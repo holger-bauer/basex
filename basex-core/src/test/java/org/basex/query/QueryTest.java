@@ -1,6 +1,8 @@
 package org.basex.query;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.math.*;
 
 import org.basex.*;
 import org.basex.core.cmd.*;
@@ -8,15 +10,14 @@ import org.basex.query.func.fn.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
-import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
- * This class tests the database commands.
+ * This class tests query evaluation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class QueryTest extends SandboxTest {
@@ -26,36 +27,35 @@ public abstract class QueryTest extends SandboxTest {
   /**
    * Tests the specified instance.
    */
-  @Test
-  public void test() {
+  @Test public void test() {
     final StringBuilder sb = new StringBuilder();
     int fail = 0;
 
     for(final Object[] qu : queries) {
+      if(qu.length == 0) continue;
+
       final boolean correct = qu.length == 3;
       final String query = qu[correct ? 2 : 1].toString();
       final Value cmp = correct ? (Value) qu[1] : null;
 
-      try(QueryProcessor qp = new QueryProcessor(query, context)) {
-        final Value val = qp.value();
-        if(!correct || !new DeepEqual().equal(val, cmp)) {
-          sb.append("[").append(qu[0]).append("] ").append(query);
-          sb.append("\n[E] ").append(cmp.size()).append(" result(s): ");
+      try {
+        final Value value = run(query);
+        if(!correct || !eq(value, cmp)) {
+          sb.append('[').append(qu[0]).append("] ").append(query);
+          sb.append("\n[E] ");
           if(correct) {
-            for(final Item it : cmp) sb.append(it.serialize()).append(", ");
+            serialize(cmp, sb);
           } else {
             sb.append("error");
           }
-          sb.append("\n[F] ").append(val.size()).append(" result(s): ");
-          for(final Item it : val) sb.append(it.serialize()).append(", ");
-          sb.append(details()).append('\n');
+          serialize(value, sb.append("\n[F] ")).append(details()).append('\n');
           ++fail;
         }
       } catch(final Exception ex) {
         final String msg = ex.getMessage();
         if(correct || msg == null || msg.contains("mailman")) {
           final String cp = correct && cmp.data() != null ? cmp.toString() : "()";
-          sb.append("[").append(qu[0]).append("] ").append(query).append("\n[E] ");
+          sb.append('[').append(qu[0]).append("] ").append(query).append("\n[E] ");
           sb.append(cp).append("\n[F] ").append(msg == null ? Util.className(ex) : normNL(msg));
           sb.append(' ').append(details()).append('\n');
           ex.printStackTrace();
@@ -75,6 +75,53 @@ public abstract class QueryTest extends SandboxTest {
   }
 
   /**
+   * Serializes the specified value.
+   * @param value value
+   * @return string representation
+   * @throws QueryIOException query I/O exception
+   */
+  protected static String serialize(final Value value) throws QueryIOException {
+    return serialize(value, new StringBuilder()).toString();
+  }
+
+  /**
+   * Serializes the specified value to the specified string builder.
+   * @param value value
+   * @param sb string builder
+   * @return string representation
+   * @throws QueryIOException query I/O exception
+   */
+  protected static StringBuilder serialize(final Value value, final StringBuilder sb)
+      throws QueryIOException {
+    sb.append(value.size()).append(" result(s): ");
+    for(final Item item : value) sb.append(item.serialize()).append("; ");
+    return sb;
+  }
+
+  /**
+   * Runs the specified query.
+   * @param query query string
+   * @return query result
+   * @throws QueryException query exception
+   */
+  protected static Value run(final String query) throws QueryException {
+    try(QueryProcessor qp = new QueryProcessor(query, context)) {
+      return qp.value();
+    }
+  }
+
+  /**
+   * Compares the actual and the expected value.
+   * @param actual evaluated result
+   * @param expected expected result
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  protected static boolean eq(final Value actual, final Value expected) throws QueryException {
+    return new DeepEqual().equal(actual, expected);
+  }
+
+  /**
    * Creates a container for the specified node values.
    * @param doc document
    */
@@ -87,7 +134,7 @@ public abstract class QueryTest extends SandboxTest {
    * @return node array
    */
   protected static Value empty() {
-    return Empty.SEQ;
+    return Empty.VALUE;
   }
 
   /**
@@ -96,7 +143,7 @@ public abstract class QueryTest extends SandboxTest {
    * @return node array
    */
   protected static Value nodes(final int... nodes) {
-    return DBNodeSeq.get(new IntList(nodes), context.data(), false, false);
+    return DBNodeSeq.get(nodes, context.data(), null);
   }
 
   /**
@@ -107,7 +154,7 @@ public abstract class QueryTest extends SandboxTest {
   protected static Value strings(final String... strings) {
     final TokenList tl = new TokenList(strings.length);
     for(final String s : strings) tl.add(s);
-    return StrSeq.get(tl.finish());
+    return StrSeq.get(tl);
   }
 
   /**
@@ -120,12 +167,12 @@ public abstract class QueryTest extends SandboxTest {
   }
 
   /**
-   * Creates an iterator for the specified decimal.
-   * @param d decimal value
+   * Creates an iterator for the specified integer.
+   * @param integer integer value
    * @return iterator
    */
-  protected static Item decimal(final double d) {
-    return Dec.get(d);
+  protected static Item decimal(final int integer) {
+    return Dec.get(new BigDecimal(integer));
   }
 
   /**
@@ -134,15 +181,15 @@ public abstract class QueryTest extends SandboxTest {
    * @return iterator
    */
   protected static Value integers(final long... integers) {
-    return IntSeq.get(integers, AtomType.ITR);
+    return IntSeq.get(integers);
   }
 
   /**
    * Creates an iterator for the specified boolean.
-   * @param b boolean value
+   * @param bool boolean value
    * @return iterator
    */
-  protected static Value booleans(final boolean... b) {
-    return BlnSeq.get(b);
+  protected static Value booleans(final boolean... bool) {
+    return BlnSeq.get(bool);
   }
 }

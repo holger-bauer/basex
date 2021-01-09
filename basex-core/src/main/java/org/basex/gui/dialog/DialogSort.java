@@ -10,7 +10,7 @@ import org.basex.gui.layout.*;
 /**
  * Sort dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogSort extends BaseXDialog {
@@ -29,30 +29,30 @@ public final class DialogSort extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public DialogSort(final GUI main) {
-    super(main, SORT);
+  public DialogSort(final GUI gui) {
+    super(gui, SORT);
 
-    final BaseXBack p = new BaseXBack(new TableLayout(6, 1));
+    final BaseXBack p = new BaseXBack(new RowLayout());
 
     final GUIOptions gopts = gui.gopts;
-    asc = new BaseXCheckBox(ASCENDING_ORDER, GUIOptions.ASCSORT, gopts, this);
-    cs = new BaseXCheckBox(CASE_SENSITIVE, GUIOptions.CASESORT, gopts, this);
-    merge = new BaseXCheckBox(MERGE_DUPLICATES, GUIOptions.MERGEDUPL, gopts, this);
-    unicode = new BaseXCheckBox(UNICODE_ORDER, GUIOptions.UNICODE, gopts, this);
-    column = new BaseXTextField(GUIOptions.COLUMN, gopts, this);
+    asc = new BaseXCheckBox(this, ASCENDING_ORDER, GUIOptions.ASCSORT, gopts);
+    merge = new BaseXCheckBox(this, MERGE_DUPLICATES, GUIOptions.MERGEDUPL, gopts);
+    unicode = new BaseXCheckBox(this, UNICODE_ORDER, GUIOptions.UNICODE, gopts);
+    cs = new BaseXCheckBox(this, CASE_SENSITIVE, GUIOptions.CASESORT, gopts);
+    column = new BaseXTextField(this, GUIOptions.COLUMN, gopts);
     column.setColumns(4);
 
-    final BaseXBack pp = new BaseXBack(new TableLayout(1, 2, 8, 4));
+    final BaseXBack pp = new BaseXBack(new ColumnLayout(8));
     pp.border(12, 0, 0, 0);
     pp.add(new BaseXLabel(COLUMN + COLS));
     pp.add(column);
 
-    p.add(cs);
     p.add(asc);
     p.add(merge);
     p.add(unicode);
+    p.add(cs);
     p.add(pp);
     set(p, BorderLayout.CENTER);
 
@@ -66,16 +66,18 @@ public final class DialogSort extends BaseXDialog {
   public void action(final Object source) {
     ok = column.check();
     enableOK(buttons, B_OK, ok);
+    cs.setEnabled(unicode.isSelected());
   }
 
   @Override
   public void close() {
     if(!ok) return;
-    super.close();
+
     cs.assign();
     asc.assign();
     unicode.assign();
     merge.assign();
     column.assign();
+    super.close();
   }
 }

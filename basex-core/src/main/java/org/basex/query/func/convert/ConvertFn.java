@@ -11,41 +11,15 @@ import java.util.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
-import org.basex.query.value.*;
-import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
-import org.basex.query.value.type.*;
 import org.basex.util.*;
-import org.basex.util.list.*;
 
 /**
  * Functions for converting data to other formats.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class ConvertFn extends StandardFunc {
-  /**
-   * Converts the first argument from a byte sequence to a byte array.
-   * @param qc query context
-   * @return resulting value
-   * @throws QueryException query exception
-   */
-  final byte[] bytesToBinary(final QueryContext qc) throws QueryException {
-    final Value v = exprs[0].atomValue(qc, info);
-    // directly pass on byte array
-    if(v instanceof BytSeq) return ((BytSeq) v).toJava();
-
-    // check if all arguments are bytes
-    final Iter ir = v.iter();
-    final ByteList bl = new ByteList(Math.max(Array.CAPACITY, (int) v.size()));
-    for(Item it; (it = ir.next()) != null;) {
-      bl.add((int) ((ANum) checkType(it, AtomType.BYT)).itr());
-    }
-    return bl.finish();
-  }
-
   /**
    * Converts the first argument from a string to a byte array.
    * @param qc query context
@@ -53,13 +27,14 @@ public abstract class ConvertFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final byte[] stringToBinary(final QueryContext qc) throws QueryException {
-    final byte[] in = toToken(exprs[0], qc);
-    final String enc = toEncoding(1, BXCO_ENCODING_X, qc);
-    if(enc == null || enc == Strings.UTF8) return in;
+    final byte[] token = toToken(exprs[0], qc);
+    final String encoding = toEncodingOrNull(1, CONVERT_ENCODING_X, qc);
+    if(encoding == null || encoding == Strings.UTF8) return token;
     try {
-      return toBinary(in, enc);
+      return toBinary(token, encoding);
     } catch(final CharacterCodingException ex) {
-      throw BXCO_BASE64_X_X.get(info, chop(in, info), enc);
+      Util.debug(ex);
+      throw CONVERT_BINARY_X_X.get(info, normalize(token, info), encoding);
     }
   }
 
@@ -81,17 +56,15 @@ public abstract class ConvertFn extends StandardFunc {
   /**
    * Converts the specified input to a string in the specified encoding.
    * @param is input stream
-   * @param enc encoding
-   * @param val validate string
+   * @param encoding encoding
+   * @param validate validate string
    * @return resulting value
    * @throws IOException I/O exception
    */
-  public static byte[] toString(final InputStream is, final String enc, final boolean val)
+  public static byte[] toString(final InputStream is, final String encoding, final boolean validate)
       throws IOException {
-    try {
-      return new TextInput(is).encoding(enc).validate(val).content();
-    } finally {
-      is.close();
+    try(TextInput ti = new TextInput(is)) {
+      return ti.encoding(encoding).validate(validate).content();
     }
   }
 }

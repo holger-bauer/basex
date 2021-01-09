@@ -3,6 +3,8 @@ package org.basex.query.value.item;
 import static java.lang.Float.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
@@ -10,7 +12,7 @@ import org.basex.util.*;
  * Abstract super class for all numeric items.
  * Useful for removing exceptions and unifying hash values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public abstract class ANum extends Item {
@@ -45,13 +47,13 @@ public abstract class ANum extends Item {
   }
 
   @Override
-  public boolean sameKey(final Item it, final InputInfo ii) throws QueryException {
-    if(it instanceof ANum) {
-      final double d1 = dbl(ii), d2 = it.dbl(ii);
+  public boolean sameKey(final Item item, final InputInfo ii) throws QueryException {
+    if(item instanceof ANum) {
+      final double d1 = dbl(ii), d2 = item.dbl(ii);
       final boolean n1 = Double.isNaN(d1), n2 = Double.isNaN(d2);
       if(n1 || n2) return n1 == n2;
       if(Double.isInfinite(d1) || Double.isInfinite(d2)) return d1 == d2;
-      return dec(ii).compareTo(it.dec(ii)) == 0;
+      return dec(ii).compareTo(item.dec(ii)) == 0;
     }
     return false;
   }
@@ -112,6 +114,15 @@ public abstract class ANum extends Item {
   }
 
   @Override
+  public final Expr simplifyFor(final Simplify mode, final CompileContext cc) {
+    // predicate: E[0]  ->  E[false()]
+    // EBV: if(0)  ->  if(false())
+    final double d = dbl();
+    return cc.simplify(this, mode == Simplify.PREDICATE && (d != itr() || d < 1) ||
+        mode == Simplify.EBV && d == 0 ? Bln.FALSE : this);
+  }
+
+  @Override
   public final int hash(final InputInfo ii) {
     // makes sure the hashing is good for very small and very big numbers
     final long l = itr();
@@ -129,7 +140,7 @@ public abstract class ANum extends Item {
   }
 
   @Override
-  public final String toString() {
-    return Token.string(string(null));
+  public final void plan(final QueryString qs) {
+    qs.token(string(null));
   }
 }

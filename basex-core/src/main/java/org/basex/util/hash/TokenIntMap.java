@@ -5,12 +5,11 @@ import java.util.*;
 
 import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
-import org.basex.util.*;
 
 /**
  * This is an efficient and memory-saving hash map for storing tokens and integers.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TokenIntMap extends TokenSet {
@@ -21,7 +20,7 @@ public final class TokenIntMap extends TokenSet {
    * Constructor.
    */
   public TokenIntMap() {
-    values = new int[Array.CAPACITY];
+    values = new int[capacity()];
   }
 
   /**
@@ -34,7 +33,7 @@ public final class TokenIntMap extends TokenSet {
   }
 
   @Override
-  protected void read(final DataInput in) throws IOException {
+  public void read(final DataInput in) throws IOException {
     super.read(in);
     values = in.readNums();
   }
@@ -68,8 +67,22 @@ public final class TokenIntMap extends TokenSet {
   }
 
   @Override
-  protected void rehash(final int sz) {
-    super.rehash(sz);
-    values = Arrays.copyOf(values, sz);
+  public int remove(final byte[] key) {
+    final int i = super.remove(key);
+    values[i] = -1;
+    return i;
+  }
+
+  @Override
+  protected void rehash(final int newSize) {
+    super.rehash(newSize);
+    values = Arrays.copyOf(values, newSize);
+  }
+
+  @Override
+  public String toString() {
+    final List<Object> v = new ArrayList<>();
+    for(final int value : values) v.add(value);
+    return toString(keys, v.toArray());
   }
 }

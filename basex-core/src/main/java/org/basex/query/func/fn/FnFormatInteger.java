@@ -6,13 +6,14 @@ import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.util.format.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFormatInteger extends StandardFunc {
@@ -20,13 +21,13 @@ public final class FnFormatInteger extends StandardFunc {
   private final TokenObjMap<IntFormat> formats = new TokenObjMap<>();
 
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
+  public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final byte[] pic = toToken(exprs[1], qc);
-    final byte[] lng = exprs.length == 2 ? EMPTY : toToken(exprs[2], qc);
+    final byte[] language = exprs.length == 2 ? EMPTY : toToken(exprs[2], qc);
 
-    final Item it = exprs[0].atomItem(qc, info);
-    if(it == null) return Str.ZERO;
-    final long num = toLong(it);
+    final Item item = exprs[0].atomItem(qc, info);
+    if(item == Empty.VALUE) return Str.EMPTY;
+    final long number = toLong(item);
 
     IntFormat format;
     synchronized(formats) {
@@ -36,6 +37,6 @@ public final class FnFormatInteger extends StandardFunc {
         formats.put(pic, format);
       }
     }
-    return Str.get(Formatter.get(lng).formatInt(num, format));
+    return Str.get(Formatter.get(language).formatInt(number, format));
   }
 }

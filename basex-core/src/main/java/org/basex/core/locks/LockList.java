@@ -8,7 +8,7 @@ import org.basex.util.list.*;
 /**
  * List with strings that serve as lock keys.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class LockList implements Iterable<String> {
@@ -86,7 +86,7 @@ public final class LockList implements Iterable<String> {
    * @param locks lock list
    */
   public void remove(final LockList locks) {
-    list.remove(locks.list);
+    list.removeAll(locks.list);
   }
 
   /**
@@ -140,6 +140,6 @@ public final class LockList implements Iterable<String> {
 
   @Override
   public String toString() {
-    return global ? "(global)" : list.isEmpty() ? "(none)" : Strings.join(list.toArray(), ",");
+    return global ? "(global)" : list.isEmpty() ? "(none)" : String.join(",", list.toArray());
   }
 }

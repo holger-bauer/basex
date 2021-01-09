@@ -2,8 +2,6 @@ package org.basex.gui.dialog;
 
 import static org.basex.core.Text.*;
 
-import java.awt.event.*;
-
 import javax.swing.*;
 
 import org.basex.core.*;
@@ -16,7 +14,7 @@ import org.basex.util.ft.*;
 /**
  * Full-text creation dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogFT extends DialogIndex {
@@ -37,7 +35,7 @@ final class DialogFT extends DialogIndex {
   private final BaseXCheckBox[] check = new BaseXCheckBox[FLAGS];
     /** Full-text language. */
   private final BaseXCombo language;
-  /** Path for Full-text stopword list. */
+  /** Path to Full-text stopword list. */
   private final BaseXTextField swpath;
   /** Element names to include. */
   private final BaseXTextField ftinc;
@@ -51,12 +49,12 @@ final class DialogFT extends DialogIndex {
    */
   DialogFT(final BaseXDialog dialog, final boolean create) {
     super(dialog);
-    layout(new TableLayout(create ? 10 : 16, 1, 0, 0));
+    layout(new TableLayout(create ? 10 : 16, 1));
 
     final MainOptions opts = dialog.gui.context.options;
     add(new BaseXLabel(H_FULLTEXT_INDEX, true, false).border(0, 0, 6, 0));
 
-    ftinc = new BaseXTextField(opts.get(MainOptions.FTINCLUDE), dialog).hint(QNAME_INPUT);
+    ftinc = new BaseXTextField(dialog, opts.get(MainOptions.FTINCLUDE)).hint(QNAME_INPUT);
     add(ftinc);
 
     final String sw = opts.get(MainOptions.STOPWORDS);
@@ -69,7 +67,7 @@ final class DialogFT extends DialogIndex {
     final BaseXLabel[] labels = new BaseXLabel[FLAGS];
     final int cl = check.length;
     for(int c = 0; c < cl; ++c) {
-      check[c] = new BaseXCheckBox(cb[c], val[c], dialog);
+      check[c] = new BaseXCheckBox(dialog, cb[c], val[c]);
       if(create) {
         check[c].setToolTipText(desc[c]);
       } else {
@@ -78,7 +76,7 @@ final class DialogFT extends DialogIndex {
       }
     }
 
-    final BaseXBack b1 = new BaseXBack(new TableLayout(1, 2, 8, 0)).border(12, 0, 0, 0);
+    final BaseXBack b1 = new BaseXBack(new ColumnLayout(8)).border(12, 0, 0, 0);
     b1.add(check[F_LANG]);
     final String[] langs = FTLexer.languages().finish();
     language = new BaseXCombo(dialog, langs);
@@ -99,18 +97,13 @@ final class DialogFT extends DialogIndex {
 
     add(check[F_STOP]);
     add(Box.createVerticalStrut(4));
-    final BaseXBack b3 = new BaseXBack(new TableLayout(1, 2, 8, 0));
+    final BaseXBack b3 = new BaseXBack(new ColumnLayout(8));
     swpath = new BaseXTextField(
-        sw.isEmpty() ? dialog.gui.gopts.get(GUIOptions.DATAPATH) : sw, dialog);
+        dialog, sw.isEmpty() ? dialog.gui.gopts.get(GUIOptions.DATAPATH) : sw);
     b3.add(swpath);
 
-    swbrowse = new BaseXButton(BROWSE_D, dialog);
-    swbrowse.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        chooseStop();
-      }
-    });
+    swbrowse = new BaseXButton(dialog, BROWSE_D);
+    swbrowse.addActionListener(e -> chooseStop());
     b3.add(swbrowse);
     add(b3);
     if(!create) add(labels[F_STOP]);
@@ -121,12 +114,12 @@ final class DialogFT extends DialogIndex {
    */
   private void chooseStop() {
     final GUIOptions gopts = dialog.gui.gopts;
-    final BaseXFileChooser fc = new BaseXFileChooser(FILE_OR_DIR, gopts.get(GUIOptions.DATAPATH),
-        dialog.gui);
-    final IO file = fc.select(Mode.FOPEN);
+    final BaseXFileChooser fc = new BaseXFileChooser(dialog,
+        FILE_OR_DIR, gopts.get(GUIOptions.DATAPATH));
+    final IOFile file = fc.select(Mode.FOPEN);
     if(file != null) {
       swpath.setText(file.path());
-      gopts.set(GUIOptions.DATAPATH, file.path());
+      gopts.setFile(GUIOptions.DATAPATH, file);
     }
   }
 
@@ -148,9 +141,8 @@ final class DialogFT extends DialogIndex {
   @Override
   void setOptions() {
     final GUI gui = dialog.gui;
-    final String lang = language.getSelectedItem();
     gui.set(MainOptions.LANGUAGE, check[F_LANG].isSelected() ?
-        Language.get(lang.replaceFirst(" \\(.*", "")).code() : "");
+        Language.get(language.getSelectedItem().replaceFirst(" \\(.*", "")).code() : "");
     gui.set(MainOptions.STEMMING, check[F_STEM].isSelected());
     gui.set(MainOptions.CASESENS, check[F_CASE].isSelected());
     gui.set(MainOptions.DIACRITICS, check[F_DIA].isSelected());

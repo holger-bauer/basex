@@ -2,15 +2,19 @@ package org.basex.query.expr;
 
 import java.util.*;
 
-import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.constr.*;
 import org.basex.query.expr.gflwor.*;
 import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
 import org.basex.query.func.fn.*;
+import org.basex.query.func.java.*;
 import org.basex.query.iter.*;
+import org.basex.query.up.expr.*;
 import org.basex.query.util.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -24,32 +28,10 @@ import org.basex.util.hash.*;
  * Abstract class for representing XQuery expressions.
  * Expression are divided into {@link ParseExpr} and {@link Value} classes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Expr extends ExprInfo {
-  /** Flags that influence query compilation. */
-  public enum Flag {
-    /** Node creation. No relocation of expressions that would change number of node constructions
-     * Example: node constructor. */
-    CNS,
-    /** Context dependency. Checked to prevent relocations of expressions to different context.
-     * Example: context item ({@code .}). */
-    CTX,
-    /** Non-deterministic code. Cannot be relocated, pre-evaluated or optimized away.
-     * Examples: random:double(), file:write(). */
-    NDT,
-    /** Positional access. Prevents simple iterative evaluation.
-     * Examples: position(), last(). */
-    POS,
-    /** Performs updates. Checked to detect if an expression is updating or not, or if code
-     * can be optimized away when using {@link MainOptions#MIXUPDATES}. Example: delete node. */
-    UPD,
-    /** Function invocation. Used to suppress pre-evaluation of built-in functions with
-     * functions arguments. Example: fold-left. */
-    HOF,
-  }
-
   /**
    * Checks if the updating semantics are satisfied.
    * This function is only called if any updating expression was found in the query.
@@ -59,7 +41,6 @@ public abstract class Expr extends ExprInfo {
 
   /**
    * Compiles and optimizes the expression, assigns types and cardinalities.
-   * This method will be initially called by {@link QueryContext#compile()}.
    * @param cc compilation context
    * @return optimized expression
    * @throws QueryException query exception
@@ -79,60 +60,66 @@ public abstract class Expr extends ExprInfo {
 
   /**
    * Evaluates the expression and returns an iterator on the resulting items.
-   * If this method is not overwritten, {@link #item(QueryContext, InputInfo)} must be implemented
-   * by an expression, as it may be called by this method.
-   * @param qc query context
-   * @return resulting item
-   * @throws QueryException query exception
-   */
-  public abstract Iter iter(QueryContext qc) throws QueryException;
-
-  /**
-   * Evaluates the expression and returns the resulting item,
-   * or a {@code null} reference if the expression yields an empty sequence.
-   * If this method is not overwritten, {@link #iter(QueryContext)} must be implemented by an
-   * expression, as it may be called by this method.
-   * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
-   * @return item or {@code null}
-   * @throws QueryException query exception
-   */
-  public abstract Item item(QueryContext qc, InputInfo ii) throws QueryException;
-
-  /**
-   * Evaluates the expression and returns the resulting value.
    * The implementation of this method is optional.
    * @param qc query context
    * @return iterator
    * @throws QueryException query exception
    */
+  public abstract Iter iter(QueryContext qc) throws QueryException;
+
+  /**
+   * Evaluates the expression and returns the resulting value.
+   * If this method is not implemented, {@link #item(QueryContext, InputInfo)} must be implemented
+   * instead.
+   * @param qc query context
+   * @return value
+   * @throws QueryException query exception
+   */
   public abstract Value value(QueryContext qc) throws QueryException;
+
+  /**
+   * Evaluates the expression and returns the resulting item,
+   * or {@link Empty#VALUE} if the expression yields an empty sequence.
+   * If this method is not implemented, {@link #value(QueryContext)} must be implemented instead.
+   * @param qc query context
+   * @param ii input info (only required by {@link Seq} instances, which have no input info)
+   * @return item or {@link Empty#VALUE}
+   * @throws QueryException query exception
+   */
+  public abstract Item item(QueryContext qc, InputInfo ii) throws QueryException;
 
   /**
    * Evaluates the expression and returns an iterator on the resulting, atomized items.
    * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
+   * @param ii input info
    * @return iterator
    * @throws QueryException query exception
    */
-  public final Iter atomIter(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return new AtomIter(iter(qc), qc, ii, seqType().mayBeArray());
+  public Iter atomIter(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final Iter iter = iter(qc);
+    final SeqType st = seqType();
+    if(st.type.instanceOf(AtomType.ANY_ATOMIC_TYPE)) return iter;
+    long size = iter.size();
+    if(size != -1 && st.mayBeArray()) size = -1;
+    return new AtomIter(iter, qc, ii, size);
   }
 
   /**
    * Evaluates the expression and returns the resulting, atomized item,
-   * or a {@code null} reference if the expression yields an empty sequence.
+   * or {@link Empty#VALUE} if the expression yields an empty sequence.
    * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
-   * @return item or {@code null}
+   * @param ii input info (only required by {@link Seq} instances, which have no input info)
+   * @return item or {@link Empty#VALUE}
    * @throws QueryException query exception
    */
-  public abstract Item atomItem(QueryContext qc, InputInfo ii) throws QueryException;
+  public Item atomItem(final QueryContext qc, final InputInfo ii) throws QueryException {
+    return atomValue(qc, ii).item(qc, ii);
+  }
 
   /**
    * Evaluates the expression and returns the atomized items.
    * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
+   * @param ii input info (only required by {@link Seq} instances, which have no input info)
    * @return atomized item
    * @throws QueryException query exception
    */
@@ -155,68 +142,59 @@ public abstract class Expr extends ExprInfo {
   public abstract Item ebv(QueryContext qc, InputInfo ii) throws QueryException;
 
   /**
-   * Performs a predicate test and returns the item the if test was successful.
+   * Performs a predicate test and returns the item if the test was successful.
+   * The returned item is required for full-text scoring.
    * @param qc query context
    * @param ii input info (required for {@link Seq} instances, which have no input info)
-   * @return item
+   * @return item or {@code null}
    * @throws QueryException query exception
    */
   public abstract Item test(QueryContext qc, InputInfo ii) throws QueryException;
-
-  /**
-   * Tests if this is an empty sequence. This function is only overwritten
-   * by the {@link Empty} class, which represents the empty sequence.
-   * @return result of check
-   */
-  public boolean isEmpty() {
-    return false;
-  }
 
   /**
    * Tests if this is a vacuous expression (empty sequence or error function).
    * This check is needed for updating queries.
    * @return result of check
    */
-  public boolean isVacuous() {
-    return false;
-  }
-
-  /**
-   * Tests if this is a value.
-   * @return result of check
-   */
-  public boolean isValue() {
+  public boolean vacuous() {
     return false;
   }
 
   /**
    * Returns the data reference bound to this expression. This method is currently overwritten
-   * by {@link DBNode}, {@link DBNodeSeq}, {@link Path} and {@link VarRef}.
-   * @return data reference
+   * by {@link DBNode}, {@link DBNodeSeq}, {@link AxisPath} and {@link VarRef}.
+   * @return data reference (can be {@code null})
    */
   public Data data() {
     return null;
   }
 
   /**
-   * Returns the sequence size or 1.
+   * Assigns a data reference, if supported.
+   * @param dt data reference
+   */
+  public void data(@SuppressWarnings("unused") final Data dt) {
+  }
+
+  /**
+   * Returns the result size, or {@code -1} if the size is unknown.
    * @return result of check
    */
   public abstract long size();
 
   /**
-   * Indicates if an expression has the specified compiler property. This method must only be
-   * called at compile time. It is invoked to test properties of sub-expressions.
-   * It returns {@code true} if at least one test is successful.
-   * @param flag flag to be checked
+   * Indicates if an expression has one of the specified compiler properties. This method must only
+   * be called at compile time. It is invoked to test properties of sub-expressions.
+   * It returns {@code true} if at least flag matches an expression.
+   * @param flags flags to be checked
    * @return result of check
    */
-  public abstract boolean has(Flag flag);
+  public abstract boolean has(Flag... flags);
 
   /**
    * Checks if the given variable is used by this expression.
    * @param var variable to be checked
-   * @return {@code true} if the variable is used, {@code false} otherwise
+   * @return {@code true} if the variable is used
    */
   public final boolean uses(final Var var) {
     // return true iff the the search was aborted, i.e. the variable is used
@@ -230,67 +208,70 @@ public abstract class Expr extends ExprInfo {
   }
 
   /**
-   * Checks if the specified variable is replaceable by a context value.
-   * The following tests might return false:
+   * Checks if inlining is possible.
+   * This function is called by {@link InlineContext#inlineable} and:
+   * {@link CNode#inlineable} returns false if the new expression construct new nodes.
+   *
+   * The following tests might reject inlining if the expression is a context reference:
    * <ul>
-   *   <li>{@link Preds#removable} if one of the variables is used within a predicate.</li>
-   *   <li>{@link Path#removable} if the variable occurs within the path.</li>
+   *   <li>{@link Preds#inlineable}</li>
+   *   <li>{@link Path#inlineable}</li>
+   *   <li>{@link SimpleMap#inlineable}</li>
+   *   <li>{@link StaticJavaCall#inlineable}</li>
+   *   <li>{@link TransformWith#inlineable}</li>
    * </ul>
-   * This method is called by {@link For#toPredicate(CompileContext, Expr)}.
-   * @param var variable to be replaced
+   *
+   * @param ic inlining context
    * @return result of check
    */
-  public abstract boolean removable(Var var);
+  public abstract boolean inlineable(InlineContext ic);
 
   /**
-   * Checks how often a variable is used in this expression.
-   * This function is e.g. called by {@link SwitchCase#countCases} or (indirectly)
-   * {@link GFLWOR#inlineLets}.
-   * @param var variable to look for
-   * @return how often the variable is used, see {@link VarUsage}
+   * Checks how often a variable or context reference is used in this expression.
+   *
+   * This function is called by:
+   * <ul>
+   *   <li> {@link Closure#optimize}</li>
+   *   <li> {@link GFLWOR#inlineLets}</li>
+   *   <li> {@link GFLWOR#optimizePos}</li>
+   *   <li> {@link GFLWOR#simplify}</li>
+   *   <li> {@link GFLWOR#unusedVars}</li>
+   *   <li> {@link SimpleMap#optimize}</li>
+   *   <li> {@link TypeswitchGroup#optimize}</li>
+   * </ul>
+   *
+   * @param var variable ({@link Var} reference) or context ({@code null}) to inline
+   * @return number of usages, see {@link VarUsage}
    */
   public abstract VarUsage count(Var var);
 
   /**
-   * Inlines an expression into this one, replacing all references to the given variable.
-   * This function is e.g. called by {@link GFLWOR#inlineLets} and {@link For#toPredicate},
-   * and the variable reference is replaced in {@link VarRef#inline}.
-   * @param var variable to replace
-   * @param ex expression to inline
-   * @param cc compilation context
-   * @return resulting expression if something changed, {@code null} otherwise
+   * Inlines an expression into this one, replacing all variable or context references.
+   * This function is called by {@link InlineContext#inline(Expr)} (see invocations of this
+   * functions for further inlinings).
+   *
+   * The variable reference is replaced in:
+   * <ul>
+   *   <li> {@link OrderBy#inline}</li>
+   *   <li> {@link VarRef#inline}</li>
+   * </ul>
+   * The context is replaced in:
+   * <ul>
+   *   <li> {@link ContextFn#inline}</li>
+   *   <li> {@link ContextValue#inline}</li>
+   *   <li> {@link Lookup#inline}</li>
+   * </ul>
+   *
+   * @param ic inlining context
+   * @return resulting expression if something has changed, {@code null} otherwise
    * @throws QueryException query exception
    */
-  public abstract Expr inline(Var var, Expr ex, CompileContext cc) throws QueryException;
-
-  /**
-   * Inlines the given expression into all elements of the given array.
-   * @param arr array
-   * @param var variable to replace
-   * @param ex expression to inline
-   * @param cc compilation context
-   * @return {@code true} if the array has changed, {@code false} otherwise
-   * @throws QueryException query exception
-   */
-  protected static boolean inlineAll(final Expr[] arr, final Var var, final Expr ex,
-      final CompileContext cc) throws QueryException {
-
-    boolean change = false;
-    final int al = arr.length;
-    for(int a = 0; a < al; a++) {
-      final Expr e = arr[a].inline(var, ex, cc);
-      if(e != null) {
-        arr[a] = e;
-        change = true;
-      }
-    }
-    return change;
-  }
+  public abstract Expr inline(InlineContext ic) throws QueryException;
 
   /**
    * Copies an expression. Used for inlining functions, or for copying static queries.
-   * It is utilized by {@link VarRef#inline}, {@link FuncItem#inlineExpr},
-   * {@link Closure#inlineExpr} and {@link StaticFunc#inlineExpr}.
+   * It is utilized by {@link VarRef#inline}, {@link FuncItem#inline},
+   * {@link Closure#inline} and {@link StaticFunc#inline}.
    * @param cc compilation context
    * @param vm mapping from old variable IDs to new variable copies.
    *           Required by {@link Closure#copy} and {@link VarRef#copy}
@@ -299,28 +280,18 @@ public abstract class Expr extends ExprInfo {
   public abstract Expr copy(CompileContext cc, IntObjMap<Var> vm);
 
   /**
-   * <p>This method is e.g. overwritten by expressions like {@link CmpG}, {@link CmpV},
-   * {@link FnBoolean}, {@link FnExists}, {@link Path} or {@link Filter}.
-   * It is called at compile time by expressions that perform
-   * effective boolean value tests (e.g. {@link If} or {@link Preds}).
-   * If the arguments of the called expression return a boolean anyway,
-   * the expression will be simplified.</p>
-   * <p>Example in {@link CmpV}:
-   * <code>if($x eq true())</code> is rewritten to <code>if($x)</code> if {@code $x}
-   * is known to return a single boolean.</p>
+   * This function is called at compile time for expressions whose operands might be simplified.
+   * @param mode mode of simplification
    * @param cc compilation context
-   * @return optimized expression
+   * @return simplified or original expression
+   * @see Simplify
    * @throws QueryException query exception
    */
   @SuppressWarnings("unused")
-  public Expr optimizeEbv(final CompileContext cc) throws QueryException {
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
     // return true if a deterministic expression returns at least one node
-    final SeqType st = seqType();
-    if(st.type instanceof NodeType && st.oneOrMore() && !has(Flag.UPD) && !has(Flag.NDT)) {
-      cc.info(QueryText.OPTREWRITE_X, this);
-      return Bln.TRUE;
-    }
-    return this;
+    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) &&
+      seqType().instanceOf(SeqType.NODE_OM) && !has(Flag.NDT) ? cc.simplify(this, Bln.TRUE) : this;
   }
 
   /**
@@ -330,20 +301,44 @@ public abstract class Expr extends ExprInfo {
   public abstract SeqType seqType();
 
   /**
-   * Indicates if the items returned by this expression are iterable, i.e., if returned nodes are
-   * in document order and contain no duplicates. This will also be guaranteed if zero or one
-   * item is returned.
-   * It is e.g. called by {@link AxisPath}.
+   * Returns the function type of this expression.
+   * @return function type, or {@code null} if expression yields no functions
+   */
+  public FuncType funcType() {
+    final Type type = seqType().type;
+    return type instanceof FuncType ? (FuncType) type : null;
+  }
+
+  /**
+   * Indicates if this expression returns nodes in document order without duplicates.
    * @return result of check
    */
-  public boolean iterable() {
-    return seqType().zeroOrOne();
+  public boolean ddo() {
+    final SeqType st = seqType();
+    return st.zeroOrOne() && st.type instanceof NodeType;
+  }
+
+  /**
+   * Returns the arguments/operands of an expression (function, list, etc).
+   * @return arguments or {@code null}
+   */
+  public Expr[] args() {
+    return null;
+  }
+
+  /**
+   * Returns the specified argument/operand of an expression (function, list, etc).
+   * @param i index of argument
+   * @return arguments or {@code null}
+   */
+  public final Expr arg(final int i) {
+    return args()[i];
   }
 
   /**
    * Checks if an expression can be rewritten to an index access.
    * If so, the index expression will be bound to {@link IndexInfo#expr}.
-   * This method will be called by {@link Path#index}.
+   * This method will be called by the {@link Path} expression.
    * @param ii index info
    * @return true if an index can be used
    * @throws QueryException query exception
@@ -354,23 +349,12 @@ public abstract class Expr extends ExprInfo {
   }
 
   /**
-   * Compares the current and specified expression for equality. {@code false} may be returned,
-   * even if the expressions are equal.
-   * @param cmp expression to be compared (can be {@code null})
+   * Checks if this expression is deterministic, performs no updates, does not access the context
+   * value and position, and calls no higher-order function.
    * @return result of check
    */
-  public boolean sameAs(final Expr cmp) {
-    return this == cmp;
-  }
-
-  /**
-   * Checks if this expression is a certain function.
-   * @param func function definition
-   * @return result of check
-   */
-  @SuppressWarnings("unused")
-  public boolean isFunction(final Function func) {
-    return false;
+  public final boolean isSimple() {
+    return !has(Flag.CTX, Flag.NDT, Flag.HOF, Flag.POS);
   }
 
   /**
@@ -395,6 +379,23 @@ public abstract class Expr extends ExprInfo {
   }
 
   /**
+   * Tries to merge two expressions that are part of an EBV test.
+   * Called by {@link And}, {@link Or}), {@link Step} and {@link Filter}.
+   * Overwritten by {@link CmpG}, {@link CmpIR}, {@link CmpR}, {@link CmpSR},
+   * {@link ItrPos}, {@link Pos} and others.
+   * @param expr second expression
+   * @param or union or intersection
+   * @param cc compilation context
+   * @return optimized expression or {@code null}
+   * @throws QueryException query exception
+   */
+  @SuppressWarnings("unused")
+  public Expr mergeEbv(final Expr expr, final boolean or, final CompileContext cc)
+      throws QueryException {
+    return null;
+  }
+
+  /**
    * Finds and marks tail calls, enabling TCO.
    * @param cc compilation context, {@code null} if the changes should not be reported
    */
@@ -416,7 +417,9 @@ public abstract class Expr extends ExprInfo {
    * @return success flag
    */
   protected static boolean visitAll(final ASTVisitor visitor, final Expr...exprs) {
-    for(final Expr expr : exprs) if(!expr.accept(visitor)) return false;
+    for(final Expr expr : exprs) {
+      if(!expr.accept(visitor)) return false;
+    }
     return true;
   }
 
@@ -429,6 +432,12 @@ public abstract class Expr extends ExprInfo {
   public abstract int exprSize();
 
   /**
+   * Refines the expression type.
+   * @param expr original expression
+   */
+  public abstract void refineType(Expr expr);
+
+  /**
    * Tries to push the given type check inside this expression.
    * @param tc type check to push into the expression
    * @param cc compilation context
@@ -439,4 +448,31 @@ public abstract class Expr extends ExprInfo {
   protected Expr typeCheck(final TypeCheck tc, final CompileContext cc) throws QueryException {
     return null;
   }
+
+  /**
+   * {@inheritDoc}
+   * <div>
+   * This function is e.g. called by:
+   * <ul>
+   *   <li>{@link If#optimize(CompileContext)}, {@link Switch#optimize(CompileContext)},
+   *     {@link Typeswitch#optimize(CompileContext)}, in order to discard identical expressions.
+   *   </li>
+   *   <li>{@link CmpR#mergeEbv(Expr, boolean, CompileContext)} or
+   *     {@link CmpSR#mergeEbv(Expr, boolean, CompileContext)},
+   *     in order to merge expressions with identical input.
+   *   </li>
+   *   <li>{@link CmpG#optimize(CompileContext)} or {@link CmpV#optimize(CompileContext)},
+   *     in order to pre-evaluate equality tests.
+   *   </li>
+   *   <li>{@link CmpG#optimize(CompileContext)} or
+   *     {@link Pos#get(Expr, CmpV.OpV, InputInfo, CompileContext)},
+   *     in order to compare the start and end value.
+   *   </li>
+   *   <li>{@link PathCache}, in order to find identical root values at runtime.
+   *   </li>
+   * </ul>
+   * </div>
+   */
+  @Override
+  public abstract boolean equals(Object obj);
 }

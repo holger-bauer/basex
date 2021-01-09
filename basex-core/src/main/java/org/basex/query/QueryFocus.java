@@ -1,11 +1,12 @@
 package org.basex.query;
 
 import org.basex.query.value.*;
+import org.basex.util.*;
 
 /**
  * Query focus: context value, position, size.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryFocus {
@@ -15,4 +16,21 @@ public final class QueryFocus {
   public long pos = 1;
   /** Context size. */
   public long size = 1;
+
+  /**
+   * Creates a copy of this query focus.
+   * @return copy
+   */
+  public QueryFocus copy() {
+    final QueryFocus qf = new QueryFocus();
+    qf.value = value;
+    qf.pos = pos;
+    qf.size = size;
+    return qf;
+  }
+
+  @Override
+  public String toString() {
+    return Util.className(this) + '[' + value + ": " + pos + '/' + size + " ]";
+  }
 }

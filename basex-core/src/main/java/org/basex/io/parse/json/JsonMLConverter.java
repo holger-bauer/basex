@@ -15,7 +15,7 @@ import org.basex.util.*;
  * The specified JSON input is first transformed into a tree representation
  * and then converted to an XML document.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  */
@@ -34,8 +34,8 @@ final class JsonMLConverter extends JsonXmlConverter {
   }
 
   @Override
-  public FDoc finish() {
-    return new FDoc().add(stack.pop());
+  public FDoc finish(final String uri) {
+    return new FDoc(uri).add(stack.pop());
   }
 
   /**
@@ -45,7 +45,7 @@ final class JsonMLConverter extends JsonXmlConverter {
    * @throws QueryIOException query I/O exception
    */
   private static void error(final String msg, final Object... ext) throws QueryIOException {
-    throw BXJS_PARSEML_X.getIO(Util.inf(msg, ext));
+    throw JSON_PARSE_X.getIO(Util.info(msg, ext) + '.');
   }
 
   /**
@@ -125,9 +125,9 @@ final class JsonMLConverter extends JsonXmlConverter {
     }
 
     if(curr == null) {
-      final FElem e = stack.isEmpty() ? null : stack.peek();
-      if(e == null) curr = new FElem(check(value));
-      else e.add(new FTxt(value));
+      final FElem elem = stack.isEmpty() ? null : stack.peek();
+      if(elem == null) curr = new FElem(check(value));
+      else elem.add(new FTxt(value));
     } else if(attName != null) {
       curr.add(attName, value);
       attName = null;

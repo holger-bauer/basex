@@ -1,41 +1,41 @@
 package org.basex.query.func.fn;
 
 import static org.basex.query.QueryError.*;
+import static org.basex.query.func.Function.*;
 
-import org.basex.core.locks.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
-import org.basex.query.util.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FnStringLength extends StandardFunc {
+public final class FnStringLength extends ContextFn {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] s;
+  public Int item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final byte[] token;
     if(exprs.length == 0) {
-      final Item it = ctxValue(qc).item(qc, info);
-      if(it instanceof FItem) throw FISTRING_X.get(info, it.type);
-      s = it == null ? Token.EMPTY : it.string(info);
+      final Item item = ctxValue(qc).item(qc, info);
+      if(item instanceof FItem) throw FISTRING_X.get(info, item.type);
+      token = item == Empty.VALUE ? Token.EMPTY : item.string(info);
     } else {
-      s = toEmptyToken(ctxArg(0, qc), qc);
+      token = toZeroToken(exprs[0], qc);
     }
-    return Int.get(Token.length(s));
+    return Int.get(Token.length(token));
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.CTX && exprs.length == 0 || super.has(flag);
-  }
-
-  @Override
-  public boolean accept(final ASTVisitor visitor) {
-    return (exprs.length != 0 || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    if(mode == Simplify.EBV) {
+      // if(string-length(nodes))  ->  if(string(nodes))
+      return cc.simplify(this, cc.function(STRING, info, exprs));
+    }
+    return this;
   }
 }

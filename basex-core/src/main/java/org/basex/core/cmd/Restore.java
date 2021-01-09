@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'restore' command and restores a backup of a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Restore extends ABackup {
@@ -77,11 +77,11 @@ public final class Restore extends ABackup {
     // drop target database
     DropDB.drop(db, sopts);
 
-    final IOFile dbpath = sopts.dbPath();
-    final Zip zip = new Zip(new IOFile(dbpath, backup + IO.ZIPSUFFIX));
+    final IOFile dbPath = sopts.dbPath();
+    final Zip zip = new Zip(new IOFile(dbPath, backup + IO.ZIPSUFFIX));
     try {
       if(cmd != null) cmd.pushJob(zip);
-      zip.unzip(dbpath);
+      zip.unzip(dbPath);
     } finally {
       if(cmd != null) cmd.popJob();
     }

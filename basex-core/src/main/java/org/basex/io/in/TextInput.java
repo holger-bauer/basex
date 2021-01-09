@@ -13,7 +13,7 @@ import org.basex.util.*;
  * it can also be explicitly set by calling {@link #encoding()}.
  * UTF-8 will be used as default encoding.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class TextInput extends BufferInput {
@@ -40,6 +40,15 @@ public class TextInput extends BufferInput {
   public TextInput(final IO io) throws IOException {
     super(io);
     guess();
+  }
+
+  /**
+   * Constructor.
+   * @param token token
+   * @throws IOException I/O exception
+   */
+  public TextInput(final byte[] token) throws IOException {
+    this(new IOContent(token));
   }
 
   /**
@@ -98,13 +107,13 @@ public class TextInput extends BufferInput {
 
   /**
    * Sets a new encoding.
-   * @param enc encoding (ignored if {@code null} or an empty string)
+   * @param encoding encoding (ignored if {@code null} or an empty string)
    * @return self reference
    * @throws IOException I/O Exception
    */
-  public TextInput encoding(final String enc) throws IOException {
-    if(enc != null && !enc.isEmpty()) {
-      String e = normEncoding(enc);
+  public TextInput encoding(final String encoding) throws IOException {
+    if(encoding != null && !encoding.isEmpty()) {
+      String e = normEncoding(encoding);
       if(e == UTF16) e = decoder.encoding == UTF16LE ? UTF16LE : UTF16BE;
       decoder = TextDecoder.get(e);
       decoder.validate = validate;
@@ -113,18 +122,18 @@ public class TextInput extends BufferInput {
   }
 
   /**
-   * Returns the next character.
+   * Returns the next codepoint.
    * @return next codepoint
    * @throws IOException I/O exception
    */
   @Override
   public int read() throws IOException {
-    final int ch = decoder.read(this);
-    if(ch != -1 && !XMLToken.valid(ch)) {
-      if(validate) throw new EncodingException(ch);
+    final int cp = decoder.read(this);
+    if(cp != -1 && !XMLToken.valid(cp)) {
+      if(validate) throw new InputException("Invalid XML character: #" + cp);
       return Token.REPLACEMENT;
     }
-    return ch;
+    return cp;
   }
 
   @Override
@@ -138,12 +147,12 @@ public class TextInput extends BufferInput {
    * @throws IOException I/O exception
    */
   public final TokenBuilder cache() throws IOException {
-    final TokenBuilder tb = new TokenBuilder(Math.max(Array.CAPACITY, (int) length));
     try {
+      final TokenBuilder tb = new TokenBuilder(Array.initialCapacity(length));
       for(int ch; (ch = read()) != -1;) tb.add(ch);
+      return tb;
     } finally {
       close();
     }
-    return tb;
   }
 }

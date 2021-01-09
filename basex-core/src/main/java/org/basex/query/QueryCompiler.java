@@ -16,7 +16,7 @@ import org.basex.util.list.*;
  * This class compiles all components of the query that are needed in an order that
  * maximizes the amount of inlining possible.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 final class QueryCompiler {
@@ -81,8 +81,8 @@ final class QueryCompiler {
       }
 
       @Override
-      public boolean inlineFunc(final Scope sub) {
-        if(map.put(sub, sub) == null) sub.visit(this);
+      public boolean inlineFunc(final Scope scope) {
+        if(map.put(scope, scope) == null) scope.visit(this);
         return true;
       }
 
@@ -102,7 +102,9 @@ final class QueryCompiler {
    * @throws QueryException compilation errors
    */
   public static void compile(final CompileContext cc, final MainModule root) throws QueryException {
-    if(!root.compiled()) new QueryCompiler(cc, root).compile();
+    if(!root.compiled()) {
+      new QueryCompiler(cc, root).compile();
+    }
   }
 
   /**
@@ -110,40 +112,50 @@ final class QueryCompiler {
    * @throws QueryException compilation errors
    */
   private void compile() throws QueryException {
-    // compile the used scopes only
-    for(final Scope[] comp : components(0)) circCheck(comp).comp(cc);
+    // compile the used scopes only, collect static functions
+    final ArrayList<StaticFunc> funcs = new ArrayList<>();
+    for(final Scope[] scps : scopes(0)) {
+      final Scope scope = circCheck(scps);
+      scope.comp(cc);
+      if(scope instanceof StaticFunc) funcs.add((StaticFunc) scope);
+    }
 
     // check for circular variable declarations without compiling the unused scopes
-    for(final StaticVar v : cc.qc.vars) {
-      if(id(v) == -1) for(final Scope[] comp : components(add(v))) circCheck(comp);
+    for(final StaticVar var : cc.qc.vars) {
+      if(id(var) == -1) {
+        for(final Scope[] scope : scopes(add(var))) circCheck(scope);
+      }
     }
+
+    // optimize static functions
+    for(final StaticFunc func : funcs) func.optimize(cc);
   }
 
   /**
    * Checks if the given component contains a static variable that depends on itself.
-   * @param comp component to check
+   * @param scopes scopes to check
    * @return scope to be compiled, the others are compiled recursively
    * @throws QueryException query exception
    */
-  private static Scope circCheck(final Scope[] comp) throws QueryException {
-    if(comp.length > 1) {
-      for(final Scope scp : comp) {
-        if(scp instanceof StaticVar) {
-          final StaticVar var = (StaticVar) scp;
+  private static Scope circCheck(final Scope[] scopes) throws QueryException {
+    if(scopes.length > 1) {
+      for(final Scope scope : scopes) {
+        if(scope instanceof StaticVar) {
+          final StaticVar var = (StaticVar) scope;
           throw CIRCVAR_X.get(var.info, var.id());
         }
       }
     }
-    return comp[0];
+    return scopes[0];
   }
 
   /**
-   * Returns the strongly connected components of the dependency graph.
+   * Returns the strongly connected scopes of the dependency graph.
    * @param p ID of the starting point
-   * @return the components
+   * @return scopes
    * @throws QueryException if a variable directly calls itself
    */
-  private Iterable<Scope[]> components(final int p) throws QueryException {
+  private Iterable<Scope[]> scopes(final int p) throws QueryException {
     result.clear();
     tarjan(p);
     return result;
@@ -199,7 +211,9 @@ final class QueryCompiler {
     }
 
     final int ss = scopes.size();
-    for(int s = 0; s < ss; s++) if(scopes.get(s) == scp) return s;
+    for(int s = 0; s < ss; s++) {
+      if(scopes.get(s) == scp) return s;
+    }
     return -1;
   }
 
@@ -250,7 +264,7 @@ final class QueryCompiler {
       @Override
       public boolean staticFuncCall(final StaticFuncCall call) { return neighbor(call.func()); }
       @Override
-      public boolean inlineFunc(final Scope sub) { return sub.visit(this); }
+      public boolean inlineFunc(final Scope scope) { return scope.visit(this); }
       @Override
       public boolean funcItem(final FuncItem func) { return neighbor(func); }
 

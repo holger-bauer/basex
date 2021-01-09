@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Resizable-array implementation for native long values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class LongList extends ElementList {
@@ -18,15 +18,15 @@ public class LongList extends ElementList {
    * Default constructor.
    */
   public LongList() {
-    this(Array.CAPACITY);
+    this(Array.INITIAL_CAPACITY);
   }
 
   /**
-   * Constructor, specifying an initial internal array size.
-   * @param capacity initial array capacity
+   * Constructor with initial capacity.
+   * @param capacity array capacity
    */
-  public LongList(final int capacity) {
-    list = new long[capacity];
+  public LongList(final long capacity) {
+    list = new long[Array.checkCapacity(capacity)];
   }
 
   /**
@@ -37,7 +37,7 @@ public class LongList extends ElementList {
   public final LongList add(final long element) {
     long[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Arrays.copyOf(lst, newSize());
+    if(s == lst.length) lst = Arrays.copyOf(lst, newCapacity());
     lst[s] = element;
     list = lst;
     size = s + 1;
@@ -52,8 +52,8 @@ public class LongList extends ElementList {
   public final LongList add(final long... elements) {
     long[] lst = list;
     final int l = elements.length, s = size, ns = s + l;
-    if(ns > lst.length) lst = Arrays.copyOf(lst, newSize(ns));
-    System.arraycopy(elements, 0, lst, s, l);
+    if(ns > lst.length) lst = Arrays.copyOf(lst, newCapacity(ns));
+    Array.copyFromStart(elements, l, lst, s);
     list = lst;
     size = ns;
     return this;
@@ -136,6 +136,18 @@ public class LongList extends ElementList {
       size = i;
     }
     return this;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(obj == this) return true;
+    if(!(obj instanceof LongList)) return false;
+    final LongList ll = (LongList) obj;
+    if(size != ll.size) return false;
+    for(int l = 0; l < size; ++l) {
+      if(list[l] != ll.list[l]) return false;
+    }
+    return true;
   }
 
   @Override

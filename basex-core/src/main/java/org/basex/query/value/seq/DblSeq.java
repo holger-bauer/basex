@@ -3,15 +3,15 @@ package org.basex.query.value.seq;
 import java.util.*;
 
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
+import org.basex.util.list.*;
 
 /**
  * Sequence of items of type {@link Int xs:double}, containing at least two of them.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DblSeq extends NativeSeq {
@@ -23,7 +23,7 @@ public final class DblSeq extends NativeSeq {
    * @param values bytes
    */
   private DblSeq(final double[] values) {
-    super(values.length, AtomType.DBL);
+    super(values.length, AtomType.DOUBLE);
     this.values = values;
   }
 
@@ -33,8 +33,17 @@ public final class DblSeq extends NativeSeq {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    return cmp instanceof DblSeq && Arrays.equals(values, ((DblSeq) cmp).values);
+  public Value reverse(final QueryContext qc) {
+    final int sz = (int) size;
+    final double[] tmp = new double[sz];
+    for(int i = 0; i < sz; i++) tmp[sz - i - 1] = values[i];
+    return get(tmp);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || (obj instanceof DblSeq ? Arrays.equals(values, ((DblSeq) obj).values) :
+      super.equals(obj));
   }
 
   @Override
@@ -42,39 +51,35 @@ public final class DblSeq extends NativeSeq {
     return values;
   }
 
-  // STATIC METHODS =====================================================================
+  // STATIC METHODS ===============================================================================
 
   /**
    * Creates a sequence with the specified items.
-   * @param items items
+   * @param values values
    * @return value
    */
-  public static Value get(final double[] items) {
-    return items.length == 0 ? Empty.SEQ : items.length == 1 ? Dbl.get(items[0]) :
-      new DblSeq(items);
+  public static Value get(final double[] values) {
+    final int vl = values.length;
+    return vl == 0 ? Empty.VALUE : vl == 1 ? Dbl.get(values[0]) : new DblSeq(values);
   }
 
   /**
-   * Creates a sequence with the items in the specified expressions.
-   * @param values values
+   * Creates a typed sequence with the items of the specified values.
    * @param size size of resulting sequence
+   * @param values values
    * @return value
    * @throws QueryException query exception
    */
-  public static Value get(final Value[] values, final int size) throws QueryException {
-    final double[] tmp = new double[size];
-    int t = 0;
-    for(final Value val : values) {
+  static Value get(final int size, final Value... values) throws QueryException {
+    final DoubleList tmp = new DoubleList(size);
+    for(final Value value : values) {
       // speed up construction, depending on input
-      final int vs = (int) val.size();
-      if(val instanceof DblSeq) {
-        final DblSeq sq = (DblSeq) val;
-        System.arraycopy(sq.values, 0, tmp, t, vs);
-        t += vs;
+      if(value instanceof DblSeq) {
+        tmp.add(((DblSeq) value).values);
       } else {
-        for(int v = 0; v < vs; v++) tmp[t++] = val.itemAt(v).dbl(null);
+        for(final Item item : value) tmp.add(item.dbl(null));
       }
     }
-    return get(tmp);
+    return get(tmp.finish());
   }
 }

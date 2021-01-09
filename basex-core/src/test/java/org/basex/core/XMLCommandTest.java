@@ -1,23 +1,22 @@
 package org.basex.core;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.parse.*;
 import org.basex.query.*;
 import org.basex.util.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the XML syntax of the database commands.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XMLCommandTest extends SandboxTest {
   /** Check syntax of all commands. */
-  @Test
-  public void commands() {
+  @Test public void commands() {
     // surrounded by <commands/> element (required to process more than one command)
     ok("<commands><add>x</add></commands>");
 
@@ -139,8 +138,7 @@ public final class XMLCommandTest extends SandboxTest {
   }
 
   /** Evaluates some commands with invalid syntax. */
-  @Test
-  public void failing() {
+  @Test public void failing() {
     no("<add/>");
     no("<add x='X'>X</add>");
     no("<add path='X' x='X'>X</add>");

@@ -3,7 +3,7 @@ package org.basex.query.util.ft;
 /**
  * Single full-text string match.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTStringMatch implements Comparable<FTStringMatch> {
@@ -40,13 +40,6 @@ public final class FTStringMatch implements Comparable<FTStringMatch> {
   }
 
   @Override
-  public boolean equals(final Object ftm) {
-    if(!(ftm instanceof FTStringMatch)) return false;
-    final FTStringMatch sm = (FTStringMatch) ftm;
-    return start == sm.start && end == sm.end;
-  }
-
-  @Override
   public int compareTo(final FTStringMatch sm) {
     final int s = start - sm.start;
     return s == 0 ? end - sm.end : s;
@@ -59,9 +52,19 @@ public final class FTStringMatch implements Comparable<FTStringMatch> {
   }
 
   @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof FTStringMatch)) return false;
+    final FTStringMatch sm = (FTStringMatch) obj;
+    return start == sm.start && end == sm.end;
+  }
+
+  @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder().append(pos);
-    sb.append(':').append(start).append('-').append(end);
-    return exclude ? "not(" + sb + ')' : sb.toString();
+    final StringBuilder sb = new StringBuilder();
+    if(exclude) sb.append("not(");
+    sb.append(pos).append(':').append(start).append('-').append(end);
+    if(exclude) sb.append(')');
+    return sb.toString();
   }
 }

@@ -1,11 +1,11 @@
 package org.basex.http.restxq;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This test contains RESTXQ outputs.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RestXqOutputTest extends RestXqTest {
@@ -13,8 +13,7 @@ public final class RestXqOutputTest extends RestXqTest {
    * Serialization parameters and elements.
    * @throws Exception exception
    */
-  @Test
-  public void output() throws Exception {
+  @Test public void output() throws Exception {
     // correct syntax
     get("declare %R:path('') %output:method('text') function m:f() {'9'};", "", "9");
     // unknown serialization parameter

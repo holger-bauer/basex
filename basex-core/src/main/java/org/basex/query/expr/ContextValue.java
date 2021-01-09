@@ -1,11 +1,10 @@
 package org.basex.query.expr;
 
 import org.basex.core.locks.*;
+import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
-import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -14,34 +13,29 @@ import org.basex.util.hash.*;
 /**
  * Context value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ContextValue extends Simple {
+  /** Data reference (can be {@code null}). */
+  private Data data;
+
   /**
    * Constructor.
    * @param info input info
    */
   public ContextValue(final InputInfo info) {
-    super(info);
-    seqType = SeqType.ITEM_ZM;
+    super(info, SeqType.ITEM_ZM);
   }
 
   @Override
-  public ContextValue compile(final CompileContext cc) {
-    return optimize(cc);
-  }
-
-  @Override
-  public ContextValue optimize(final CompileContext cc) {
-    final QueryFocus focus = cc.qc.focus;
-    if(focus.value != null) seqType = focus.value.seqType();
+  public Expr optimize(final CompileContext cc) {
+    final Value value = cc.qc.focus.value;
+    if(value != null) {
+      if(!cc.nestedFocus()) return cc.replaceWith(this, value);
+      adoptType(value);
+    }
     return this;
-  }
-
-  @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return ctxValue(qc).iter();
   }
 
   @Override
@@ -50,18 +44,28 @@ public final class ContextValue extends Simple {
   }
 
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return ctxValue(qc).item(qc, info);
+  public boolean has(final Flag... flags) {
+    return Flag.CTX.in(flags);
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.CTX;
+  public VarUsage count(final Var var) {
+    return var == null ? VarUsage.ONCE : VarUsage.NEVER;
   }
 
   @Override
-  public boolean removable(final Var var) {
-    return false;
+  public Expr inline(final InlineContext ic) throws QueryException {
+    return ic.var == null ? ic.copy() : null;
+  }
+
+  @Override
+  public Data data() {
+    return data;
+  }
+
+  @Override
+  public void data(final Data dt) {
+    data = dt;
   }
 
   @Override
@@ -71,16 +75,16 @@ public final class ContextValue extends Simple {
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
-    return visitor.lock(Locking.CONTEXT) && super.accept(visitor);
+    return visitor.lock(Locking.CONTEXT, false) && super.accept(visitor);
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    return cmp instanceof ContextValue;
+  public boolean equals(final Object obj) {
+    return obj instanceof ContextValue;
   }
 
   @Override
-  public String toString() {
-    return ".";
+  public void plan(final QueryString qs) {
+    qs.token(".");
   }
 }

@@ -2,8 +2,8 @@ package org.basex.query.expr.ft;
 
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 import org.basex.util.ft.*;
@@ -11,11 +11,11 @@ import org.basex.util.ft.*;
 /**
  * Abstract FTFilter expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class FTFilter extends FTExpr {
-  /** Optional unit. */
+  /** Unit. */
   final FTUnit unit;
 
   /**
@@ -40,19 +40,20 @@ public abstract class FTFilter extends FTExpr {
 
   @Override
   public final FTNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final FTNode it = exprs[0].item(qc, info);
-    filter(qc, it, qc.ftLexer);
-    return it;
+    final FTNode item = exprs[0].item(qc, info);
+    filter(qc, item, qc.ftLexer);
+    return item;
   }
 
   @Override
   public final FTIter iter(final QueryContext qc) throws QueryException {
-    final FTIter ir = exprs[0].iter(qc);
+    final FTIter iter = exprs[0].iter(qc);
     return new FTIter() {
       @Override
       public FTNode next() throws QueryException {
         FTNode it;
-        while((it = ir.next()) != null) {
+        while((it = iter.next()) != null) {
+          qc.checkStop();
           // only create lexer if content needs to be parsed
           if(filter(qc, it, content() ? new FTLexer().init(it.string(info)) : null)) break;
         }
@@ -74,7 +75,7 @@ public abstract class FTFilter extends FTExpr {
 
     final FTMatches all = item.matches();
     for(int a = 0; a < all.size(); a++) {
-      if(!filter(qc, all.match[a], lexer)) all.delete(a--);
+      if(!filter(qc, all.list[a], lexer)) all.remove(a--);
     }
     return !all.isEmpty();
   }
@@ -115,7 +116,7 @@ public abstract class FTFilter extends FTExpr {
   }
 
   @Override
-  public String toString() {
-    return exprs[0] + " ";
+  public boolean equals(final Object obj) {
+    return obj instanceof FTFilter && unit == ((FTFilter) obj).unit && super.equals(obj);
   }
 }

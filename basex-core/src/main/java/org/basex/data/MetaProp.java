@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * This class provides meta properties.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum MetaProp {
@@ -19,7 +19,7 @@ public enum MetaProp {
   /** Property. */
   SIZE(false) {
     @Override
-    public Long value(final MetaData meta) { return meta.dbsize(); }
+    public Long value(final MetaData meta) { return meta.dbSize(); }
   },
   /** Property. */
   NODES(false) {
@@ -35,13 +35,13 @@ public enum MetaProp {
   BINARIES(false) {
     @Override
     public Integer value(final MetaData meta) {
-      return meta.path != null ? meta.binaries().descendants().size() : 0;
+      return meta.dir != null ? meta.binaryDir().descendants().size() : 0;
     }
   },
   /** Property. */
   TIMESTAMP(false) {
     @Override
-    public String value(final MetaData meta) { return DateTime.format(new Date(meta.dbtime())); }
+    public String value(final MetaData meta) { return DateTime.format(new Date(meta.dbTime())); }
   },
   /** Property. */
   UPTODATE(false) {
@@ -56,7 +56,7 @@ public enum MetaProp {
   /** Property. */
   INPUTSIZE(false) {
     @Override
-    public Long value(final MetaData meta) { return meta.filesize; }
+    public Long value(final MetaData meta) { return meta.inputsize; }
   },
   /** Property. */
   INPUTDATE(false) {

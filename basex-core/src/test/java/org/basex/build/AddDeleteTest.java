@@ -1,19 +1,19 @@
 package org.basex.build;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests adding files/folders/zip files/urls to collections.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Michael Seiferle
  */
 public final class AddDeleteTest extends SandboxTest {
@@ -32,7 +32,7 @@ public final class AddDeleteTest extends SandboxTest {
   /** Test XML fragment. */
   private static final String XMLFRAG = "<xml a='blu'><foo /></xml>";
   /** Temporary XML file. */
-  private static final String TEMP = Prop.TMP + NAME + IO.XMLSUFFIX;
+  private static final String TEMP = Prop.TEMPDIR + NAME + IO.XMLSUFFIX;
 
   /** Number of XML files for folder. */
   private static final int NFLDR;
@@ -48,16 +48,14 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Creates a database.
    */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     execute(new CreateDB(NAME));
   }
 
   /**
    * Drops the database.
    */
-  @After
-  public void tearDown() {
+  @AfterEach public void tearDown() {
     execute(new DropDB(NAME));
   }
 
@@ -67,8 +65,7 @@ public final class AddDeleteTest extends SandboxTest {
    * <li> with name and target set</li>
    * <li> w/o name and target set</li></ol>
    */
-  @Test
-  public void addXMLString() {
+  @Test public void addXMLString() {
     execute(new Add("index.xml", XMLFRAG));
     assertEquals(1, docs());
     execute(new Add("a/b/c/index2.xml", XMLFRAG));
@@ -80,8 +77,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds a single file to the database.
    */
-  @Test
-  public void addFile() {
+  @Test public void addFile() {
     execute(new Add(null, FILE));
     assertEquals(1, docs());
   }
@@ -89,8 +85,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds a zip file.
    */
-  @Test
-  public void addZip() {
+  @Test public void addZip() {
     execute(new Add("target", ZIPFILE));
     assertEquals(4, docs());
 
@@ -118,8 +113,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds/deletes a GZIP file.
    */
-  @Test
-  public void addGzip() {
+  @Test public void addGzip() {
     execute(new Add("", GZIPFILE));
     execute(new Add("bar", GZIPFILE));
     execute(new Delete("bar"));
@@ -129,8 +123,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds a folder. The contained a zip file is added as well.
    */
-  @Test
-  public void addFolder() {
+  @Test public void addFolder() {
     execute(new Add("", FLDR));
     assertEquals(NFLDR, docs());
   }
@@ -138,8 +131,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds/deletes with target.
    */
-  @Test
-  public void deletePath() {
+  @Test public void deletePath() {
     execute(new Add("foo/pub", FLDR));
     assertEquals(NFLDR, docs());
     execute(new Delete("foo"));
@@ -153,8 +145,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds/deletes a file/folder.
    */
-  @Test
-  public void addFoldersDeleteFiles() {
+  @Test public void addFoldersDeleteFiles() {
     execute(new Add("folder", FLDR));
     execute(new Add("", FILE));
     execute(new Delete("input.xml"));
@@ -165,8 +156,7 @@ public final class AddDeleteTest extends SandboxTest {
   /**
    * Adds/deletes with target.
    */
-  @Test
-  public void createDeleteAdd() {
+  @Test public void createDeleteAdd() {
     execute(new CreateDB(NAME, "<a/>"));
     execute(new Delete("/"));
     assertEquals(0, docs());
@@ -180,19 +170,17 @@ public final class AddDeleteTest extends SandboxTest {
 
   /**
    * Adds a non-existent file.
-   * @throws BaseXException database exception
    */
-  @Test(expected = BaseXException.class)
-  public void addFileFail() throws BaseXException {
-    new Add("", FILE + "/doesnotexist").execute(context);
+  @Test public void addFileFail() {
+    assertThrows(BaseXException.class,
+      () -> new Add("", FILE + "/doesnotexist").execute(context));
   }
 
   /**
    * Adds a broken input file to the database and checks if the file can be
    * deleted afterwards.
    */
-  @Test
-  public void addCorrupt() {
+  @Test public void addCorrupt() {
     final IOFile io = new IOFile(TEMP);
     write(io, "<x");
     try {
@@ -205,29 +193,24 @@ public final class AddDeleteTest extends SandboxTest {
 
   /**
    * Creates a database from a broken input.
-   * @throws BaseXException database exception
    */
-  @Test(expected = BaseXException.class)
-  public void createCorrupt() throws BaseXException {
-    new CreateDB(NAME, "<x").execute(context);
+  @Test public void createCorrupt() {
+    assertThrows(BaseXException.class, () -> new CreateDB(NAME, "<x").execute(context));
   }
 
   /**
    * Creates a database from a broken input file.
-   * @throws BaseXException database exception
    */
-  @Test(expected = BaseXException.class)
-  public void createCorruptFromFile() throws BaseXException {
+  @Test public void createCorruptFromFile() {
     final IOFile io = new IOFile(TEMP);
     write(io, "<x");
-    new CreateDB(NAME, io.path()).execute(context);
+    assertThrows(BaseXException.class, () -> new CreateDB(NAME, io.path()).execute(context));
   }
 
   /**
    * Skips a corrupt file.
    */
-  @Test
-  public void skipCorrupt() {
+  @Test public void skipCorrupt() {
     final IOFile io = new IOFile(TEMP);
     write(io, "<x");
 

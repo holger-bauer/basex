@@ -2,7 +2,6 @@ package org.basex.gui.layout;
 
 import static org.basex.core.Text.*;
 
-import java.awt.*;
 import java.io.*;
 import java.util.*;
 
@@ -16,7 +15,7 @@ import org.basex.util.*;
 /**
  * Project specific File Chooser implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXFileChooser {
@@ -29,32 +28,26 @@ public final class BaseXFileChooser {
     /** Save file or directory. */ DSAVE,
   }
 
-  /** Reference to main window. */
-  private GUI gui;
+  /** Reference to parent window (of type {@link BaseXDialog} or {@link GUI}). */
+  private final BaseXWindow win;
   /** Swing file chooser. */
-  private JFileChooser fc;
-  /** Simple file dialog. */
-  private FileDialog fd;
+  private final JFileChooser fc;
   /** File suffix. */
   private String suffix;
 
   /**
    * Default constructor.
+   * @param win reference to the main window
    * @param title dialog title
    * @param path initial path
-   * @param main reference to main window
    */
-  public BaseXFileChooser(final String title, final String path, final GUI main) {
+  public BaseXFileChooser(final BaseXWindow win, final String title, final String path) {
+    this.win = win;
+
     final IOFile file = new IOFile(path);
-    if(main.gopts.get(GUIOptions.SIMPLEFD)) {
-      fd = new FileDialog(main, title);
-      fd.setDirectory(file.path());
-    } else {
-      fc = new JFileChooser(path);
-      if(!file.isDir()) fc.setSelectedFile(file.file());
-      fc.setDialogTitle(title);
-      gui = main;
-    }
+    fc = new JFileChooser(path);
+    if(!file.isDir()) fc.setSelectedFile(file.file());
+    fc.setDialogTitle(title);
   }
 
   /**
@@ -62,7 +55,7 @@ public final class BaseXFileChooser {
    * @return self reference
    */
   public BaseXFileChooser textFilters() {
-    filter(XML_DOCUMENTS, IO.XMLSUFFIXES);
+    filter(XML_DOCUMENTS, win.gui().gopts.xmlSuffixes());
     filter(XSL_DOCUMENTS, IO.XSLSUFFIXES);
     filter(HTML_DOCUMENTS, IO.HTMLSUFFIXES);
     filter(JSON_DOCUMENTS, IO.JSONSUFFIX);
@@ -116,39 +109,27 @@ public final class BaseXFileChooser {
   }
 
   /**
-   * Selects a file or directory.
+   * Returns selected files or directories.
    * @param mode type defined by {@link Mode}
-   * @return resulting input reference
+   * @return input files
    */
   public IOFile[] selectAll(final Mode mode) {
-    if(fd != null) {
-      if(mode == Mode.FDOPEN) fd.setFile(" ");
-      fd.setMode(mode == Mode.FSAVE || mode == Mode.DSAVE ?
-          FileDialog.SAVE : FileDialog.LOAD);
-      fd.setVisible(true);
-      final String f = fd.getFile();
-      if(f == null) return new IOFile[0];
-      final String dir = fd.getDirectory();
-      return new IOFile[] { new IOFile(mode == Mode.DOPEN || mode == Mode.DSAVE ? dir :
-        dir + '/' + fd.getFile()) };
-    }
-
     int state = 0;
     switch(mode) {
       case FOPEN:
-        state = fc.showOpenDialog(gui);
+        state = fc.showOpenDialog(win.component());
         break;
       case FDOPEN:
         fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-        state = fc.showOpenDialog(gui);
+        state = fc.showOpenDialog(win.component());
         break;
       case FSAVE:
-        state = fc.showSaveDialog(gui);
+        state = fc.showSaveDialog(win.component());
         break;
       case DOPEN:
       case DSAVE:
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        state = fc.showDialog(gui, null);
+        state = fc.showDialog(win.component(), null);
         break;
     }
     if(state != JFileChooser.APPROVE_OPTION) return new IOFile[0];
@@ -156,8 +137,15 @@ public final class BaseXFileChooser {
     final File[] fls = fc.isMultiSelectionEnabled() ? fc.getSelectedFiles() :
       new File[] { fc.getSelectedFile() };
     final int fl = fls.length;
+
     final IOFile[] files = new IOFile[fl];
-    for(int f = 0; f < fl; f++) files[f] = new IOFile(fls[f].getPath());
+    for(int f = 0; f < fl; f++) {
+      // chop too long paths (usually result of copy'n'paste)
+      String path = fls[f].getPath();
+      path = path.substring(0, Math.min(path.length(), 512));
+      if(fls[f].isDirectory()) path += '/';
+      files[f] = new IOFile(path);
+    }
 
     if(mode == Mode.FSAVE) {
       // add file suffix to files
@@ -168,7 +156,7 @@ public final class BaseXFileChooser {
           if(!path.contains(".")) files[f] = new IOFile(path + suffix);
         }
       } else if(ff instanceof Filter) {
-        final String[] sufs = ((Filter) ff).sufs;
+        final String[] sufs = ((Filter) ff).suffixes;
         final int sl = sufs.length;
         for(int f = 0; f < fl && sl != 0; f++) {
           final String path = files[f].path();
@@ -178,8 +166,8 @@ public final class BaseXFileChooser {
 
       // show replace dialog
       for(final IOFile io : files) {
-        if(io.exists() && !BaseXDialog.confirm(gui, Util.info(FILE_EXISTS_X, io))) {
-          return new IOFile[0];
+        if(io.exists()) {
+          if(!BaseXDialog.confirm(win.gui(), Util.info(FILE_EXISTS_X, io))) return new IOFile[0];
         }
       }
     }
@@ -191,36 +179,38 @@ public final class BaseXFileChooser {
    */
   private static class Filter extends FileFilter {
     /** Suffixes. */
-    final String[] sufs;
+    final String[] suffixes;
     /** Description. */
-    final String desc;
+    final String description;
 
     /**
      * Constructor.
-     * @param s suffixes
-     * @param d description
+     * @param suffixes suffixes
+     * @param description description
      */
-    Filter(final String[] s, final String d) {
-      sufs = s;
-      desc = d;
+    Filter(final String[] suffixes, final String description) {
+      this.suffixes = suffixes;
+      this.description = description;
     }
 
     @Override
     public boolean accept(final File file) {
       if(file.isDirectory()) return true;
       final String name = file.getName().toLowerCase(Locale.ENGLISH);
-      for(final String s : sufs) if(name.endsWith(s)) return true;
+      for(final String suf : suffixes) {
+        if(name.endsWith(suf)) return true;
+      }
       return false;
     }
 
     @Override
     public String getDescription() {
       final StringBuilder sb = new StringBuilder();
-      for(final String s : sufs) {
+      for(final String s : suffixes) {
         if(sb.length() != 0) sb.append(", ");
         sb.append('*').append(s);
       }
-      return desc + " (" + sb + ')';
+      return description + " (" + sb + ')';
     }
   }
 }

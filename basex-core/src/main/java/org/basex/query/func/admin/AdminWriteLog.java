@@ -5,14 +5,14 @@ import static org.basex.util.Token.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
-import org.basex.server.*;
+import org.basex.query.value.seq.*;
 import org.basex.server.Log.LogType;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class AdminWriteLog extends AdminFn {
@@ -22,12 +22,9 @@ public final class AdminWriteLog extends AdminFn {
 
     final String msg = string(toToken(exprs[0], qc));
     final String type = exprs.length > 1 ? string(toToken(exprs[1], qc)) : LogType.INFO.toString();
-    if(!type.matches("^[A-Z]+$")) throw BXAD_TYPE_X.get(info, type);
+    if(type.matches(".*\\s.*$")) throw ADMIN_TYPE_X.get(info, type);
 
-    final ClientInfo ci = qc.context.client;
-    final String addr = ci == null ? Log.SERVER : ci.address();
-    final String user = ci == null ? qc.context.user().name() : ci.user();
-    qc.context.log.write(addr, user, type, msg, null);
-    return null;
+    qc.context.log.write(type, msg, null, qc.context);
+    return Empty.VALUE;
   }
 }

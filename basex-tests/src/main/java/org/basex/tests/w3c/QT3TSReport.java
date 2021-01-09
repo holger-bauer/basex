@@ -4,14 +4,13 @@ import java.util.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.io.out.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 
 /**
  * QT3TS Report builder.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QT3TSReport {
@@ -96,7 +95,7 @@ public final class QT3TSReport {
    * @return report stream
    * @throws Exception exception
    */
-  public ArrayOutput create(final Context ctx) throws Exception {
+  public byte[] create(final Context ctx) throws Exception {
     final String dquery = "replace(string(current-date()),'\\+.*','')";
     final String date = new XQuery(dquery).execute(ctx);
 
@@ -107,9 +106,9 @@ public final class QT3TSReport {
     submission.add("anonymous", "false");
 
     final FElem created = element("created", submission);
-    created.add("by", Prop.AUTHOR);
+    created.add("by", Text.AUTHOR);
     created.add("email", "cg@basex.org");
-    created.add("organization", Prop.ENTITY);
+    created.add("organization", Text.ORGANIZATION);
     created.add("on", date);
 
     final FElem testRun = element("test-run", submission);
@@ -120,7 +119,7 @@ public final class QT3TSReport {
 
     // product element
     final FElem product = element("product", root);
-    product.add("vendor", Prop.ENTITY);
+    product.add("vendor", Text.ORGANIZATION);
     product.add("name", Prop.NAME);
     product.add("version", Prop.VERSION);
     product.add("released", "true");
@@ -147,7 +146,7 @@ public final class QT3TSReport {
         tc.add("result", test[1]);
       }
     }
-    return root.serialize();
+    return root.serialize().finish();
   }
 
   /**

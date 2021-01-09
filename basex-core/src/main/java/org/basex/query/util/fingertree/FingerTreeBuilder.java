@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * A builder for {@link FingerTree}s from leaf nodes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <E> element type
@@ -68,7 +68,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
    * @return the resulting finger tree
    */
   public FingerTree<E, E> freeze() {
-    return root == null ? FingerTree.<E>empty() : root.freeze();
+    return root == null ? FingerTree.empty() : root.freeze();
   }
 
   @Override
@@ -208,7 +208,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
         final int n = inLeft + inRight;
         final Node<N, E>[] buff = new Node[n + ll];
         copyInto(midPos - inLeft, buff, 0, n);
-        System.arraycopy(ls, 0, buff, n, ll);
+        Array.copyFromStart(ls, ll, buff, n);
         inLeft = inRight = 0;
         middle = mid;
         for(int i = buff.length; --i >= 0;) prepend(buff[i]);
@@ -218,12 +218,12 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
         final int n = inRight + ll;
         final Node<N, E>[] buff = new Node[n];
         copyInto(midPos, buff, 0, inRight);
-        System.arraycopy(ls, 0, buff, inRight, ll);
+        Array.copyFromStart(ls, ll, buff, inRight);
         inRight = 0;
         for(int k = (n + NODE_SIZE - 1) / NODE_SIZE, p = 0; k > 0; k--) {
           final int inNode = (n - p + k - 1) / k;
           final Node<N, E>[] out = new Node[inNode];
-          System.arraycopy(buff, p, out, 0, inNode);
+          Array.copyToStart(buff, p, inNode, out);
           final Node<Node<N, E>, E> sub = new InnerNode<>(out);
           if(middle == null) middle = new BufferNode<>(sub);
           else midBuffer().append(sub);
@@ -266,7 +266,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
 
     /**
      * Returns the middle tree as a buffer node.
-     * @return middle buffer node
+     * @return middle buffer node (can be {@code null})
      */
     private BufferNode<Node<N, E>, E> midBuffer() {
       if(middle == null) return null;
@@ -298,10 +298,10 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
     private void copyInto(final int start, final Node<N, E>[] arr, final int pos, final int len) {
       final int p = ((start % CAP) + CAP) % CAP, k = CAP - p;
       if(len <= k) {
-        System.arraycopy(nodes, p, arr, pos, len);
+        Array.copy(nodes, p, len, arr, pos);
       } else {
-        System.arraycopy(nodes, p, arr, pos, k);
-        System.arraycopy(nodes, 0, arr, pos + k, len - k);
+        Array.copy(nodes, p, k, arr, pos);
+        Array.copyFromStart(nodes, len - k, arr, pos + k);
       }
     }
   }
@@ -338,7 +338,6 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
 
     @Override
     public E next() {
-      if(sub == null) throw new NoSuchElementException();
       final E out = sub.next();
       if(sub.hasNext()) return out;
 
@@ -388,7 +387,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
 
     @Override
     public void remove() {
-      throw new UnsupportedOperationException();
+      throw Util.notExpected();
     }
   }
 }

@@ -13,12 +13,14 @@ import org.basex.util.list.*;
 /**
  * Visualization preferences.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogVisualPrefs extends BaseXBack {
   /** GUI reference. */
   private final GUI gui;
+  /** Wrap tabs. */
+  private final BaseXCheckBox scrollTabs;
   /** Show names checkbox. */
   private final BaseXCheckBox showNames;
 
@@ -33,33 +35,35 @@ final class DialogVisualPrefs extends BaseXBack {
   private final BaseXSlider mapWeight;
   /** Show attributes. */
   private final BaseXCheckBox mapAtts;
+  /** Focus checkbox. */
+  private final BaseXCheckBox mousefocus;
   /** Select layout algorithm. */
   private final BaseXCombo mapOffsets;
   /** Simple file dialog checkbox. */
   private final BaseXCombo lookfeel;
-  /** Scale UI components. */
-  private final BaseXCheckBox scale;
 
   /** Look and feels. */
   private final StringList classes = new StringList();
 
   /**
    * Default constructor.
-   * @param d dialog reference
+   * @param dialog dialog reference
    */
-  DialogVisualPrefs(final BaseXDialog d) {
-    border(8).setLayout(new TableLayout(1, 2, 40, 0));
-    gui = d.gui;
+  DialogVisualPrefs(final BaseXDialog dialog) {
+    border(8).setLayout(new ColumnLayout(40));
+    gui = dialog.gui;
 
-    final GUIOptions gopts = d.gui.gopts;
-    showNames = new BaseXCheckBox(SHOW_NAME_ATTS, GUIOptions.SHOWNAME, gopts, d);
-    treeSlims = new BaseXCheckBox(ADJUST_NODES, GUIOptions.TREESLIMS, gopts, d);
-    treeAtts = new BaseXCheckBox(SHOW_ATTS, GUIOptions.TREEATTS, gopts, d);
-    mapAlgo = new BaseXCombo(d, GUIOptions.MAPALGO, gopts, MAP_LAYOUTS);
-    mapOffsets = new BaseXCombo(d, GUIOptions.MAPOFFSETS, gopts, MAP_CHOICES);
-    mapWeight = new BaseXSlider(0, 100, GUIOptions.MAPWEIGHT, gopts, d);
-    mapAtts = new BaseXCheckBox(SHOW_ATTS, GUIOptions.MAPATTS, gopts, d);
-    mapAlgo.setSize((int) (GUIConstants.scale * 200), (int) (GUIConstants.scale * 100));
+    final GUIOptions gopts = dialog.gui.gopts;
+    scrollTabs = new BaseXCheckBox(dialog, SCROLL_TABS, GUIOptions.SCROLLTABS, gopts);
+    showNames = new BaseXCheckBox(dialog, SHOW_NAME_ATTS, GUIOptions.SHOWNAME, gopts);
+    mousefocus = new BaseXCheckBox(dialog, RT_FOCUS, GUIOptions.MOUSEFOCUS, gopts);
+    treeSlims = new BaseXCheckBox(dialog, ADJUST_NODES, GUIOptions.TREESLIMS, gopts);
+    treeAtts = new BaseXCheckBox(dialog, SHOW_ATTS, GUIOptions.TREEATTS, gopts);
+    mapAlgo = new BaseXCombo(dialog, GUIOptions.MAPALGO, gopts, MAP_LAYOUTS);
+    mapOffsets = new BaseXCombo(dialog, GUIOptions.MAPOFFSETS, gopts, MAP_CHOICES);
+    mapWeight = new BaseXSlider(dialog, 0, 100, GUIOptions.MAPWEIGHT, gopts);
+    mapAtts = new BaseXCheckBox(dialog, SHOW_ATTS, GUIOptions.MAPATTS, gopts);
+    mapAlgo.setSize(200, 100);
     BaseXLayout.setWidth(mapWeight, 150);
 
     final StringList lafs = new StringList("(default)");
@@ -72,48 +76,48 @@ final class DialogVisualPrefs extends BaseXBack {
       c++;
       if(clzz.equals(laf)) i = c;
     }
-    lookfeel = new BaseXCombo(d, lafs.finish());
+    lookfeel = new BaseXCombo(dialog, lafs.finish());
     lookfeel.setSelectedIndex(i);
 
-    scale = new BaseXCheckBox(SCALE_GUI, GUIOptions.SCALE, gopts, d);
+    BaseXBack p = new BaseXBack().layout(new RowLayout(8)), pp;
+    pp = new BaseXBack(new RowLayout());
+    pp.add(new BaseXLabel(JAVA_LF + COL, true, true));
+    pp.add(lookfeel);
+    pp.add(Box.createVerticalStrut(8));
+    pp.add(scrollTabs);
+    p.add(pp);
 
-    BaseXBack pp = new BaseXBack().layout(new TableLayout(3, 1, 0, 8)), p;
-    p = new BaseXBack(new TableLayout(2, 1));
-    p.add(new BaseXLabel(GENERAL + COL, true, true));
-    p.add(showNames);
-    pp.add(p);
+    pp = new BaseXBack(new RowLayout());
+    pp.add(new BaseXLabel(GENERAL + COL, true, true));
+    pp.add(showNames);
+    pp.add(mousefocus);
+    p.add(pp);
 
-    p = new BaseXBack(new TableLayout(3, 1));
-    p.add(new BaseXLabel(TREE + COL, true, true));
-    p.add(treeSlims);
-    p.add(treeAtts);
-    pp.add(p);
+    add(p);
 
-    p = new BaseXBack(new TableLayout(3, 1));
-    p.add(new BaseXLabel(JAVA_LF + COL, true, true));
-    p.add(lookfeel);
-    p.add(scale);
-    pp.add(p);
+    p = new BaseXBack(new RowLayout());
+    p.add(new BaseXLabel(MAP + COL, true, true));
 
-    add(pp);
+    pp = new BaseXBack(new TableLayout(2, 2, 8, 8));
+    pp.add(new BaseXLabel(ALGORITHM + COL));
+    pp.add(mapAlgo);
+    pp.add(new BaseXLabel(OFFSETS + COL));
+    pp.add(mapOffsets);
+    p.add(pp);
 
-    pp = new BaseXBack(new TableLayout(3, 1));
-    pp.add(new BaseXLabel(MAP + COL, true, true));
+    pp = new BaseXBack(new RowLayout(8));
+    pp.add(new BaseXLabel(RATIO + COLS));
+    pp.add(mapWeight);
+    pp.add(mapAtts);
+    p.add(pp);
 
-    p = new BaseXBack(new TableLayout(2, 2, 8, 8));
-    p.add(new BaseXLabel(ALGORITHM + COL));
-    p.add(mapAlgo);
-    p.add(new BaseXLabel(OFFSETS + COL));
-    p.add(mapOffsets);
-    pp.add(p);
+    pp = new BaseXBack(new RowLayout());
+    pp.add(new BaseXLabel(TREE + COL, true, true));
+    pp.add(treeSlims);
+    pp.add(treeAtts);
+    p.add(pp);
 
-    p = new BaseXBack(new TableLayout(3, 1, 0, 8));
-    p.add(new BaseXLabel(RATIO + COLS));
-    p.add(mapWeight);
-    p.add(mapAtts);
-    pp.add(p);
-
-    add(pp);
+    add(p);
   }
 
   /**
@@ -121,14 +125,15 @@ final class DialogVisualPrefs extends BaseXBack {
    * @return success flag
    */
   boolean action() {
+    mousefocus.assign();
     treeSlims.assign();
     treeAtts.assign();
     mapAtts.assign();
+    scrollTabs.assign();
     showNames.assign();
     mapWeight.assign();
     mapAlgo.assign();
     mapOffsets.assign();
-    scale.assign();
     gui.gopts.set(GUIOptions.LOOKANDFEEL, classes.get(lookfeel.getSelectedIndex()));
     return true;
   }

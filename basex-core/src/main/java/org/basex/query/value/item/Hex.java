@@ -1,7 +1,8 @@
 package org.basex.query.value.item;
 
-import static org.basex.query.QueryError.*;
+import java.util.*;
 
+import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
@@ -10,7 +11,7 @@ import org.basex.util.*;
 /**
  * HexBinary item ({@code xs:hexBinary}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Hex extends Bin {
@@ -19,7 +20,7 @@ public final class Hex extends Bin {
    * @param value bytes
    */
   public Hex(final byte[] value) {
-    super(value, AtomType.HEX);
+    super(value, AtomType.HEX_BINARY);
   }
 
   /**
@@ -29,7 +30,7 @@ public final class Hex extends Bin {
    * @throws QueryException query exception
    */
   public Hex(final byte[] value, final InputInfo ii) throws QueryException {
-    super(decode(Token.trim(value), ii), AtomType.HEX);
+    super(parse(Token.trim(value), ii), AtomType.HEX_BINARY);
   }
 
   /**
@@ -48,51 +49,69 @@ public final class Hex extends Bin {
   }
 
   @Override
-  public boolean eq(final Item it, final Collation coll, final StaticContext sc,
+  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
       final InputInfo ii) throws QueryException {
-    return Token.eq(binary(ii), it instanceof Bin ? ((Bin) it).binary(ii) :
-      decode(it.string(ii), ii));
+    final byte[] bin = item instanceof Bin ? ((Bin) item).binary(ii) : parse(item, ii);
+    return Token.eq(binary(ii), bin);
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii)
-      throws QueryException {
-    return Token.diff(binary(ii), it instanceof Bin ? ((Bin) it).binary(ii) :
-      decode(it.string(ii), ii));
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    final byte[] bin = item instanceof Bin ? ((Bin) item).binary(ii) : parse(item, ii);
+    return Token.diff(binary(ii), bin);
+  }
+
+  /**
+   * Converts the given item to a byte array.
+   * @param item item to be converted
+   * @param ii input info
+   * @return byte array
+   * @throws QueryException query exception
+   */
+  public static byte[] parse(final Item item, final InputInfo ii) throws QueryException {
+    final byte[] bytes = parse(item.string(ii));
+    if(bytes != null) return bytes;
+    throw AtomType.HEX_BINARY.castError(item, ii);
+  }
+
+  /**
+   * Converts the given token into a byte array.
+   * @param value value to be converted
+   * @param ii input info
+   * @return byte array
+   * @throws QueryException query exception
+   */
+  public static byte[] parse(final byte[] value, final InputInfo ii) throws QueryException {
+    final byte[] bytes = parse(value);
+    if(bytes != null) return bytes;
+    throw AtomType.HEX_BINARY.castError(value, ii);
   }
 
   /**
    * Converts the input into a byte array.
-   * @param d textual data
-   * @param ii input info
-   * @return decoded string
-   * @throws QueryException query exception
+   * @param data textual data
+   * @return byte array, or {@code null} if input is invalid
    */
-  public static byte[] decode(final byte[] d, final InputInfo ii) throws QueryException {
-    if((d.length & 1) != 0) throw castError(AtomType.HEX, (char) d[0], ii);
-    final int l = d.length >>> 1;
-    final byte[] v = new byte[l];
-    for(int i = 0; i < l; ++i) {
-      v[i] = (byte) ((dec(d[i << 1], ii) << 4) + dec(d[(i << 1) + 1], ii));
+  private static byte[] parse(final byte[] data) {
+    final int dl = data.length;
+    if((dl & 1) != 0) return null;
+    final byte[] value = new byte[dl >>> 1];
+    for(int d = 0; d < dl; d += 2) {
+      final int n = Token.dec(data[d], data[d + 1]);
+      if(n < 0) return null;
+      value[d >>> 1] = (byte) n;
     }
-    return v;
-  }
-
-  /**
-   * Converts a single character into a byte value.
-   * @param b character
-   * @param ii input info
-   * @return byte value
-   * @throws QueryException query exception
-   */
-  private static int dec(final byte b, final InputInfo ii) throws QueryException {
-    if(b >= '0' && b <= '9') return b - '0';
-    if(b >= 'a' && b <= 'f' || b >= 'A' && b <= 'F') return (b & 0x0F) + 9;
-    throw castError(AtomType.HEX, (char) b, ii);
+    return value;
   }
 
   @Override
-  public String toString() {
-    return new TokenBuilder().add('"').add(Token.hex(data, true)).add('"').toString();
+  public void plan(final QueryString qs) {
+    final TokenBuilder tb = new TokenBuilder().add('"');
+    if(data.length > 128) {
+      tb.add(Token.hex(Arrays.copyOf(data, 128), true)).add(Text.DOTS);
+    } else {
+      tb.add(Token.hex(data, true));
+    }
+    qs.token(tb.add('"').finish());
   }
 }

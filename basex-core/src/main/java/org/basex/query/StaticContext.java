@@ -16,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * This class contains the static context of an expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class StaticContext {
@@ -26,6 +26,8 @@ public final class StaticContext {
   public final NSContext ns = new NSContext();
   /** Mix updates flag. */
   public final boolean mixUpdates;
+  /** Look up documents in databases. */
+  public final boolean withdb;
 
   /** Default collation (default collection ({@link QueryText#COLLATION_URI}): {@code null}). */
   public Collation collation;
@@ -33,10 +35,8 @@ public final class StaticContext {
   public byte[] elemNS;
   /** Default function namespace. */
   public byte[] funcNS = FN_URI;
-  /** Expression contains dynamic function call. */
-  public boolean dynFuncCall;
-  /** Static type of context value. */
-  SeqType contextType;
+  /** Name of module (not assigned for main module). */
+  public QNm module;
 
   /** Construction mode. */
   public boolean strip;
@@ -51,10 +51,13 @@ public final class StaticContext {
   /** Copy-namespaces mode: (no-)inherit. */
   public boolean inheritNS = true;
 
-  /** Static Base URI. */
-  private Uri baseURI = Uri.EMPTY;
+  /** Static type of context value. */
+  SeqType contextType;
   /** Sets a module URI resolver. */
   UriResolver resolver;
+
+  /** Static Base URI. */
+  private Uri baseURI = Uri.EMPTY;
 
   /**
    * Constructor.
@@ -62,6 +65,7 @@ public final class StaticContext {
    */
   public StaticContext(final QueryContext qc) {
     mixUpdates = qc.context.options.get(MainOptions.MIXUPDATES);
+    withdb = qc.context.options.get(MainOptions.WITHDB);
   }
 
   /**
@@ -102,7 +106,8 @@ public final class StaticContext {
       // adopt original URIs that do not adhere to a known IO schema
       string = IO.get(uri) instanceof IOContent ? uri : resolve(uri).url();
       // #1062: check if specified URI points to a directory. if yes, add trailing slash
-      if(!string.endsWith("/") && (uri.endsWith(".") || uri.endsWith("/"))) string += '/';
+      if(!Strings.endsWith(string, '/') &&
+        (Strings.endsWith(uri, '.') || Strings.endsWith(uri, '/'))) string += '/';
     }
     baseURI = Uri.uri(string);
   }
@@ -139,7 +144,7 @@ public final class StaticContext {
   /**
    * Returns a decimal format.
    * @param id format id
-   * @return decimal format, or {@code null}
+   * @return decimal format or {@code null}
    * @throws QueryException query exception
    */
   public DecFormatter decFormat(final byte[] id) throws QueryException {

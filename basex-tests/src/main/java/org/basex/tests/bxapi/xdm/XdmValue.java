@@ -13,18 +13,19 @@ import org.basex.tests.bxapi.*;
 /**
  * Wrapper for representing XQuery values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class XdmValue implements Iterable<XdmItem> {
   /**
    * Returns a new XQuery value.
-   * @param val value
+   * @param value value
    * @return result
    */
-  public static XdmValue get(final Value val) {
-    return val instanceof Empty ? XdmEmpty.EMPTY : val instanceof Item ? XdmItem.get((Item) val) :
-      new XdmSequence((Seq) val);
+  public static XdmValue get(final Value value) {
+    final long size = value.size();
+    return size == 0 ? XdmEmpty.EMPTY : size == 1 ? XdmItem.get((Item) value) :
+      new XdmSequence((Seq) value);
   }
 
   /**

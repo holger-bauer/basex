@@ -1,35 +1,27 @@
 package org.basex.gui.layout;
 
-import java.awt.*;
-import java.awt.event.*;
-
 import javax.swing.*;
 
 /**
- * Project specific RadioButton implementation.
+ * Project specific radio button implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXRadio extends JRadioButton {
   /**
    * Default constructor.
-   * @param label button title
-   * @param sel initial selection state
    * @param win parent window
+   * @param text button text
+   * @param selected initial selection state
    */
-  public BaseXRadio(final String label, final boolean sel, final Window win) {
-    super(label, sel);
+  public BaseXRadio(final BaseXWindow win, final String text, final boolean selected) {
+    super(text, selected);
     setOpaque(false);
     setBorder(BaseXLayout.border(0, 0, 0, 16));
     BaseXLayout.addInteraction(this, win);
 
-    if(!(win instanceof BaseXDialog)) return;
-    addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        ((BaseXDialog) win).action(e.getSource());
-      }
-    });
+    final BaseXDialog dialog = win.dialog();
+    if(dialog != null) addActionListener(e -> dialog.action(e.getSource()));
   }
 }

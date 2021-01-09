@@ -7,13 +7,14 @@ import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.up.primitives.name.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbRestore extends DbAccess {
@@ -21,15 +22,15 @@ public final class DbRestore extends DbAccess {
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     // extract database name from backup file
     final String name = string(toToken(exprs[0], qc));
-    if(!Databases.validName(name)) throw BXDB_NAME_X.get(info, name);
+    if(!Databases.validName(name)) throw DB_NAME_X.get(info, name);
 
     // find backup with or without date suffix
     final StringList backups = qc.context.databases.backups(name);
-    if(backups.isEmpty()) throw BXDB_NOBACKUP_X.get(info, name);
+    if(backups.isEmpty()) throw DB_NOBACKUP_X.get(info, name);
 
     final String backup = backups.get(0);
     final String db = Databases.name(backup);
     qc.updates().add(new DBRestore(db, backup, qc, info), qc);
-    return null;
+    return Empty.VALUE;
   }
 }

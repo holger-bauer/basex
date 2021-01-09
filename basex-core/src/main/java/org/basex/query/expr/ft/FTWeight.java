@@ -1,11 +1,14 @@
 package org.basex.query.expr.ft;
 
 import static org.basex.query.QueryError.*;
+import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -14,7 +17,7 @@ import org.basex.util.hash.*;
 /**
  * FTOptions expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTWeight extends FTExpr {
@@ -41,28 +44,33 @@ public final class FTWeight extends FTExpr {
   @Override
   public FTExpr compile(final CompileContext cc) throws QueryException {
     weight = weight.compile(cc);
-    return super.compile(cc);
+    return super.compile(cc).optimize(cc);
   }
 
-  // called by sequential variant
+  @Override
+  public FTExpr optimize(final CompileContext cc) throws QueryException {
+    weight = weight.simplifyFor(Simplify.NUMBER, cc);
+    return this;
+  }
+
   @Override
   public FTNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
     return weight(exprs[0].item(qc, info), qc);
   }
 
-  // called by index variant
   @Override
   public FTIter iter(final QueryContext qc) {
     return new FTIter() {
       @Override
       public FTNode next() throws QueryException {
-        return weight(exprs[0].iter(qc).next(), qc);
+        final FTNode node = exprs[0].iter(qc).next();
+        return node == null ? null : weight(node, qc);
       }
     };
   }
 
   /**
-   * Returns the item with weight calculation.
+   * Returns the item with an enriched score value.
    * @param item input item
    * @param qc query context
    * @return item
@@ -70,7 +78,6 @@ public final class FTWeight extends FTExpr {
    */
   private FTNode weight(final FTNode item, final QueryContext qc) throws QueryException {
     // evaluate weight
-    if(item == null) return null;
     final double d = toDouble(weight, qc);
     if(Math.abs(d) > 1000) throw FTWEIGHT_X.get(info, d);
     if(d == 0) item.matches().reset();
@@ -85,13 +92,13 @@ public final class FTWeight extends FTExpr {
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return weight.has(flag) || super.has(flag);
+  public boolean has(final Flag... flags) {
+    return weight.has(flags) || super.has(flags);
   }
 
   @Override
-  public boolean removable(final Var var) {
-    return weight.removable(var) && super.removable(var);
+  public boolean inlineable(final InlineContext ic) {
+    return weight.inlineable(ic) && super.inlineable(ic);
   }
 
   @Override
@@ -100,25 +107,19 @@ public final class FTWeight extends FTExpr {
   }
 
   @Override
-  public FTExpr inline(final Var var, final Expr ex, final CompileContext cc)
-      throws QueryException {
-    boolean change = inlineAll(exprs, var, ex, cc);
-    final Expr w = weight.inline(var, ex, cc);
-    if(w != null) {
-      weight = w;
-      change = true;
+  public FTExpr inline(final InlineContext ic) throws QueryException {
+    boolean changed = ic.inline(exprs);
+    final Expr inlined = weight.inline(ic);
+    if(inlined != null) {
+      weight = inlined;
+      changed = true;
     }
-    return change ? optimize(cc) : null;
+    return changed ? optimize(ic.cc) : null;
   }
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTWeight(info, exprs[0].copy(cc, vm), weight.copy(cc, vm));
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(), weight, exprs[0]);
+    return copyType(new FTWeight(info, exprs[0].copy(cc, vm), weight.copy(cc, vm)));
   }
 
   @Override
@@ -128,13 +129,24 @@ public final class FTWeight extends FTExpr {
 
   @Override
   public int exprSize() {
-    int sz = 1;
-    for(final FTExpr expr : exprs) sz += expr.exprSize();
-    return sz + weight.exprSize();
+    int size = 1;
+    for(final FTExpr expr : exprs) size += expr.exprSize();
+    return size + weight.exprSize();
   }
 
   @Override
-  public String toString() {
-    return exprs[0] + " " + QueryText.WEIGHT + " {" + weight + "} ";
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTWeight && weight.equals(((FTWeight) obj).weight) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), weight, exprs[0]);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(exprs[0]).token(WEIGHT).brace(weight);
   }
 }

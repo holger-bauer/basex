@@ -1,11 +1,11 @@
 package org.basex.core.cmd;
 
-import org.basex.core.users.*;
+import org.basex.query.value.*;
 
 /**
  * Evaluates the 'xquery' command and processes an XQuery request.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XQuery extends AQuery {
@@ -14,7 +14,7 @@ public final class XQuery extends AQuery {
    * @param query query to evaluate
    */
   public XQuery(final String query) {
-    super(Perm.NONE, false, query);
+    super(false, query);
   }
 
   @Override
@@ -25,7 +25,18 @@ public final class XQuery extends AQuery {
   /**
    * Binds a variable.
    * @param name name of variable (if {@code null}, value will be bound as context value)
-   * @param value value to be bound
+   * @param value XQuery value to be bound
+   * @return self reference
+   */
+  public XQuery bind(final String name, final Value value) {
+    vars.put(name, value);
+    return this;
+  }
+
+  /**
+   * Binds a variable.
+   * @param name name of variable (if {@code null}, value will be bound as context value)
+   * @param value value to be bound (XQuery value; any other value will be converted to a string)
    * @return self reference
    */
   public XQuery bind(final String name, final String value) {

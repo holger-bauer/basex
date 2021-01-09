@@ -12,43 +12,39 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MapFind extends StandardFunc {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
-  public Array value(final QueryContext qc) throws QueryException {
+  public XQArray value(final QueryContext qc) throws QueryException {
     final ArrayBuilder builder = new ArrayBuilder();
-    find(qc.iter(exprs[0]), toAtomItem(exprs[1], qc), builder);
+    find(exprs[0].iter(qc), toAtomItem(exprs[1], qc), builder, qc);
     return builder.freeze();
   }
 
   /**
    * Finds map entries in the specified iterator.
-   * @param ir iterator
+   * @param iter iterator
    * @param key item to be found
    * @param builder array builder
+   * @param qc query context
    * @throws QueryException query exception
    */
-  private void find(final Iter ir, final Item key, final ArrayBuilder builder)
-      throws QueryException {
+  private void find(final Iter iter, final Item key, final ArrayBuilder builder,
+      final QueryContext qc) throws QueryException {
 
-    for(Item it; (it = ir.next()) != null;) {
-      if(it instanceof Map) {
-        final Map map = (Map) it;
+    for(Item item; (item = qc.next(iter)) != null;) {
+      if(item instanceof XQMap) {
+        final XQMap map = (XQMap) item;
         final Value value = map.get(key, info);
-        if(value != Empty.SEQ) builder.append(value);
-        for(final Item item : map.keys()) {
-          find(map.get(item, info).iter(), key, builder);
+        if(value != Empty.VALUE) builder.append(value);
+        for(final Item it : map.keys()) {
+          find(map.get(it, info).iter(), key, builder, qc);
         }
-      } else if(it instanceof Array) {
-        for(final Value value : ((Array) it).members()) {
-          find(value.iter(), key, builder);
+      } else if(item instanceof XQArray) {
+        for(final Value value : ((XQArray) item).members()) {
+          find(value.iter(), key, builder, qc);
         }
       }
     }

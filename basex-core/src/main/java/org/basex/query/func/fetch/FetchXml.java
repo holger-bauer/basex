@@ -1,7 +1,6 @@
 package org.basex.query.func.fetch;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
 import java.io.*;
 
@@ -19,24 +18,32 @@ import org.basex.util.options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FetchXml extends StandardFunc {
+public class FetchXml extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] in = toToken(exprs[0], qc);
+    final byte[] uri = toToken(exprs[0], qc);
+    return fetch(IO.get(Token.string(uri)), qc);
+  }
+
+  /**
+   * Parses the input and creates an XML document.
+   * @param io input data
+   * @param qc query context
+   * @return node
+   * @throws QueryException query exception
+   */
+  protected DBNode fetch(final IO io, final QueryContext qc) throws QueryException {
     final Options opts = toOptions(1, new Options(), qc);
-    if(!Uri.uri(in).isValid()) throw INVDOC_X.get(info, in);
 
-    final IO input = IO.get(string(in));
-    final MainOptions mo = MainOptions.get();
-    new DBOptions(opts, DBOptions.PARSING, info).assignTo(mo);
-
+    final MainOptions mopts = MainOptions.get();
+    new DBOptions(opts, DBOptions.PARSING, info).assignTo(mopts);
     try {
-      return new DBNode(Parser.singleParser(input, mo, ""));
+      return new DBNode(Parser.singleParser(io, mopts, ""));
     } catch(final IOException ex) {
-      throw BXFE_IO_X.get(info, ex);
+      throw FETCH_OPEN_X.get(info, ex);
     }
   }
 }

@@ -11,23 +11,23 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_DROP_BACKUP} function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BackupDrop extends NameUpdate {
   /**
    * Constructor.
    * @param name name of backup file to be dropped
-   * @param info input info
    * @param qc query context
+   * @param info input info
    */
-  public BackupDrop(final String name, final InputInfo info, final QueryContext qc) {
-    super(UpdateType.BACKUPDROP, name, info, qc);
+  public BackupDrop(final String name, final QueryContext qc, final InputInfo info) {
+    super(UpdateType.BACKUPDROP, name, qc, info);
   }
 
   @Override
   public void merge(final Update update) throws QueryException {
-    throw BXDB_ONCEBACK_X_X.get(info, name, operation());
+    throw DB_CONFLICT2_X_X.get(info, name, operation());
   }
 
   @Override

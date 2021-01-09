@@ -1,7 +1,6 @@
 package org.basex.query.value;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.query.QueryText.*;
 
 import java.io.*;
 import java.util.*;
@@ -13,7 +12,6 @@ import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
-import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -27,7 +25,7 @@ import org.basex.util.hash.*;
  * values can also be retrieved via enhanced for(for-each) loops. The default
  * {@link #iter()} method will provide better performance.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Value extends Expr implements Iterable<Item> {
@@ -52,7 +50,7 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   @Override
-  public final ValueIter iter(final QueryContext qc) {
+  public final BasicIter<Item> iter(final QueryContext qc) {
     return iter();
   }
 
@@ -65,7 +63,7 @@ public abstract class Value extends Expr implements Iterable<Item> {
    * Returns an iterator.
    * @return iterator
    */
-  public abstract ValueIter iter();
+  public abstract BasicIter<Item> iter();
 
   @Override
   public final Value value(final QueryContext qc) {
@@ -73,49 +71,69 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   /**
-   * Returns a sub-sequence of this value with the given start and length.<br>
+   * Returns a materialized, context-independent version of this value.
+   * @param qc query context (if {@code null}, process cannot be interrupted)
+   * @param error query error
+   * @param info input info
+   * @return item copy, or {@code null}) if the value cannot be materialized
+   * @throws QueryException query exception
+   */
+  public Value materialize(final QueryContext qc, final QueryError error, final InputInfo info)
+      throws QueryException {
+
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final Item item : this) {
+      final Item it = item.materialize(qc, item.persistent());
+      if(it == null) throw error.get(info, item);
+      vb.add(it);
+    }
+    return vb.value();
+  }
+
+  /**
+   * Tests if this is an empty sequence.
+   * @return result of check
+   */
+  public final boolean isEmpty() {
+    return size() == 0;
+  }
+
+  /**
+   * Tests if this is an item.
+   * @return result of check
+   */
+  public final boolean isItem() {
+    return size() == 1;
+  }
+
+  /**
+   * Returns a subsequence of this value with the given start and length.
    * The following properties must hold:
    * <ul>
    *   <li>{@code start >= 0},
-   *   <li>{@code len >= 0},
-   *   <li>{@code start + len <= size()}
+   *   <li>{@code length >= 0},
+   *   <li>{@code length <= size() - start}
    * </ul>
-   * @param start starting position (zero-based)
-   * @param len number of items
-   * @return the sub-sequence
+   * @param start starting position
+   * @param length number of items
+   * @param qc query context
+   * @return sub sequence
    */
-  public abstract Value subSeq(long start, long len);
+  public abstract Value subsequence(long start, long length, QueryContext qc);
 
   /**
-   * Materializes streamable values.
+   * Caches lazy values.
+   * @param lazy lazy caching
    * @param ii input info
    * @throws QueryException query exception
    */
-  public abstract void materialize(InputInfo ii) throws QueryException;
-
-  /**
-   * Evaluates the expression and returns the atomized items.
-   * @param ii input info
-   * @return materialized item
-   * @throws QueryException query exception
-   */
-  public abstract Value atomValue(InputInfo ii) throws QueryException;
-
-  @Override
-  public final Value atomValue(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return atomValue(ii);
-  }
+  public abstract void cache(boolean lazy, InputInfo ii) throws QueryException;
 
   /**
    * Computes the number of atomized items.
    * @return atomized item
    */
   public abstract long atomSize();
-
-  @Override
-  public final boolean isValue() {
-    return true;
-  }
 
   /**
    * Returns a Java representation of the value.
@@ -125,12 +143,12 @@ public abstract class Value extends Expr implements Iterable<Item> {
   public abstract Object toJava() throws QueryException;
 
   @Override
-  public final boolean has(final Flag flag) {
+  public final boolean has(final Flag... flags) {
     return false;
   }
 
   @Override
-  public final boolean removable(final Var var) {
+  public final boolean inlineable(final InlineContext ic) {
     return true;
   }
 
@@ -140,20 +158,13 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   @Override
-  public final Expr inline(final Var var, final Expr ex,
-      final CompileContext cc) {
-    // values do not contain variable references
+  public final Expr inline(final InlineContext ic) {
     return null;
   }
 
   @Override
   public Value copy(final CompileContext cc, final IntObjMap<Var> vm) {
     return this;
-  }
-
-  @Override
-  public String description() {
-    return type + " " + SEQUENCE;
   }
 
   /**
@@ -163,25 +174,6 @@ public abstract class Value extends Expr implements Iterable<Item> {
    * @throws QueryException if atomization can't be applied (e.g. function item)
    */
   public abstract int hash(InputInfo ii) throws QueryException;
-
-  /**
-   * Writes this value's items out to the given array.
-   * @param arr array to write to
-   * @param index start position
-   * @return number of written items
-   */
-  public abstract int writeTo(Item[] arr, int index);
-
-  /**
-   * Creates an array containing all items of this value.
-   * Use with care, as compressed Values are expanded, creating many objects.
-   * @return cached items
-   */
-  public final ItemList cache() {
-    final long n = size();
-    if(n > Integer.MAX_VALUE) throw Util.notExpected(n);
-    return new ItemList((int) n).add(this);
-  }
 
   /**
    * Serializes the value, using the standard XML serializer,
@@ -207,6 +199,10 @@ public abstract class Value extends Expr implements Iterable<Item> {
       throw ex;
     } catch(final IOException ex) {
       throw SER_X.getIO(ex);
+    } catch(final ArrayIndexOutOfBoundsException ex) {
+      // might occur if serialized result is too large
+      Util.debug(ex);
+      throw BASEX_ERROR_X.getIO(ex.getLocalizedMessage());
     }
     return ao;
   }
@@ -217,14 +213,14 @@ public abstract class Value extends Expr implements Iterable<Item> {
    * @throws IOException I/O exception
    */
   public final void serialize(final Serializer ser) throws IOException {
-    for(final Item it : this) {
+    for(final Item item : this) {
       if(ser.finished()) break;
-      ser.serialize(it);
+      ser.serialize(item);
     }
   }
 
   /**
-   * Gets the item at the given position in the value.
+   * Returns the item at the given position in the value.
    * The specified value must be lie within the valid bounds.
    * @param pos position
    * @return item
@@ -232,21 +228,16 @@ public abstract class Value extends Expr implements Iterable<Item> {
   public abstract Item itemAt(long pos);
 
   /**
-   * Checks if all items of this value share the same type.
-   * @return result of check
+   * Returns all items of this value in reverse order.
+   * @param qc query context
+   * @return items in reverse order
    */
-  public abstract boolean homogeneous();
-
-  /**
-   * Returns a sequence in reverse order.
-   * @return sequence
-   */
-  public abstract Value reverse();
+  public abstract Value reverse(QueryContext qc);
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
     final Data data = data();
-    return data == null || visitor.lock(data.meta.name);
+    return data == null || visitor.lock(data.meta.name, false);
   }
 
   @Override

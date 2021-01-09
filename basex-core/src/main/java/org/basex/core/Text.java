@@ -16,12 +16,43 @@ import org.basex.util.*;
  * This class contains internationalized text strings, which are used throughout the project.
  * If this class is called first, the Strings are initialized by the {@link Lang} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface Text {
 
   // FIXED STRINGS ================================================================================
+
+  /** Title and version. */
+  String TITLE = Prop.NAME + ' ' + Prop.VERSION;
+  /** Public URL (used in the GUI). */
+  String PUBLIC_URL = "https://" + Prop.PROJECT + ".org";
+  /** URL of the community page. */
+  String COMMUNITY_URL = PUBLIC_URL + "/open-source/";
+  /** URL of the update page. */
+  String UPDATE_URL = PUBLIC_URL + "/download/";
+  /** URL of the documentation. */
+  String DOCS_URL = "https://docs." + Prop.PROJECT + ".org";
+  /** URL of the documentation. */
+  String FILES_URL = "https://files." + Prop.PROJECT + ".org";
+  /** Version URL. */
+  String VERSION_URL = FILES_URL + "/version.txt";
+  /** Repository URL. */
+  String REPO_URL = FILES_URL + "/modules";
+  /** Mail. */
+  String MAILING_LIST = Prop.PROJECT + "-talk@mailman.uni-konstanz.de";
+
+  /** Main author. */
+  String AUTHOR = "Christian Grün";
+  /** Co-authors (1). */
+  String AUTHORS1 = "Michael Seiferle, Alexander Holupirek";
+  /** Co-authors (2). */
+  String AUTHORS2 = "Marc H. Scholl, Sabine Teubner, Dominik Abend";
+
+  /** Entity. */
+  String ORGANIZATION = Prop.NAME + " Team";
+  /** Copyright info. */
+  String COPYRIGHT = "\u00A9 2005-20 " + ORGANIZATION;
 
   /** New line. */
   String NL = Prop.NL;
@@ -55,94 +86,95 @@ public interface Text {
   String S_STANDALONE = "Standalone";
   /** Start information. */
   String  S_LOCALINFO =
-    " [-bcdiIoqrRstuvVwxXz] [input]" + NL +
-    "  [input]     XQuery or command file, or query string" + NL +
-    "  -b<pars>    Bind external query variables" + NL +
-    "  -c<input>   Execute commands from file or string" + NL +
-    "  -d          Activate debugging mode" + NL +
-    "  -i<input>   Assign file or database to context" + NL +
-    "  -I<input>   Assign input string to context" + NL +
-    "  -o<output>  Write output to file" + NL +
-    "  -q<expr>    Execute XQuery expression" + NL +
-    "  -r<num>     Set number of query executions" + NL +
-    "  -R          Turn query execution on/off" + NL +
-    "  -s<pars>    Set serialization parameter(s)" + NL +
-    "  -t[path]    Run tests in file or directory" + NL +
-    "  -u          Write updates back to original files" + NL +
-    "  -v/V        Show (all) process info" + NL +
-    "  -w          Preserve whitespaces from input files" + NL +
-    "  -x          Show query plan" + NL +
-    "  -X          Show query plan before/after compilation" + NL +
-    "  -z          Skip output of results";
+    " [-bcdiIoqrRstuvVwxz] [input]" + NL +
+    "  [input]    XQuery or command file, or query string" + NL +
+    "  -b<args>   Bind external query variables" + NL +
+    "  -c<input>  Execute commands from file or string" + NL +
+    "  -d         Toggle debugging output" + NL +
+    "  -i<input>  Bind file or database to context" + NL +
+    "  -I<input>  Bind input string to context" + NL +
+    "  -o<path>   Write output to local file" + NL +
+    "  -q<expr>   Execute XQuery expression" + NL +
+    "  -r<num>    Run query multiple times" + NL +
+    "  -R         Toggle query execution" + NL +
+    "  -s<args>   Set serialization parameters" + NL +
+    "  -t[path]   Run tests in file or directory" + NL +
+    "  -u         Toggle updates in original files" + NL +
+    "  -v         Toggle output of progress info" + NL +
+    "  -V         Toggle detailed query output" + NL +
+    "  -w         Toggle whitespace chopping" + NL +
+    "  -x         Toggle output of query plan" + NL +
+    "  -z         Toggle output of query result";
 
   /** Client mode. */
   String S_CLIENT = "Client";
   /** Client start information. */
   String S_CLIENTINFO =
-    " [-bcdiInopPqrRsUvVwxXz] [input]" + NL +
-    "  [input]     XQuery or command file, or query string" + NL +
-    "  -b<pars>    Bind external query variables" + NL +
-    "  -c<input>   Execute commands from file or string" + NL +
-    "  -d          Activate debugging mode" + NL +
-    "  -i<input>   Assign file or database to context" + NL +
-    "  -I<input>   Assign input string to context" + NL +
-    "  -n<name>    Set server (host) name" + NL +
-    "  -o<output>  Write output to file" + NL +
-    "  -p<port>    Set server port" + NL +
-    "  -P<pass>    Specify user password" + NL +
-    "  -q<expr>    Execute XQuery expression" + NL +
-    "  -r<num>     Set number of query executions" + NL +
-    "  -R          Turn query execution on/off" + NL +
-    "  -s<pars>    Set serialization parameter(s)" + NL +
-    "  -U<name>    Specify user name" + NL +
-    "  -v/V        Show (all) process info" + NL +
-    "  -w          Preserve whitespaces from input files" + NL +
-    "  -x          Show query execution plan" + NL +
-    "  -X          Show query plan before/after compilation" + NL +
-    "  -z          Skip output of results";
+    " [-bcdiInopPqrRsUvVwxz] [input]" + NL +
+    "  [input]    XQuery or command file, or query string" + NL +
+    "  -b<args>   Bind external query variables" + NL +
+    "  -c<input>  Execute commands from file or string" + NL +
+    "  -d         Toggle debugging output" + NL +
+    "  -i<input>  Bind file or database to context" + NL +
+    "  -I<input>  Bind input string to context" + NL +
+    "  -n<name>   Set server (host) name" + NL +
+    "  -o<path>   Write output to local file" + NL +
+    "  -p<port>   Set server port" + NL +
+    "  -P<pass>   Specify user password" + NL +
+    "  -q<expr>   Execute XQuery expression" + NL +
+    "  -r<num>    Run query multiple times" + NL +
+    "  -R         Toggle query execution" + NL +
+    "  -s<args>   Set serialization parameters" + NL +
+    "  -U<name>   Specify user name" + NL +
+    "  -v         Toggle output of progress info" + NL +
+    "  -V         Toggle detailed query output" + NL +
+    "  -w         Toggle whitespace chopping" + NL +
+    "  -x         Toggle output of query plan" + NL +
+    "  -z         Toggle output of query result";
 
   /** Server mode. */
   String S_SERVER = "Server";
   /** Server start information. */
   String S_SERVERINFO =
-    " [-cdinpSz] [stop]" + NL +
-    "  stop      Stop running server" + NL +
-    "  -c<cmds>  Execute initial database commands" + NL +
-    "  -d        Activate debugging mode" + NL +
-    "  -n<name>  Set host the server is bound to" + NL +
-    "  -p<port>  Set server port" + NL +
-    "  -S        Start as service" + NL +
-    "  -z        Suppress logging";
+    " [-cdnpSz] [stop]" + NL +
+    "  stop       Stop running server" + NL +
+    "  -c<input>  Execute commands from file or string" + NL +
+    "  -d         Enable debugging output" + NL +
+    "  -n<name>   Set host the server is bound to" + NL +
+    "  -p<port>   Set server port" + NL +
+    "  -S         Start as service" + NL +
+    "  -z         Suppress logging";
 
   /** GUI mode. */
   String S_GUI = "GUI";
   /** GUI start information. */
   String S_GUIINFO =
-    " [-d] [file]" + NL +
-    "  [file]  Open specified XML or XQuery file" + NL +
-    "  -d  Activate debugging mode";
+    " [-d] [files]" + NL +
+    "  [files]  Open specified files" + NL +
+    "  -d  Enable debugging";
 
   /** HTTP server mode. */
   String S_HTTP_SERVER = "HTTP Server";
   /** HTTP information. */
   String S_HTTPINFO =
-    " [-dhlnpsSUz] [stop]" + NL +
-    "  stop      Stop running server" + NL +
-    "  -c        Start in client mode" + NL +
-    "  -d        Activate debugging mode" + NL +
-    "  -h<port>  Set port of HTTP server" + NL +
-    "  -l        Start in local mode" + NL +
-    "  -n<name>  Set host name of database server" + NL +
-    "  -p<port>  Set port of database server" + NL +
-    "  -s<port>  Specify port to stop HTTP server" + NL +
-    "  -S        Start as service" + NL +
-    "  -U<name>  Specify user name" + NL +
-    "  -z        Suppress logging";
+    " [-cdhlnpsSUz] [stop]" + NL +
+    "  stop       Stop running server" + NL +
+    "  -c<input>  Execute commands from file or string" + NL +
+    "  -d         Enable debugging output" + NL +
+    "  -g         Enable GZIP support" + NL +
+    "  -h<port>   Set port of HTTP server" + NL +
+    "  -l         Start in local mode" + NL +
+    "  -n<name>   Set host name of database server" + NL +
+    "  -p<port>   Set port of database server" + NL +
+    "  -s<port>   Specify port to stop HTTP server" + NL +
+    "  -S         Start as service" + NL +
+    "  -U<name>   Specify user name" + NL +
+    "  -z         Suppress logging";
 
   /** Bug info. */
   String S_BUGINFO = "Improper use? Potential bug? Your feedback is welcome:";
   /** Console text. */
-  String S_CONSOLE_X = Prop.TITLE + " [%]";
+  String S_CONSOLE_X = TITLE + " [%]";
 
   /** Localhost. */
   String S_LOCALHOST = "localhost";
@@ -186,6 +218,8 @@ public interface Text {
   String ITEM = "Item";
   /** Query hits. */
   String ITEMS = "Items";
+  /** Context. */
+  String CONTEXT = "Context";
 
   /** Options error. */
   String OPT_OFFSET_X = "List counter for '%' is invalid.";
@@ -195,8 +229,6 @@ public interface Text {
   String OPT_BOOLEAN_X_X = OPT_INVALID_X_X + "'yes', 'no', or a boolean.";
   /** Options error. */
   String OPT_NUMBER_X_X = OPT_INVALID_X_X + "a number.";
-  /** Options error. */
-  String OPT_STRING_X_X = OPT_INVALID_X_X + "a string.";
   /** Options error. */
   String OPT_MAP_X_X = OPT_INVALID_X_X + "a map.";
   /** Options error. */
@@ -218,7 +250,7 @@ public interface Text {
   /** File description: HTML Documents. */
   String HTML_DOCUMENTS = "HTML Documents";
   /** File description: Comma-Separated Values. */
-  String CSV_DOCUMENTS = "Comma-Separated Values";
+  String CSV_DOCUMENTS = "CSV Documents";
   /** File description: Plain Text. */
   String PLAIN_TEXT = "Plain Text";
   /** File description: ZIP Archives. */
@@ -234,10 +266,8 @@ public interface Text {
 
   /** "Stack Trace". */
   String STACK_TRACE = "Stack Trace";
-  /** Copyright info. */
-  String COPYRIGHT = "\u00A9 2005-16 " + Prop.ENTITY;
 
-  // SERVER ===================================================================
+  // SERVER =======================================================================================
 
   /** Server was started. */
   String PORT_X = " (" + lang("port") + ": %).";
@@ -254,17 +284,17 @@ public interface Text {
   /** Connection error. */
   String CONNECTION_ERROR_X = lang("connection_error") + PORT_X;
   /** Unknown host. */
-  String UNKNOWN_HOST_X = lang("unknown_host_x");
+  String UNKNOWN_HOST_X = lang("unknown_host_%");
   /** Timeout exceeded. */
   String TIMEOUT_EXCEEDED = lang("timeout_exceeded");
   /** Access denied. */
-  String ACCESS_DENIED = lang("access_denied");
+  String ACCESS_DENIED_X = lang("access_denied_%");
   /** User name. */
   String USERNAME = lang("username");
   /** Password. */
   String PASSWORD = lang("password");
 
-  // COMMANDS =================================================================
+  // COMMANDS =====================================================================================
 
   /** Console text. */
   String TRY_MORE_X = lang("try_more_%", "'help'");
@@ -480,7 +510,7 @@ public interface Text {
     "", lang("c_exit1"), lang("c_exit2")
   };
 
-  // COMMAND INFOS ============================================================
+  // COMMAND INFOS ================================================================================
 
   /** Command timing information. */
   String TIME_REQUIRED = lang("time_required");
@@ -511,7 +541,7 @@ public interface Text {
   /** Unknown command: % (similar: %). */
   String UNKNOWN_SIMILAR_X_X = UNKNOWN_CMD_X + ' ' + lang("similar_cmd_%");
 
-  // CREATE COMMAND ===========================================================
+  // CREATE COMMAND ===============================================================================
 
   /** Create database question. */
   String CREATE_DB_FILE = lang("create_db_file");
@@ -570,7 +600,7 @@ public interface Text {
   /** No stemmer found. */
   String NO_STEMMER_X = lang("no_stemmer_%");
 
-  // DATABASE COMMANDS ========================================================
+  // DATABASE COMMANDS ============================================================================
 
   /** Database not found. */
   String DB_NOT_FOUND_X = lang("db_not_found_%");
@@ -592,7 +622,7 @@ public interface Text {
   String NO_DB_DROPPED = lang("no_db_dropped");
   /** Database not dropped. */
   String DB_NOT_DROPPED_X = lang("db_not_dropped_%");
-  /** Database altered. */
+  /** Database renamed. */
   String DB_RENAMED_X = lang("db_renamed_%");
   /** Database not dropped. */
   String DB_NOT_RENAMED_X = lang("db_not_renamed_%");
@@ -616,7 +646,11 @@ public interface Text {
   String DB_EXPORTED_X = lang("db_exported_%");
   /** Database already exists. */
   String DB_EXISTS_X = lang("db_exists_%");
-  /** Database was dropped. */
+  /** Database was renamed. */
+  String BACKUP_RENAMED_X = lang("backup_renamed_%");
+  /** Database was not renamed. */
+  String BACKUP_NOT_RENAMED_X = lang("backup_not_renamed_%");
+ /** Database was dropped. */
   String BACKUP_DROPPED_X = lang("backup_dropped_%");
   /** Backup was not found. */
   String BACKUP_NOT_FOUND_X = lang("backup_not_found_%");
@@ -642,7 +676,7 @@ public interface Text {
   /** Index not available. */
   String NOT_AVAILABLE = lang("not_available");
 
-  // XQUERY COMMAND ===========================================================
+  // XQUERY COMMAND ===============================================================================
 
   /** Query info: query. */
   String QUERY = lang("query");
@@ -681,7 +715,9 @@ public interface Text {
   String UPDATED_CC = lang("updated") + COLS;
   /** "Printed: ". */
   String PRINTED_CC = lang("printed") + COLS;
-  /** "Results: %". */
+  /** "% Result". */
+  String RESULT_X = lang("result_%");
+  /** "% Results". */
   String RESULTS_X = lang("results_%");
   /** "Query executed in %". */
   String QUERY_EXECUTED_X_X = lang("query_executed_%_%");
@@ -691,12 +727,16 @@ public interface Text {
   /** Line info. */
   String LINE_X = lang("line_%");
 
-  // ADMIN COMMANDS ==========================================================
+  // ADMIN COMMANDS ==============================================================================
 
   /** Show sessions. */
   String SESSIONS_X = lang("sessions_%");
   /** Show packages. */
   String PACKAGES_X = lang("packages_%");
+  /** Show jobs. */
+  String JOBS_X = lang("jobs_%");
+  /** Show packages. */
+  String RESOURCES_X = lang("resources_%");
   /** Permission required. */
   String PERM_REQUIRED_X = lang("perm_required_%");
   /** Invalid permissions. */
@@ -717,7 +757,7 @@ public interface Text {
   String USER_CREATED_X = lang("user_created_%");
   /** Password changed. */
   String PW_CHANGED_X = lang("pw_changed_%");
-  /** User altered. */
+  /** User renamed. */
   String USER_RENAMED_X_X = lang("user_renamed_%_%");
   /** User unknown. */
   String USER_EXISTS_X = lang("user_exists_%");
@@ -736,7 +776,7 @@ public interface Text {
   /** Jobs stopped. */
   String JOBS_STOPPED_X = lang("jobs_stopped_%");
 
-  // GENERAL COMMANDS =========================================================
+  // GENERAL COMMANDS =============================================================================
 
   /** "Global option '%' cannot be set". */
   String GLOBAL_OPTION_X = lang("global_option_%");
@@ -745,14 +785,14 @@ public interface Text {
   /** Unknown command error. */
   String UNKNOWN_OPT_SIMILAR_X_X = lang("unknown_option_%") + ' ' + lang("similar_cmd_%");
 
-  // INFO STRINGS =============================================================
+  // INFO STRINGS =================================================================================
 
   /** Waiting information. */
   String PLEASE_WAIT_D = lang("please_wait") + DOTS;
   /** Statistics information. */
   String CREATE_STATS_D = lang("create_stats") + DOTS;
 
-  /** "Name". */
+  /** "All". */
   String ALL = lang("all");
   /** "Name". */
   String NAME = lang("name");
@@ -768,16 +808,10 @@ public interface Text {
   String RESOURCES = lang("resources");
   /** "Encoding". */
   String ENCODING = lang("encoding");
-  /** "Method". */
-  String METHOD = lang("method");
   /** "Parameters". */
   String PARAMETERS = lang("parameters");
   /** "Path". */
   String PATH = lang("path");
-  /** Input. */
-  String INPUT = lang("input");
-  /** "Jobs". */
-  String JOBS = lang("jobs");
   /** "Duration". */
   String DURATION = lang("duration");
   /** "State". */
@@ -786,12 +820,16 @@ public interface Text {
   String START = lang("start");
   /** "End". */
   String END = lang("end");
+  /** "Interval". */
+  String INTERVAL = lang("interval");
   /** "User". */
   String USER = lang("user");
   /** "Reads". */
   String READS = lang("reads");
   /** "Writes". */
   String WRITES = lang("writes");
+  /** "Time". */
+  String TIME = lang("time");
   /** External Variables. */
   String EXTERNAL_VARIABLES = lang("external_variables");
 
@@ -801,8 +839,6 @@ public interface Text {
   String RUN_QUERY = lang("run_query");
   /** Command info. */
   String RUN_TESTS = lang("run_tests");
-  /** Command info. */
-  String INPUT_HISTORY = lang("input_history");
 
   /** Command info. */
   String FIND_REPLACE = lang("find_replace");
@@ -822,6 +858,11 @@ public interface Text {
   String STRINGS_FOUND_X = lang("strings_found_%");
   /** "Strings were replaced.". */
   String STRINGS_REPLACED = lang("strings_replaced");
+  /** Searching. */
+  String SEARCHING = lang("searching");
+
+  /** Serialization parameters. */
+  String SERIALIZATION = lang("serialization");
 
   /** Info on text index. */
   String TEXT_INDEX = lang("text_index");
@@ -859,7 +900,7 @@ public interface Text {
   /** "Error". */
   String ERROR = lang("error");
 
-  // MENU ENTRIES =============================================================
+  // MENU ENTRIES =================================================================================
 
   /** "Database". */
   String DATABASE = lang("database");
@@ -874,7 +915,7 @@ public interface Text {
   /** "Help". */
   String HELP = lang("help");
 
-  // GUI COMMANDS =============================================================
+  // GUI COMMANDS =================================================================================
 
   /** Command info. */
   String ABOUT = lang("about_%", Prop.NAME);
@@ -892,6 +933,8 @@ public interface Text {
   String SELECT_ALL = lang("select_all");
   /** Command info. */
   String COPY_PATH = lang("copy_path");
+  /** Command info. */
+  String SET_CONTEXT = lang("set_context");
   /** Command info. */
   String NEW = lang("new");
   /** Command info. */
@@ -945,7 +988,7 @@ public interface Text {
   /** Command info. */
   String CHECK_FOR_UPDATES = lang("check_for_updates");
   /** Command info. */
-  String QUERY_INFO = lang("query_info");
+  String INFO = lang("info");
   /** Command info. */
   String INPUT_BAR = lang("input_bar");
   /** Command info. */
@@ -978,7 +1021,7 @@ public interface Text {
   /** Command info. */
   String FONTS_D = lang("fonts") + DOTS;
 
-  // BUTTONS ==================================================================
+  // BUTTONS ======================================================================================
 
   /** Button: " OK ". */
   String B_OK = "  " + lang("ok") + "  ";
@@ -1029,7 +1072,7 @@ public interface Text {
 
   /** Button text for creating things. */
   String CREATE = lang("create");
-  /** Button for starting the server. */
+  /** Button for stopping the server. */
   String STOP = lang("stop");
   /** Button for deleting all. */
   String DELETE_ALL = lang("delete_all");
@@ -1042,7 +1085,7 @@ public interface Text {
   /** Filter button. */
   String FILTER = lang("filter");
 
-  // VISUALIZATIONS ===========================================================
+  // VISUALIZATIONS ===============================================================================
 
   /** "No data available.". */
   String NO_DATA = lang("no_data");
@@ -1051,7 +1094,7 @@ public interface Text {
   /** "file". */
   String FILE = lang("file");
 
-  // DIALOG WINDOWS ===========================================================
+  // DIALOG WINDOWS ===============================================================================
 
   /** Open dialog - No database. */
   String INFORMATION = lang("information");
@@ -1140,6 +1183,8 @@ public interface Text {
   String UPPER_CASE = lang("upper_case");
   /** Title case. */
   String TITLE_CASE = lang("title_case");
+  /** Jump to bracket. */
+  String JUMP_TO_BRACKET = lang("jump_to_bracket");
   /** Split input lines. */
   String SPLIT_INPUT_LINES = lang("split_input_lines");
   /** Treat first line as header. */
@@ -1243,18 +1288,18 @@ public interface Text {
   String DATABASE_PATH = lang("database_path");
   /** Repository path. */
   String REPOSITORY_PATH = lang("repository_path");
-  /** Interactions. */
-  String GUI_INTERACTIONS = lang("gui_interactions");
+  /** Suffixes. */
+  String FILE_SUFFIXES_X = lang("file_suffixes_%");
   /** Limits. */
   String LIMITS = lang("limits");
   /** Look and feel. */
   String JAVA_LF = "Look & Feel (" + lang("requires_restart") + ')';
   /** Focus. */
   String RT_FOCUS = lang("rt_focus");
-  /** Simple file dialog. */
-  String SIMPLE_FILE_CHOOSER = lang("simple_file_chooser");
   /** Name display flag. */
   String SHOW_NAME_ATTS = lang("show_name_atts");
+  /** Scroll editor tabs. */
+  String SCROLL_TABS = lang("scroll_tabs");
   /** Maximum number of results. */
   String MAX_NO_OF_HITS = lang("max_nr_of_hits");
   /** Size of text result. */
@@ -1314,8 +1359,6 @@ public interface Text {
   /** Color schema information. */
   String BLUE = lang("blue");
 
-  /** Scale interface. */
-  String SCALE_GUI = lang("scale_gui");
   /** Show attributes. */
   String SHOW_ATTS = lang("show_atts");
   /** Algorithm. */
@@ -1349,17 +1392,15 @@ public interface Text {
   /** License info. */
   String LICENSE = lang("license");
   /** Developer info. */
-  String CHIEF_ARCHITECT = lang("chief_architect") + COLS + Prop.AUTHOR;
+  String CHIEF_ARCHITECT = lang("chief_architect");
   /** Contributors info. */
-  String TEAM1 = lang("team") + COLS + Prop.TEAM1 + ',';
-  /** Developer names. */
-  String TEAM2 = Prop.TEAM2;
+  String TEAM = lang("team");
   /** Developer names. */
   String AND_OTHERS = lang("and_others");
   /** Translation. */
   String TRANSLATION = lang("translation");
 
-  // HELP TEXTS ===============================================================
+  // HELP TEXTS ===================================================================================
 
   /** Memory help. */
   String H_USED_MEM = lang("h_used_mem");

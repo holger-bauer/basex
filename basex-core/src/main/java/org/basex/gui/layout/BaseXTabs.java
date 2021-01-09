@@ -10,7 +10,7 @@ import org.basex.gui.*;
 /**
  * Project specific TabbedPane implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXTabs extends JTabbedPane {
@@ -21,7 +21,7 @@ public final class BaseXTabs extends JTabbedPane {
    * Default constructor.
    * @param win parent window
    */
-  public BaseXTabs(final Window win) {
+  public BaseXTabs(final BaseXWindow win) {
     BaseXLayout.addInteraction(this, win);
   }
 
@@ -39,22 +39,19 @@ public final class BaseXTabs extends JTabbedPane {
 
   /**
    * Adds drag and drop support.
-   * @param last include last tab
    */
-  public void addDragDrop(final boolean last) {
+  public void addDragDrop() {
     addMouseMotionListener(new MouseMotionAdapter() {
       @Override
       public void mouseDragged(final MouseEvent e) {
         if(draggedTab == -1) {
-          int t = getUI().tabForCoordinate(BaseXTabs.this, e.getX(), e.getY());
-          final int tabs = getTabCount();
-          if(tabs == (last ? 1 : 2) || !last && t + 1 == tabs) t = -1;
-          if(t != -1) {
+          final int t = getUI().tabForCoordinate(BaseXTabs.this, e.getX(), e.getY());
+          if(t != -1 && getTabCount() > 1) {
             draggedTab = t;
             setCursor(GUIConstants.CURSORMOVE);
           }
         } else {
-          drop(last, e);
+          drop(e);
         }
         refreshTabs();
       }
@@ -64,7 +61,7 @@ public final class BaseXTabs extends JTabbedPane {
       @Override
       public void mouseReleased(final MouseEvent e) {
         if(draggedTab < 0) return;
-        drop(last, e);
+        drop(e);
         draggedTab = -1;
         setCursor(GUIConstants.CURSORARROW);
         refreshTabs();
@@ -74,11 +71,10 @@ public final class BaseXTabs extends JTabbedPane {
 
   /**
    * Drops the current tab.
-   * @param last include last tab
    * @param e mouse event
    */
-  private void drop(final boolean last, final MouseEvent e) {
-    final int newTab = Math.min(getTabCount() - (last ? 1 : 2),
+  private void drop(final MouseEvent e) {
+    final int newTab = Math.min(getTabCount() - 1,
         getUI().tabForCoordinate(this, e.getX(), e.getY()));
 
     if(newTab >= 0 && newTab != draggedTab) {

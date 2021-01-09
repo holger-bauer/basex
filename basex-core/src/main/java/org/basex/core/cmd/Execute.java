@@ -3,6 +3,7 @@ package org.basex.core.cmd;
 import static org.basex.core.Text.*;
 
 import java.util.*;
+import java.util.stream.*;
 
 import org.basex.core.*;
 import org.basex.core.locks.*;
@@ -15,26 +16,36 @@ import org.basex.util.*;
  * Evaluates the 'execute' command and runs a command script.
  * This command can be used to run multiple commands as a single transaction.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class Execute extends Command {
   /** Commands to execute. */
-  final ArrayList<Command> commands = new ArrayList<>();
+  final java.util.List<Command> commands;
   /** Error message. */
   String error;
 
   /**
-   * Default constructor.
+   * Constructor for string input.
    * @param input user input
    */
   public Execute(final String input) {
-    super(Perm.ADMIN, false, input);
+    super(Perm.NONE, false, input);
+    commands = new ArrayList<>();
+  }
+
+  /**
+   * Constructor for command input.
+   * @param commands commands to execute
+   */
+  public Execute(final Command... commands) {
+    super(Perm.NONE, false);
+    this.commands = Arrays.asList(commands);
   }
 
   @Override
   public final boolean newData(final Context ctx) {
-    return close(ctx);
+    return Close.close(ctx);
   }
 
   @Override
@@ -76,24 +87,25 @@ public class Execute extends Command {
   }
 
   /**
-   * Initializes the specified input.
+   * Initializes command execution.
    * @param ctx database context
    * @return success flag
    */
   boolean init(final Context ctx) {
-    return init(args[0], ctx);
+    return args.length == 0 || init(args[0], uri, ctx);
   }
 
   /**
    * Initializes the specified input.
    * @param input command input
+   * @param base base URI
    * @param ctx database context
    * @return success flag
    */
-  final boolean init(final String input, final Context ctx) {
+  final boolean init(final String input, final String base, final Context ctx) {
     if(commands.isEmpty() && error == null) {
       try {
-        Collections.addAll(commands, CommandParser.get(input, ctx).baseURI(uri).parse());
+        Collections.addAll(commands, CommandParser.get(input, ctx).baseURI(base).parse());
       } catch(final QueryException ex) {
         error = Util.message(ex);
         return false;
@@ -104,6 +116,11 @@ public class Execute extends Command {
 
   @Override
   public void build(final CmdBuilder cb) {
-    cb.init().arg(0);
+    cb.init();
+    if(args.length == 0) {
+      cb.arg(null, commands.stream().map(Command::toString).collect(Collectors.joining(";")));
+    } else {
+      cb.arg(0);
+    }
   }
 }

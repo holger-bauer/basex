@@ -1,53 +1,45 @@
 package org.basex.query.func;
 
-import org.basex.query.*;
-import org.junit.*;
+import org.basex.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the SQL Module.
  * Due to the lack of a default JDBC driver, this class contains only tests signatures.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class SqlModuleTest extends AdvancedQueryTest {
+public final class SqlModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void init() {
+  @Test public void close() {
   }
 
   /** Test method. */
-  @Test
-  public void connect() {
+  @Test public void commit() {
   }
 
   /** Test method. */
-  @Test
-  public void prepare() {
+  @Test public void connect() {
   }
 
   /** Test method. */
-  @Test
-  public void execute() {
+  @Test public void execute() {
   }
 
   /** Test method. */
-  @Test
-  public void executePrepared() {
+  @Test public void executePrepared() {
   }
 
   /** Test method. */
-  @Test
-  public void close() {
+  @Test public void init() {
   }
 
   /** Test method. */
-  @Test
-  public void commit() {
+  @Test public void prepare() {
   }
 
   /** Test method. */
-  @Test
-  public void rollback() {
+  @Test public void rollback() {
   }
 }

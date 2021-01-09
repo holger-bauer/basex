@@ -8,13 +8,13 @@ import org.basex.gui.layout.*;
  * This is the toolbar of the main window.
  * The toolbar contents are defined in {@link GUIConstants#TOOLBAR}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class GUIToolBar extends JToolBar {
   /** Toolbar commands. */
   private final GUICommand[] commands;
-  /** Reference to main window. */
+  /** Reference to the main window. */
   private final GUI gui;
 
   /**

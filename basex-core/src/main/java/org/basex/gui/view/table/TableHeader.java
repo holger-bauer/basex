@@ -19,7 +19,7 @@ import org.basex.query.value.seq.*;
 /**
  * This is the header of the table view.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class TableHeader extends BaseXPanel {
@@ -58,7 +58,7 @@ final class TableHeader extends BaseXPanel {
     // restore default focus traversal with TAB key
     setFocusTraversalKeysEnabled(false);
 
-    addFocusListener(new FocusAdapter() {
+    addFocusListener(new FocusListener() {
       @Override
       public void focusGained(final FocusEvent e) {
         filter(e.getOppositeComponent() instanceof TableView ? 0 :
@@ -122,15 +122,16 @@ final class TableHeader extends BaseXPanel {
       g.setColor(TEXT);
       g.setFont(bfont);
 
-      final int off = clicked ? 1 : 0;
-      BaseXLayout.chopString(g, tdata.cols[n].name, (int) x + 4 + off, 2 + off, (int) cw, fsz);
+      final int o = clicked ? 1 : 0;
+      final byte[] text = tdata.cols[n].name;
+      BaseXLayout.chopString(g, text, (int) x + 4 + o, 2 + o, (int) cw, fsz);
 
       if(n == tdata.sortCol) {
-        if(tdata.asc) g.fillPolygon(new int[] { (int) ce - 9 + off, (int) ce - 3 + off,
-            (int) ce - 6 + off },
-            new int[] { 4 + off, 4 + off, 8 + off }, 3);
-        else g.fillPolygon(new int[] { (int) ce - 9 + off, (int) ce - 3 + off,
-            (int) ce - 6 + off }, new int[] { 8 + off, 8 + off, 4 + off }, 3);
+        if(tdata.asc) g.fillPolygon(new int[] { (int) ce - 9 + o, (int) ce - 3 + o,
+            (int) ce - 6 + o },
+            new int[] { 4 + o, 4 + o, 8 + o }, 3);
+        else g.fillPolygon(new int[] { (int) ce - 9 + o, (int) ce - 3 + o,
+            (int) ce - 6 + o }, new int[] { 8 + o, 8 + o, 4 + o }, 3);
       }
 
       // draw filter texts
@@ -150,7 +151,7 @@ final class TableHeader extends BaseXPanel {
     BaseXLayout.antiAlias(g);
 
     int o = header && clicked ? 1 : 0;
-    final int xo = (int) (4 * scale), yo = (int) (6 * scale);
+    final int xo = 4, yo = 6;
     g.setColor(TEXT);
     g.fillPolygon(
         new int[] { (int) x + o + xo, (int) x + o + bs - xo, (int) x + o + bs / 2 },
@@ -220,7 +221,9 @@ final class TableHeader extends BaseXPanel {
         for(int i = 0; i < moveC; ++i) ww[i] += p / moveC;
         for(int i = moveC; i < wl; ++i) ww[i] -= p / (wl - moveC);
       }
-      for(final double w : ww) if(w < 0.0001) return;
+      for(final double w : ww) {
+        if(w < 0.0001) return;
+      }
       mouseX = x;
 
       for(int w = 0; w < wl; ++w) tdata.cols[w].width = ww[w];
@@ -300,12 +303,9 @@ final class TableHeader extends BaseXPanel {
     for(final byte[] en : tdata.roots) {
       final int id = data.elemNames.id(en);
       final JMenuItem mi = new JRadioButtonMenuItem(string(en), eq(root, en));
-      mi.addActionListener(new ActionListener() {
-        @Override
-        public void actionPerformed(final ActionEvent ac) {
-          tdata.init(data, id);
-          view.refreshContext(true, false);
-        }
+      mi.addActionListener(ac -> {
+        tdata.init(data, id);
+        view.refreshContext(true, false);
       });
       popup.add(mi);
     }
@@ -321,25 +321,22 @@ final class TableHeader extends BaseXPanel {
     for(final TableCol col : tdata.cols) {
       final String item = (col.elem ? "" : "@") + string(col.name);
       final JMenuItem mi = new JCheckBoxMenuItem(item, col.width != 0);
-      mi.addActionListener(new ActionListener() {
-        @Override
-        public void actionPerformed(final ActionEvent ac) {
-          final boolean sel = mi.isSelected();
-          boolean vis = sel;
-          // disallow removal of last visible column
-          for(final TableCol c : tdata.cols) vis |= c != col && c.width != 0;
+      mi.addActionListener(ac -> {
+        final boolean sel = mi.isSelected();
+        boolean vis = sel;
+        // disallow removal of last visible column
+        for(final TableCol c : tdata.cols) vis |= c != col && c.width != 0;
 
-          if(vis) {
-            col.hwidth = sel ? 0 : col.width;
-            col.width = sel ? col.hwidth : 0;
-          } else {
-            mi.setSelected(true);
-          }
-
-          popup.setVisible(true);
-          tdata.setWidths(true);
-          view.refreshContext(true, true);
+        if(vis) {
+          col.hwidth = sel ? 0 : col.width;
+          col.width = sel ? col.hwidth : 0;
+        } else {
+          mi.setSelected(true);
         }
+
+        popup.setVisible(true);
+        tdata.setWidths(true);
+        view.refreshContext(true, true);
       });
       popup.add(mi);
     }

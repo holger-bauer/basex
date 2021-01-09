@@ -1,13 +1,11 @@
 package org.basex.query.expr;
 
-import static org.basex.query.QueryText.*;
-
-import java.util.*;
-
+import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.iter.*;
+import org.basex.query.util.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -15,22 +13,22 @@ import org.basex.util.hash.*;
 /**
  * Pragma extension.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class Extension extends Single {
-  /** Pragmas of the ExtensionExpression. */
-  private final Pragma[] pragmas;
+  /** Pragma. */
+  private final Pragma pragma;
 
   /**
    * Constructor.
    * @param info input info
-   * @param pragmas pragmas
+   * @param pragma pragma
    * @param expr enclosed expression
    */
-  public Extension(final InputInfo info, final Pragma[] pragmas, final Expr expr) {
-    super(info, expr);
-    this.pragmas = pragmas;
+  public Extension(final InputInfo info, final Pragma pragma, final Expr expr) {
+    super(info, expr, SeqType.ITEM_ZM);
+    this.pragma = pragma;
   }
 
   @Override
@@ -40,64 +38,75 @@ public final class Extension extends Single {
 
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
-    final ArrayList<Object> cache = new ArrayList<>();
-    for(final Pragma p : pragmas) cache.add(p.init(cc.qc, info));
+    final Object state = pragma.init(cc.qc, info);
     try {
       expr = expr.compile(cc);
     } finally {
-      int c = 0;
-      for(final Pragma p : pragmas) p.finish(cc.qc, cache.get(c++));
+      pragma.finish(cc.qc, state);
     }
     return optimize(cc);
   }
 
   @Override
   public Expr optimize(final CompileContext cc) {
-    seqType = expr.seqType();
-    size = expr.size();
-    return this;
-  }
-
-  @Override
-  public ValueIter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter(qc);
+    return adoptType(expr);
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final ArrayList<Object> cache = new ArrayList<>();
-    for(final Pragma p : pragmas) cache.add(p.init(qc, info));
+    final Object state = pragma.init(qc, info);
     try {
-      return qc.value(expr);
+      return expr.value(qc);
     } finally {
-      int c = 0;
-      for(final Pragma p : pragmas) p.finish(qc, cache.get(c++));
+      pragma.finish(qc, state);
     }
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final Pragma[] prag = pragmas.clone();
-    final int pl = prag.length;
-    for(int p = 0; p < pl; p++) prag[p] = prag[p].copy();
-    return copyType(new Extension(info, prag, expr.copy(cc, vm)));
+    return copyType(new Extension(info, pragma.copy(), expr.copy(cc, vm)));
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(), pragmas, expr);
+  public boolean has(final Flag... flags) {
+    return pragma.has(flags) || super.has(flags);
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    for(final Pragma p : pragmas) if(p.has(flag)) return true;
-    return super.has(flag);
+  public boolean accept(final ASTVisitor visitor) {
+    pragma.accept(visitor);
+    return super.accept(visitor);
   }
 
   @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
-    for(final Pragma p : pragmas) sb.append(p).append(' ');
-    return sb.append(CURLY1 + ' ').append(expr).append(' ').append(CURLY2).toString();
+  public boolean indexAccessible(final IndexInfo ii) throws QueryException {
+    final QueryContext qc = ii.cc.qc;
+    final Object state = pragma.init(qc, info);
+    try {
+      return expr.indexAccessible(ii);
+    } finally {
+      pragma.finish(qc, state);
+    }
+  }
+
+  @Override
+  public Data data() {
+    return expr.data();
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Extension &&
+        pragma.equals(((Extension) obj).pragma) && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), pragma, expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(pragma).brace(expr);
   }
 }

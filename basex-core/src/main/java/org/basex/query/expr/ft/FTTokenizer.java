@@ -17,10 +17,10 @@ import org.basex.util.similarity.*;
 /**
  * This class performs the full-text tokenization.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class FTTokenizer {
+public final class FTTokenizer {
   /** Token comparator. */
   final TokenComparator cmp;
 
@@ -60,60 +60,57 @@ final class FTTokenizer {
     this.opt = opt;
     this.info = info;
 
-    cmp = new TokenComparator() {
-      @Override
-      public boolean equal(final byte[] in, final byte[] qu) throws QueryException {
-        FTWildcard ftw = null;
-        if(opt.is(WC)) {
-          ftw = wcCache.get(qu);
-          if(ftw == null) {
-            ftw = new FTWildcard(qu);
-            if(!ftw.parse()) throw FTWILDCARD_X.get(info, qu);
-            wcCache.put(qu, ftw);
-          }
-          // simple characters
-          if(ftw.simple()) ftw = null;
+    cmp = (in, qu) -> {
+      FTWildcard ftw = null;
+      if(opt.is(WC)) {
+        ftw = wcCache.get(qu);
+        if(ftw == null) {
+          ftw = new FTWildcard(qu);
+          if(!ftw.valid()) throw FTWILDCARD_X.get(info, qu);
+          wcCache.put(qu, ftw);
         }
-
-        return
-          // skip stop words, i. e. if the current query token is a stop word,
-          // it is always equal to the corresponding input token:
-          opt.sw != null && opt.sw.contains(qu) ||
-          // fuzzy search:
-          (opt.is(FZ) ? ls.similar(in, qu) :
-          // wild-card search:
-          ftw != null ? ftw.match(in) :
-          // simple search:
-          eq(in, qu));
+        // simple characters
+        if(ftw.simple()) ftw = null;
       }
+
+      return
+        // skip stop words, i. e. if the current query token is a stop word,
+        // it is always equal to the corresponding input token:
+        opt.sw != null && opt.sw.contains(qu) ||
+        // fuzzy search:
+        (opt.is(FZ) ? ls.similar(in, qu) :
+        // wild-card search:
+        ftw != null ? ftw.match(in) :
+        // simple search:
+        eq(in, qu));
     };
   }
 
   /**
    * Returns cached query tokens.
-   * @param query query token
+   * @param input query token
    * @return number of occurrences
    * @throws QueryException query exception
    */
-  FTTokens cache(final byte[] query) throws QueryException {
-    FTTokens tokens = cache.get(query);
+  FTTokens cache(final byte[] input) throws QueryException {
+    FTTokens tokens = cache.get(input);
     if(tokens == null) {
       tokens = new FTTokens();
-      cache.put(query, tokens);
+      cache.put(input, tokens);
 
       // cache query tokens:
-      final FTIterator quLex = new FTLexer(opt).init(query);
-      final TokenList quList = new TokenList(1);
-      while(quLex.hasNext()) quList.add(quLex.nextToken());
-      tokens.add(quList);
+      final FTIterator lexer = new FTLexer(opt).init(input);
+      final TokenList list = new TokenList(1);
+      while(lexer.hasNext()) list.add(lexer.nextToken());
+      tokens.add(list);
 
       // if thesaurus is required, add the terms which extend the query:
       if(opt.th != null) {
-        for(final byte[] ext : opt.th.find(info, query)) {
+        for(final byte[] thes : opt.th.find(info, input)) {
           // parse each extension term to a set of tokens:
           final TokenList tl = new TokenList(1);
-          quLex.init(ext);
-          while(quLex.hasNext()) tl.add(quLex.nextToken());
+          lexer.init(thes);
+          while(lexer.hasNext()) tl.add(lexer.nextToken());
           // add each thesaurus term as an additional query term:
           tokens.add(tl);
         }

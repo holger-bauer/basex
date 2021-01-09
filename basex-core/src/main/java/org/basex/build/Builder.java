@@ -6,6 +6,7 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
+import org.basex.core.cmd.*;
 import org.basex.core.jobs.*;
 import org.basex.data.*;
 import org.basex.index.name.*;
@@ -21,7 +22,7 @@ import org.basex.util.list.*;
  * are to be added or closed. The builder implementation decides whether
  * the nodes are stored on disk or kept in memory.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Builder extends Job {
@@ -53,6 +54,9 @@ public abstract class Builder extends Job {
   /** Current tree height. */
   private int level;
 
+  /** Optional path to binary files. */
+  private IOFile binDir;
+
   /**
    * Constructor.
    * @param dbName name of database
@@ -63,7 +67,7 @@ public abstract class Builder extends Job {
     this.parser = parser;
   }
 
-  // PUBLIC METHODS ===========================================================
+  // PUBLIC METHODS ===============================================================================
 
   /**
    * Parses the given input source and builds the database.
@@ -81,6 +85,17 @@ public abstract class Builder extends Job {
     meta.lastid = meta.size - 1;
 
     if(Prop.debug) Util.errln(" " + perf + " (" + Performance.getMemory() + ')');
+  }
+
+  /**
+   * Sets the path to the raw database files. The path might differ from the actual database path
+   * if XML data is written to a temporary instance.
+   * @param dir database directory (can be {@code null})
+   * @return self reference
+   */
+  public final Builder binaryDir(final IOFile dir) {
+    if(dir != null) binDir = new IOFile(dir, IO.RAW);
+    return this;
   }
 
   /**
@@ -130,7 +145,7 @@ public abstract class Builder extends Job {
     addElem(name, att, nsp);
     final int pre = parStack.get(level);
     nspaces.close(pre);
-    if(att.size() > IO.MAXATTS) setSize(pre, meta.size - pre);
+    if(att.size() >= IO.MAXATTS) setSize(pre, meta.size - pre);
   }
 
   /**
@@ -172,7 +187,17 @@ public abstract class Builder extends Job {
     addText(pi, Data.PI);
   }
 
-  // PROGRESS INFORMATION =====================================================
+  /**
+   * Stores binary data.
+   * @param target database target
+   * @param data data to store
+   * @throws IOException I/O exception
+   */
+  public final void binary(final String target, final IO data) throws IOException {
+    Store.store(data.inputSource(), new IOFile(binDir, target));
+  }
+
+  // PROGRESS INFORMATION =========================================================================
 
   @Override
   public final String shortInfo() {
@@ -189,21 +214,14 @@ public abstract class Builder extends Job {
     return spos == 0 ? parser.progressInfo() : (double) spos / ssize;
   }
 
-  // ABSTRACT METHODS =========================================================
+  // ABSTRACT METHODS =============================================================================
 
   /**
-   * Builds the database.
+   * Builds the database and returns the resulting database instance.
    * @return data database instance
    * @throws IOException I/O exception
    */
   public abstract Data build() throws IOException;
-
-  /**
-   * Returns a data clip with the parsed input.
-   * @return data data clip
-   * @throws IOException I/O exception
-   */
-  public abstract DataClip dataClip() throws IOException;
 
   /**
    * Adds a document node to the database.
@@ -253,7 +271,7 @@ public abstract class Builder extends Job {
    */
   protected abstract void setSize(int pre, int size) throws IOException;
 
-  // PRIVATE METHODS ==========================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Adds an element node to the storage.

@@ -5,14 +5,14 @@ import java.util.*;
 /**
  * A min-heap.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  * @param <K> key type
  * @param <V> value type
  */
 public final class MinHeap<K, V> {
-  /** value array. */
-  private Object[] vals;
+  /** Value array. */
+  private Object[] vals = new Object[Array.INITIAL_CAPACITY << 1];
   /** Comparator. */
   private final Comparator<K> comp;
   /** Size of the heap. */
@@ -20,20 +20,10 @@ public final class MinHeap<K, V> {
 
   /**
    * Constructs a heap with the given initial capacity and order.
-   * @param cmp comparator
+   * @param comp comparator
    */
-  public MinHeap(final Comparator<K> cmp) {
-    this(Array.CAPACITY, cmp);
-  }
-
-  /**
-   * Constructs a heap with the given initial capacity and order.
-   * @param cap initial capacity
-   * @param cmp comparator
-   */
-  public MinHeap(final int cap, final Comparator<K> cmp) {
-    vals = new Object[2 * cap];
-    comp = cmp;
+  public MinHeap(final Comparator<K> comp) {
+    this.comp = comp;
   }
 
   /**
@@ -153,8 +143,7 @@ public final class MinHeap<K, V> {
   public String toString() {
     final StringBuilder sb = new StringBuilder("Heap[");
     for(int i = 0; i < size; i++) {
-      sb.append('(').append(vals[2 * i]).append(", ").append(
-          vals[2 * i + 1]).append(')');
+      sb.append('(').append(vals[2 * i]).append(", ").append(vals[2 * i + 1]).append(')');
       if(i < size - 1) sb.append(", ");
     }
     return sb.append(']').toString();

@@ -11,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * Simple filter expression with one deterministic predicate.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class SimpleFilter extends CachedFilter {
@@ -19,30 +19,30 @@ final class SimpleFilter extends CachedFilter {
    * Constructor.
    * @param info input info
    * @param root root expression
-   * @param preds predicates
+   * @param exprs predicates
    */
-  SimpleFilter(final InputInfo info, final Expr root, final Expr... preds) {
-    super(info, root, preds);
+  SimpleFilter(final InputInfo info, final Expr root, final Expr... exprs) {
+    super(info, root, exprs);
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Item pred = preds[0].ebv(qc, info);
+    final Item pred = exprs[0].ebv(qc, info);
     if(pred != null) {
-      final Value val = root.value(qc);
+      final Value value = root.value(qc);
       if(pred instanceof ANum) {
         final double pos = pred.dbl(info);
-        if(pos > 0 && pos <= val.size() && pos == (long) pos) return val.itemAt((long) pos - 1);
+        if(pos > 0 && pos <= value.size() && pos == (long) pos)
+          return value.itemAt((long) pos - 1);
       } else {
-        if(pred.bool(info)) return val;
+        if(pred.bool(info)) return value;
       }
     }
-    return Empty.SEQ;
+    return Empty.VALUE;
   }
 
   @Override
   public Filter copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new SimpleFilter(info, root.copy(cc, vm),
-        Arr.copyAll(cc, vm, preds)));
+    return copyType(new SimpleFilter(info, root.copy(cc, vm), Arr.copyAll(cc, vm, exprs)));
   }
 }

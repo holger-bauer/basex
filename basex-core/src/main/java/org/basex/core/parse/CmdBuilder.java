@@ -9,7 +9,7 @@ import org.basex.util.*;
  * This class simplifies the composition of the string representation of
  * a database command.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CmdBuilder {
@@ -60,12 +60,13 @@ public final class CmdBuilder {
   }
 
   /**
-   * Adds the specified argument as XQuery string.
+   * Adds the specified argument unchanged.
    * @param arg argument index
    * @return self instance
    */
-  public CmdBuilder xquery(final int arg) {
-    tb.add(' ').add(cmd.args[arg]);
+  public CmdBuilder add(final int arg) {
+    final String s = cmd.args[arg];
+    if(s != null) tb.add(' ').add(s);
     return this;
   }
 
@@ -94,14 +95,23 @@ public final class CmdBuilder {
    * @return self instance
    */
   public CmdBuilder arg(final String key, final int arg) {
-    final String a = cmd.args.length > arg ? cmd.args[arg] : null;
-    if(a != null && !a.isEmpty()) {
+    return arg(key, cmd.args.length > arg ? cmd.args[arg] : null);
+  }
+
+  /**
+   * Adds an argument with an optional prefix.
+   * @param key optional keyword prefix
+   * @param arg argument string
+   * @return self instance
+   */
+  public CmdBuilder arg(final String key, final String arg) {
+    if(arg != null && !arg.isEmpty()) {
       if(key != null) tb.add(' ').add(key);
       tb.add(' ');
-      if(a.indexOf(' ') != -1 || a.indexOf(';') != -1) {
-        tb.add('"').add(a.replaceAll("\"", "\\\"")).add('"');
+      if(arg.indexOf(' ') != -1 || arg.indexOf(';') != -1) {
+        tb.add('"').add(arg.replaceAll("\"", "\\\"")).add('"');
       } else {
-        tb.add(a);
+        tb.add(arg);
       }
     }
     return this;

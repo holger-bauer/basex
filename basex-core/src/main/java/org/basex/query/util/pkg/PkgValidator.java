@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Package validator. This class executes some essential checks before installing a new package.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 public final class PkgValidator {
@@ -56,10 +56,10 @@ public final class PkgValidator {
     for(final PkgDep dep : pkg.dep) {
       // first check of dependency elements are consistently defined in the
       // descriptor
-      if(dep.name == null && dep.processor == null) throw BXRE_DESC_X.get(info, MISSSECOND);
+      if(dep.name == null && dep.processor == null) throw REPO_DESCRIPTOR_X.get(info, MISSSECOND);
       // if dependency involves a package, check if this package or an
       // appropriate version of it is installed
-      if(dep.name != null && depPkg(dep) == null) throw BXRE_NOTINST_X.get(info, dep.name);
+      if(dep.name != null && depPkg(dep) == null) throw REPO_NOTFOUND_X.get(info, dep.name);
       // if dependency involves a processor, add it to the list with processor
       // dependencies
       if(dep.processor != null) procs.add(dep);
@@ -70,7 +70,7 @@ public final class PkgValidator {
   /**
    * Checks if a secondary package, i.e. package involved in a dependency is already installed.
    * @param dep dependency
-   * @return result, or {@code null}
+   * @return result or {@code null}
    */
   String depPkg(final PkgDep dep) {
     // get installed versions of secondary package
@@ -85,24 +85,21 @@ public final class PkgValidator {
 
   /**
    * Checks if current database version of is among the processor dependencies.
-   * @param procs processor dependencies
+   * @param deps processor dependencies
    * @throws QueryException query exception
    */
-  private void checkProcs(final ArrayList<PkgDep> procs) throws QueryException {
-    boolean supported = false;
+  private void checkProcs(final ArrayList<PkgDep> deps) throws QueryException {
     // extract database version
-    final int i = Prop.VERSION.indexOf(' ');
     final HashSet<String> versions = new HashSet<>();
-    versions.add(i == -1 ? Prop.VERSION : Prop.VERSION.substring(0, i));
-    for(final PkgDep d : procs) {
-      if(!d.processor.toLowerCase(Locale.ENGLISH).equals(Prop.PROJECT_NAME)) {
-        supported = false;
-        break;
-      }
-      // check if current version is acceptable for the dependency
-      supported = availVersion(d, versions) != null;
+    final int version = Prop.VERSION.indexOf(' ');
+    versions.add(version == -1 ? Prop.VERSION : Prop.VERSION.substring(0, version));
+
+    // check if any of the dependencies math
+    for(final PkgDep dep : deps) {
+      if(dep.processor.toLowerCase(Locale.ENGLISH).equals(Prop.PROJECT) &&
+          availVersion(dep, versions) != null) return;
     }
-    if(!supported) throw BXRE_VERSION.get(info);
+    throw REPO_VERSION.get(info);
   }
 
   /**
@@ -110,7 +107,7 @@ public final class PkgValidator {
    * @param dep dependency
    * @param versions current versions - either currently installed versions
    * for a package or current version of BaseX
-   * @return available appropriate version
+   * @return available appropriate version or {@code null}
    */
   private static String availVersion(final PkgDep dep, final HashSet<String> versions) {
     if(versions.isEmpty()) return null;
@@ -119,7 +116,9 @@ public final class PkgValidator {
       final HashSet<String> versList = new HashSet<>();
       Collections.addAll(versList, Strings.split(dep.versions, ' '));
       // check if any acceptable version is already installed
-      for(final String v : versList) if(versions.contains(v)) return v;
+      for(final String v : versList) {
+        if(versions.contains(v)) return v;
+      }
     } else if(dep.semver != null) {
       // version template - version of secondary package or BaseX version must
       // be compatible with the defined template
@@ -171,13 +170,12 @@ public final class PkgValidator {
   private void checkComps(final Pkg pkg) throws QueryException {
     // modules other than xquery could be supported in future
     for(final PkgComponent comp : pkg.comps) {
-      if(isInstalled(comp, pkg.name())) throw BXRE_INST_X.get(info, comp.name());
+      if(isInstalled(comp, pkg.name())) throw REPO_INSTALLED_X.get(info, comp.name());
     }
   }
 
   /**
-   * Checks if an XQuery component is already installed as part of another
-   * package.
+   * Checks if an XQuery component is already installed as part of another package.
    * @param comp component
    * @param name component's package
    * @return result
@@ -191,8 +189,8 @@ public final class PkgValidator {
     for(final String id : ids) {
       if(id != null && !name(id).equals(name)) {
         // installed package is a different one, not just a different version of the current one
-        final String pkgDir = repo.pkgDict().get(id).dir();
-        final IO pkgDesc = new IOFile(repo.path(pkgDir), DESCRIPTOR);
+        final String pkgPath = repo.pkgDict().get(id).path();
+        final IO pkgDesc = new IOFile(repo.path(pkgPath), DESCRIPTOR);
         final Pkg pkg = new PkgParser(info).parse(pkgDesc);
         for(final PkgComponent nextComp : pkg.comps) {
           if(nextComp.name().equals(comp.name())) return true;

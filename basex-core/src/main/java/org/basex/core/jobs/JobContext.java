@@ -8,31 +8,38 @@ import org.basex.util.*;
 /**
  * Job context.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JobContext {
+  /** Prints trace output to the standard error. */
+  private static final QueryTracer ERRLN = info -> { Util.errln(info); return false; };
+
   /** Job prefix. */
   public static final String PREFIX = "job";
   /** Query id. */
   private static long jobId = -1;
 
+  /** Registered locks. */
+  public final Locks locks = new Locks();
+  /** Time of creation. */
+  public final long time = System.currentTimeMillis();
+
   /** Performance measurements. */
   public Performance performance;
   /** Query tracer. */
-  public QueryTracer tracer = QueryTracer.ERRLN;
+  public QueryTracer tracer = ERRLN;
   /** Database context. */
   public Context context;
-  /** Registered locks. */
-  public final Locks locks = new Locks();
-
   /** Root job. */
   private final Job job;
 
-  /** Job id. Will be set via if job is being registered. */
+  /** Job id. Will be set while job is registered. */
   private String id;
-  /** Job name. */
+  /** Job name (optional). */
   private String tp;
+  /** Job description (optional). */
+  private String desc;
 
   /**
    * Constructor.
@@ -71,6 +78,14 @@ public final class JobContext {
   }
 
   /**
+   * Sets a job description.
+   * @param description description
+   */
+  public void description(final String description) {
+    desc = description;
+  }
+
+  /**
    * Returns the job type.
    * @return name
    */
@@ -80,6 +95,6 @@ public final class JobContext {
 
   @Override
   public String toString() {
-    return job.toString();
+    return desc != null ? desc : job.toString();
   }
 }

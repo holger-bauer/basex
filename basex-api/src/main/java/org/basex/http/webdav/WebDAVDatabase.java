@@ -5,7 +5,7 @@ import java.io.*;
 /**
  * WebDAV resource representing a collection database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */
@@ -25,7 +25,7 @@ final class WebDAVDatabase extends WebDAVFolder {
   }
 
   @Override
-  protected void del() throws IOException {
+  protected void remove() throws IOException {
     service.dropDb(meta.db);
   }
 

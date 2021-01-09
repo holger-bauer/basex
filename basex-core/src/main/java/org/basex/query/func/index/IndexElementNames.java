@@ -7,29 +7,33 @@ import org.basex.index.*;
 import org.basex.index.query.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
+import org.basex.query.value.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class IndexElementNames extends IndexFn {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return names(qc, IndexType.ELEMNAME);
+  public final Iter iter(final QueryContext qc) throws QueryException {
+    final Data data = checkData(qc);
+    final IndexType type = type();
+    return entries(type == IndexType.ELEMNAME ? data.elemNames : data.attrNames,
+      new IndexEntries(EMPTY, type));
+  }
+
+  @Override
+  public final Value value(final QueryContext qc) throws QueryException {
+    return iter(qc).value(qc, this);
   }
 
   /**
-   * Returns all entries of the specified name index.
-   * @param qc query context
-   * @param it index type
-   * @return text entries
-   * @throws QueryException query exception
+   * Returns the index type (overwritten by implementing functions).
+   * @return index type
    */
-  Iter names(final QueryContext qc, final IndexType it) throws QueryException {
-    final Data data = checkData(qc);
-    return entries(it == IndexType.ELEMNAME ? data.elemNames : data.attrNames,
-      new IndexEntries(EMPTY, it));
+  IndexType type() {
+    return IndexType.ELEMNAME;
   }
 }

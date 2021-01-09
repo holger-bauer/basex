@@ -10,13 +10,13 @@ import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
 
 /**
  * Functions on relational databases.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 public final class SqlExecutePrepared extends SqlExecute {
@@ -26,23 +26,25 @@ public final class SqlExecutePrepared extends SqlExecute {
   private static final QNm Q_PARAMETER = new QNm(SQL_PREFIX, "parameter", SQL_URI);
 
   /** Type int. */
-  private static final byte[] INT = AtomType.INT.string();
+  private static final byte[] INT = AtomType.INT.name.local();
   /** Type string. */
-  private static final byte[] STRING = AtomType.STR.string();
+  private static final byte[] STRING = AtomType.STRING.name.local();
   /** Type boolean. */
-  private static final byte[] BOOL = AtomType.BLN.string();
+  private static final byte[] BOOL = AtomType.BOOLEAN.name.local();
   /** Type date. */
-  private static final byte[] DATE = AtomType.DAT.string();
+  private static final byte[] DATE = AtomType.DATE.name.local();
   /** Type double. */
-  private static final byte[] DOUBLE = AtomType.DBL.string();
+  private static final byte[] DOUBLE = AtomType.DOUBLE.name.local();
   /** Type float. */
-  private static final byte[] FLOAT = AtomType.FLT.string();
+  private static final byte[] FLOAT = AtomType.FLOAT.name.local();
   /** Type short. */
-  private static final byte[] SHORT = AtomType.SHR.string();
+  private static final byte[] SHORT = AtomType.SHORT.name.local();
   /** Type time. */
-  private static final byte[] TIME = AtomType.TIM.string();
+  private static final byte[] TIME = AtomType.TIME.name.local();
   /** Type timestamp. */
   private static final byte[] TIMESTAMP = token("timestamp");
+  /** Type xml. */
+  private static final byte[] SQLXML = token("sqlxml");
 
   /** Attribute "type" of <sql:parameter/>. */
   private static final byte[] TYPE = token("type");
@@ -52,39 +54,28 @@ public final class SqlExecutePrepared extends SqlExecute {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
     checkCreate(qc);
-    final int id = (int) toLong(exprs[0], qc);
-    long c = 0;
+
+    final PreparedStatement stmt = prepared(qc);
     ANode params = null;
     if(exprs.length > 1) {
       params = toElem(exprs[1], qc);
       if(!params.qname().eq(Q_PARAMETERS)) throw INVALIDOPTION_X.get(info, params.qname().local());
-      c = countParams(params);
     }
+    final StatementOptions options = toOptions(2, new StatementOptions(), qc);
 
-    final Object obj = jdbc(qc).get(id);
-    if(!(obj instanceof PreparedStatement)) throw BXSQ_STATE_X.get(info, id);
     try {
-      final PreparedStatement stmt = (PreparedStatement) obj;
-      // Check if number of parameters equals number of place holders
-      if(c != stmt.getParameterMetaData().getParameterCount()) throw BXSQ_PARAMS.get(info);
-      if(params != null) setParameters(params.children(), stmt);
-      return stmt.execute() ? iter(stmt, false) : Empty.ITER;
-    } catch(final SQLException ex) {
-      throw BXSQ_ERROR_X.get(info, ex);
+      stmt.setQueryTimeout(options.get(StatementOptions.TIMEOUT));
+      if(params != null) setParameters(params.childIter(), stmt);
+      // If execute returns false, statement was updating: return number of updated rows
+      return iter(stmt, false, stmt.execute());
+    } catch(final QueryException ex) {
+      // already handled
+      throw ex;
+    } catch(final Exception ex) {
+      // assume other then SQLException related to SQL Processing also
+      // Eg. java.lang.ArrayIndexOutOfBoundsException in case of SQLite
+      throw SQL_ERROR_X.get(info, ex);
     }
-  }
-
-  /**
-   * Counts the numbers of <sql:parameter/> elements.
-   * @param params element <sql:parameter/>
-   * @return number of parameters
-   */
-  private static long countParams(final ANode params) {
-    final BasicNodeIter ch = params.children();
-    long n = ch.size();
-    if(n == -1) do ++n;
-    while(ch.next() != null);
-    return n;
   }
 
   /**
@@ -100,19 +91,18 @@ public final class SqlExecutePrepared extends SqlExecute {
     for(ANode next; (next = params.next()) != null;) {
       // Check name
       if(!next.qname().eq(Q_PARAMETER)) throw INVALIDOPTION_X.get(info, next.qname().local());
-      final BasicNodeIter attrs = next.attributes();
+      final BasicNodeIter attrs = next.attributeIter();
       byte[] paramType = null;
       boolean isNull = false;
       for(ANode attr; (attr = attrs.next()) != null;) {
-        // Attribute "type"
+        // attribute "type"
         if(eq(attr.name(), TYPE)) paramType = attr.string();
-        // Attribute "null"
-        else if(eq(attr.name(), NULL))
-          isNull = attr.string() != null && Bln.parse(attr.string(), info);
-        // Not expected attribute
-        else throw BXSQ_ATTR_X.get(info, string(attr.name()));
+        // attribute "null"
+        else if(eq(attr.name(), NULL)) isNull = attr.string() != null && Bln.parse(attr, info);
+        // attribute not expected
+        else throw SQL_ATTRIBUTE_X.get(info, attr.name());
       }
-      if(paramType == null) throw BXSQ_TYPE.get(info);
+      if(paramType == null) throw SQL_PARAMETERS.get(info);
       final byte[] v = next.string();
       setParam(++i, stmt, paramType, isNull ? null : string(v), isNull);
     }
@@ -122,48 +112,56 @@ public final class SqlExecutePrepared extends SqlExecute {
    * Sets the parameter with the given index in a prepared statement.
    * @param index parameter index
    * @param stmt prepared statement
-   * @param paramType parameter type
+   * @param type parameter type
    * @param value parameter value
    * @param isNull indicator if the parameter is null or not
    * @throws QueryException query exception
    */
-  private void setParam(final int index, final PreparedStatement stmt,
-      final byte[] paramType, final String value, final boolean isNull) throws QueryException {
+  private void setParam(final int index, final PreparedStatement stmt, final byte[] type,
+      final String value, final boolean isNull) throws QueryException {
     try {
-      if(eq(BOOL, paramType)) {
+      if(eq(BOOL, type)) {
         if(isNull) stmt.setNull(index, Types.BOOLEAN);
         else stmt.setBoolean(index, Boolean.parseBoolean(value));
-      } else if(eq(DATE, paramType)) {
+      } else if(eq(DATE, type)) {
         if(isNull) stmt.setNull(index, Types.DATE);
         else stmt.setDate(index, Date.valueOf(value));
-      } else if(eq(DOUBLE, paramType)) {
+      } else if(eq(DOUBLE, type)) {
         if(isNull) stmt.setNull(index, Types.DOUBLE);
         else stmt.setDouble(index, Double.parseDouble(value));
-      } else if(eq(FLOAT, paramType)) {
+      } else if(eq(FLOAT, type)) {
         if(isNull) stmt.setNull(index, Types.FLOAT);
         else stmt.setFloat(index, Float.parseFloat(value));
-      } else if(eq(INT, paramType)) {
+      } else if(eq(INT, type)) {
         if(isNull) stmt.setNull(index, Types.INTEGER);
         else stmt.setInt(index, Integer.parseInt(value));
-      } else if(eq(SHORT, paramType)) {
+      } else if(eq(SHORT, type)) {
         if(isNull) stmt.setNull(index, Types.SMALLINT);
         else stmt.setShort(index, Short.parseShort(value));
-      } else if(eq(STRING, paramType)) {
+      } else if(eq(STRING, type)) {
         if(isNull) stmt.setNull(index, Types.VARCHAR);
         else stmt.setString(index, value);
-      } else if(eq(TIME, paramType)) {
+      } else if(eq(TIME, type)) {
         if(isNull) stmt.setNull(index, Types.TIME);
         else stmt.setTime(index, Time.valueOf(value));
-      } else if(eq(TIMESTAMP, paramType)) {
+      } else if(eq(TIMESTAMP, type)) {
         if(isNull) stmt.setNull(index, Types.TIMESTAMP);
         else stmt.setTimestamp(index, Timestamp.valueOf(value));
+      } else if(eq(SQLXML, type)) {
+        if(isNull) stmt.setNull(index, Types.SQLXML);
+        else {
+          final SQLXML xml = stmt.getConnection().createSQLXML();
+          xml.setString(value);
+          stmt.setSQLXML(index, xml);
+        }
       } else {
-        throw BXSQ_ERROR_X.get(info, "unsupported type: " + string(paramType));
+        throw SQL_ERROR_X.get(info, "unsupported type: " + string(type));
       }
     } catch(final SQLException ex) {
-      throw BXSQ_ERROR_X.get(info, ex);
+      throw SQL_ERROR_X.get(info, ex);
     } catch(final IllegalArgumentException ex) {
-      throw BXSQ_FORMAT_X.get(info, string(paramType));
+      Util.debug(ex);
+      throw SQL_TYPE_X_X.get(info, type, value);
     }
   }
 }

@@ -8,7 +8,7 @@ import org.basex.util.*;
 /**
  * Writes the parsed JSON file to the given {@link TokenBuilder}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 final class JsonStringConverter extends JsonConverter {
@@ -148,7 +148,7 @@ final class JsonStringConverter extends JsonConverter {
   }
 
   @Override
-  public Item finish() {
+  public Item finish(final String uri) {
     return Str.get(tb.toArray());
   }
 }

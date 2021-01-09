@@ -2,7 +2,7 @@ package org.basex.rest;
 
 import static org.basex.core.users.UserText.*;
 import static org.basex.util.http.HttpMethod.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.net.*;
@@ -15,13 +15,13 @@ import org.basex.core.cmd.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
 import org.basex.util.list.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Concurrency tests of BaseX REST API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class RESTConcurrencyTest extends SandboxTest {
@@ -29,18 +29,17 @@ public final class RESTConcurrencyTest extends SandboxTest {
   private static BaseXHTTP http;
 
   /** Time-out in (ms): increase if running on a slower system. */
-  private static final long TIMEOUT = 600;
+  private static final long TIMEOUT = 2000;
   /** Socket time-out in (ms). */
   private static final int SOCKET_TIMEOUT = 3000;
   /** BaseX HTTP base URL. */
   private static final String BASE_URL = REST_ROOT + NAME;
 
   /**
-   * Create a test database and start BaseXHTTP.
+   * Creates a test database and starts BaseXHTTP.
    * @throws Exception if database cannot be created or server cannot be started
    */
-  @BeforeClass
-  public static void setUp() throws Exception {
+  @BeforeEach public void setUp() throws Exception {
     final StringList sl = new StringList();
     sl.add("-p" + DB_PORT, "-h" + HTTP_PORT, "-s" + STOP_PORT, "-z").add("-U" + ADMIN);
 
@@ -51,14 +50,10 @@ public final class RESTConcurrencyTest extends SandboxTest {
   }
 
   /**
-   * Drop the test database and stop BaseXHTTP.
-   * @throws Exception if database cannot be dropped or server cannot be stopped
+   * Stops the server.
+   * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void tearDown() throws Exception {
-    try(ClientSession cs = createClient()) {
-      cs.execute(new DropDB(NAME));
-    }
+  @AfterEach public void tearDown() throws IOException {
     http.stop();
   }
 
@@ -71,8 +66,7 @@ public final class RESTConcurrencyTest extends SandboxTest {
    * </ol>
    * @throws Exception error during request execution
    */
-  @Test
-  public void testMultipleReaders() throws Exception {
+  @Test public void testMultipleReaders() throws Exception {
     final String number = "63177";
     final String slowQuery = "?query=(1%20to%20100000000000)%5b.=0%5d";
     final String fastQuery = "?query=" + number;
@@ -106,9 +100,7 @@ public final class RESTConcurrencyTest extends SandboxTest {
    * </ol>
    * @throws Exception error during request execution
    */
-  @Test
-  @Ignore("There is no way to stop a query on the server!")
-  public void testReaderWriter() throws Exception {
+  @Test @Disabled("Query cannot be stopped") public void testReaderWriter() throws Exception {
     final String readerQuery = "?query=(1%20to%20100000000000000)%5b.=0%5d";
     final String writerQuery = "/test.xml";
     final byte[] content = Token.token("<a/>");
@@ -150,8 +142,7 @@ public final class RESTConcurrencyTest extends SandboxTest {
    * </ol>
    * @throws Exception error during request execution
    */
-  @Test
-  public void testMultipleWriters() throws Exception {
+  @Test public void testMultipleWriters() throws Exception {
     final int count = 10;
     final String template =
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
@@ -327,9 +318,9 @@ public final class RESTConcurrencyTest extends SandboxTest {
     NOT_FOUND(403, "Not Found");
 
     /** HTTP response code. */
-    public final int code;
+    private final int code;
     /** HTTP response message. */
-    public final String message;
+    private final String message;
 
     /**
      * Constructor.

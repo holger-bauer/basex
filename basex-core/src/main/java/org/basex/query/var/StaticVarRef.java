@@ -5,18 +5,17 @@ import static org.basex.query.QueryError.*;
 import org.basex.query.*;
 import org.basex.query.ann.*;
 import org.basex.query.expr.*;
-import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * Reference to a static variable.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 final class StaticVarRef extends ParseExpr {
@@ -34,7 +33,7 @@ final class StaticVarRef extends ParseExpr {
    * @param sc static context
    */
   StaticVarRef(final InputInfo info, final QNm name, final StaticContext sc) {
-    super(info);
+    super(info, SeqType.ITEM_ZM);
     this.name = name;
     this.sc = sc;
   }
@@ -46,13 +45,17 @@ final class StaticVarRef extends ParseExpr {
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
     var.comp(cc);
-    seqType = var.seqType();
-    return var.val != null ? var.val : this;
+    return optimize(cc);
   }
 
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
+  public Expr optimize(final CompileContext cc) {
+    if(var.value != null) {
+      cc.info(QueryText.OPTINLINE_X, this);
+      return var.value;
+    }
+    exprType.assign(var.seqType());
+    return this;
   }
 
   @Override
@@ -61,8 +64,8 @@ final class StaticVarRef extends ParseExpr {
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return var != null && var.has(flag);
+  public boolean has(final Flag... flags) {
+    return var != null && var.has(flags);
   }
 
   @Override
@@ -74,7 +77,7 @@ final class StaticVarRef extends ParseExpr {
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
     final StaticVarRef ref = new StaticVarRef(info, name, sc);
     ref.var = var;
-    return ref;
+    return copyType(ref);
   }
 
   @Override
@@ -84,12 +87,7 @@ final class StaticVarRef extends ParseExpr {
   }
 
   @Override
-  public String toString() {
-    return '$' + Token.string(name.string());
-  }
-
-  @Override
-  public boolean removable(final Var v) {
+  public boolean inlineable(final InlineContext v) {
     return true;
   }
 
@@ -99,13 +97,8 @@ final class StaticVarRef extends ParseExpr {
   }
 
   @Override
-  public Expr inline(final Var v, final Expr ex, final CompileContext cc) {
+  public Expr inline(final InlineContext ic) {
     return null;
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(QueryText.VAR, name));
   }
 
   /**
@@ -117,5 +110,23 @@ final class StaticVarRef extends ParseExpr {
     if(vr.anns.contains(Annotation.PRIVATE) && !sc.baseURI().eq(vr.sc.baseURI()))
       throw VARPRIVATE_X.get(info, vr);
     var = vr;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof StaticVarRef)) return false;
+    final StaticVarRef s = (StaticVarRef) obj;
+    return name.eq(s.name) && var == s.var;
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, QueryText.VAR, name));
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.concat("$", name.string());
   }
 }

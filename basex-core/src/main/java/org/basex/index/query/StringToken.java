@@ -5,10 +5,10 @@ import org.basex.index.*;
 /**
  * This class defines access to index text tokens.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class StringToken implements IndexToken {
+public final class StringToken implements IndexSearch {
   /** Index type. */
   private final IndexType type;
   /** Index string. */
@@ -30,7 +30,7 @@ public final class StringToken implements IndexToken {
   }
 
   @Override
-  public byte[] get() {
+  public byte[] token() {
     return value;
   }
 }

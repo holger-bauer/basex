@@ -1,20 +1,19 @@
 package net.xqj.basex.local;
 
 import static net.xqj.basex.BaseXXQInsertOptions.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import java.util.Map.Entry;
 import java.util.concurrent.*;
-import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
+import java.util.concurrent.ThreadPoolExecutor.*;
 
 import javax.xml.xquery.*;
 
-import net.xqj.basex.*;
-
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 import com.xqj2.*;
+
+import net.xqj.basex.*;
 
 /**
  * Test XQJ concurrency, both reads and writes.
@@ -37,8 +36,7 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
    * Runs read concurrency test.
    * @throws Throwable any exception or error
    */
-  @Test
-  public void testConcurrentXQuery1to1024() throws Throwable {
+  @Test public void testConcurrentXQuery1to1024() throws Throwable {
     final ArrayList<SimpleQueryThread> sqtList = new ArrayList<>();
 
     for(int i = 0; i < CONCURRENT_READ_THREADS; i++)
@@ -46,15 +44,16 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
 
     for(final SimpleQueryThread s : sqtList) s.start();
     for(final SimpleQueryThread s : sqtList) s.join();
-    for(final SimpleQueryThread s : sqtList) if(s.thrown != null) throw s.thrown;
+    for(final SimpleQueryThread s : sqtList) {
+      if(s.thrown != null) throw s.thrown;
+    }
   }
 
   /**
    * Runs insert concurrency test.
    * @throws Exception exceptions
    */
-  @Test
-  public void testConcurrentInsert() throws Exception {
+  @Test public void testConcurrentInsert() throws Exception {
     final XQExpression xqpe = xqc.createExpression();
     try {
       xqpe.executeCommand("CREATE DB xqj-concurrent-insert-test");
@@ -66,8 +65,7 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
       final ThreadPoolExecutor tpe =
         new ThreadPoolExecutor(
           CONCURRENT_WRITE_THREADS, CONCURRENT_WRITE_THREADS, 4L,
-          TimeUnit.SECONDS,
-          new ArrayBlockingQueue<Runnable>(CONCURRENT_READ_THREADS),
+          TimeUnit.SECONDS, new ArrayBlockingQueue<>(CONCURRENT_READ_THREADS),
           new CallerRunsPolicy());
 
       final ArrayList<Future<?>> futures = new ArrayList<>();
@@ -78,8 +76,7 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
         docs.put(uri, item);
       }
 
-      for(final Entry<String, XQItem> doc : docs.entrySet())
-        futures.add(tpe.submit(new InsertItemThread(doc.getKey(), doc.getValue())));
+      docs.forEach((key, value) -> futures.add(tpe.submit(new InsertItemThread(key, value))));
 
       for(final Future<?> future : futures)
         future.get();
@@ -156,12 +153,12 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
 
     /**
      * Constructor.
-     * @param u uri
-     * @param it item
+     * @param uri uri
+     * @param item item
      */
-    private InsertItemThread(final String u, final XQItem it) {
-      uri = u;
-      item = it;
+    private InsertItemThread(final String uri, final XQItem item) {
+      this.uri = uri;
+      this.item = item;
     }
 
     @Override

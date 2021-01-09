@@ -1,5 +1,7 @@
 package org.basex.http.webdav;
 
+import static javax.servlet.http.HttpServletResponse.*;
+
 import javax.servlet.*;
 
 import org.basex.http.*;
@@ -9,7 +11,7 @@ import com.bradmcevoy.http.*;
 /**
  * WebDAV servlet.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class WebDAVServlet extends BaseXServlet {
@@ -28,10 +30,11 @@ public final class WebDAVServlet extends BaseXServlet {
     WebDAVFactory.init(conn);
 
     // create response
-    final WebDAVRequest request = new WebDAVRequest(conn.req);
-    final WebDAVResponse response = new WebDAVResponse(conn.res);
+    final WebDAVRequest request = new WebDAVRequest(conn);
+    final WebDAVResponse response = new WebDAVResponse(conn);
     try {
       manager.process(request, response);
+      conn.log(SC_OK, "");
     } finally {
       WebDAVFactory.close();
       response.close();

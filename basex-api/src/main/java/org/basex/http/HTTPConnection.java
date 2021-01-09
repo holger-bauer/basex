@@ -1,12 +1,10 @@
 package org.basex.http;
 
 import static javax.servlet.http.HttpServletResponse.*;
-import static org.basex.http.HTTPText.*;
 import static org.basex.util.Token.*;
 import static org.basex.util.http.HttpText.*;
 
 import java.io.*;
-import java.net.*;
 import java.util.*;
 
 import javax.servlet.*;
@@ -14,34 +12,35 @@ import javax.servlet.http.*;
 
 import org.basex.core.*;
 import org.basex.core.StaticOptions.*;
+import org.basex.core.jobs.*;
 import org.basex.core.users.*;
-import org.basex.io.out.*;
 import org.basex.io.serial.*;
 import org.basex.server.*;
 import org.basex.server.Log.*;
 import org.basex.util.*;
+import org.basex.util.Base64;
 import org.basex.util.http.*;
 
 /**
  * Single HTTP connection.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class HTTPConnection implements ClientInfo {
-  /** Servlet request. */
-  public final HttpServletRequest req;
-  /** Servlet response. */
-  public final HttpServletResponse res;
-  /** Servlet instance. */
-  public final BaseXServlet servlet;
+  /** Forwarding headers. */
+  private static final String[] FORWARDING_HEADERS = { "X-Forwarded-For", "Proxy-Client-IP",
+      "WL-Proxy-Client-IP", "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR" };
+
+  /** HTTP servlet request. */
+  public final HttpServletRequest request;
+  /** HTTP servlet response. */
+  public final HttpServletResponse response;
 
   /** Current database context. */
   public final Context context;
-  /** Request method. */
-  public final String method;
   /** Request parameters. */
-  public final HTTPParams params;
+  public final RequestContext requestCtx;
 
   /** Performance. */
   private final Performance perf = new Performance();
@@ -50,58 +49,57 @@ public final class HTTPConnection implements ClientInfo {
   /** Path, starting with a slash. */
   private final String path;
 
+  /** Request method. */
+  public String method;
   /** Serialization parameters. */
   private SerializerOptions serializer;
-  /** User name. */
-  private String username;
 
   /**
    * Constructor.
-   * @param req request
-   * @param res response
-   * @param servlet calling servlet instance
+   * @param request request
+   * @param response response
+   * @param auth authentication method (can be {@code null})
    */
-  HTTPConnection(final HttpServletRequest req, final HttpServletResponse res,
-      final BaseXServlet servlet) {
+  HTTPConnection(final HttpServletRequest request, final HttpServletResponse response,
+      final AuthMethod auth) {
 
-    this.req = req;
-    this.res = res;
-    this.servlet = servlet;
+    this.request = request;
+    this.response = response;
 
-    context = new Context(HTTPContext.context(), this);
-    method = req.getMethod();
-    params = new HTTPParams(this);
+    context = new Context(HTTPContext.get().context(), this);
+    method = request.getMethod();
+    requestCtx = new RequestContext(request);
 
     // set UTF8 as default encoding (can be overwritten)
-    res.setCharacterEncoding(Strings.UTF8);
-    path = decode(normalize(req.getPathInfo()));
+    response.setCharacterEncoding(Strings.UTF8);
+    path = normalize(request.getPathInfo());
 
-    // authentication method
-    auth = servlet.auth != null ? servlet.auth : context.soptions.get(StaticOptions.AUTHMETHOD);
+    // authentication method (servlet-specific or global)
+    this.auth = auth != null ? auth : context.soptions.get(StaticOptions.AUTHMETHOD);
   }
 
   /**
    * Authorizes a request. Initializes the user if it is called for the first time.
+   * @param username name of default servlet user (can be {@code null})
    * @throws IOException I/O exception
    */
-  public void authenticate() throws IOException {
+  public void authenticate(final String username) throws IOException {
     // choose admin user for OPTIONS requests, servlet-specific user, or global user (can be empty)
-    String name = method.equals(HttpMethod.OPTIONS.name()) ? UserText.ADMIN : servlet.user;
+    String name = method.equals(HttpMethod.OPTIONS.name()) ? UserText.ADMIN : username;
     if(name == null) name = context.soptions.get(StaticOptions.USER);
 
     // look for existing user. if it does not exist, try to authenticate
     User user = context.users.get(name);
     if(user == null) user = login();
 
-    // successful authentication: assign user; after that, generate servlet-specific user name
+    // successful authentication: assign user
     context.user(user);
-    username = servlet.username(this);
 
     // generate log entry
-    final StringBuilder uri = new StringBuilder(req.getRequestURL());
-    final String qs = req.getQueryString();
+    final StringBuilder uri = new StringBuilder(request.getRequestURI());
+    final String qs = request.getQueryString();
     if(qs != null) uri.append('?').append(qs);
-    context.log.write(address(), user(), LogType.REQUEST, '[' + method + "] " + uri, null);
+    context.log.write(LogType.REQUEST, '[' + method + "] " + uri, null, context);
   }
 
   /**
@@ -109,19 +107,18 @@ public final class HTTPConnection implements ClientInfo {
    * @return content type
    */
   public MediaType contentType() {
-    final String ct = req.getContentType();
-    return new MediaType(ct == null ? "" : ct);
+    return mediaType(request);
   }
 
   /**
    * Initializes the output. Sets the expected encoding and content type.
    */
   public void initResponse() {
-    // set content type and encoding
     final SerializerOptions opts = sopts();
-    final String enc = opts.get(SerializerOptions.ENCODING);
-    res.setCharacterEncoding(enc);
-    res.setContentType(new MediaType(mediaType(opts) + "; " + CHARSET + '=' + enc).toString());
+    final String encoding = opts.get(SerializerOptions.ENCODING);
+    final MediaType mt = new MediaType(mediaType(opts) + "; " + CHARSET + '=' + encoding);
+    response.setCharacterEncoding(encoding);
+    response.setContentType(mt.toString());
   }
 
   /**
@@ -137,25 +134,25 @@ public final class HTTPConnection implements ClientInfo {
    * @return database path
    */
   public String dbpath() {
-    final int s = path.indexOf('/', 1);
-    return s == -1 ? "" : path.substring(s + 1);
+    final int i = path.indexOf('/', 1);
+    return i == -1 ? "" : path.substring(i + 1);
   }
 
   /**
    * Returns the addressed database (i.e., the first path entry).
-   * @return database, or {@code null} if the root directory was specified.
+   * @return database, or {@code null} if the root directory was specified
    */
   public String db() {
-    final int s = path.indexOf('/', 1);
-    return path.substring(1, s == -1 ? path.length() : s);
+    final int i = path.indexOf('/', 1);
+    return path.substring(1, i == -1 ? path.length() : i);
   }
 
   /**
    * Returns all accepted media types.
    * @return accepted media types
    */
-  public MediaType[] accepts() {
-    final String accepts = req.getHeader(ACCEPT);
+  public ArrayList<MediaType> accepts() {
+    final String accepts = request.getHeader(ACCEPT);
     final ArrayList<MediaType> list = new ArrayList<>();
     if(accepts == null) {
       list.add(MediaType.ALL_ALL);
@@ -175,32 +172,23 @@ public final class HTTPConnection implements ClientInfo {
         }
       }
     }
-    return list.toArray(new MediaType[list.size()]);
+    return list;
   }
 
   /**
-   * Sends an error with an info message.
+   * Handles an error with an info message.
    * @param code status code
-   * @param info info, sent as body
+   * @param info info, will additionally be logged
    * @throws IOException I/O exception
    */
   public void error(final int code, final String info) throws IOException {
+    log(code, info);
     status(code, null, info);
   }
 
   /**
-   * Sets the HTTP status code and message.
-   * @param code status code
-   * @param message status message
-   * @throws IOException I/O exception
-   */
-  public void status(final int code, final String message) throws IOException {
-    status(code, message, null);
-  }
-
-  /**
    * Assigns serialization parameters.
-   * @param opts serialization parameters.
+   * @param opts serialization parameters
    */
   public void sopts(final SerializerOptions opts) {
     serializer = opts;
@@ -208,7 +196,7 @@ public final class HTTPConnection implements ClientInfo {
 
   /**
    * Returns the serialization parameters.
-   * @return serialization parameters.
+   * @return serialization parameters
    */
   public SerializerOptions sopts() {
     if(serializer == null) serializer = new SerializerOptions();
@@ -217,11 +205,11 @@ public final class HTTPConnection implements ClientInfo {
 
   /**
    * Writes a log message.
-   * @param type log type
+   * @param status HTTP status code
    * @param info info string (can be {@code null})
    */
-  void log(final int type, final String info) {
-    context.log.write(address(), user(), type, info, perf);
+  public void log(final int status, final String info) {
+    context.log.write(status, info, perf, context);
   }
 
   /**
@@ -231,13 +219,9 @@ public final class HTTPConnection implements ClientInfo {
    */
   public String resolve(final String location) {
     String loc = location;
-    if(location.startsWith("/")) {
-      final String uri = req.getRequestURI(), info = req.getPathInfo();
-      if(info == null) {
-        loc = uri + location;
-      } else {
-        loc = uri.substring(0, uri.length() - info.length()) + location;
-      }
+    if(Strings.startsWith(location, '/')) {
+      final String uri = request.getRequestURI(), info = request.getPathInfo();
+      loc = (info == null ? uri : uri.substring(0, uri.length() - info.length())) + location;
     }
     return loc;
   }
@@ -248,7 +232,7 @@ public final class HTTPConnection implements ClientInfo {
    * @throws IOException I/O exception
    */
   public void redirect(final String location) throws IOException {
-    res.sendRedirect(resolve(location));
+    response.sendRedirect(resolve(location));
   }
 
   /**
@@ -258,29 +242,91 @@ public final class HTTPConnection implements ClientInfo {
    * @throws ServletException servlet exception
    */
   public void forward(final String location) throws IOException, ServletException {
-    req.getRequestDispatcher(resolve(location)).forward(req, res);
+    request.getRequestDispatcher(resolve(location)).forward(request, response);
   }
 
   @Override
-  public String address() {
-    return req.getRemoteAddr() + ':' + req.getRemotePort();
+  public String clientAddress() {
+    return getRemoteAddr() + ':' + request.getRemotePort();
   }
 
   @Override
-  public String user() {
-    return username;
+  public String clientName() {
+    // check for request id
+    Object value = request.getAttribute(HTTPText.CLIENT_ID);
+
+    // check for session id (DBA, global)
+    if(value == null) {
+      final HttpSession session = request.getSession(false);
+      if(session != null) {
+        final boolean dba = (path() + '/').contains('/' + HTTPText.DBA_CLIENT_ID + '/');
+        value = session.getAttribute(dba ? HTTPText.DBA_CLIENT_ID : HTTPText.CLIENT_ID);
+      }
+    }
+    return clientName(value, context);
   }
 
   /**
-   * Decodes the specified path.
-   * @param path strings to be decoded
-   * @return argument
+   * Sets 460 a proprietary status code and sends the exception message as info.
+   * @param ex job exception
+   * @throws IOException I/O exception
    */
-  public static String decode(final String path) {
+  public void stop(final JobException ex) throws IOException {
+    final int code = 460;
+    final String info = ex.getMessage();
+    log(code, info);
     try {
-      return URLDecoder.decode(path, Prop.ENCODING);
-    } catch(final UnsupportedEncodingException | IllegalArgumentException ex) {
-      return path;
+      response.resetBuffer();
+      response.setStatus(code);
+      response.setContentType(MediaType.TEXT_PLAIN + "; " + CHARSET + '=' + Strings.UTF8);
+      // client directive: do not cache result (HTTP 1.1, old clients)
+      response.setHeader(CACHE_CONTROL, "no-cache, no-store, must-revalidate");
+      response.setHeader(PRAGMA, "no-cache");
+      response.setHeader(EXPIRES, "0");
+      response.getOutputStream().write(token(info));
+    } catch(final IllegalStateException e) {
+      // too late (response has already been committed)
+      logError(code, null, info, e);
+    }
+  }
+
+  /**
+   * Sets a status and sends an info message.
+   * @param code status code
+   * @param message status message (can be {@code null})
+   * @param body message for response body (can be {@code null})
+   * @throws IOException I/O exception
+   */
+  @SuppressWarnings("deprecation")
+  public void status(final int code, final String message, final String body) throws IOException {
+    try {
+      response.resetBuffer();
+      if(code == SC_UNAUTHORIZED && !response.containsHeader(WWW_AUTHENTICATE)) {
+        final TokenBuilder header = new TokenBuilder();
+        header.add(auth).add(' ').add(Request.REALM).add("=\"").add(Prop.NAME).add('"');
+        if(auth == AuthMethod.DIGEST) {
+          final String nonce = Strings.md5(Long.toString(System.nanoTime()));
+          header.add(",").add(Request.QOP).add("=\"").add(AUTH).add(',').add(AUTH_INT);
+          header.add('"').add(',').add(Request.NONCE).add("=\"").add(nonce).add('"');
+        }
+        response.setHeader(WWW_AUTHENTICATE, header.toString());
+      }
+
+      final int c = code < 0 || code > 999 ? 500 : code;
+      if(message == null) {
+        response.setStatus(c);
+      } else {
+        // do not allow Jetty to create a custom error html page
+        // control characters and non-ASCII codes will be removed (GH-1632)
+        response.setStatus(c, message.replaceAll("[^\\x20-\\x7F]", "?"));
+      }
+
+      if(body != null) {
+        response.setContentType(MediaType.TEXT_PLAIN + "; " + CHARSET + '=' + Strings.UTF8);
+        response.getOutputStream().write(new TokenBuilder(token(body)).normalize().finish());
+      }
+    } catch(final IllegalStateException | IllegalArgumentException ex) {
+      logError(code, message, body, ex);
     }
   }
 
@@ -303,11 +349,34 @@ public final class HTTPConnection implements ClientInfo {
     return MediaType.TEXT_PLAIN;
   }
 
-  // PRIVATE METHODS ====================================================================
+  /**
+   * Returns the content type of a request, or an empty string.
+   * @param request servlet request
+   * @return content type
+   */
+  public static MediaType mediaType(final HttpServletRequest request) {
+    final String ct = request.getContentType();
+    return new MediaType(ct == null ? "" : ct);
+  }
+
+  /**
+   * Returns the content type of a request, or an empty string.
+   * @param request servlet request
+   * @return content type
+   */
+  public static String remoteAddress(final HttpServletRequest request) {
+    for(final String header : FORWARDING_HEADERS) {
+      final String addr = request.getHeader(header);
+      if (addr != null && !addr.isEmpty() && !"unknown".equalsIgnoreCase(addr)) return addr;
+    }
+    return request.getRemoteAddr();
+  }
+
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Normalizes the specified path.
-   * @param path path, or {@code null}
+   * @param path path (can be {@code null})
    * @return normalized path
    */
   private static String normalize(final String path) {
@@ -337,7 +406,6 @@ public final class HTTPConnection implements ClientInfo {
    * @throws IOException I/O exception
    */
   private User login() throws IOException {
-    final byte[] address = token(req.getRemoteAddr());
     try {
       final User user;
       if(auth == AuthMethod.CUSTOM) {
@@ -345,19 +413,19 @@ public final class HTTPConnection implements ClientInfo {
         user = user(UserText.ADMIN);
       } else {
         // request authorization header, check authentication method
-        final String header = req.getHeader(AUTHORIZATION);
+        final String header = request.getHeader(AUTHORIZATION);
         final String[] am = header != null ? Strings.split(header, ' ', 2) : new String[] { "" };
         final AuthMethod meth = StaticOptions.AUTHMETHOD.get(am[0]);
-        if(auth != meth) throw new LoginException(WRONGAUTH_X, auth);
+        if(auth != meth) throw new LoginException(HTTPText.WRONGAUTH_X, auth);
 
         if(auth == AuthMethod.BASIC) {
           final String details = am.length > 1 ? am[1] : "";
-          final String[] creds = Strings.split(org.basex.util.Base64.decode(details), ':', 2);
+          final String[] creds = Strings.split(Base64.decode(details), ':', 2);
           user = user(creds[0]);
-          if(creds.length < 2 || !user.matches(creds[1])) throw new LoginException();
+          if(creds.length < 2 || !user.matches(creds[1])) throw new LoginException(user.name());
 
         } else {
-          final EnumMap<Request, String> map = HttpClient.digestHeaders(header);
+          final EnumMap<Request, String> map = HttpClient.authHeaders(header);
           user = user(map.get(Request.USERNAME));
 
           final String nonce = map.get(Request.NONCE), cnonce = map.get(Request.CNONCE);
@@ -367,83 +435,67 @@ public final class HTTPConnection implements ClientInfo {
 
           String h2 = method + ':' + map.get(Request.URI);
           final String qop = map.get(Request.QOP);
-          if(Strings.eq(qop, AUTH_INT)) h2 += ':' + Strings.md5(params.body().toString());
+          if(Strings.eq(qop, AUTH_INT)) h2 += ':' + Strings.md5(requestCtx.payload().toString());
           final String ha2 = Strings.md5(h2);
 
-          final StringBuilder response = new StringBuilder(ha1).append(':').append(nonce);
+          final StringBuilder sb = new StringBuilder(ha1).append(':').append(nonce);
           if(Strings.eq(qop, AUTH, AUTH_INT)) {
-            response.append(':').append(map.get(Request.NC));
-            response.append(':').append(cnonce).append(':').append(qop);
+            sb.append(':').append(map.get(Request.NC));
+            sb.append(':').append(cnonce).append(':').append(qop);
           }
-          response.append(':').append(ha2);
+          sb.append(':').append(ha2);
 
-          if(!Strings.md5(response.toString()).equals(map.get(Request.RESPONSE)))
-            throw new LoginException();
+          if(!Strings.md5(sb.toString()).equals(map.get(Request.RESPONSE)))
+            throw new LoginException(user.name());
         }
       }
 
       // accept and return user
-      context.blocker.remove(address);
+      context.blocker.remove(token(getRemoteAddr()));
       return user;
 
     } catch(final LoginException ex) {
       // delay users with wrong passwords
-      context.blocker.delay(address);
+      context.blocker.delay(token(getRemoteAddr()));
       throw ex;
     }
   }
 
   /**
    * Returns a user for the specified string, or an error.
-   * @param user user name (can be {@code null})
+   * @param name user name (can be {@code null})
    * @return user reference
    * @throws LoginException login exception
    */
-  private User user(final String user) throws LoginException {
-    final User u = context.users.get(user);
-    if(u == null) throw new LoginException();
-    return u;
+  private User user(final String name) throws LoginException {
+    final User user = context.users.get(name);
+    if(user == null) throw new LoginException(name);
+    return user;
+  }
+
+  /**
+   * Returns the remote address. Resolves proxy forwardings.
+   * @return client address
+   */
+  private String getRemoteAddr() {
+    return remoteAddress(request);
   }
 
   /**
    * Sets a status and sends an info message.
    * @param code status code
    * @param message status message (can be {@code null})
-   * @param info info, sent as body (can be {@code null})
-   * @throws IOException I/O exception
+   * @param info detailed information (can be {@code null})
+   * @param ex exception
    */
-  @SuppressWarnings("deprecation")
-  private void status(final int code, final String message, final String info) throws IOException {
-    try {
-      log(code, message != null ? message : info != null ? info : "");
-      res.resetBuffer();
-      if(code == SC_UNAUTHORIZED) {
-        final TokenBuilder header = new TokenBuilder(auth.toString());
-        header.add(' ').addExt(Request.REALM).add("=\"").add(Prop.NAME).add('"');
-        if(auth == AuthMethod.DIGEST) {
-          final String nonce = Strings.md5(Long.toString(System.nanoTime()));
-          header.add(",").addExt(Request.QOP).add("=\"").add(AUTH).add(',').add(AUTH_INT).add('"');
-          header.add(',').addExt(Request.NONCE).add("=\"").add(nonce).add('"');
-        }
-        res.setHeader(WWW_AUTHENTICATE, header.toString());
-      }
+  private void logError(final int code, final String message, final String info,
+      final Exception ex) {
 
-      final int c = code < 0 || code > 999 ? 500 : code;
-      if(message == null) {
-        res.setStatus(c);
-      } else {
-        // do not allow Jetty to create a custom error html page
-        res.setStatus(c, message);
-      }
-      if(info != null) {
-        res.setContentType(MediaType.TEXT_PLAIN.toString());
-        try(ArrayOutput ao = new ArrayOutput()) {
-          ao.write(token(info));
-          res.getOutputStream().write(ao.normalize().finish());
-        }
-      }
-    } catch(final IllegalStateException | IllegalArgumentException ex) {
-      log(SC_INTERNAL_SERVER_ERROR, code + ", Message: " + message + ": " + Util.message(ex));
-    }
+    final StringBuilder sb = new StringBuilder();
+    sb.append("Code: ").append(code);
+    if(info != null) sb.append(", Info: ").append(info);
+    if(message != null) sb.append(", Message: ").append(message);
+    sb.append(", Error: ").append(Util.message(ex));
+    log(SC_INTERNAL_SERVER_ERROR, sb.toString());
   }
 }

@@ -1,7 +1,8 @@
 package org.basex.query.func;
 
 import static org.basex.query.func.Function.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.*;
 import java.util.concurrent.*;
 
@@ -9,17 +10,16 @@ import org.basex.*;
 import org.basex.api.client.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.query.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests the functions of the Database Module in a client/server environment.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class DbModuleServerTest extends AdvancedQueryTest {
+public final class DbModuleServerTest extends SandboxTest {
   /** Number of clients. */
   private static final int NUM = 5;
   /** Test file. */
@@ -30,8 +30,7 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
   /**
    * Initializes a test.
    */
-  @Before
-  public void finishTest() {
+  @BeforeEach public void finishTest() {
     execute(new DropDB(NAME));
   }
 
@@ -39,17 +38,15 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
    * Starts the server.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void start() throws IOException {
+  @BeforeAll public static void start() throws IOException {
     server = createServer();
   }
 
   /**
-   * Finishes the test.
+   * Stops the server.
    * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void finish() throws IOException {
+  @AfterAll public static void stop() throws IOException {
     stopServer(server);
   }
 
@@ -57,8 +54,7 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
    * Tests client/server functionality of database functions.
    * @throws IOException I/O exception
    */
-  @Test
-  public void clientServer() throws IOException {
+  @Test public void clientServer() throws IOException {
     final ClientSession c1 = createClient();
     final ClientSession c2 = createClient();
 
@@ -72,8 +68,7 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
    * @throws IOException I/O exception
    * @throws InterruptedException interrupted exception
    */
-  @Test
-  public void concurrentClients() throws IOException, InterruptedException {
+  @Test public void concurrentClients() throws IOException, InterruptedException {
     final ClientSession check = createClient();
 
     // same DB name, which is 2 x NUM times
@@ -87,15 +82,10 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
     assertEquals("true", check.execute(new XQuery(_DB_EXISTS.args(NAME))));
 
     // create
-    runClients(new XQuery(
-      _DB_DROP.args(NAME) + ',' +
-      _DB_CREATE.args(NAME, FILE, "in/")
-    ));
+    runClients(new XQuery(_DB_DROP.args(NAME) + ',' + _DB_CREATE.args(NAME, FILE, "in/")));
 
     // add, create
-    runClients(new XQuery(
-        _DB_ADD.args(NAME, "<X/>", "x.xml") + ',' +
-      _DB_DROP.args(NAME) + ',' +
+    runClients(new XQuery(_DB_ADD.args(NAME, " <X/>", "x.xml") + ',' + _DB_DROP.args(NAME) + ',' +
       _DB_CREATE.args(NAME, FILE)));
 
     check.execute(new DropDB(NAME));
@@ -116,6 +106,8 @@ public final class DbModuleServerTest extends AdvancedQueryTest {
     }
     start.countDown();
     stop.await();
-    for(final Client c : clients) if(c.error != null) fail(c.error);
+    for(final Client c : clients) {
+      if(c.error != null) fail(c.error);
+    }
   }
 }

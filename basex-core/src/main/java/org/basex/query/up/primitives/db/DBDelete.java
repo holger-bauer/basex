@@ -10,7 +10,7 @@ import org.basex.util.list.*;
 /**
  * Update primitive for the {@link Function#_DB_DELETE} function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DBDelete extends DBUpdate {
@@ -39,7 +39,7 @@ public final class DBDelete extends DBUpdate {
 
   @Override
   public void apply() {
-    for(final String path : paths) Delete.delete(data,  path);
+    for(final String path : paths) Delete.deleteBinary(data,  path);
   }
 
   @Override

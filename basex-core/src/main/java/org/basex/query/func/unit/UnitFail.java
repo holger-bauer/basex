@@ -1,17 +1,17 @@
 package org.basex.query.func.unit;
 
 import org.basex.query.*;
-import org.basex.query.iter.*;
+import org.basex.query.value.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UnitFail extends UnitFn {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    throw error(exprs.length < 1 ? null : toNodeOrAtomItem(exprs[0], qc));
+  public Value value(final QueryContext qc) throws QueryException {
+    throw error(exprs.length > 0 ? toNodeOrAtomItem(0, qc) : null);
   }
 }

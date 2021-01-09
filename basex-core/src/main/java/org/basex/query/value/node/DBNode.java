@@ -1,7 +1,6 @@
 package org.basex.query.value.node;
 
 import static org.basex.query.QueryText.*;
-import static org.basex.query.func.Function.*;
 
 import java.io.*;
 
@@ -11,13 +10,12 @@ import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.query.*;
-import org.basex.query.expr.*;
+import org.basex.query.func.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.Type.ID;
+import org.basex.query.value.type.Type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -26,10 +24,13 @@ import org.basex.util.list.*;
 /**
  * Database node.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class DBNode extends ANode {
+  /** Parent of the database instance  (can be {@code null}). */
+  FNode root;
+
   /** Data reference. */
   private final Data data;
   /** Pre value. */
@@ -66,14 +67,14 @@ public class DBNode extends ANode {
    * Constructor, specifying full node information.
    * @param data data reference
    * @param pre pre value
-   * @param par parent reference
+   * @param rt root reference (can be {@code null})
    * @param type node type
    */
-  DBNode(final Data data, final int pre, final ANode par, final NodeType type) {
+  DBNode(final Data data, final int pre, final FNode rt, final NodeType type) {
     super(type);
     this.data = data;
     this.pre = pre;
-    parent = par;
+    root = rt;
   }
 
   /**
@@ -98,12 +99,13 @@ public class DBNode extends ANode {
    * Sets the node type.
    * @param p pre value
    * @param k node kind
+   * @return self reference
    */
-  private void set(final int p, final int k) {
+  private DBNode set(final int p, final int k) {
     type = type(k);
-    parent = null;
     value = null;
     pre = p;
+    return this;
   }
 
   @Override
@@ -135,44 +137,45 @@ public class DBNode extends ANode {
 
   @Override
   public final long itr(final InputInfo ii) throws QueryException {
-    if(type == NodeType.ELM) {
+    if(type == NodeType.ELEMENT) {
       final int as = data.attSize(pre, Data.ELEM);
       if(data.size(pre, Data.ELEM) - as == 1 && data.kind(pre + as) == Data.TEXT) {
         final long l = data.textItr(pre + as, true);
         if(l != Long.MIN_VALUE) return l;
       }
-    } else if(type == NodeType.TXT || type == NodeType.ATT) {
-      final long l = data.textItr(pre, type == NodeType.TXT);
+    } else if(type == NodeType.TEXT || type == NodeType.ATTRIBUTE) {
+      final long l = data.textItr(pre, type == NodeType.TEXT);
       if(l != Long.MIN_VALUE) return l;
     }
-    return Int.parse(data.atom(pre), ii);
+    return Int.parse(this, ii);
   }
 
   @Override
   public final double dbl(final InputInfo ii) throws QueryException {
     // try to directly retrieve inlined numeric value from XML storage
     double d = Double.NaN;
-    if(type == NodeType.ELM) {
+    if(type == NodeType.ELEMENT) {
       final int as = data.attSize(pre, Data.ELEM);
       if(data.size(pre, Data.ELEM) - as == 1 && data.kind(pre + as) == Data.TEXT) {
         d = data.textDbl(pre + as, true);
       }
-    } else if(type == NodeType.TXT || type == NodeType.ATT) {
-      d = data.textDbl(pre, type == NodeType.TXT);
+    } else if(type == NodeType.TEXT || type == NodeType.ATTRIBUTE) {
+      d = data.textDbl(pre, type == NodeType.TEXT);
     }
     // GH-1206: parse invalid values again
-    return Double.isNaN(d) ? Dbl.parse(data.atom(pre), ii) : d;
+    return Double.isNaN(d) ? Dbl.parse(string(), ii) : d;
   }
 
   @Override
   public final byte[] name() {
-    return type == NodeType.ELM || type == NodeType.ATT || type == NodeType.PI ?
-      data.name(pre, kind(nodeType())) : Token.EMPTY;
+    return type == NodeType.ELEMENT || type == NodeType.ATTRIBUTE ||
+        type == NodeType.PROCESSING_INSTRUCTION ? data.name(pre, kind(nodeType())) : null;
   }
 
   @Override
   public final QNm qname() {
-    if(type == NodeType.ELM || type == NodeType.ATT || type == NodeType.PI) {
+    if(type == NodeType.ELEMENT || type == NodeType.ATTRIBUTE ||
+        type == NodeType.PROCESSING_INSTRUCTION) {
       final byte[][] qname = data.qname(pre, kind());
       return new QNm(qname[0], qname[1]);
     }
@@ -186,13 +189,13 @@ public class DBNode extends ANode {
 
   @Override
   public final byte[] baseURI() {
-    if(type == NodeType.DOC) {
+    if(type == NodeType.DOCUMENT_NODE) {
       final String base = Token.string(data.text(pre, true));
       if(data.inMemory()) {
         final String path = data.meta.original;
         return Token.token(path.isEmpty() ? base : IO.get(path).merge(base).url());
       }
-      return new TokenBuilder().add('/').add(data.meta.name).add('/').add(base).finish();
+      return Token.concat('/', data.meta.name, '/', base);
     }
     final byte[] base = attribute(QNm.XML_BASE);
     return base != null ? base : Token.EMPTY;
@@ -200,21 +203,18 @@ public class DBNode extends ANode {
 
   @Override
   public final boolean is(final ANode node) {
-    return node == this || node instanceof DBNode &&
-        data == node.data() && pre == ((DBNode) node).pre;
+    return this == node || data == node.data() && pre == ((DBNode) node).pre;
   }
 
   @Override
   public final int diff(final ANode node) {
-    // compare fragment with database node; specify fragment first to save time
-    if(node instanceof FNode) return -diff(node, this);
-    // same database instance: compare pre values
-    if(data == node.data()) {
-      final int p = ((DBNode) node).pre;
-      return pre > p ? 1 : pre < p ? -1 : 0;
-    }
-    // check order via lowest common ancestor
-    return diff(this, node);
+    if(this == node) return 0;
+    final Data ndata = node.data();
+    return ndata != null ?
+      // comparison of two databases: compare pre values or database ids
+      data == ndata ? pre - ((DBNode) node).pre : data.dbid - ndata.dbid :
+      // comparison of database and fragment: find LCA
+      diff(this, node);
   }
 
   @Override
@@ -223,176 +223,118 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final DBNode dbNodeCopy(final MainOptions opts) {
-    final MemData md = new MemData(opts);
-    new DataBuilder(md).build(this);
-    return new DBNode(md).parent(parent);
-  }
-
-  @Override
-  public final DBNode deepCopy(final MainOptions options) {
-    return dbNodeCopy(options);
+  public final DBNode materialize(final QueryContext qc, final boolean copy) {
+    return copy ? copy(qc) : this;
   }
 
   @Override
   public final DBNode finish() {
-    final DBNode n = new DBNode(data, pre, parent, nodeType());
-    n.score = score;
-    return n;
-  }
-
-  @Override
-  public final ANode parent() {
-    if(parent != null) return parent;
-    final int p = data.parent(pre, data.kind(pre));
-    if(p == -1) return null;
-
-    final DBNode node = finish();
-    node.set(p, data.kind(p));
+    final DBNode node = new DBNode(data, pre, root, nodeType());
+    node.score = score;
     return node;
   }
 
   @Override
-  protected final DBNode parent(final ANode par) {
-    parent = par;
-    return this;
+  public final ANode parent() {
+    final int par = data.parent(pre, kind());
+    return par == -1 ? root : finish().set(par, data.kind(par));
+  }
+
+  @Override
+  public final void parent(final FNode par) {
+    // supplied parent node will be set as parent of the database instance
+    root = par;
   }
 
   @Override
   public final boolean hasChildren() {
-    final int kind = data.kind(pre);
+    final int kind = kind();
     return data.attSize(pre, kind) != data.size(pre, kind);
   }
 
   @Override
-  public final DBNodeIter ancestor() {
-    return new DBNodeIter(data) {
-      private final DBNode node = finish();
-      int curr = pre, kind = data.kind(curr);
-
-      @Override
-      public DBNode next() {
-        curr = data.parent(curr, kind);
-        if(curr == -1) return null;
-        kind = data.kind(curr);
-        node.set(curr, kind);
-        return node;
-      }
-    };
+  public final BasicNodeIter ancestorIter() {
+    return root != null ? super.ancestorIter() : ancestorIter(data.parent(pre, kind()));
   }
 
   @Override
-  public final DBNodeIter ancestorOrSelf() {
-    return new DBNodeIter(data) {
-      private final DBNode node = finish();
-      int curr = pre, kind = data.kind(curr);
-
-      @Override
-      public DBNode next() {
-        if(curr == -1) return null;
-        kind = data.kind(curr);
-        node.set(curr, kind);
-        curr = data.parent(curr, kind);
-        return node;
-      }
-    };
+  public final BasicNodeIter ancestorOrSelfIter() {
+    return root != null ? super.ancestorOrSelfIter() : ancestorIter(pre);
   }
 
   @Override
-  public final DBNodeIter attributes() {
-    return new DBNodeIter(data) {
+  public final BasicNodeIter attributeIter() {
+    final int k = kind(), first = pre + 1, last = pre + data.attSize(pre, k);
+    return first == last ? BasicNodeIter.EMPTY : new DBNodeIter(data) {
       final DBNode node = finish();
-      final int size = data.attSize(pre, data.kind(pre));
-      int curr = pre + 1;
+      int curr = first;
 
       @Override
       public DBNode next() {
-        if(curr == pre + size) return null;
-        final DBNode n = node;
-        n.set(curr++, Data.ATTR);
-        return n;
+        return curr == last ? null : node.set(curr++, Data.ATTR);
       }
       @Override
       public ANode get(final long i) {
-        final DBNode n = node;
-        n.set(pre + 1 + (int) i, Data.ATTR);
-        return n;
+        return node.set(pre + 1 + (int) i, Data.ATTR);
       }
       @Override
-      public long size() { return size - 1; }
+      public long size() {
+        return last - first;
+      }
     };
   }
 
   @Override
-  public final DBNodeIter children() {
-    return new DBNodeIter(data) {
-      int kind = data.kind(pre), curr = pre + data.attSize(pre, kind);
-      final int last = pre + data.size(pre, kind);
+  public final BasicNodeIter childIter() {
+    final int k = kind(), first = pre + data.attSize(pre, k), last = pre + data.size(pre, k);
+    return first == last ? BasicNodeIter.EMPTY : new DBNodeIter(data) {
       final DBNode node = finish();
+      int curr = first;
 
       @Override
       public DBNode next() {
         if(curr == last) return null;
-        final Data d = data;
-        kind = d.kind(curr);
+        final int kind = data.kind(curr);
         node.set(curr, kind);
-        curr += d.size(curr, kind);
+        curr += data.size(curr, kind);
         return node;
       }
     };
   }
 
   @Override
-  public final DBNodeIter descendant() {
-    return new DBNodeIter(data) {
-      int kind = data.kind(pre), curr = pre + data.attSize(pre, kind);
-      final int last = pre + data.size(pre, kind);
-      final DBNode node = finish();
-
-      @Override
-      public DBNode next() {
-        if(curr == last) return null;
-        kind = data.kind(curr);
-        node.set(curr, kind);
-        curr += data.attSize(curr, kind);
-        return node;
-      }
-    };
+  public final BasicNodeIter descendantIter() {
+    final int k = kind(), first = pre + data.attSize(pre, k), last = pre + data.size(pre, k);
+    return descendantIter(first, last);
   }
 
   @Override
-  public final DBNodeIter descendantOrSelf() {
-    return new DBNodeIter(data) {
-      final DBNode node = finish();
-      final int last = pre + data.size(pre, data.kind(pre));
-      int curr = pre;
-
-      @Override
-      public DBNode next() {
-        if(curr == last) return null;
-        final int k = data.kind(curr);
-        node.set(curr, k);
-        curr += data.attSize(curr, k);
-        return node;
-      }
-    };
+  public final BasicNodeIter descendantOrSelfIter() {
+    final int k = kind(), first = pre, last = pre + data.size(pre, k);
+    return descendantIter(first, last);
   }
 
   @Override
-  public final DBNodeIter following() {
+  public final BasicNodeIter followingIter() {
+    if(root != null) return super.followingIter();
+
     return new DBNodeIter(data) {
       private final DBNode node = finish();
-      int kind = data.kind(pre), curr = pre + data.size(pre, kind), size = -1;
+      int kind = kind(), curr = pre + data.size(pre, kind), size = -1;
 
       @Override
       public DBNode next() {
         // initialize iterator: find last node that needs to be scanned
         if(size == -1) {
           if(data.meta.ndocs > 1) {
-            for(final ANode anc : ancestor()) size = ((DBNode) anc).pre;
+            int p = pre;
+            for(final ANode nd : ancestorIter()) p = ((DBNode) nd).pre;
+            size = p + data.size(p, data.kind(p));
+          } else {
+            size = data.meta.size;
           }
-          size = size == -1 ? data.meta.size : data.size(size, data.kind(size));
         }
+
         if(curr == size) return null;
         kind = data.kind(curr);
         node.set(curr, kind);
@@ -403,18 +345,19 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final DBNodeIter followingSibling() {
+  public final BasicNodeIter followingSiblingIter() {
+    final int k = kind(), parent = data.parent(pre, k);
+    if(parent == -1) return root != null ? super.followingSiblingIter() : BasicNodeIter.EMPTY;
+
     return new DBNodeIter(data) {
-      private final DBNode node = finish();
-      int kind = data.kind(pre);
-      private final int pp = data.parent(pre, kind);
-      final int sz = pp == -1 ? 0 : pp + data.size(pp, data.kind(pp));
-      int curr = pp == -1 ? 0 : pre + data.size(pre, kind);
+      final DBNode node = finish();
+      final int last = parent + data.size(parent, data.kind(parent));
+      int curr = pre + data.size(pre, k);
 
       @Override
       public DBNode next() {
-        if(curr == sz) return null;
-        kind = data.kind(curr);
+        if(curr == last) return null;
+        final int kind = data.kind(curr);
         node.set(curr, kind);
         curr += data.size(curr, kind);
         return node;
@@ -422,77 +365,132 @@ public class DBNode extends ANode {
     };
   }
 
-  @Override
-  public final boolean sameAs(final Expr cmp) {
-    return cmp instanceof DBNode && data == ((DBNode) cmp).data && pre == ((DBNode) cmp).pre;
+  /**
+   * Returns an iterator for the ancestor axes.
+   * @param first pre value to start from
+   * @return iterator
+   */
+  private BasicNodeIter ancestorIter(final int first) {
+    return first == -1 ? BasicNodeIter.EMPTY : new DBNodeIter(data) {
+      final DBNode node = finish();
+      int curr = first;
+
+      @Override
+      public DBNode next() {
+        if(curr == -1) return null;
+        final int kind = data.kind(curr);
+        node.set(curr, kind);
+        curr = data.parent(curr, kind);
+        return node;
+      }
+    };
   }
 
-  @Override
-  public final void plan(final FElem plan) {
-    addPlan(plan, planElem(NAM, data.meta.name, PRE, pre));
+  /**
+   * Returns an iterator for the ancestor axes.
+   * @param first pre value to start from
+   * @param last last pre value
+   * @return iterator
+   */
+  private BasicNodeIter descendantIter(final int first, final int last) {
+    return first == last ? BasicNodeIter.EMPTY : new DBNodeIter(data) {
+      final DBNode node = finish();
+      int curr = first;
+
+      @Override
+      public DBNode next() {
+        if(curr == last) return null;
+        final int kind = data.kind(curr);
+        node.set(curr, kind);
+        curr += data.attSize(curr, kind);
+        return node;
+      }
+    };
   }
 
   @Override
   public final byte[] xdmInfo() {
     final ByteList bl = new ByteList().add(typeId().asByte());
-    if(type == NodeType.DOC) bl.add(baseURI()).add(0);
-    else if(type == NodeType.ATT) bl.add(qname().uri()).add(0);
+    if(type == NodeType.DOCUMENT_NODE) bl.add(baseURI()).add(0);
+    else if(type == NodeType.ATTRIBUTE) bl.add(qname().uri()).add(0);
     return bl.finish();
   }
 
   @Override
   public final ID typeId() {
     // check if a document has a single element as child
-    ID t = type.id();
-    if(type == NodeType.DOC) {
-      final DBNodeIter ir = children();
-      final ANode n = ir.next();
-      if(n != null && n.type == NodeType.ELM && ir.next() == null) t = NodeType.DEL.id();
+    ID i = type.id();
+    if(type == NodeType.DOCUMENT_NODE) {
+      final BasicNodeIter iter = childIter();
+      final ANode n = iter.next();
+      if(n != null && n.type == NodeType.ELEMENT && iter.next() == null) {
+        i = NodeType.DOCUMENT_NODE_ELEMENT.id();
+      }
     }
-    return t;
-  }
-
-  @Override
-  public String toErrorString() {
-    return toString(false);
-  }
-
-  @Override
-  public String toString() {
-    return toString(!data.inMemory());
-  }
-
-  /**
-   * Returns a string representation of the sequence.
-   * @param func display function representation
-   * @return string
-   */
-  private String toString(final boolean func) {
-    if(func) return _DB_OPEN_PRE.args(data.meta.name, pre);
-
-    final TokenBuilder tb = new TokenBuilder(type.string()).add(' ');
-    switch((NodeType) type) {
-      case ATT:
-      case PI:
-        tb.add(name()).add(" {\"").add(Token.chop(string(), 32)).add("\"}");
-        break;
-      case ELM:
-        tb.add(name()).add(" {");
-        if(hasChildren() || attributes().size() != 0) tb.add("...");
-        tb.add('}');
-        break;
-      case DOC:
-        tb.add("{\"").add(data.text(pre, true)).add("\"}");
-        break;
-      default:
-        tb.add("{\"").add(Token.chop(string(), 32)).add("\"}");
-        break;
-    }
-    return tb.toString();
+    return i;
   }
 
   @Override
   public final BXNode toJava() {
-    return BXNode.get(deepCopy(new MainOptions()));
+    return BXNode.get(copy(new MainOptions(), null));
+  }
+
+  @Override
+  public final int hashCode() {
+    return data.hashCode() + pre;
+  }
+
+  @Override
+  public final boolean equals(final Object obj) {
+    return obj instanceof DBNode && is((DBNode) obj);
+  }
+
+  @Override
+  public final void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, PRE, pre));
+  }
+
+  @Override
+  public String toErrorString() {
+    final QueryString qs = new QueryString();
+    plan(qs, true);
+    return qs.toString();
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    plan(qs, false);
+  }
+
+  /**
+   * Returns a string representation of the sequence.
+   * @param qs query string builder
+   * @param error error representation
+   */
+  private void plan(final QueryString qs, final boolean error) {
+    if(error || data.inMemory()) {
+      switch((NodeType) type) {
+        case ATTRIBUTE:
+          qs.concat(name(), "=", QueryString.toQuoted(string()));
+          break;
+        case PROCESSING_INSTRUCTION:
+          qs.concat(FPI.OPEN, name(), " ", QueryString.toValue(string()), FPI.CLOSE);
+          break;
+        case ELEMENT:
+          qs.concat("<", name(), hasChildren() || attributeIter().size() > 0 ? DOTS : "", "/>");
+          break;
+        case DOCUMENT_NODE:
+          qs.token(DOCUMENT).brace(QueryString.toQuoted(baseURI()));
+          break;
+        case COMMENT:
+          qs.concat("<!--", QueryString.toValue(string()), "-->");
+          break;
+        default:
+          qs.quoted(string());
+          break;
+      }
+    } else {
+      qs.function(Function._DB_OPEN_PRE, data.meta.name, pre);
+    }
   }
 }

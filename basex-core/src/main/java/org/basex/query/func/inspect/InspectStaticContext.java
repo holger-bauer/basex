@@ -5,7 +5,6 @@ import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.util.format.*;
 import org.basex.query.value.*;
@@ -18,29 +17,29 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class InspectStaticContext extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    Item it = exprs[0].item(qc, info);
+    Item func = exprs[0].item(qc, info);
     final String name = Token.string(toToken(exprs[1], qc));
     final StaticContext sctx;
-    if(it == null) {
+    if(func == Empty.VALUE) {
       sctx = sc;
     } else {
-      it = toFunc(it, qc);
-      if(!(it instanceof FuncItem)) throw INVFUNCITEM_X_X.get(info, it.type, it);
-      sctx = ((FuncItem) it).sc;
+      func = toFunc(func, qc);
+      if(!(func instanceof FuncItem)) throw INVFUNCITEM_X_X.get(info, func.type, func);
+      sctx = ((FuncItem) func).sc;
     }
 
     switch(name) {
       case BASE_URI:
         return sctx.baseURI();
       case NAMESPACES:
-        Map map = Map.EMPTY;
-        Atts nsp = sctx.ns.ns;
+        XQMap map = XQMap.EMPTY;
+        Atts nsp = sctx.ns.list;
         int ns = nsp.size();
         for(int n = 0; n < ns; n++) {
           map = map.put(Str.get(nsp.name(n)), Str.get(nsp.value(n)), info);
@@ -53,9 +52,9 @@ public final class InspectStaticContext extends StandardFunc {
         }
         return map;
       case ELEMENT_NAMESPACE:
-        return sctx.elemNS == null ? Empty.SEQ : Uri.uri(sctx.elemNS);
+        return sctx.elemNS == null ? Empty.VALUE : Uri.uri(sctx.elemNS);
       case FUNCTION_NAMESPACE:
-        return sctx.funcNS == null ? Empty.SEQ : Uri.uri(sctx.funcNS);
+        return sctx.funcNS == null ? Empty.VALUE : Uri.uri(sctx.funcNS);
       case COLLATION:
         return Uri.uri(sctx.collation == null ? COLLATION_URI : sctx.collation.uri());
       case ORDERING:
@@ -67,18 +66,18 @@ public final class InspectStaticContext extends StandardFunc {
       case BOUNDARY_SPACE:
         return Str.get(sctx.spaces ? PRESERVE : STRIP);
       case COPY_NAMESPACES:
-        final TokenList sl = new TokenList(2);
-        sl.add(sctx.preserveNS ? PRESERVE : NO_PRESERVE);
-        sl.add(sctx.inheritNS ? INHERIT : NO_INHERIT);
-        return StrSeq.get(sl);
+        final TokenList tl = new TokenList(2);
+        tl.add(sctx.preserveNS ? PRESERVE : NO_PRESERVE);
+        tl.add(sctx.inheritNS ? INHERIT : NO_INHERIT);
+        return StrSeq.get(tl);
       case DECIMAL_FORMATS:
-        map = Map.EMPTY;
+        map = XQMap.EMPTY;
         // enforce creation of default formatter
         sctx.decFormat(Token.EMPTY);
         // loop through all formatters
         for(final byte[] format : sctx.decFormats) {
           final DecFormatter df = sctx.decFormats.get(format);
-          map = map.put(Str.get(format), Map.EMPTY.
+          map = map.put(Str.get(format), XQMap.EMPTY.
               put(Str.get(DF_DEC), Str.get(token(df.decimal)), info).
               put(Str.get(DF_EXP), Str.get(token(df.exponent)), info).
               put(Str.get(DF_GRP), Str.get(token(df.grouping)), info).
@@ -96,11 +95,6 @@ public final class InspectStaticContext extends StandardFunc {
       default:
         throw INSPECT_UNKNOWN_X.get(info, name);
     }
-  }
-
-  @Override
-  public ValueIter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
   }
 
   /**

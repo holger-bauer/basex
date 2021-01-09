@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * Evaluates the 'alter user' command and alters the name of a user.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class AlterUser extends AUser {
@@ -38,7 +38,7 @@ public final class AlterUser extends AUser {
     if(users.get(newname) != null) return error(USER_EXISTS_X, newname);
 
     users.alter(user, newname);
-    users.write(context);
+    users.write();
     return info(USER_RENAMED_X_X, name, newname);
   }
 

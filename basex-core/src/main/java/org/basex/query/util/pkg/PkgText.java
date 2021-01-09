@@ -8,7 +8,7 @@ import org.basex.util.*;
 /**
  * This class assembles textual information for package handling.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface PkgText {
@@ -18,38 +18,39 @@ public interface PkgText {
   /** Package descriptor. */
   String DESCRIPTOR = "expath-pkg" + IO.XMLSUFFIX;
   /** Jar descriptor. */
-  String JARDESC = Prop.PROJECT_NAME + IO.XMLSUFFIX;
+  String JARDESC = Prop.PROJECT + IO.XMLSUFFIX;
 
-  /** EXPath type. */
-  String EXPATH = "EXPath";
-  /** Internal type. */
-  String INTERNAL = "Internal";
-  /** Content directory. */
+  /** EXPath content directory. */
   String CONTENT = "content";
 
-  /** <package/> root element. */
+  // <package/> root element
+
   /** Element package. */
-  byte[] PACKAGE = token("package");
+  byte[] E_PACKAGE = token("package");
 
-  /** <package/> children. */
+  // <package/> children.
+
   /** Element dependency. */
-  byte[] DEPEND = token("dependency");
+  byte[] E_DEPENDENCY = token("dependency");
   /** Element xquery. */
-  byte[] XQUERY = token("xquery");
+  byte[] E_XQUERY = token("xquery");
 
-  /** <xquery/> children. */
+  // <xquery/> children
+
   /** Attribute namespace. */
   byte[] A_NAMESPACE = token("namespace");
   /** Attribute file. */
   byte[] A_FILE = token("file");
 
-  /** Jar descriptor children. */
-  /** <jar/> element. */
-  byte[] JAR = token("jar");
-  /** <class/> element. */
-  byte[] CLASS = token("class");
+  // Jar descriptor children
 
-  /** <package/> attributes. */
+  /** jar element. */
+  byte[] E_JAR = token("jar");
+  /** class element. */
+  byte[] E_CLASS = token("class");
+
+  // <package/> attributes
+
   /** Attribute name. */
   byte[] A_NAME = token("name");
   /** Attribute abbrev. */
@@ -59,7 +60,8 @@ public interface PkgText {
   /** Attribute spec. */
   byte[] A_SPEC = token("spec");
 
-  /** <dependency/> attributes. */
+  // <dependency/> attributes
+
   /** Attribute package. */
   byte[] A_PACKAGE = token("package");
   /** Attribute processor. */
@@ -77,8 +79,6 @@ public interface PkgText {
   String MISSDESC = "Missing package descriptor for package '%'";
   /** Attribute missing. */
   String MISSATTR = "'%' attribute missing in '%' element";
-  /** Invalid attribute. */
-  String WHICHATTR = "Invalid attribute '%'";
   /** Invalid element. */
   String WHICHELEM = "Invalid element %";
   /** Secondary package missing. */
@@ -89,6 +89,6 @@ public interface PkgText {
   String NOJARS = "No jars specified";
   /** No public classes registered. */
   String NOCLASSES = "No public classes specified";
-  /** Not expected error during extraction of packaged dependency jars. */
-  String EXTFAILED = "%: could not extract packaged dependency from jar: %";
+  /** No main class found in Java manifest. */
+  String MANIFEST = "No 'Main-Class' attribute found: %/META-INF/MANIFEST.MF.";
 }

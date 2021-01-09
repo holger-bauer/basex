@@ -1,29 +1,27 @@
 package org.basex.query.func.web;
 
-import static org.basex.query.QueryText.*;
+import java.util.*;
 
 import org.basex.query.*;
-import org.basex.query.value.item.*;
-import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
+import org.basex.util.http.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class WebRedirect extends WebFn {
   @Override
   public FElem item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] url = createUrl(toToken(exprs[0], qc),
-        exprs.length < 2 ? Map.EMPTY : toMap(exprs[1], qc));
+    final String location = createUrl(qc);
 
-    final FElem hhead = new FElem(new QNm(HTTP_PREFIX, "header", HTTP_URI)).
-        add("name", "location").add("value", url);
-    final FElem hresp = new FElem(new QNm(HTTP_PREFIX, "response", HTTP_URI)).
-        add("status", "302").add(hhead);
-    return new FElem(new QNm(REST_PREFIX, "response", REST_URI)).add(hresp);
+    final HashMap<String, String> headers = new HashMap<>();
+    headers.put(HttpText.LOCATION, location);
+    final ResponseOptions response = new ResponseOptions();
+    response.set(ResponseOptions.STATUS, 302);
+    return createResponse(response, headers, null);
   }
 }

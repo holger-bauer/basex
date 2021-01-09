@@ -11,6 +11,7 @@ import org.basex.core.cmd.*;
 import org.basex.data.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
+import org.basex.gui.listener.*;
 import org.basex.index.name.*;
 import org.basex.index.stats.*;
 import org.basex.util.*;
@@ -19,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * This view provides standard GUI components to browse the currently opened database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Bastian Lemke
  */
@@ -55,12 +56,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
 
     all = new BaseXTextField(gui);
     all.addKeyListener(main);
-    all.addKeyListener(new KeyAdapter() {
-      @Override
-      public void keyReleased(final KeyEvent e) {
-        query(false);
-      }
-    });
+    all.addKeyListener((KeyReleasedListener) e -> query());
     add(all, BorderLayout.NORTH);
 
     panel = new BaseXBack(false).layout(new TableLayout(32, 2, 10, 5));
@@ -96,12 +92,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
     BaseXLayout.setWidth(txt, COMPW);
     txt.setPreferredSize(new Dimension(getPreferredSize().width, txt.getFont().getSize() + 11));
     txt.setMargin(new Insets(0, 0, 0, 10));
-    txt.addKeyListener(new KeyAdapter() {
-      @Override
-      public void keyReleased(final KeyEvent e) {
-        query(false);
-      }
-    });
+    txt.addKeyListener((KeyReleasedListener) e -> query());
     txt.addKeyListener(main);
     panel.add(txt, pos);
   }
@@ -118,7 +109,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
       final BaseXCombo combo = (BaseXCombo) panel.getComponent(c);
       if(combo.getSelectedIndex() == 0) continue;
       final String elem = combo.getSelectedItem();
-      if(!elem.startsWith("@")) tl.add(Token.token(elem));
+      if(!Strings.startsWith(elem, '@')) tl.add(elem);
     }
 
     final String[] entries = entries(data.paths.desc(tl, true, false));
@@ -151,7 +142,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
    * @param itr integer flag
    */
   private void addSlider(final double min, final double max, final int pos, final boolean itr) {
-    final BaseXDSlider sl = new BaseXDSlider(min, max, gui, this);
+    final BaseXDSlider sl = new BaseXDSlider(gui, min, max, this);
     BaseXLayout.setWidth(sl, COMPW + BaseXDSlider.LABELW);
     sl.itr = itr;
     sl.addKeyListener(main);
@@ -166,7 +157,9 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
       // find modified component
       int cp = 0;
       final int cs = panel.getComponentCount();
-      for(int c = 0; c < cs; ++c) if(panel.getComponent(c) == source) cp = c;
+      for(int c = 0; c < cs; ++c) {
+        if(panel.getComponent(c) == source) cp = c;
+      }
 
       if((cp & 1) == 0) {
         // combo box with element/attribute names
@@ -177,7 +170,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
         final boolean selected = combo.getSelectedIndex() != 0;
         if(selected) {
           final String item = combo.getSelectedItem();
-          final boolean att = item.startsWith("@");
+          final boolean att = Strings.startsWith(item, '@');
           final Names names = att ? data.attrNames : data.elemNames;
           final byte[] key = Token.token(att ? item.substring(1) : item);
           final Stats stats = names.stats(names.id(key));
@@ -204,14 +197,13 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
         panel.repaint();
       }
     }
-    query(false);
+    query();
   }
 
   /**
    * Runs a query.
-   * @param force force the execution of a new query
    */
-  private void query(final boolean force) {
+  private void query() {
     final TokenBuilder tb = new TokenBuilder();
     final Data data = gui.context.data();
 
@@ -221,7 +213,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
       final int k = com.getSelectedIndex();
       if(k <= 0) continue;
       String key = com.getSelectedItem().replaceAll("^(@?)(.*):", "$1*:");
-      final boolean attr = key.startsWith("@");
+      final boolean attr = Strings.startsWith(key, '@');
 
       final Component comp = panel.getComponent(c + 1);
       String pattern = "";
@@ -230,8 +222,8 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
       if(comp instanceof BaseXTextField) {
         val1 = ((JTextComponent) comp).getText();
         if(!val1.isEmpty()) {
-          if(val1.startsWith("\"")) {
-            val1 = val1.replaceAll("\"", "");
+          if(Strings.startsWith(val1, '"')) {
+            val1 = val1.replace("\"", "");
             pattern = PATEX;
           } else {
             pattern = (attr ? data.meta.attrindex : data.meta.textindex) ? PATSUB : PATEX;
@@ -245,9 +237,9 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
         }
       } else if(comp instanceof BaseXDSlider) {
         final BaseXDSlider slider = (BaseXDSlider) comp;
-        if(slider.min != slider.totMin || slider.max != slider.totMax) {
-          final double m = slider.min;
-          final double n = slider.max;
+        if(slider.currMin != slider.min || slider.currMax != slider.max) {
+          final double m = slider.currMin;
+          final double n = slider.currMax;
           val1 = (long) m == m ? Long.toString((long) m) : Double.toString(m);
           val2 = (long) n == n ? Long.toString((long) n) : Double.toString(n);
           pattern = PATNUM;
@@ -278,7 +270,7 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
 
     if(qu.isEmpty()) qu = rt || root ? "/" : ".";
 
-    if(!force && last.equals(qu)) return;
+    if(last.equals(qu)) return;
     last = qu;
     gui.simpleQuery(qu);
   }
@@ -289,9 +281,10 @@ final class ExploreArea extends BaseXPanel implements ActionListener {
    * @return key array
    */
   private static String[] entries(final TokenList names) {
-    final StringList entries = new StringList();
-    entries.add(Util.info(ENTRIES_X, names.size()));
-    for(final byte[] k : names) entries.add(Token.string(k));
+    final int ns = names.size();
+    final StringList entries = new StringList(ns);
+    entries.add(Util.info(ENTRIES_X, ns));
+    for(final byte[] name : names) entries.add(name);
     return entries.sort(true, true, 1).finish();
   }
 }

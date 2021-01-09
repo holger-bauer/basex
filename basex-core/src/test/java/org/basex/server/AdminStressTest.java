@@ -1,19 +1,19 @@
 package org.basex.server;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.util.concurrent.*;
 
 import org.basex.*;
 import org.basex.core.cmd.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Admin stress test.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class AdminStressTest extends SandboxTest {
@@ -26,8 +26,7 @@ public final class AdminStressTest extends SandboxTest {
    * Starts the server.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void start() throws IOException {
+  @BeforeAll public static void start() throws IOException {
     server = createServer();
   }
 
@@ -35,8 +34,7 @@ public final class AdminStressTest extends SandboxTest {
    * Stops the server.
    * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void stop() throws IOException {
+  @AfterAll public static void stop() throws IOException {
     stopServer(server);
   }
 
@@ -44,14 +42,15 @@ public final class AdminStressTest extends SandboxTest {
    * Test simultaneous client sessions.
    * @throws Exception exception
    */
-  @Test
-  public void createAndListSessions() throws Exception {
+  @Test public void createAndListSessions() throws Exception {
     final CountDownLatch start = new CountDownLatch(1);
     final CountDownLatch stop = new CountDownLatch(NUM);
     final Client[] clients = new Client[NUM];
     for(int i = 0; i < NUM; ++i) clients[i] = new Client(new ShowSessions(), start, stop);
     start.countDown(); // start all clients
     stop.await();
-    for(final Client c : clients) if(c.error != null) fail(c.error);
+    for(final Client c : clients) {
+      if(c.error != null) fail(c.error);
+    }
   }
 }

@@ -12,16 +12,16 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnLang extends Ids {
   @Override
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] lang = lc(toEmptyToken(exprs[0], qc));
+    final byte[] lang = lc(toZeroToken(exprs[0], qc));
     final ANode node = toNode(ctxArg(1, qc), qc);
-    for(ANode n = node; n != null; n = n.parent()) {
-      final BasicNodeIter atts = n.attributes();
+    for(ANode nd = node; nd != null; nd = nd.parent()) {
+      final BasicNodeIter atts = nd.attributeIter();
       for(ANode at; (at = atts.next()) != null;) {
         if(eq(at.qname().string(), LANG)) {
           final byte[] ln = lc(normalize(at.string()));

@@ -9,14 +9,14 @@ import org.basex.util.list.*;
 /**
  * Log file instance.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class LogFile {
   /** File reference. */
-  final IOFile file;
+  private final IOFile file;
   /** Output stream. */
-  FileOutputStream fos;
+  private FileOutputStream fos;
 
   /**
    * Creates a new writable log file for the specified date.
@@ -25,7 +25,7 @@ public final class LogFile {
    * @return log file
    * @throws IOException I/O exception
    */
-  public static LogFile create(final String name, final IOFile dir) throws IOException {
+  static LogFile create(final String name, final IOFile dir) throws IOException {
     final LogFile lf = new LogFile(name, dir);
     dir.md();
     lf.fos = new FileOutputStream(lf.file.file(), true);
@@ -114,7 +114,7 @@ public final class LogFile {
    * @param name name of log file
    * @return result of check
    */
-  boolean sameAs(final String name) {
+  boolean valid(final String name) {
     return file.name().equals(name + IO.LOGSUFFIX);
   }
 }

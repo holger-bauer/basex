@@ -3,10 +3,11 @@ package org.basex.query.expr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.expr.CmpV.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -14,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * Node comparison.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CmpN extends Cmp {
@@ -23,24 +24,24 @@ public final class CmpN extends Cmp {
     /** Node comparison: same. */
     EQ("is") {
       @Override
-      public boolean eval(final ANode it1, final ANode it2) {
-        return it1.is(it2);
+      public boolean eval(final ANode node1, final ANode node2) {
+        return node1.is(node2);
       }
     },
 
     /** Node comparison: before. */
     ET("<<") {
       @Override
-      public boolean eval(final ANode it1, final ANode it2) {
-        return it1.diff(it2) < 0;
+      public boolean eval(final ANode node1, final ANode node2) {
+        return node1.diff(node2) < 0;
       }
     },
 
     /** Node comparison: after. */
     GT(">>") {
       @Override
-      public boolean eval(final ANode it1, final ANode it2) {
-        return it1.diff(it2) > 0;
+      public boolean eval(final ANode node1, final ANode node2) {
+        return node1.diff(node2) > 0;
       }
     };
 
@@ -59,11 +60,11 @@ public final class CmpN extends Cmp {
 
     /**
      * Evaluates the expression.
-     * @param it1 first node
-     * @param it2 second node
+     * @param node1 first node
+     * @param node2 second node
      * @return result
      */
-    public abstract boolean eval(ANode it1, ANode it2);
+    public abstract boolean eval(ANode node1, ANode node2);
 
     @Override
     public String toString() {
@@ -82,49 +83,61 @@ public final class CmpN extends Cmp {
    * @param info input info
    */
   public CmpN(final Expr expr1, final Expr expr2, final OpN op, final InputInfo info) {
-    super(info, expr1, expr2, null);
+    super(info, expr1, expr2, null, SeqType.BOOLEAN_ZO, null);
     this.op = op;
-    seqType = SeqType.BLN_ZO;
   }
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    seqType = SeqType.get(AtomType.BLN,
-        exprs[0].size() == 1 && exprs[1].size() == 1 ? Occ.ONE : Occ.ZERO_ONE);
-    return optPre(oneIsEmpty() ? null : allAreValues() ? item(cc.qc, info) : this, cc);
+    final Expr expr1 = exprs[0], expr2 = exprs[1];
+    final SeqType st1 = expr1.seqType(), st2 = expr2.seqType();
+    if(st1.oneOrMore() && st2.oneOrMore()) exprType.assign(Occ.EXACTLY_ONE);
+
+    final Expr expr = emptyExpr();
+    return expr == this && allAreValues(false) ? cc.preEval(this) : cc.replaceWith(this, expr);
   }
 
   @Override
-  public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode n1 = toEmptyNode(exprs[0], qc);
-    if(n1 == null) return null;
-    final ANode n2 = toEmptyNode(exprs[1], qc);
-    if(n2 == null) return null;
+  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final ANode n1 = toNodeOrNull(exprs[0], qc);
+    if(n1 == null) return Empty.VALUE;
+    final ANode n2 = toNodeOrNull(exprs[1], qc);
+    if(n2 == null) return Empty.VALUE;
     return Bln.get(op.eval(n1, n2));
   }
 
   @Override
-  public CmpN invert() {
-    throw Util.notExpected();
+  public Expr invert() {
+    return null;
+  }
+
+  @Override
+  public OpV opV() {
+    return null;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new CmpN(exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), op, info);
+    return copyType(new CmpN(exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), op, info));
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(OP, op.name), exprs);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof CmpN && op == ((CmpN) obj).op && super.equals(obj);
   }
 
   @Override
   public String description() {
-    return "'" + op + "' operator";
+    return "'" + op + "' comparison";
   }
 
   @Override
-  public String toString() {
-    return toString(" " + op + ' ');
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, OP, op.name), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.tokens(exprs, " " + op + ' ', true);
   }
 }

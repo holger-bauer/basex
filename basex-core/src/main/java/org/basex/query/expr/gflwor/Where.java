@@ -1,12 +1,14 @@
 package org.basex.query.expr.gflwor;
 
+import static org.basex.query.QueryText.*;
+
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
 import org.basex.query.util.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -14,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * GFLWOR {@code where} clause, filtering tuples not satisfying the predicate.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class Where extends Clause {
@@ -27,7 +29,7 @@ public final class Where extends Clause {
    * @param info input info
    */
   public Where(final Expr expr, final InputInfo info) {
-    super(info);
+    super(info, SeqType.BOOLEAN_O);
     this.expr = expr;
   }
 
@@ -36,27 +38,17 @@ public final class Where extends Clause {
     return new Eval() {
       @Override
       public boolean next(final QueryContext qc) throws QueryException {
-        while(sub.next(qc)) if(expr.ebv(qc, info).bool(info)) return true;
+        while(sub.next(qc)) {
+          if(expr.ebv(qc, info).bool(info)) return true;
+        }
         return false;
       }
     };
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem();
-    expr.plan(e);
-    plan.add(e);
-  }
-
-  @Override
-  public String toString() {
-    return QueryText.WHERE + ' ' + expr;
-  }
-
-  @Override
-  public boolean has(final Flag flag) {
-    return expr.has(flag);
+  public boolean has(final Flag... flags) {
+    return expr.has(flags);
   }
 
   @Override
@@ -67,14 +59,17 @@ public final class Where extends Clause {
 
   @Override
   public Where optimize(final CompileContext cc) throws QueryException {
-    expr = expr.optimizeEbv(cc);
-    if(expr.isValue()) expr = expr.ebv(cc.qc, info);
+    // where exists(nodes)  ->  where nodes
+    expr = expr.simplifyFor(Simplify.EBV, cc);
+    if(expr instanceof Value && !(expr instanceof Bln)) {
+      expr = cc.replaceWith(expr, Bln.get(expr.ebv(cc.qc, info).bool(info)));
+    }
     return this;
   }
 
   @Override
-  public boolean removable(final Var var) {
-    return expr.removable(var);
+  public boolean inlineable(final InlineContext ic) {
+    return expr.inlineable(ic);
   }
 
   @Override
@@ -83,17 +78,16 @@ public final class Where extends Clause {
   }
 
   @Override
-  public Clause inline(final Var var, final Expr ex,
-      final CompileContext cc) throws QueryException {
-    final Expr sub = expr.inline(var, ex, cc);
-    if(sub == null) return null;
-    expr = sub;
-    return optimize(cc);
+  public Clause inline(final InlineContext ic) throws QueryException {
+    final Expr inlined = expr.inline(ic);
+    if(inlined == null) return null;
+    expr = inlined;
+    return optimize(ic.cc);
   }
 
   @Override
   public Where copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Where(expr.copy(cc, vm), info);
+    return copyType(new Where(expr.copy(cc, vm), info));
   }
 
   @Override
@@ -113,7 +107,7 @@ public final class Where extends Clause {
   }
 
   @Override
-  void calcSize(final long[] minMax) {
+  public void calcSize(final long[] minMax) {
     minMax[0] = 0;
     if(expr == Bln.FALSE) minMax[1] = 0;
   }
@@ -121,5 +115,20 @@ public final class Where extends Clause {
   @Override
   public int exprSize() {
     return expr.exprSize();
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return obj instanceof Where && expr.equals(((Where) obj).expr);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(WHERE).token(expr);
   }
 }

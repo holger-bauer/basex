@@ -1,6 +1,6 @@
 package org.basex.build;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.*;
@@ -9,41 +9,38 @@ import org.basex.io.*;
 import org.basex.query.func.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for the {@link MainOptions#ADDRAW} option.
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class AddRawOptionTest extends SandboxTest {
   /** Test directory. */
   private static final String DIR = "src/test/resources/dir";
   /** Test files from {@link AddRawOptionTest#DIR}}. */
-  private static final IOFile[] FILES = new IOFile(DIR).children();
+  private static final StringList FILES = new IOFile(DIR).descendants();
 
   /**
    * Class set up method.
    */
-  @BeforeClass
-  public static void classSetUp() {
+  @BeforeAll public static void classSetUp() {
     set(MainOptions.ADDRAW, true);
   }
 
   /**
    * Set up method.
    */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     execute(new CreateDB(NAME));
   }
 
   /**
    * Test if raw files are added on executing a {@code CREATE} command.
    */
-  @Test
-  public void testCreate() {
+  @Test public void testCreate() {
     execute(new CreateDB(NAME, DIR));
     assertAllFilesExist();
   }
@@ -51,8 +48,7 @@ public final class AddRawOptionTest extends SandboxTest {
   /**
    * Test if raw files are added on executing an {@code ADD} command.
    */
-  @Test
-  public void testAdd() {
+  @Test public void testAdd() {
     execute(new Add("", DIR));
     assertAllFilesExist();
   }
@@ -62,11 +58,10 @@ public final class AddRawOptionTest extends SandboxTest {
    */
   private static void assertAllFilesExist() {
     final StringList files = new StringList(query(Function._DB_LIST.args(NAME)).split(Prop.NL));
-    assertFalse("No files were imported", files.isEmpty());
-    for(final IOFile f : FILES) {
-      final String fname = f.name();
-      assertTrue("File " + fname + " is not imported", files.contains(fname));
+    assertFalse(files.isEmpty(), "No files were imported");
+    for(final String name : FILES) {
+      assertTrue(files.contains(name), "File " + name + " is not imported");
     }
-    assertEquals("Expected number of imported files is different", FILES.length, files.size());
+    assertEquals(FILES.size(), files.size(), "Expected number of imported files is different");
   }
 }

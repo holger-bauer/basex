@@ -4,18 +4,23 @@ import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
 import org.basex.util.*;
+import org.basex.util.hash.*;
 
 /**
  * Global namespaces.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NSGlobal {
-  /** Namespace: prefixes and namespace URIs. */
+  /** Namespaces: prefixes and namespace URIs. */
   public static final Atts NS = new Atts();
-  /** Reserved namespaces. */
-  private static final int RESERVED;
+  /** Mapping: prefix to URI. */
+  private static final TokenMap URIS = new TokenMap();
+  /** Mapping: URI to prefix. */
+  private static final TokenMap PREFIXES = new TokenMap();
+  /** URIs of reserved namespaces. */
+  private static final TokenSet RESERVED = new TokenSet();
 
   static {
     // reserved namespaces
@@ -27,7 +32,7 @@ public final class NSGlobal {
     NS.add(MAP_PREFIX, MAP_URI);
     NS.add(ARRAY_PREFIX, ARRAY_URI);
     NS.add(ANN_PREFIX, XQ_URI);
-    RESERVED = NS.size();
+    for(int s = NS.size() - 1; s >= 0; s--) RESERVED.add(NS.value(s));
 
     // additional XQuery namespaces
     NS.add(LOCAL_PREFIX, LOCAL_URI);
@@ -39,14 +44,14 @@ public final class NSGlobal {
     NS.add(BIN_PREFIX, BIN_URI);
     NS.add(CRYPTO_PREFIX, CRYPTO_URI);
     NS.add(FILE_PREFIX, FILE_URI);
+    NS.add(GEO_PREFIX, GEO_URI);
     NS.add(HTTP_PREFIX, HTTP_URI);
     NS.add(PKG_PREFIX, PKG_URI);
     NS.add(ZIP_PREFIX, ZIP_URI);
     // EXQuery namespaces
+    NS.add(REQUEST_PREFIX, REQUEST_URI);
     NS.add(REST_PREFIX, REST_URI);
-    NS.add(RESTXQ_PREFIX, REST_URI);
     // BaseX namespaces
-    NS.add(BXERR_PREFIX, BXERRORS_URI);
     NS.add(BASEX_PREFIX, BASEX_URI);
     // namespaces of built-in modules
     NS.add(ADMIN_PREFIX, ADMIN_URI);
@@ -65,22 +70,32 @@ public final class NSGlobal {
     NS.add(INSPECT_PREFIX, INSPECT_URI);
     NS.add(JOBS_PREFIX, JOBS_URI);
     NS.add(JSON_PREFIX, JSON_URI);
+    NS.add(LAZY_PREFIX, LAZY_URI);
     NS.add(OUT_PREFIX, OUT_URI);
+    NS.add(PERM_PREFIX, PERM_URI);
     NS.add(PROC_PREFIX, PROC_URI);
     NS.add(PROF_PREFIX, PROF_URI);
-    NS.add(QUERY_PREFIX, QUERY_URI);
     NS.add(RANDOM_PREFIX, RANDOM_URI);
     NS.add(REPO_PREFIX, REPO_URI);
+    NS.add(SESSION_PREFIX, SESSION_URI);
+    NS.add(SESSIONS_PREFIX, SESSIONS_URI);
     NS.add(SQL_PREFIX, SQL_URI);
-    NS.add(STREAM_PREFIX, STREAM_URI);
     NS.add(STRINGS_PREFIX, STRINGS_URI);
     NS.add(UNIT_PREFIX, UNIT_URI);
+    NS.add(UPDATE_PREFIX, UPDATE_URI);
     NS.add(USER_PREFIX, USER_URI);
     NS.add(UTIL_PREFIX, UTIL_URI);
     NS.add(VALIDATE_PREFIX, VALIDATE_URI);
     NS.add(WEB_PREFIX, WEB_URI);
+    NS.add(WS_PREFIX, WS_URI);
     NS.add(XSLT_PREFIX, XSLT_URI);
     NS.add(XQUERY_PREFIX, XQUERY_URI);
+
+    for(int s = NS.size() - 1; s >= 0; s--) {
+      final byte[] prefix = NS.name(s), uri = NS.value(s);
+      URIS.put(prefix, uri);
+      PREFIXES.put(uri, prefix);
+    }
   }
 
   /** Private constructor. */
@@ -92,10 +107,7 @@ public final class NSGlobal {
    * @return uri or {@code null}
    */
   public static byte[] uri(final byte[] pref) {
-    for(int s = NS.size() - 1; s >= 0; s--) {
-      if(eq(NS.name(s), pref)) return NS.value(s);
-    }
-    return null;
+    return URIS.get(pref);
   }
 
   /**
@@ -104,10 +116,8 @@ public final class NSGlobal {
    * @return prefix, or empty string
    */
   public static byte[] prefix(final byte[] uri) {
-    for(int s = NS.size() - 1; s >= 0; s--) {
-      if(eq(NS.value(s), uri)) return NS.name(s);
-    }
-    return EMPTY;
+    final byte[] prefix = PREFIXES.get(uri);
+    return prefix != null ? prefix : EMPTY;
   }
 
   /**
@@ -116,9 +126,6 @@ public final class NSGlobal {
    * @return result of check
    */
   public static boolean reserved(final byte[] uri) {
-    for(int s = RESERVED - 1; s >= 0; s--) {
-      if(eq(NS.value(s), uri)) return true;
-    }
-    return false;
+    return RESERVED.contains(uri);
   }
 }

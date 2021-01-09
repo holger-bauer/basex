@@ -2,15 +2,18 @@ package org.basex.query.value.array;
 
 import java.util.*;
 
+import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.*;
+import org.basex.util.*;
 
 /**
  * The empty array.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-final class EmptyArray extends Array {
+final class EmptyArray extends XQArray {
   /** The empty array. */
   static final EmptyArray INSTANCE = new EmptyArray();
 
@@ -19,23 +22,27 @@ final class EmptyArray extends Array {
   }
 
   @Override
-  public Array cons(final Value elem) {
+  public void refineType(final Expr expr) {
+  }
+
+  @Override
+  public XQArray cons(final Value elem) {
     return new SmallArray(new Value[] { elem });
   }
 
   @Override
-  public Array snoc(final Value elem) {
+  public XQArray snoc(final Value elem) {
     return new SmallArray(new Value[] { elem });
   }
 
   @Override
   public Value get(final long index) {
-    throw new IndexOutOfBoundsException(Long.toString(index));
+    throw Util.notExpected();
   }
 
   @Override
-  public Array put(final long pos, final Value val) {
-    throw new IndexOutOfBoundsException(Long.toString(pos));
+  public XQArray put(final long pos, final Value value) {
+    throw Util.notExpected();
   }
 
   @Override
@@ -44,36 +51,32 @@ final class EmptyArray extends Array {
   }
 
   @Override
-  public Array concat(final Array seq) {
+  public XQArray concat(final XQArray seq) {
     return seq;
   }
 
   @Override
   public Value head() {
-    throw new NoSuchElementException();
+    throw Util.notExpected();
   }
 
   @Override
   public Value last() {
-    throw new NoSuchElementException();
+    throw Util.notExpected();
   }
 
   @Override
-  public Array init() {
-    throw new IllegalStateException();
+  public XQArray init() {
+    throw Util.notExpected();
   }
 
   @Override
-  public Array tail() {
-    throw new IllegalStateException();
+  public XQArray tail() {
+    throw Util.notExpected();
   }
 
   @Override
-  public Array subArray(final long pos, final long len) {
-    if(pos < 0) throw new IndexOutOfBoundsException("first index < 0: " + pos);
-    if(len < 0) throw new IndexOutOfBoundsException("length < 0: " + len);
-    if(pos + len > 0)
-      throw new IndexOutOfBoundsException("end out of bounds: " + (pos + len) + " > 0");
+  public XQArray subArray(final long pos, final long len, final QueryContext qc) {
     return this;
   }
 
@@ -83,21 +86,18 @@ final class EmptyArray extends Array {
   }
 
   @Override
-  public Array reverseArray() {
+  public XQArray reverseArray(final QueryContext qc) {
     return this;
   }
 
   @Override
-  public Array insertBefore(final long pos, final Value val) {
-    if(pos < 0) throw new IndexOutOfBoundsException("negative index: " + pos);
-    if(pos > 0) throw new IndexOutOfBoundsException("position too big: " + pos);
-    return new SmallArray(new Value[] { val });
+  public XQArray insertBefore(final long pos, final Value value, final QueryContext qc) {
+    return new SmallArray(new Value[] { value });
   }
 
   @Override
-  public Array remove(final long pos) {
-    if(pos < 0) throw new IndexOutOfBoundsException("negative index: " + pos);
-    throw new IndexOutOfBoundsException("position too big: " + pos);
+  public XQArray remove(final long pos, final QueryContext qc) {
+    throw Util.notExpected();
   }
 
   @Override
@@ -111,7 +111,7 @@ final class EmptyArray extends Array {
   }
 
   @Override
-  Array consSmall(final Value[] vals) {
-    return new SmallArray(vals);
+  XQArray prepend(final SmallArray array) {
+    return array;
   }
 }

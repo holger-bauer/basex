@@ -5,12 +5,11 @@ import org.basex.query.expr.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
-import org.basex.util.*;
 
 /**
  * Interface for possibly non-compiled XQuery functions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public interface XQFunctionExpr {
@@ -27,11 +26,11 @@ public interface XQFunctionExpr {
   QNm funcName();
 
   /**
-   * Name of the argument at the given position.
-   * @param pos position of the argument
-   * @return name of the argument
+   * Name of the parameter at the given position.
+   * @param pos position of the parameter
+   * @return name of the parameter
    */
-  QNm argName(int pos);
+  QNm paramName(int pos);
 
   /**
    * Type of this function.
@@ -46,12 +45,17 @@ public interface XQFunctionExpr {
   AnnList annotations();
 
   /**
-   * Tries to inline this function with the given argument expressions.
-   * @param exprs argument expressions
+   * Tries to inline this function with the given arguments.
+   * @param exprs arguments
    * @param cc compilation context
-   * @param ii input info
    * @return the expression to inline if successful, {@code null} otherwise
    * @throws QueryException query exception
    */
-  Expr inlineExpr(Expr[] exprs, CompileContext cc, InputInfo ii) throws QueryException;
+  Expr inline(Expr[] exprs, CompileContext cc) throws QueryException;
+
+  /**
+   * Checks if this function returns vacuous results (see {@link Expr#vacuous()}).
+   * @return result of check
+   */
+  boolean vacuousBody();
 }

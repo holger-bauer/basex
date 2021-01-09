@@ -19,7 +19,7 @@ import org.xml.sax.*;
  * TagSoup was written by John Cowan and is based on the Apache 2.0 License:
  * {@code http://home.ccil.org/~cowan/XML/tagsoup/}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class HtmlParser extends XMLParser {
@@ -89,12 +89,11 @@ public final class HtmlParser extends XMLParser {
     // reader could not be initialized; fall back to XML
     if(READER == null) return io;
 
-    // tries to extract the encoding from the input
-    final TextInput ti = new TextInput(io);
-    String enc = ti.encoding();
-    final byte[] content = ti.content();
+    try(TextInput ti = new TextInput(io)) {
+      // tries to extract the encoding from the input
+      String enc = ti.encoding();
+      final byte[] content = ti.content();
 
-    try {
       // looks for a charset definition
       final byte[] encoding = token("charset=");
       int cs = indexOf(content, encoding);

@@ -5,12 +5,13 @@ import java.io.*;
 import javax.xml.transform.stream.*;
 
 import org.basex.io.in.*;
+import org.basex.util.*;
 import org.xml.sax.*;
 
 /**
  * {@link IO} stream.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class IOStream extends IO {
@@ -32,7 +33,7 @@ public final class IOStream extends IO {
    */
   public IOStream(final InputStream is, final String path) {
     super(path);
-    input = is instanceof BufferInput ? (BufferInput) is : new BufferInput(is);
+    input = BufferInput.get(is);
   }
 
   @Override
@@ -53,5 +54,10 @@ public final class IOStream extends IO {
   @Override
   public InputStream inputStream() {
     return input;
+  }
+
+  @Override
+  public String toString() {
+    return Util.className(this) + '[' + pth + ']';
   }
 }

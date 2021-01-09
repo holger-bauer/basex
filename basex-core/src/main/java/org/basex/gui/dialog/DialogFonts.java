@@ -11,7 +11,7 @@ import org.basex.util.list.*;
 /**
  * Dialog window for changing the used fonts.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogFonts extends BaseXDialog {
@@ -41,25 +41,25 @@ public final class DialogFonts extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  private DialogFonts(final GUI main) {
-    super(main, CHOOSE_FONT, false);
+  private DialogFonts(final GUI gui) {
+    super(gui, CHOOSE_FONT, false);
 
     final GUIOptions gopts = gui.gopts;
     fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
 
     final BaseXBack p = new BaseXBack(new TableLayout(2, 4, 8, 0));
-    font = new BaseXList(fonts, this);
+    font = new BaseXList(this, fonts);
     font.setWidth(200);
     p.add(font);
-    font2 = new BaseXList(fonts, this);
+    font2 = new BaseXList(this, fonts);
     font2.setWidth(200);
     p.add(font2);
-    type = new BaseXList(FONT_TYPES, this);
+    type = new BaseXList(this, FONT_TYPES);
     type.setWidth(90);
     p.add(type);
-    size = new BaseXList(SIZES, this);
+    size = new BaseXList(this, SIZES);
     size.setWidth(50);
     p.add(size);
 
@@ -70,7 +70,7 @@ public final class DialogFonts extends BaseXDialog {
     font.setValue(gopts.get(GUIOptions.FONT));
 
     p.add(new BaseXBack());
-    onlyMono = new BaseXCheckBox("Monospace", GUIOptions.ONLYMONO, gopts, this);
+    onlyMono = new BaseXCheckBox(this, "Monospace", GUIOptions.ONLYMONO, gopts);
     p.add(onlyMono);
 
     set(p, BorderLayout.CENTER);
@@ -82,12 +82,12 @@ public final class DialogFonts extends BaseXDialog {
 
   /**
    * Activates the dialog window.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public static void show(final GUI main) {
-    if(dialog == null) dialog = new DialogFonts(main);
+  public static void show(final GUI gui) {
+    if(dialog == null) dialog = new DialogFonts(gui);
     dialog.setVisible(true);
-    dialog.size.setValue(Integer.toString(main.gopts.get(GUIOptions.FONTSIZE)));
+    dialog.size.setValue(Integer.toString(gui.gopts.get(GUIOptions.FONTSIZE)));
   }
 
   @Override

@@ -8,7 +8,7 @@ import org.basex.util.list.*;
 /**
  * This class uses an internal buffer to speed up input stream processing.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class BufferInput extends InputStream {
@@ -29,6 +29,25 @@ public class BufferInput extends InputStream {
   private int bmark;
   /** Number of read bytes. */
   private int read;
+
+  /**
+   * Returns a buffered input stream.
+   * @param in input stream
+   * @return stream
+   */
+  public static BufferInput get(final InputStream in) {
+    return in instanceof BufferInput ? (BufferInput) in : new BufferInput(in);
+  }
+
+  /**
+   * Returns a buffered input stream.
+   * @param input input to be read
+   * @return stream
+   * @throws IOException I/O Exception
+   */
+  public static BufferInput get(final IO input) throws IOException {
+    return get(input.inputStream());
+  }
 
   /**
    * Constructor.
@@ -52,12 +71,12 @@ public class BufferInput extends InputStream {
   /**
    * Initializes the file reader.
    * @param in input stream
-   * @param bs buffer size
+   * @param bufsize buffer size
    */
-  public BufferInput(final InputStream in, final int bs) {
+  public BufferInput(final InputStream in, final int bufsize) {
     this.in = in;
-    array = new byte[bs];
-    length = -1;
+    array = new byte[bufsize];
+    length = in instanceof BufferInput ? ((BufferInput) in).length : -1;
   }
 
   /**
@@ -165,12 +184,14 @@ public class BufferInput extends InputStream {
   }
 
   @Override
-  public final synchronized void mark(final int m) {
+  @SuppressWarnings("sync-override")
+  public final void mark(final int m) {
     bmark = bpos;
   }
 
   @Override
-  public final synchronized void reset() throws IOException {
+  @SuppressWarnings("sync-override")
+  public final void reset() throws IOException {
     if(bmark == -1) throw new IOException("Mark cannot be reset.");
     bpos = bmark;
   }

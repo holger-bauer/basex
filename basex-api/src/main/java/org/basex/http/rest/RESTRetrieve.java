@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Retrieve resources via REST.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class RESTRetrieve extends RESTCmd {
@@ -42,18 +42,18 @@ final class RESTRetrieve extends RESTCmd {
       conn.initResponse();
 
       context.options.set(MainOptions.SERIALIZER, sopts);
-      run(query(raw ? _DB_RETRIEVE : _DB_OPEN), conn.res.getOutputStream());
+      run(query(raw ? _DB_RETRIEVE : _DB_OPEN), conn.response.getOutputStream());
 
     } else {
       // list database resources
       final Table table = new Table(run(new List(conn.db(), conn.dbpath())));
-      final FElem el = new FElem(RESTText.Q_DATABASE).declareNS();
-      el.add(RESTText.NAME, conn.db()).add(RESTText.RESOURCES, token(table.contents.size()));
-      list(table, el, RESTText.Q_RESOURCE, 0);
+      final FElem elem = new FElem(RESTText.Q_DATABASE).declareNS();
+      elem.add(RESTText.NAME, conn.db()).add(RESTText.RESOURCES, token(table.contents.size()));
+      list(table, elem, RESTText.Q_RESOURCE, 0);
 
       conn.initResponse();
-      try(Serializer ser = Serializer.get(conn.res.getOutputStream(), sopts)) {
-        ser.serialize(el);
+      try(Serializer ser = Serializer.get(conn.response.getOutputStream(), sopts)) {
+        ser.serialize(elem);
       }
     }
   }
@@ -66,7 +66,7 @@ final class RESTRetrieve extends RESTCmd {
   private XQuery query(final Function f) {
     final HTTPConnection conn = session.conn;
     final String query = "declare variable $d external;" +
-        "declare variable $p external;" + f.args("$d", "$p");
+        "declare variable $p external;" + f.args(" $d", " $p");
     return new XQuery(query).bind("d", conn.db()).bind("p", conn.dbpath());
   }
 

@@ -4,7 +4,6 @@ import java.util.Map.*;
 
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
@@ -13,15 +12,10 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ProcPropertyNames extends StandardFunc {
-  @Override
-  public Iter iter(final QueryContext qc) {
-    return value(qc).iter();
-  }
-
   @Override
   public Value value(final QueryContext qc) {
     final TokenList tl = new TokenList();

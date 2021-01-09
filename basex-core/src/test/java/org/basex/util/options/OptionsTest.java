@@ -1,6 +1,6 @@
 package org.basex.util.options;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.build.csv.*;
@@ -15,18 +15,17 @@ import org.basex.query.func.xquery.XQueryEval.XQueryOptions;
 import org.basex.query.util.collation.*;
 import org.basex.util.*;
 import org.basex.util.ft.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Tests on options.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class OptionsTest extends SandboxTest {
   /** Initializes various options. */
-  @AfterClass
-  public static void init() {
+  @AfterAll public static void init() {
     // instantiate options at least once
     new UCAOptions();
     new CsvOptions();
@@ -36,7 +35,7 @@ public final class OptionsTest extends SandboxTest {
     new JsonParserOptions();
     new JsonSerialOptions();
     new TextOptions();
-    new ArchOptions();
+    new CreateOptions();
     new FtIndexOptions();
     new FtContainsOptions();
     new XQueryOptions();
@@ -47,8 +46,7 @@ public final class OptionsTest extends SandboxTest {
   }
 
   /** Tests the effect of setting system properties. */
-  @Test
-  public void systemProperty() {
+  @Test public void systemProperty() {
     final BooleanOption name = MainOptions.CHOP;
     final Boolean value = Boolean.FALSE;
     System.setProperty(Prop.DBPREFIX + name.name(), value.toString());
@@ -63,13 +61,12 @@ public final class OptionsTest extends SandboxTest {
    * Tests the {@link MainOptions#WRITEBACK} option.
    * @throws Exception exception
    */
-  @Test
-  public void writeBack() throws Exception {
+  @Test public void writeBack() throws Exception {
     final BooleanOption name = MainOptions.WRITEBACK;
 
     final String input = "<a/>";
-    final IOFile file = new IOFile(Prop.TMP + NAME + '/' + NAME);
-    file.write(Token.token(input));
+    final IOFile file = new IOFile(Prop.TEMPDIR + NAME + '/' + NAME);
+    file.write(input);
 
     // check if original file will be updated
     set(name, true);
@@ -81,7 +78,7 @@ public final class OptionsTest extends SandboxTest {
     }
 
     // original file will stay untouched
-    file.write(Token.token(input));
+    file.write(input);
     query("delete node doc('" + file + "')/a");
     assertEquals(input, Token.string(file.read()));
   }

@@ -1,7 +1,7 @@
 package org.basex.util;
 
 import static org.basex.util.Token.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
@@ -10,23 +10,15 @@ import org.basex.query.expr.ft.*;
 import org.basex.util.ft.*;
 import org.basex.util.ft.FTBitapSearch.TokenComparator;
 import org.basex.util.list.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Test {@link FTBitapSearch} methods.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class FTBitapSearchTest {
-  /** Simple comparator. */
-  private static final TokenComparator CMP = new TokenComparator() {
-    @Override
-    public boolean equal(final byte[] o1, final byte[] o2) {
-      return eq(o1, o2);
-    }
-  };
-
   /**
    * Test data.
    * @author Dimitar Popov
@@ -78,9 +70,9 @@ public final class FTBitapSearchTest {
       };
 
       needles = new FTTokens();
-      for(final String[] s : needle) {
-        final TokenList tl = new TokenList(s.length);
-        for(final String t : s) tl.add(t);
+      for(final String[] strings : needle) {
+        final TokenList tl = new TokenList(strings.length);
+        for(final String string : strings) tl.add(string);
         needles.add(tl);
       }
     }
@@ -142,18 +134,17 @@ public final class FTBitapSearchTest {
   private FTBitapSearch[] searches;
 
   /** Set up method. */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
+    final TokenComparator cmp = Token::eq;
     final int tl = TESTS.length;
     searches = new FTBitapSearch[tl];
     for(int t = 0; t < tl; t++) {
-      searches[t] = new FTBitapSearch(TESTS[t].haystack, TESTS[t].needles, CMP);
+      searches[t] = new FTBitapSearch(TESTS[t].haystack, TESTS[t].needles, cmp);
     }
   }
 
   /** Test search. */
-  @Test
-  public void searchIter() {
+  @Test public void searchIter() {
     try {
       final int tl = TESTS.length;
       for(int t = 0; t < tl; t++) {

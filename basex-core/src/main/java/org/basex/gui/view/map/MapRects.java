@@ -7,12 +7,12 @@ import org.basex.util.*;
 /**
  * This class organizes all map rectangles in a simple list.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class MapRects implements Iterable<MapRect> {
   /** Value array. */
-  MapRect[] list = new MapRect[8];
+  MapRect[] list;
   /** Sorted values. */
   MapRect[] sorted;
   /** Number of entries. */
@@ -38,7 +38,7 @@ final class MapRects implements Iterable<MapRect> {
    * @param v value to be added
    */
   void add(final MapRect v) {
-    if(size == list.length) list = Array.copy(list, new MapRect[Array.newSize(size)]);
+    if(size == list.length) list = Array.copy(list, new MapRect[Array.newCapacity(size)]);
     list[size++] = v;
   }
 
@@ -67,13 +67,12 @@ final class MapRects implements Iterable<MapRect> {
   }
 
   /**
-   * Returns the position of the specified value or -1 if it has not been found.
-   * @param r rectangle (pre value) to be found
-   * @return rectangle position of -1
+   * Returns the rectangle index with the specified pre value, or -1 if it has not been found.
+   * @param p pre value of the rectangle to be found
+   * @return rectangle position, or {@code -1}
    */
-  int find(final MapRect r) {
+  int find(final int p) {
     if(sorted == null) sort();
-    final int p = r.pre;
     int l = 0;
     int h = size - 1;
     while(l <= h) {

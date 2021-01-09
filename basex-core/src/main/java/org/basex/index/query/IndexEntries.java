@@ -5,10 +5,10 @@ import org.basex.index.*;
 /**
  * This class contains information for returning index entries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class IndexEntries implements IndexToken {
+public final class IndexEntries implements IndexSearch {
   /** Index type. */
   private final IndexType type;
   /** Text. */
@@ -55,7 +55,7 @@ public final class IndexEntries implements IndexToken {
   }
 
   @Override
-  public byte[] get() {
+  public byte[] token() {
     return text;
   }
 }

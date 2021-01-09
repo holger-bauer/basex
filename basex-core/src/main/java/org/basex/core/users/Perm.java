@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * User permissions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum Perm {
@@ -24,21 +24,14 @@ public enum Perm {
   public static final Perm[] VALUES = values();
 
   /**
-   * Returns the permission with more privileges.
-   * @param perm permission to be compared
-   * @return permission
-   */
-  public Perm max(final Perm perm) {
-    return ordinal() > perm.ordinal() ? this : perm;
-  }
-
-  /**
    * Returns a permission matching the specified string.
    * @param perm permission string
    * @return permission, or {@code null} if no match is found
    */
   public static Perm get(final String perm) {
-    for(final Perm p : VALUES) if(p.toString().equals(perm)) return p;
+    for(final Perm p : VALUES) {
+      if(p.toString().equals(perm)) return p;
+    }
     return null;
   }
 

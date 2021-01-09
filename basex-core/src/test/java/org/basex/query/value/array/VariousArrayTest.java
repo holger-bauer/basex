@@ -1,27 +1,26 @@
 package org.basex.query.value.array;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
- * Tests for the {@link Array} data structure.
+ * Tests for the {@link XQArray} data structure.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-public final class VariousArrayTest {
+public final class VariousArrayTest extends ArrayTest {
   /**
-   * Test for {@link Array#cons(Value)} and {@link Array#snoc(Value)}.
+   * Test for {@link XQArray#cons(Value)} and {@link XQArray#snoc(Value)}.
    */
-  @Test
-  public void consSnocTest() {
+  @Test public void consSnocTest() {
     final int n = 200_000;
-    Array seq = Array.empty();
+    XQArray seq = XQArray.empty();
     for(int i = 0; i < n; i++) {
       final Int val = Int.get(i);
       seq = seq.cons(val).snoc(val);
@@ -35,37 +34,11 @@ public final class VariousArrayTest {
   }
 
   /**
-   * Test for {@link Array#concat(Array)}.
+   * Test an {@link XQArray} used as a FIFO queue.
    */
-  @Test
-  public void concatTest() {
-    Array seq1 = Array.empty();
-    Array seq2 = Array.empty();
-    final int n = 200_000;
-    for(int i = 0; i < n; i++) {
-      final Value val = Int.get(i);
-      seq1 = seq1.cons(val);
-      seq2 = seq2.snoc(val);
-    }
-
-    assertEquals(n, seq1.arraySize());
-    assertEquals(n, seq2.arraySize());
-    final Array seq = seq1.concat(seq2);
-    assertEquals(2 * n, seq.arraySize());
-
-    for(int i = 0; i < 2 * n; i++) {
-      final int diff = i - n, j = diff < 0 ? -(diff + 1) : diff;
-      assertEquals(j, ((Int) seq.get(i)).itr());
-    }
-  }
-
-  /**
-   * Test an {@link Array} used as a FIFO queue.
-   */
-  @Test
-  public void queueTest() {
+  @Test public void queueTest() {
     final int n = 2_000_000, k = n / 100;
-    Array seq = Array.empty();
+    XQArray seq = XQArray.empty();
     for(int i = 0; i < k; i++) seq = seq.cons(Int.get(i));
 
     for(int i = k; i < n; i++) {
@@ -86,12 +59,11 @@ public final class VariousArrayTest {
   }
 
   /**
-   * Test an {@link Array} used as a LIFO stack.
+   * Test an {@link XQArray} used as a LIFO stack.
    */
-  @Test
-  public void stackTest() {
+  @Test public void stackTest() {
     final int n = 2_000_000;
-    Array seq = Array.empty();
+    XQArray seq = XQArray.empty();
 
     for(int i = 0; i < n; i++) {
       assertEquals(i, seq.arraySize());
@@ -113,59 +85,11 @@ public final class VariousArrayTest {
   }
 
   /**
-   * Test for {@link Array#insertBefore(long, Value)}.
+   * Test for {@link XQArray#members()}.
    */
-  @Test
-  public void insertTest() {
+  @Test public void iteratorTest() {
     final int n = 1_000;
-    Array seq = Array.empty();
-
-    for(int i = 0; i < n; i++) seq = seq.snoc(Int.get(i));
-    assertEquals(n, seq.arraySize());
-
-    final Int val = Int.get(n);
-    for(int i = 0; i <= n; i++) {
-      final Array seq2 = seq.insertBefore(i, val);
-      assertEquals(n, ((Int) seq2.get(i)).itr());
-      assertEquals(n + 1L, seq2.arraySize());
-      for(int j = 0; j < n; j++) {
-        assertEquals(j, ((Int) seq2.get(j < i ? j : j + 1)).itr());
-      }
-    }
-  }
-
-  /**
-   * Test for {@link Array#remove(long)}.
-   */
-  @Test
-  public void removeTest() {
-    final int n = 100;
-    Array seq = Array.empty();
-
-    for(int k = 0; k < n; k++) {
-      assertEquals(k, seq.arraySize());
-      for(int i = 0; i < k; i++) {
-        final Array seq2 = seq.remove(i);
-        assertEquals(k - 1, seq2.arraySize());
-
-        final Iterator<Value> iter = seq2.iterator(0);
-        for(int j = 0; j < k - 1; j++) {
-          assertTrue(iter.hasNext());
-          assertEquals(j < i ? j : j + 1, ((Int) iter.next()).itr());
-        }
-        assertFalse(iter.hasNext());
-      }
-      seq = seq.snoc(Int.get(k));
-    }
-  }
-
-  /**
-   * Test for {@link Array#members()}.
-   */
-  @Test
-  public void iteratorTest() {
-    final int n = 1_000;
-    Array seq = Array.empty();
+    XQArray seq = XQArray.empty();
     assertFalse(seq.iterator(0).hasNext());
 
     for(int i = 0; i < n; i++) {
@@ -183,10 +107,9 @@ public final class VariousArrayTest {
     }
   }
 
-  /** Tests {@link Array#tail()}. */
-  @Test
-  public void tailTest() {
-    Array seq = Array.empty();
+  /** Tests {@link XQArray#tail()}. */
+  @Test public void tailTest() {
+    XQArray seq = XQArray.empty();
     for(int i = 0; i < 15; i++) {
       seq = seq.snoc(Int.get(i));
     }

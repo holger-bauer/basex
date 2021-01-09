@@ -8,8 +8,9 @@ import org.basex.query.iter.*;
 import org.basex.query.up.atomic.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.up.primitives.node.*;
-import org.basex.query.util.list.*;
+import org.basex.query.value.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
 
@@ -54,7 +55,7 @@ import org.basex.util.list.*;
  *      merging.</li>
  * </ol>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class Updates {
@@ -63,7 +64,7 @@ public final class Updates {
   /** All file paths that are targeted during a snapshot by an fn:put expression. */
   public final TokenSet putPaths = new TokenSet();
   /** Cached outputs. */
-  public final ItemList cache = new ItemList();
+  private ValueBuilder output;
 
   /** Mapping between fragment IDs and the temporary data instances
    * to apply updates on the corresponding fragments. */
@@ -97,6 +98,27 @@ public final class Updates {
   }
 
   /**
+   * Adds output.
+   * @param value value to be added
+   * @param qc query context
+   */
+  public synchronized void addOutput(final Value value, final QueryContext qc) {
+    if(output == null) output = new ValueBuilder(qc);
+    output.add(value);
+  }
+
+  /**
+   * Returns value to be output.
+   * @param reset reset cache
+   * @return value
+   */
+  public synchronized Value output(final boolean reset) {
+    final ValueBuilder vb = output;
+    if(reset) output = null;
+    return vb != null ? vb.value() : Empty.VALUE;
+  }
+
+  /**
    * Determines the data reference and pre value for an update primitive
    * which has a fragment as a target node. If an ancestor of the given target
    * node has already been added to the pending update list, the corresponding
@@ -112,27 +134,20 @@ public final class Updates {
     if(target instanceof DBNode) return (DBNode) target;
 
     // determine highest ancestor node
-    ANode anc = target;
-    final BasicNodeIter it = target.ancestor();
-    for(ANode p; (p = it.next()) != null;) anc = p;
+    ANode tmp = target;
+    final BasicNodeIter iter = target.ancestorIter();
+    for(ANode n; (n = iter.next()) != null;) tmp = n;
+    final ANode root = tmp;
 
-    /* See if this ancestor has already been added to the pending update list.
-     * In this case a database has already been created.
-     */
-    final int ancID = anc.id;
+    // see if this ancestor has already been added to the pending update list
+    // if data instance does not exist, create mapping between fragment id and data reference
     MemData data;
     synchronized(fragmentIDs) {
-      data = fragmentIDs.get(ancID);
-      // if data doesn't exist, create a new one
-      if(data == null) {
-        data = (MemData) anc.dbNodeCopy(qc.context.options).data();
-        // create a mapping between the fragment id and the data reference
-        fragmentIDs.put(ancID, data);
-      }
+      data = fragmentIDs.computeIfAbsent(root.id, () -> (MemData) root.copy(qc).data());
     }
 
     // determine the pre value of the target node within its database
-    final int pre = preSteps(anc, target.id);
+    final int pre = preSteps(root, target.id);
     return new DBNode(data, pre);
   }
 
@@ -186,15 +201,15 @@ public final class Updates {
     if(node.id == trgID) return 0;
 
     int s = 1;
-    for(final ANode n : node.attributes()) {
-      final int st = preSteps(n, trgID);
+    for(final ANode nd : node.attributeIter()) {
+      final int st = preSteps(nd, trgID);
       if(st == 0) return s;
       s += st;
     }
-    for(final ANode n : node.children()) {
+    for(final ANode nd : node.childIter()) {
       // n.id <= trgID: rewritten to catch ID overflow
-      if(trgID - n.id < 0) break;
-      s += preSteps(n, trgID);
+      if(trgID - nd.id < 0) break;
+      s += preSteps(nd, trgID);
     }
     return s;
   }

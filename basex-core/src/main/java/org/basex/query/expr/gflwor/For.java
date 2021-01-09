@@ -2,39 +2,42 @@ package org.basex.query.expr.gflwor;
 
 import static org.basex.query.QueryText.*;
 
+import java.util.*;
 import java.util.List;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
-import org.basex.query.expr.path.*;
-import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
-import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
-import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * FLWOR {@code for} clause, iterating over a sequence.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class For extends ForLet {
-  /** Position variable. */
+  /** Position variable (can be {@code null}). */
   Var pos;
-  /** Score variable. */
+  /** Score variable (can be {@code null}). */
   Var score;
   /** {@code allowing empty} flag. */
-  final boolean empty;
+  boolean empty;
+
+  /**
+   * Constructor.
+   * @param var item variable
+   * @param expr bound expression
+   */
+  public For(final Var var, final Expr expr) {
+    this(var, null, null, expr, false);
+  }
 
   /**
    * Constructor.
@@ -45,7 +48,7 @@ public final class For extends ForLet {
    * @param empty {@code allowing empty} flag
    */
   public For(final Var var, final Var pos, final Var score, final Expr expr, final boolean empty) {
-    super(var.info, var, expr, score != null, vars(var, pos, score));
+    super(var.info, SeqType.ITEM_ZO, var, expr, score != null, vars(var, pos, score));
     this.pos = pos;
     this.score = score;
     this.empty = empty;
@@ -63,31 +66,31 @@ public final class For extends ForLet {
       public boolean next(final QueryContext qc) throws QueryException {
         while(true) {
           // next iteration, reset iterator and counter
-          Item it = null;
+          Item item = null;
           if(iter != null) {
             if(scoring) {
               final boolean s = qc.scoring;
               try {
                 qc.scoring = true;
-                it = iter.next();
+                item = qc.next(iter);
               } finally {
                 qc.scoring = s;
               }
             } else {
-              it = iter.next();
+              item = qc.next(iter);
             }
           }
-          if(it != null) {
+          if(item != null) {
             // there's another item to serve
             ++p;
-            qc.set(var, it);
+            qc.set(var, item);
             if(pos != null) qc.set(pos, Int.get(p));
-            if(score != null) qc.set(score, Dbl.get(it.score()));
+            if(score != null) qc.set(score, Dbl.get(item.score()));
             return true;
           }
           if(empty && iter != null && p == 0) {
             // expression yields no items, bind the empty sequence instead
-            qc.set(var, Empty.SEQ);
+            qc.set(var, Empty.VALUE);
             if(pos != null) qc.set(pos, Int.get(p));
             if(score != null) qc.set(score, Dbl.ZERO);
             iter = null;
@@ -116,22 +119,28 @@ public final class For extends ForLet {
 
   @Override
   public For optimize(final CompileContext cc) throws QueryException {
-    final SeqType tp = expr.seqType();
-    final boolean emp = empty && tp.mayBeZero();
-    seqType = SeqType.get(tp.type, emp ? Occ.ZERO_ONE : Occ.ONE);
-    var.refineType(seqType, cc);
-    if(pos != null) pos.refineType(SeqType.ITR, cc);
-    if(score != null) score.refineType(SeqType.DBL, cc);
-    size = emp ? -1 : 1;
-    var.size = size;
-    var.data = expr.data();
+    // assign type to clause and variable; remove empty flag if expression always yields items
+    final SeqType st = expr.seqType();
+    if(st.oneOrMore()) empty = false;
+    exprType.assign(st.with(empty ? st.zero() ? Occ.ZERO : Occ.ZERO_OR_ONE : Occ.EXACTLY_ONE));
+
+    var.refineType(seqType(), size(), cc);
+    var.expr(expr);
+    if(pos != null) {
+      pos.refineType(SeqType.INTEGER_O, 1, cc);
+      pos.expr(Int.ZERO);
+    }
+    if(score != null) {
+      score.refineType(SeqType.DOUBLE_O, 1, cc);
+      score.expr(Dbl.ZERO);
+    }
     return this;
   }
 
   @Override
   public For copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new For(cc.copy(var, vm), cc.copy(pos, vm), cc.copy(score, vm),
-        expr.copy(cc, vm), empty);
+    return copyType(new For(cc.copy(var, vm), cc.copy(pos, vm), cc.copy(score, vm),
+        expr.copy(cc, vm), empty));
   }
 
   @Override
@@ -160,98 +169,65 @@ public final class For extends ForLet {
    * @return {@code true} if the clause was converted, {@code false} otherwise
    */
   boolean asLet(final List<Clause> clauses, final int p) {
-    if(expr.size() != 1 && !expr.seqType().one()) return false;
+    if(!expr.seqType().one()) return false;
     clauses.set(p, Let.fromFor(this));
     if(score != null) clauses.add(p + 1, Let.fromForScore(this));
-    if(pos != null) clauses.add(p + 1, new Let(pos, Int.get(1), false));
+    if(pos != null) clauses.add(p + 1, new Let(pos, Int.ONE));
     return true;
   }
 
   /**
-   * Adds a predicate to the looped expression.
-   * @param pred predicate
-   */
-  void addPredicate(final Expr pred) {
-    if(expr instanceof AxisPath && !pred.has(Flag.POS)) {
-      // add to axis path, provided that predicate is not positional
-      expr = ((AxisPath) expr).addPreds(pred);
-    } else if(expr instanceof Filter) {
-      // add to existing filter expression
-      expr = ((Filter) expr).addPred(pred);
-    } else {
-      // create new filter expression
-      expr = Filter.get(info, expr, pred);
-    }
-  }
-
-  /**
-   * Tries to add the given expression as a predicate to the loop expression.
+   * Removes a variable reference.
    * @param cc compilation context
-   * @param ex expression to add as predicate
-   * @return success
-   * @throws QueryException query exception
+   * @param vr variable to be removed
    */
-  public boolean toPredicate(final CompileContext cc, final Expr ex) throws QueryException {
-    if(empty || !(vars.length == 1 && ex.uses(var) && ex.removable(var))) return false;
-
-    // reset context value (will not be accessible in predicate)
-    final QueryFocus focus = cc.qc.focus;
-    final Value v = focus.value;
-    Expr pred = ex;
-    try {
-      focus.value = null;
-      // assign type of iterated items to context expression
-      final ContextValue cv = new ContextValue(info);
-      cv.seqType = expr.seqType().type.seqType();
-      final Expr r = ex.inline(var, cv, cc);
-      if(r != null) pred = r;
-    } finally {
-      focus.value = v;
+  void remove(final CompileContext cc, final Var vr) {
+    cc.info(OPTVAR_X, vr);
+    if(vr == score) {
+      score = null;
+      scoring = false;
+    } else {
+      pos = null;
     }
-
-    // attach predicates to axis path or filter, or create a new filter
-    if(pred.seqType().mayBeNumber()) pred = cc.function(Function.BOOLEAN, info, pred);
-
-    addPredicate(pred);
-    return true;
+    vars = vars(var, pos, score);
   }
 
   @Override
-  void calcSize(final long[] minMax) {
-    final long sz = expr.size();
-    final long factor = sz > 0 ? sz : empty ? 1 : 0;
+  public void calcSize(final long[] minMax) {
+    final long size = expr.size(), factor = size > 0 ? size : empty ? 1 : 0;
     minMax[0] *= factor;
     final long max = minMax[1];
-    minMax[1] = sz < 0 ? -1 : max > 0 ? max * factor : max;
+    if(max > 0) minMax[1] = size >= 0 ? max * factor : -1;
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem();
-    if(empty) e.add(planAttr(Token.token(EMPTYORD), Token.TRUE));
-    var.plan(e);
-    if(pos != null) {
-      final FElem e2 = new FElem(AT);
-      pos.plan(e2);
-      e.add(e2);
-    }
-
-    if(score != null) {
-      final FElem e2 = new FElem(SCORE);
-      score.plan(e2);
-      e.add(e2);
-    }
-
-    expr.plan(e);
-    plan.add(e);
+  Expr inlineExpr(final CompileContext cc) {
+    return empty || vars.length > 1 || var.checksType() ? null : expr;
   }
 
   @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder(FOR).append(' ').append(var);
-    if(empty) sb.append(' ').append(ALLOWING).append(' ').append(EMPTYORD);
-    if(pos != null) sb.append(' ').append(AT).append(' ').append(pos);
-    if(score != null) sb.append(' ').append(SCORE).append(' ').append(score);
-    return sb.append(' ').append(IN).append(' ').append(expr).toString();
+  public boolean equals(final Object obj) {
+    if(!(obj instanceof For)) return false;
+    final For f = (For) obj;
+    return Objects.equals(pos, f.pos) && Objects.equals(score, f.score) && empty == f.empty &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    final FElem elem = plan.attachVariable(plan.create(this), var, false);
+    if(empty) plan.addAttribute(elem, EMPTYY, true);
+    if(pos != null) plan.addElement(elem, plan.create(AT, pos));
+    if(score != null) plan.addElement(elem, plan.create(SCORE, score));
+    plan.add(elem, expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(FOR).token(var);
+    if(empty) qs.token(ALLOWING).token(EMPTYY);
+    if(pos != null) qs.token(AT).token(pos);
+    if(score != null) qs.token(SCORE).token(score);
+    qs.token(IN).token(expr);
   }
 }

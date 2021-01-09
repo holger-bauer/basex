@@ -1,6 +1,7 @@
 package org.basex.util.hash;
 
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.util.*;
 
@@ -8,13 +9,20 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing primitive integers
  * and objects. It extends the {@link IntSet} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <E> generic value type
  */
 public final class IntObjMap<E> extends IntSet {
   /** Values. */
-  private Object[] values = new Object[Array.CAPACITY];
+  private Object[] values;
+
+  /**
+   * Default constructor.
+   */
+  public IntObjMap() {
+    values = new Object[capacity()];
+  }
 
   /**
    * Indexes the specified key and stores the associated value.
@@ -30,6 +38,22 @@ public final class IntObjMap<E> extends IntSet {
     final Object v = values[i];
     values[i] = value;
     return (E) v;
+  }
+
+  /**
+   * Returns the value for the specified key.
+   * Creates a new value if none exists.
+   * @param key key
+   * @param func function that create a new value
+   * @return value
+   */
+  public E computeIfAbsent(final int key, final Supplier<? extends E> func) {
+    E value = get(key);
+    if(value == null) {
+      value = func.get();
+      put(key, value);
+    }
+    return value;
   }
 
   /**
@@ -51,16 +75,9 @@ public final class IntObjMap<E> extends IntSet {
   }
 
   @Override
-  protected void rehash(final int sz) {
-    super.rehash(sz);
-    values = Array.copy(values, new Object[sz]);
-  }
-
-  @Override
-  public int delete(final int key) {
-    final int i = super.delete(key);
-    if(i != 0) values[i] = null;
-    return i;
+  protected void rehash(final int newSize) {
+    super.rehash(newSize);
+    values = Array.copy(values, new Object[newSize]);
   }
 
   @Override
@@ -71,11 +88,8 @@ public final class IntObjMap<E> extends IntSet {
 
   @Override
   public String toString() {
-    final TokenBuilder tb = new TokenBuilder(Util.className(this)).add('[');
-    for(int i = 1; i < size; i++) {
-      tb.add(Integer.toString(keys[i])).add(": ").add(get(keys[i]).toString());
-      if(i < size - 1) tb.add(",\n\t");
-    }
-    return tb.add(']').toString();
+    final List<Object> k = new ArrayList<>();
+    for(final int key : keys) k.add(key);
+    return toString(k.toArray(), values);
   }
 }

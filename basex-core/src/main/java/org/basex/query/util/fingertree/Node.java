@@ -3,7 +3,7 @@ package org.basex.query.util.fingertree;
 /**
  * A node inside a digit.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -62,7 +62,6 @@ public interface Node<N, E> extends NodeLike<N, E> {
    * @param pos position
    * @param val new value
    * @return resulting node
-   * @throws IndexOutOfBoundsException if {@code pos} is out of bounds
    */
   Node<N, E> set(long pos, E val);
 

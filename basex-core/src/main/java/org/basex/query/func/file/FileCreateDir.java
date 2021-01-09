@@ -7,11 +7,12 @@ import java.nio.file.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FileCreateDir extends FileFn {
@@ -29,6 +30,6 @@ public final class FileCreateDir extends FileFn {
     }
 
     Files.createDirectories(path);
-    return null;
+    return Empty.VALUE;
   }
 }

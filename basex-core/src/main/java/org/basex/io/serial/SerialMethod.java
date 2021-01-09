@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * Serialization methods.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum SerialMethod {
@@ -17,6 +17,9 @@ public enum SerialMethod {
   /** Text.     */ TEXT,
   /** Adaptive. */ ADAPTIVE,
   /** BaseX.    */ BASEX;
+
+  /** Cached enums (faster). */
+  public static final SerialMethod[] VALUES = values();
 
   @Override
   public String toString() {

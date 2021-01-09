@@ -11,18 +11,21 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnSubstringAfter extends StandardFunc {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] ss = toEmptyToken(exprs[0], qc), sb = toEmptyToken(exprs[1], qc);
+  public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final byte[] string = toZeroToken(exprs[0], qc), sub = toZeroToken(exprs[1], qc);
     final Collation coll = toCollation(2, qc);
+    if(string.length == 0) return Str.EMPTY;
+    if(sub.length == 0) return Str.get(string);
+
     if(coll == null) {
-      final int p = indexOf(ss, sb);
-      return p == -1 ? Str.ZERO : Str.get(substring(ss, p + sb.length));
+      final int pos = indexOf(string, sub);
+      return pos == -1 ? Str.EMPTY : Str.get(substring(string, pos + sub.length));
     }
-    return Str.get(coll.after(ss, sb, info));
+    return Str.get(coll.after(string, sub, info));
   }
 }

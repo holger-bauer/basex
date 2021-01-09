@@ -11,7 +11,7 @@ import org.basex.util.*;
  * newline characters {@code \n}, and the input encoding will be guessed by
  * analyzing the first bytes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NewlineInput extends TextInput {
@@ -34,6 +34,15 @@ public final class NewlineInput extends TextInput {
    */
   public NewlineInput(final IO in) throws IOException {
     super(in);
+  }
+
+  /**
+   * Constructor.
+   * @param token token
+   * @throws IOException I/O exception
+   */
+  public NewlineInput(final byte[] token) throws IOException {
+    super(token);
   }
 
   @Override
@@ -68,7 +77,7 @@ public final class NewlineInput extends TextInput {
 
   /**
    * Copies a single line to the specified token builder.
-   * @param tb token builder to be filled.
+   * @param tb token builder to be filled
    * @return {@code true} if more input was found
    * @throws IOException I/O exception
    */

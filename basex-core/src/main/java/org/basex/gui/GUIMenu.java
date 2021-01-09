@@ -3,8 +3,6 @@ package org.basex.gui;
 import static org.basex.gui.GUIConstants.*;
 
 import java.awt.*;
-import java.awt.event.*;
-
 import javax.swing.*;
 
 import org.basex.gui.layout.*;
@@ -15,21 +13,21 @@ import org.basex.util.*;
  * The menu structure is defined in {@link GUIConstants#MENUBAR} and
  * {@link GUIConstants#MENUITEMS}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class GUIMenu extends JMenuBar {
   /** Referenced menu items. */
   private final JMenuItem[] items;
-  /** Reference to main window. */
+  /** Reference to the main window. */
   private final GUI gui;
 
   /**
    * Initializes the menu bar.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  GUIMenu(final GUI main) {
-    gui = main;
+  GUIMenu(final GUI gui) {
+    this.gui = gui;
     if(Prop.langright) setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
 
     // create menu for each top level menu entries
@@ -74,13 +72,11 @@ public final class GUIMenu extends JMenuBar {
    * @return menu item
    */
   public static JMenuItem newItem(final GUICommand cmd, final GUI gui, final StringBuilder mnem) {
-    final String desc = cmd.label();
-    final JMenuItem item = cmd.toggle() ? new JCheckBoxMenuItem(desc) : new JMenuItem(desc);
-    item.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        cmd.execute(gui);
-      }
+    final String label = cmd.label();
+    final JMenuItem item = cmd.toggle() && (!Prop.MAC || Prop.JAVA8) ?
+      new JCheckBoxMenuItem(label) : new JMenuItem(label);
+    item.addActionListener(e -> {
+      if(!gui.updating) cmd.execute(gui);
     });
     BaseXLayout.setMnemonic(item, mnem);
     return item;

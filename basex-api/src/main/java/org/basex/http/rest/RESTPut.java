@@ -15,7 +15,7 @@ import org.basex.util.http.*;
 /**
  * REST-based evaluation of PUT operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class RESTPut {
@@ -37,18 +37,18 @@ final class RESTPut {
     RESTCmd.parseOptions(session);
 
     final MainOptions options = conn.context.options;
-    final InputStream is = conn.req.getInputStream();
+    final InputStream is = conn.request.getInputStream();
     final MediaType mt = conn.contentType();
 
     // choose correct importer
     boolean xml = true;
     final String ct = mt.type();
-    if(mt.is(MediaType.APPLICATION_JSON)) {
+    if(mt.isJSON()) {
       final JsonParserOptions opts = new JsonParserOptions();
       opts.assign(mt);
       options.set(MainOptions.JSONPARSER, opts);
       options.set(MainOptions.PARSER, MainParser.JSON);
-    } else if(mt.is(MediaType.TEXT_CSV)) {
+    } else if(mt.isCSV()) {
       final CsvParserOptions opts = new CsvParserOptions();
       opts.assign(mt);
       options.set(MainOptions.CSVPARSER, opts);

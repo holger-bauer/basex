@@ -19,7 +19,7 @@ import org.basex.util.*;
  * This class creates a database instance on disk.
  * The storage layout is described in the {@link Data} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DiskBuilder extends Builder {
@@ -54,12 +54,11 @@ public final class DiskBuilder extends Builder {
   @Override
   public DiskData build() throws IOException {
     meta.assign(parser);
-    meta.dirty = true;
 
     // calculate optimized output buffer sizes to reduce disk fragmentation
     final Runtime rt = Runtime.getRuntime();
     final long max = Math.min(1 << 22, rt.maxMemory() - rt.freeMemory() >> 2);
-    int bs = (int) Math.min(meta.filesize, max);
+    int bs = (int) Math.min(meta.inputsize, max);
     bs = Math.max(IO.BLOCKSIZE, bs - bs % IO.BLOCKSIZE);
 
     // drop old database (if available) and create new one
@@ -71,9 +70,9 @@ public final class DiskBuilder extends Builder {
     try {
       try {
         tout = new DataOutput(new TableOutput(meta, DATATBL));
-        xout = new DataOutput(meta.dbfile(DATATXT), bs);
-        vout = new DataOutput(meta.dbfile(DATAATV), bs);
-        sout = new DataOutput(meta.dbfile(DATATMP), bs);
+        xout = new DataOutput(meta.dbFile(DATATXT), bs);
+        vout = new DataOutput(meta.dbFile(DATAATV), bs);
+        sout = new DataOutput(meta.dbFile(DATATMP), bs);
         parse();
       } finally {
         if(tout != null) tout.close();
@@ -83,7 +82,8 @@ public final class DiskBuilder extends Builder {
       }
 
       // copy temporary values into database table
-      try(DataInput in = new DataInput(meta.dbfile(DATATMP))) {
+      final IOFile tmpFile = meta.dbFile(DATATMP);
+      try(DataInput in = new DataInput(tmpFile)) {
         final TableAccess ta = new TableDiskAccess(meta, true);
         try {
           for(; spos < ssize; ++spos) ta.write4(in.readNum(), 8, in.readNum());
@@ -91,20 +91,16 @@ public final class DiskBuilder extends Builder {
           ta.close();
         }
       }
-      meta.dbfile(DATATMP).delete();
+      tmpFile.delete();
 
-      // return database instance
+      // return database instance. build will be finalized when this instance is closed
+      meta.dirty = true;
       return new DiskData(meta, elemNames, attrNames, path, nspaces);
 
     } catch(final Throwable th) {
       DropDB.drop(meta.name, sopts);
       throw th;
     }
-  }
-
-  @Override
-  public DataClip dataClip() throws IOException {
-    return new DataClip(build());
   }
 
   @Override
@@ -165,15 +161,15 @@ public final class DiskBuilder extends Builder {
    * @throws IOException I/O exception
    */
   private long textRef(final byte[] value, final boolean text) throws IOException {
-    // inline integer value
-    final long v = Token.toSimpleInt(value);
-    if(v != Integer.MIN_VALUE) return v | IO.OFFNUM;
+    // try to inline value
+    final long inlined = Inline.pack(value);
+    if(inlined != 0) return inlined;
 
     // store text to heap file
+    final byte[] packed = Compress.pack(value);
     final DataOutput store = text ? xout : vout;
-    final long off = store.size();
-    final byte[] val = Compress.pack(value);
-    store.writeToken(val);
-    return val == value ? off : off | IO.OFFCOMP;
+    final long offset = store.size();
+    store.writeToken(packed);
+    return packed == value ? offset : Compress.COMPRESS | offset;
   }
 }

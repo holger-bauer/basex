@@ -5,56 +5,75 @@ import static org.basex.query.func.Function.*;
 
 import java.io.*;
 
-import org.basex.query.*;
+import org.basex.*;
 import org.basex.util.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the Process Module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class ProcModuleTest extends AdvancedQueryTest {
+public final class ProcModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void system() {
-    query(_PROC_SYSTEM.args("java", "-version"), "");
-    error(_PROC_SYSTEM.args("java", "-version", "xx"), BXPR_ENC_X);
+  @Test public void execute() {
+    final Function func = _PROC_EXECUTE;
+    // queries
+    query("exists(" + func.args("java", "x") + "/code)", true);
+    query("exists(" + func.args("a b c") + "/error)", true);
+    query("empty(" + func.args("a b c") + "/(output, code))", true);
+
+    error(func.args("java", "-version", " map { 'encoding': 'xx' }"), PROC_ENCODING_X);
   }
 
   /** Test method. */
-  @Test
-  public void execute() {
-    query("count(" + _PROC_EXECUTE.args("java", "-version") + "/*)", "3");
+  @Test public void fork() {
+    final Function func = _PROC_FORK;
+    // queries
+    query(func.args("java", "-version"), "");
+    query(func.args("a b c"), "");
   }
 
   /** Test method. */
-  @Test
-  public void property() {
-    query(_PROC_PROPERTY.args("path.separator"), File.pathSeparator);
+  @Test public void property() {
+    final Function func = _PROC_PROPERTY;
+    // queries
+    query(func.args("path.separator"), File.pathSeparator);
 
     Prop.put("A", "B");
     try {
-      query(_PROC_PROPERTY.args("A"), "B");
-      query(_PROC_PROPERTY.args("XYZ"), "");
+      query(func.args("A"), "B");
+      query(func.args("XYZ"), "");
     } finally {
       Prop.clear();
     }
   }
 
   /** Test method. */
-  @Test
-  public void propertyNames() {
+  @Test public void propertyNames() {
+    final Function func = _PROC_PROPERTY_NAMES;
+    // queries
     // checks if all system properties exist (i.e., have a value)
-    query(_PROC_PROPERTY_NAMES.args() + '[' + EMPTY.args(_PROC_PROPERTY.args(" .")) + ']', "");
+    query(func.args() + "[empty(" + _PROC_PROPERTY.args(" .") + ")]", "");
 
     Prop.put("A", "B");
     try {
-      query(_PROC_PROPERTY_NAMES.args() + "[. = 'A']", "A");
-      query(_PROC_PROPERTY_NAMES.args() + "[. = 'XYZ']", "");
+      query(func.args() + "[. = 'A']", "A");
+      query(func.args() + "[. = 'XYZ']", "");
     } finally {
       Prop.clear();
     }
+  }
+
+  /** Test method. */
+  @Test public void system() {
+    final Function func = _PROC_SYSTEM;
+    // queries
+    query(func.args("java", "-version"), "");
+    query("try { " + func.args("java", "x") + "} catch proc:* { 'error' }", "error");
+
+    error(func.args("java", "-version", " map { 'encoding': 'xx' }"), PROC_ENCODING_X);
+    error(func.args("a b c"), PROC_ERROR_X);
   }
 }

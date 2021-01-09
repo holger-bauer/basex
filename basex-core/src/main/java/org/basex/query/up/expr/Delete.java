@@ -10,6 +10,7 @@ import org.basex.query.up.*;
 import org.basex.query.up.primitives.node.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -17,7 +18,7 @@ import org.basex.util.hash.*;
 /**
  * Delete expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class Delete extends Update {
@@ -33,26 +34,31 @@ public final class Delete extends Update {
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Iter t = qc.iter(exprs[0]);
-    for(Item i; (i = t.next()) != null;) {
-      if(!(i instanceof ANode)) throw UPTRGDELEMPT_X.get(info, i);
-      final ANode n = (ANode) i;
+    final Iter iter = exprs[0].iter(qc);
+    for(Item item; (item = qc.next(iter)) != null;) {
+      if(!(item instanceof ANode)) throw UPTRGDELEMPT_X.get(info, item);
+      final ANode node = (ANode) item;
       // nodes without parents are ignored
-      if(n.parent() == null) continue;
+      if(node.parent() == null) continue;
       final Updates updates = qc.updates();
-      final DBNode dbn = updates.determineDataRef(n, qc);
+      final DBNode dbn = updates.determineDataRef(node, qc);
       updates.add(new DeleteNode(dbn.pre(), dbn.data(), info), qc);
     }
-    return null;
+    return Empty.VALUE;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Delete(sc, info, exprs[0].copy(cc, vm));
+    return copyType(new Delete(sc, info, exprs[0].copy(cc, vm)));
   }
 
   @Override
-  public String toString() {
-    return DELETE + ' ' + NODES + ' ' + exprs[0];
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Delete && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(DELETE).token(NODES).token(exprs[0]);
   }
 }

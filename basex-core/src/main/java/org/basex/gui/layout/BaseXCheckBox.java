@@ -1,16 +1,15 @@
 package org.basex.gui.layout;
 
 import java.awt.*;
-import java.awt.event.*;
 
 import javax.swing.*;
 
 import org.basex.util.options.*;
 
 /**
- * Project specific CheckBox implementation.
+ * Project specific check box implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXCheckBox extends JCheckBox {
@@ -21,40 +20,35 @@ public final class BaseXCheckBox extends JCheckBox {
 
   /**
    * Checkbox.
-   * @param label checkbox text
-   * @param opt option
-   * @param opts options
    * @param win parent window
+   * @param label checkbox text
+   * @param option option
+   * @param options options
    */
-  public BaseXCheckBox(final String label, final BooleanOption opt, final Options opts,
-      final Window win) {
-    this(label, opts.get(opt), win);
-    options = opts;
-    option = opt;
+  public BaseXCheckBox(final BaseXWindow win, final String label, final BooleanOption option,
+      final Options options) {
+    this(win, label, options.get(option));
+    this.options = options;
+    this.option = option;
   }
 
   /**
    * Checkbox.
-   * @param label checkbox text
-   * @param sel initial selection state
    * @param win parent window
+   * @param label checkbox text
+   * @param selected initial selection state
    */
-  public BaseXCheckBox(final String label, final boolean sel, final Window win) {
-    super(label, sel);
+  public BaseXCheckBox(final BaseXWindow win, final String label, final boolean selected) {
+    super(label, selected);
     setOpaque(false);
     setMargin(new Insets(0, 0, 0, 0));
 
     BaseXLayout.addInteraction(this, win);
-    if(!(win instanceof BaseXDialog)) return;
+    final BaseXDialog dialog = win.dialog();
+    if(dialog == null) return;
 
-    final BaseXDialog dialog = (BaseXDialog) win;
     BaseXLayout.setMnemonic(this, dialog.mnem);
-    addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        dialog.action(e.getSource());
-      }
-    });
+    addActionListener(e -> dialog.action(e.getSource()));
   }
 
   /**
@@ -62,7 +56,7 @@ public final class BaseXCheckBox extends JCheckBox {
    * @return self reference
    */
   public BaseXCheckBox bold() {
-    setFont(getFont().deriveFont(Font.BOLD));
+    BaseXLayout.boldFont(this);
     return this;
   }
 
@@ -71,8 +65,8 @@ public final class BaseXCheckBox extends JCheckBox {
    * @return self reference
    */
   public BaseXCheckBox large() {
-    final Font f = getFont();
-    setFont(new Font(f.getName(), Font.BOLD, (int) (f.getSize2D() * 1.4)));
+    BaseXLayout.boldFont(this);
+    BaseXLayout.resizeFont(this, 1.4f);
     return this;
   }
 

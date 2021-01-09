@@ -7,7 +7,6 @@ import java.io.*;
 import java.nio.charset.*;
 
 import org.basex.core.jobs.*;
-import org.basex.io.out.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
@@ -18,102 +17,100 @@ import org.basex.util.list.*;
 /**
  * Process function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class ProcFn extends StandardFunc {
+  /** Name: result. */
+  static final String RESULT = "result";
+  /** Name: standard output. */
+  static final String OUTPUT = "output";
+  /** Name: standard error. */
+  static final String ERROR = "error";
+  /** Name: code. */
+  static final String CODE = "code";
+
   /**
    * Returns the result of a command.
    * @param qc query context
-   * @return result
+   * @param fork fork process
+   * @return result, or {@code null} if process is forked
    * @throws QueryException query exception
    */
-  final Result exec(final QueryContext qc) throws QueryException {
+  final ProcResult exec(final QueryContext qc, final boolean fork) throws QueryException {
     checkAdmin(qc);
 
     // arguments
-    final TokenList tl = new TokenList();
-    tl.add(toToken(exprs[0], qc));
+    final StringList sl = new StringList();
+    sl.add(toToken(exprs[0], qc));
     if(exprs.length > 1) {
-      final Iter ir = qc.iter(exprs[1]);
-      for(Item it; (it = ir.next()) != null;) tl.add(toToken(it));
+      final Iter iter = exprs[1].iter(qc);
+      for(Item item; (item = qc.next(iter)) != null;) sl.add(toToken(item));
     }
-    final String[] args = tl.toStringArray();
+    final String[] args = sl.finish();
 
-    // encoding
-    final ProcOptions opts = new ProcOptions();
-    if(exprs.length > 2) {
-      // backward compatibility...
-      final Item item = exprs[2].item(qc, info);
-      if(item != null && item.type.isStringOrUntyped()) {
-        opts.set(ProcOptions.ENCODING, string(toEmptyToken(exprs[2], qc)));
-      } else {
-        toOptions(2, opts, qc);
-      }
-    }
+    // options
+    final ProcOptions opts = toOptions(2, new ProcOptions(), qc);
     final String encoding = opts.get(ProcOptions.ENCODING);
     final Charset cs;
     try {
       cs = Charset.forName(encoding);
     } catch(final Exception ex) {
-      throw BXPR_ENC_X.get(info, encoding);
+      Util.debug(ex);
+      throw PROC_ENCODING_X.get(info, encoding);
     }
+    final long seconds = opts.get(ProcOptions.TIMEOUT);
+    final String dir = opts.get(ProcOptions.DIR);
+    final String input = opts.get(ProcOptions.INPUT);
 
-    // options
-    final long sec = opts.get(ProcOptions.TIMEOUT);
-
-    final Result result = new Result();
+    final ProcResult result = new ProcResult();
     final Process proc;
+    final ProcessBuilder pb = new ProcessBuilder(args);
+    if(dir != null) pb.directory(toPath(token(dir)).toFile());
     try {
-      final ProcessBuilder pb = new ProcessBuilder(args);
-      final String dir = opts.get(ProcOptions.DIR);
-      if(dir != null) pb.directory(toPath(token(dir)).toFile());
       proc = pb.start();
     } catch(final IOException ex) {
-      try {
-        result.error.write(token(Util.message(ex)));
-      } catch(final IOException ignore) {
-        Util.debug(ignore);
-      }
-      result.code = 9999;
+      result.exception(ex);
       return result;
     }
+    if(fork) return null;
 
-    final Thread outt = reader(proc.getInputStream(), result.output, cs);
-    final Thread errt = reader(proc.getErrorStream(), result.error, cs);
+    final Thread outt = reader(proc.getInputStream(), result.output, cs, result);
+    final Thread errt = reader(proc.getErrorStream(), result.error, cs, result);
     outt.start();
     errt.start();
 
-    final Thread thread = new Thread() {
-      @Override
-      public void run() {
-        try {
-          proc.waitFor();
-          outt.join();
-          errt.join();
-        } catch(final InterruptedException ex) {
-          try {
-            result.error.write(token(Util.message(ex)));
-          } catch(final IOException ignored) { }
+    final Thread thread = new Thread(() -> {
+      try {
+        if(input != null) {
+          try(OutputStream os = proc.getOutputStream()) {
+            os.write(token(input));
+          }
         }
+        proc.waitFor();
+        outt.join();
+        errt.join();
+      } catch(final IOException ex) {
+        result.exception(ex);
+      } catch(final InterruptedException ex) {
+        result.error.add(Util.message(ex));
       }
-    };
+    });
     thread.start();
 
     final Performance perf = new Performance();
     try {
       while(thread.isAlive()) {
         qc.checkStop();
-        if(sec > 0 && (System.nanoTime() - perf.start()) / 1000000000 >= sec) {
+        if(seconds > 0 && perf.ns(false) / 1000000000 >= seconds) {
           thread.interrupt();
-          throw BXPR_TIMEOUT.get(info);
+          throw PROC_TIMEOUT.get(info);
         }
         Performance.sleep(10);
       }
       result.code = proc.exitValue();
       return result;
     } catch(final JobException ex) {
-      Util.debug(ex);
       thread.interrupt();
       throw ex;
     }
@@ -122,34 +119,21 @@ abstract class ProcFn extends StandardFunc {
   /**
    * Creates a reader thread.
    * @param in input stream
-   * @param ao cache
+   * @param tb token builder
    * @param cs charset
+   * @param pr process result
    * @return result
    */
-  private static Thread reader(final InputStream in, final ArrayOutput ao, final Charset cs) {
+  private static Thread reader(final InputStream in, final TokenBuilder tb, final Charset cs,
+      final ProcResult pr) {
     final InputStreamReader isr = new InputStreamReader(in, cs);
     final BufferedReader br = new BufferedReader(isr);
-    return new Thread() {
-      @Override
-      public void run() {
-        try {
-          for(int b; (b = br.read()) != -1;) ao.write(b);
-        } catch(final IOException ex) {
-          Util.stack(ex);
-        }
+    return new Thread(() -> {
+      try {
+        for(int b; (b = br.read()) != -1;) tb.add(b);
+      } catch(final IOException ex) {
+        pr.exception = ex;
       }
-    };
-  }
-
-  /**
-   * Error object.
-   */
-  static final class Result {
-    /** Process output. */
-    final ArrayOutput output = new ArrayOutput();
-    /** Process error. */
-    final ArrayOutput error = new ArrayOutput();
-    /** Exit code. */
-    int code;
+    });
   }
 }

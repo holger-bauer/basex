@@ -6,14 +6,14 @@ import org.basex.query.value.item.*;
 import org.basex.util.*;
 
 /**
- * Function implementation.).
+ * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnImplicitTimezone extends StandardFunc {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return qc.initDateTime().zone;
+  public DTDur item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    return qc.dateTime().zone;
   }
 }

@@ -1,18 +1,16 @@
 package org.basex.query.func.db;
 
 import org.basex.index.*;
-import org.basex.query.*;
-import org.basex.query.iter.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class DbToken extends DbText {
+public final class DbToken extends DbAttribute {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return attribute(valueAccess(IndexType.TOKEN, qc), qc, 2);
+  IndexType type() {
+    return IndexType.TOKEN;
   }
 }

@@ -6,7 +6,7 @@ import static org.basex.util.Token.*;
 /**
  * Abstract class for parsing various inputs, such as database commands or queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class InputParser {
@@ -108,15 +108,15 @@ public class InputParser {
 
   /**
    * Peeks forward and consumes the string if it equals the specified one.
-   * @param str string to consume
+   * @param string string to consume
    * @return true if string was found
    */
-  public final boolean consume(final String str) {
+  public final boolean consume(final String string) {
     int i = pos;
-    final int l = str.length();
+    final int l = string.length();
     if(i + l > length) return false;
     for(int s = 0; s < l; ++s) {
-      if(input.charAt(i++) != str.charAt(s)) return false;
+      if(input.charAt(i++) != string.charAt(s)) return false;
     }
     pos = i;
     return true;
@@ -131,10 +131,10 @@ public class InputParser {
   }
 
   /**
-   * Returns the remaining, unscanned query substring.
+   * Returns a maximum of 15 remaining characters that have not yet been parsed.
    * @return query substring
    */
-  protected final String rest() {
+  protected final String remaining() {
     final StringBuilder sb = new StringBuilder();
     final int pl = Math.min(length, pos + 15);
     int p = pos;

@@ -5,12 +5,13 @@ import java.awt.*;
 /**
  * Project specific Split panel implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXSplit extends BaseXBack implements LayoutManager {
   /** Layout: horizontal = true, vertical = false. */
-  private final boolean horiz;
+  private final boolean horizontal;
+
   /** Proportional panel sizes. */
   private double[] propSize;
   /** Panel positions; assigned when a drag operation starts. */
@@ -28,12 +29,12 @@ public final class BaseXSplit extends BaseXBack implements LayoutManager {
    */
   public BaseXSplit(final boolean horizontal) {
     layout(this);
-    horiz = horizontal;
+    this.horizontal = horizontal;
   }
 
   @Override
   public Component add(final Component comp) {
-    if(getComponentCount() != 0) super.add(new BaseXSplitSep(horiz));
+    if(getComponentCount() != 0) super.add(new BaseXSplitSep(horizontal));
     super.add(comp);
     propSize = null;
     return comp;
@@ -96,10 +97,16 @@ public final class BaseXSplit extends BaseXBack implements LayoutManager {
     final Component[] m = getComponents();
     final int r = propSize.length;
     int q = 0;
-    for(int n = 0; n < r - 1; ++n) if(m[(n << 1) + 1] == sep) q = n + 1;
-    final double v = (dragPos - p) / (horiz ? getWidth() : getHeight());
-    for(int i = 0; i < q; ++i) if(dragSize[i] - v / q < 0.0001) return;
-    for(int i = q; i < r; ++i) if(dragSize[i] + v / (r - q) < 0.0001) return;
+    for(int n = 0; n < r - 1; ++n) {
+      if(m[(n << 1) + 1] == sep) q = n + 1;
+    }
+    final double v = (dragPos - p) / (horizontal ? getWidth() : getHeight());
+    for(int i = 0; i < q; ++i) {
+      if(dragSize[i] - v / q < 0.0001) return;
+    }
+    for(int i = q; i < r; ++i) {
+      if(dragSize[i] + v / (r - q) < 0.0001) return;
+    }
     for(int i = 0; i < q; ++i) propSize[i] = dragSize[i] - v / q;
     for(int i = q; i < r; ++i) propSize[i] = dragSize[i] + v / (r - q);
     revalidate();
@@ -137,10 +144,12 @@ public final class BaseXSplit extends BaseXBack implements LayoutManager {
     }
     // count number of invisible panels
     int c = panels - 1;
-    for(final double d : propSize) if(d == 0) c--;
+    for(final double d : propSize) {
+      if(d == 0) c--;
+    }
 
     // set bounds of all components
-    final int sz = (horiz ? w : h) - c * BaseXSplitSep.SIZE;
+    final int sz = (horizontal ? w : h) - c * SEPARATOR_SIZE;
     double posD = 0;
     boolean invisible = false;
     for(c = 0; c < cl; c++) {
@@ -151,10 +160,10 @@ public final class BaseXSplit extends BaseXBack implements LayoutManager {
         invisible = size == 0;
       } else {
         // splitter: hide when last panel was invisible
-        size = invisible ? 0 : BaseXSplitSep.SIZE;
+        size = invisible ? 0 : SEPARATOR_SIZE;
       }
       final int pos = (int) posD;
-      if(horiz) {
+      if(horizontal) {
         comps[c].setBounds(pos, 0, size, h);
       } else {
         comps[c].setBounds(0, pos, w, size);

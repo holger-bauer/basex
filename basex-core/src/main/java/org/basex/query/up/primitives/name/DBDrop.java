@@ -11,18 +11,18 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_DROP} function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class DBDrop extends NameUpdate {
   /**
    * Constructor.
    * @param name name of database
-   * @param info input info
    * @param qc query context
+   * @param info input info
    */
-  public DBDrop(final String name, final InputInfo info, final QueryContext qc) {
-    super(UpdateType.DBDROP, name, info, qc);
+  public DBDrop(final String name, final QueryContext qc, final InputInfo info) {
+    super(UpdateType.DBDROP, name, qc, info);
   }
 
   @Override

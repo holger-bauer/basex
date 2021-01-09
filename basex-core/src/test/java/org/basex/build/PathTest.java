@@ -1,6 +1,6 @@
 package org.basex.build;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.*;
@@ -8,13 +8,13 @@ import org.basex.core.MainOptions.MainParser;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests queries with path in it on collections.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Andreas Weiler
  */
 public final class PathTest extends SandboxTest {
@@ -32,8 +32,7 @@ public final class PathTest extends SandboxTest {
   /**
    * Creates initial databases.
    */
-  @BeforeClass
-  public static void before() {
+  @BeforeAll public static void before() {
     execute(new CreateDB(INPUT));
     execute(new Add("input", INPUTF));
     execute(new Add("input2", INPUTF));
@@ -45,8 +44,7 @@ public final class PathTest extends SandboxTest {
   /**
    * Drops the initial databases.
    */
-  @AfterClass
-  public static void after() {
+  @AfterAll public static void after() {
     execute(new DropDB(INPUT));
     execute(new DropDB(WEEK1));
     execute(new DropDB(WEEK2));
@@ -55,24 +53,21 @@ public final class PathTest extends SandboxTest {
   /**
    * Checks the number of documents under the specified path.
    */
-  @Test
-  public void documentTestInput() {
+  @Test public void documentTestInput() {
     assertEquals("1", query("count(collection('" + INPUT + "/input'))"));
   }
 
   /**
    * Checks the number of documents under the specified path.
    */
-  @Test
-  public void documentTestWeek() {
+  @Test public void documentTestWeek() {
     assertEquals("3", query("count(collection('" + WEEK1 + "/week/monday'))"));
   }
 
   /**
    * Checks the results of the query with index access.
    */
-  @Test
-  public void withIndexTest() {
+  @Test public void withIndexTest() {
     weekTest();
     weekTest2();
   }
@@ -81,8 +76,7 @@ public final class PathTest extends SandboxTest {
    * #905: Ensure that parser options will not affect doc() and collection().
    * May be moved to a separate test class in future.
    */
-  @Test
-  public void docParsing() {
+  @Test public void docParsing() {
     final IOFile path = new IOFile(sandbox(), "doc.xml");
     write(path, "<a/>");
     set(MainOptions.PARSER, MainParser.JSON);
@@ -92,8 +86,7 @@ public final class PathTest extends SandboxTest {
   /**
    * Checks the results of the query without index access.
    */
-  @Test
-  public void withoutIndexTest() {
+  @Test public void withoutIndexTest() {
     execute(new Open(WEEK1));
     execute(new DropIndex("text"));
     execute(new Open(WEEK2));

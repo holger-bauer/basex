@@ -1,10 +1,10 @@
 package org.basex.query.expr.ft;
 
+import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
 import org.basex.query.*;
 import org.basex.query.util.ft.*;
-import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.ft.*;
@@ -13,7 +13,7 @@ import org.basex.util.hash.*;
 /**
  * FTOrder expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTOrder extends FTFilter {
@@ -40,16 +40,16 @@ public final class FTOrder extends FTFilter {
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTOrder(info, exprs[0].copy(cc, vm));
+    return copyType(new FTOrder(info, exprs[0].copy(cc, vm)));
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(QueryText.ORDERED, TRUE), exprs);
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, QueryText.ORDERED, TRUE), exprs);
   }
 
   @Override
-  public String toString() {
-    return super.toString() + QueryText.ORDERED;
+  public void plan(final QueryString qs) {
+    qs.token(exprs[0]).token(ORDERED);
   }
 }

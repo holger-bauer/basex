@@ -3,20 +3,33 @@ package org.basex.query.func;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 
-import org.basex.query.*;
-import org.junit.*;
+import org.basex.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the JSON Module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class JsonModuleTest extends AdvancedQueryTest {
+public final class JsonModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void parseXml() {
+  @Test public void doc() {
+    final Function func = _JSON_DOC;
+    query(func.args(" ()"), "");
+    query(func.args(" []"), "");
+    query(func.args(" <_/>/text()"), "");
+
+    final String path = "src/test/resources/example.json";
+    query(func.args(path) + "//name ! string()", "Smith");
+    query(func.args(path, " map { 'format': 'xquery' }") + "?name", "Smith");
+  }
+
+  /** Test method. */
+  @Test public void parseXml() {
     // default output
+    parse(" ()", "", "");
+    parse(" []", "", "");
     parse("[]", "", "<json type=\"array\"/>");
     parse("{}", "", "<json type=\"object\"/>");
     parse("{ } ", "", "<json type=\"object\"/>");
@@ -73,31 +86,51 @@ public final class JsonModuleTest extends AdvancedQueryTest {
   }
 
   /** Test method. */
-  @Test
-  public void parseMap() {
-    final String map = " map { 'format':'map' }";
-    query(_JSON_PARSE.args("{}", map), "map {\n}");
-    query(_JSON_PARSE.args("{\"A\":1}", map), "map {\n\"A\": 1\n}");
-    query(_JSON_PARSE.args("{\"\":null}", map), "map {\n\"\": ()\n}");
+  @Test public void parseXQuery() {
+    final Function func = _JSON_PARSE;
+    // queries
+    final String map = " map { 'format':'xquery' }";
+    query(func.args("{}", map), "map {\n}");
+    query(func.args("{\"A\":1}", map), "map {\n\"A\": 1.0e0\n}");
+    query(func.args("{\"\":null}", map), "map {\n\"\": ()\n}");
 
-    query(_JSON_PARSE.args("[]", map), "[]");
-    query(_JSON_PARSE.args("[\"A\"]", map), "[\"A\"]");
-    query(_JSON_PARSE.args("[1,true]", map), "[1, true()]");
+    query(func.args("[]", map), "[]");
+    query(func.args("[\"A\"]", map), "[\"A\"]");
+    query(func.args("[1,true]", map), "[1.0e0, true()]");
 
-    query(_JSON_PARSE.args("1", map), "1");
-    query(_JSON_PARSE.args("\"\"\"f\"\"\"", map), "f");
-    query(_JSON_PARSE.args("false", map), "false");
-    query(_JSON_PARSE.args("null", map), "");
+    query(func.args("1", map), 1);
+    query(func.args("\"f\"", map), "f");
+    query(func.args("false", map), false);
+    query(func.args("null", map), "");
+  }
+
+  /** Tests the configuration argument of {@code json:parse(...)}. */
+  @Test public void parseConfig() {
+    final Function func = _JSON_PARSE;
+    // queries
+    query(func.args("[\"A\",{\"B\":\"C\"}]",
+        " map { 'format': 'jsonml' }"),
+        "<A B=\"C\"/>");
+    query("array:size(" + func.args("[\"A\",{\"B\":\"C\"}]",
+        " map { 'format': 'xquery' }") + ')',
+        2);
+    query(func.args("\"\\t\\u000A\"",
+        " map { 'format': 'xquery', 'escape': true(), 'liberal': true() }"),
+        "\\t\\n");
+    query("string-to-codepoints(" + func.args("\"\\t\\u000A\"",
+        " map { 'format': 'xquery', 'escape': false(), 'liberal': true() }") + ')',
+        "9\n10");
+
+    error(func.args("42", " map { 'spec': 'garbage' }"), INVALIDOPT_X);
   }
 
   /** Test method. */
-  @Test
-  public void serialize() {
+  @Test public void serialize() {
     serial("<json type='object'/>", "", "{\n}");
     serial("<json objects='json'/>", "", "{\n}");
     serial("<json type='array'/>", "", "[\n]");
     serial("<json arrays='json'/>", "", "[\n]");
-    serial("<json type='number'>1</json>", "", "1");
+    serial("<json type='number'>1</json>", "", 1);
     serial("<json type='array'><_ type='null'/></json>", "", "[\nnull\n]");
     serial("<json type='array'><_ type='string'/></json>", "", "[\n\"\"\n]");
     serial("<json type='array'><_ type='string'>x</_></json>", "", "[\n\"x\"\n]");
@@ -110,22 +143,9 @@ public final class JsonModuleTest extends AdvancedQueryTest {
     serialError("<json type='array'><_ type='null'>x</_></json>", ""); // no value
   }
 
-  /** Test method with namespaces. */
-  @Test public void ns() {
+  /** Bidirectional tests. */
+  @Test public void serializeParse() {
     query("json:serialize(<x xmlns='X'>{ json:parse('{}') }</x>/*)", "{\n}");
-  }
-
-  /** Tests the configuration argument of {@code json:parse(...)}. */
-  @Test public void config() {
-    query("json:parse('[\"foo\",{\"test\":\"asdf\"}]', map {'format':'jsonml'})",
-        "<foo test=\"asdf\"/>");
-    query("array:size(json:parse('[\"foo\",{\"test\":\"asdf\"}]', map {'format':'map'}))",
-        "2");
-    query("json:parse('\"\\t\\u000A\"', map {'format':'map','escape':true(),'liberal':true()})",
-        "\\t\\n");
-    query("string-to-codepoints(json:parse('\"\\t\\u000A\"'," +
-        "  map {'format':'map','escape':false(),'liberal':true()}))", "9\n10");
-    error("json:parse('42', map {'spec':'garbage'})", INVALIDOPT_X);
   }
 
   /**
@@ -134,7 +154,7 @@ public final class JsonModuleTest extends AdvancedQueryTest {
    * @param options options
    * @param expected expected result
    */
-  private static void parse(final String input, final String options, final String expected) {
+  private static void parse(final String input, final String options, final Object expected) {
     query(input, options, expected, _JSON_PARSE);
   }
 
@@ -144,8 +164,8 @@ public final class JsonModuleTest extends AdvancedQueryTest {
    * @param options options
    * @param expected expected result
    */
-  private static void serial(final String input, final String options, final String expected) {
-    query(input, options, expected, _JSON_SERIALIZE);
+  private static void serial(final String input, final String options, final Object expected) {
+    query(' ' + input, options, expected, _JSON_SERIALIZE);
   }
 
   /**
@@ -155,13 +175,14 @@ public final class JsonModuleTest extends AdvancedQueryTest {
    * @param expected expected result
    * @param function function
    */
-  private static void query(final String input, final String options, final String expected,
+  private static void query(final String input, final String options, final Object expected,
       final Function function) {
 
     final String query = options.isEmpty() ? function.args(input) :
-      function.args(input, " map {" + options + '}');
-    if(expected.startsWith("...")) {
-      contains(query, expected.substring(3));
+      function.args(input, " map { " + options + " }");
+    final String exp = expected.toString();
+    if(exp.startsWith("...")) {
+      contains(query, exp.substring(3));
     } else {
       query(query, expected);
     }
@@ -182,7 +203,7 @@ public final class JsonModuleTest extends AdvancedQueryTest {
    * @param options options
    */
   private static void serialError(final String input, final String options) {
-    error(input, options, _JSON_SERIALIZE);
+    error(' ' + input, options, _JSON_SERIALIZE);
   }
 
   /**
@@ -193,7 +214,7 @@ public final class JsonModuleTest extends AdvancedQueryTest {
    */
   private static void error(final String input, final String options, final Function function) {
     final String query = options.isEmpty() ? function.args(input) :
-      function.args(input, " map {" + options + '}');
-    error(query, INVALIDOPT_X, BXJS_PARSE_X_X_X, BXJS_SERIAL_X);
+      function.args(input, " map { " + options + " }");
+    error(query, INVALIDOPT_X, JSON_PARSE_X, JSON_SERIALIZE_X);
   }
 }

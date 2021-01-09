@@ -5,68 +5,60 @@ import static org.basex.util.Token.*;
 
 import java.util.*;
 
-import org.basex.core.locks.*;
 import org.basex.data.*;
 import org.basex.index.*;
 import org.basex.query.*;
 import org.basex.query.expr.index.*;
-import org.basex.query.func.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
-import org.basex.util.list.*;
 
 /**
  * Id functions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-abstract class Ids extends StandardFunc {
+abstract class Ids extends ContextFn {
   /** Hash map for data references and id flags. */
   private final IdentityHashMap<Data, Boolean> indexed = new IdentityHashMap<>();
 
   /**
    * Returns referenced nodes.
    * @param qc query context
-   * @param idref follow idref
+   * @param idref resolve id reference
    * @return referenced nodes
    * @throws QueryException query exception
    */
-  protected BasicNodeIter ids(final QueryContext qc, final boolean idref) throws QueryException {
-    final TokenSet idSet = ids(exprs[0].atomIter(qc, info));
+  protected final Value ids(final QueryContext qc, final boolean idref) throws QueryException {
+    final TokenSet idSet = ids(exprs[0].atomIter(qc, info), qc);
     final ANode root = checkRoot(toNode(ctxArg(1, qc), qc));
 
+    final ANodeBuilder list = new ANodeBuilder();
     if(index(root, idref)) {
       // create index iterator
-      final TokenList idList = new TokenList(idSet.size());
-      for(final byte[] id : idSet) idList.add(id);
-      final Value ids = StrSeq.get(idList);
       final Data data = root.data();
-      final ValueAccess va = new ValueAccess(info, ids, idref ? IndexType.TOKEN :
-        IndexType.ATTRIBUTE, null, new IndexContext(data, false));
+      final ValueAccess va = new ValueAccess(info, idSet, idref ? IndexType.TOKEN :
+        IndexType.ATTRIBUTE, null, new IndexStaticDb(data, info));
 
       // collect and return index results, filtered by id/idref attributes
-      final ANodeList results = new ANodeList();
-      for(final ANode attr : va.iter(qc)) {
+      final Iter iter = va.iter(qc);
+      for(Item item; (item = iter.next()) != null;) {
         // check attribute name; check root if database has more than one document
+        final ANode attr = (ANode) item;
         if(XMLToken.isId(attr.name(), idref) && (data.meta.ndocs == 1 || attr.root().is(root)))
-          results.add(idref ? attr : attr.parent());
+          list.add(idref ? attr : attr.parent());
       }
-      return results.iter();
+    } else {
+      // otherwise, do sequential scan: parse node and its descendants
+      add(idSet, list, root, idref);
     }
-
-    // otherwise, do sequential scan: parse node and its descendants
-    final ANodeList list = new ANodeList().check();
-    add(idSet, list, root, idref);
-    return list.iter();
+    return list.value(this);
   }
 
   /**
@@ -78,18 +70,12 @@ abstract class Ids extends StandardFunc {
   private boolean index(final ANode root, final boolean idref) {
     // check if index exists
     final Data data = root.data();
-    if(data == null || !(idref ? data.meta.tokenindex : data.meta.attrindex)) return false;
+    if(data == null || (idref ? !data.meta.tokenindex : !data.meta.attrindex)) return false;
     // check if index names contain id attributes
-
-    Boolean index;
     synchronized(indexed) {
-      index = indexed.get(data);
-      if(index == null) {
-        index = new IndexNames(IndexType.ATTRIBUTE, data).containsIds(idref);
-        indexed.put(data, index);
-      }
+      return indexed.computeIfAbsent(data, d -> new IndexNames(IndexType.ATTRIBUTE, d).
+          containsIds(idref));
     }
-    return index;
   }
 
   /**
@@ -99,22 +85,22 @@ abstract class Ids extends StandardFunc {
    * @param node current node
    * @param idref idref flag
    */
-  private static void add(final TokenSet idSet, final ANodeList results, final ANode node,
+  private static void add(final TokenSet idSet, final ANodeBuilder results, final ANode node,
       final boolean idref) {
 
-    for(final ANode attr : node.attributes()) {
+    for(final ANode attr : node.attributeIter()) {
       if(XMLToken.isId(attr.name(), idref)) {
         // id/idref found
-        for(final byte[] val : distinctTokens(attr.string())) {
+        for(final byte[] token : distinctTokens(attr.string())) {
           // correct value: add to results
-          if(idSet.contains(val)) {
+          if(idSet.contains(token)) {
             results.add(idref ? attr.finish() : node.finish());
             break;
           }
         }
       }
     }
-    for(final ANode child : node.children()) add(idSet, results, child, idref);
+    for(final ANode child : node.childIter()) add(idSet, results, child, idref);
   }
 
   /**
@@ -125,31 +111,32 @@ abstract class Ids extends StandardFunc {
    */
   private ANode checkRoot(final ANode node) throws QueryException {
     final ANode root = node.root();
-    if(root.type != NodeType.DOC) throw IDDOC.get(info);
+    if(root.type != NodeType.DOCUMENT_NODE) throw IDDOC.get(info);
     return root;
   }
 
   /**
    * Extracts and returns all unique ids from the iterated strings.
    * @param iter iterator
+   * @param qc query context
    * @return id set
    * @throws QueryException query exception
    */
-  private TokenSet ids(final Iter iter) throws QueryException {
+  private TokenSet ids(final Iter iter, final QueryContext qc) throws QueryException {
     final TokenSet ts = new TokenSet();
-    for(Item ids; (ids = iter.next()) != null;) {
+    for(Item ids; (ids = qc.next(iter)) != null;) {
       for(final byte[] id : distinctTokens(toToken(ids))) ts.put(id);
     }
     return ts;
   }
 
   @Override
-  public final boolean has(final Flag flag) {
-    return flag == Flag.CTX && exprs.length == 1 || super.has(flag);
+  public final int contextArg() {
+    return 1;
   }
 
   @Override
-  public final boolean accept(final ASTVisitor visitor) {
-    return (exprs.length != 1 || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
+  public final boolean ddo() {
+    return true;
   }
 }

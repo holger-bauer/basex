@@ -1,28 +1,30 @@
 package org.basex.query.value.type;
 
+import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
+
+import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.util.*;
 
 /**
  * XQuery list types.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum ListType implements Type {
   /** NMTOKENS type. */
-  NMT("NMTOKENS", AtomType.NMT),
+  NMTOKENS("NMTOKENS", AtomType.NMTOKEN),
   /** ENTITIES type. */
-  ENT("ENTITIES", AtomType.ENT),
+  ENTITIES("ENTITIES", AtomType.ENTITY),
   /** IDREFS type. */
-  IDR("IDREFS", AtomType.IDR);
+  IDREFS("IDREFS", AtomType.IDREF);
 
   /** Cached enums (faster). */
   private static final ListType[] VALUES = values();
@@ -32,8 +34,8 @@ public enum ListType implements Type {
   /** Name. */
   private final QNm name;
 
-  /** Sequence type (lazy instantiation). */
-  private SeqType seq;
+  /** Sequence types (lazy instantiation). */
+  private EnumMap<Occ, SeqType> seqTypes;
 
   /**
    * Constructor.
@@ -66,8 +68,8 @@ public enum ListType implements Type {
   }
 
   @Override
-  public final byte[] string() {
-    return name.string();
+  public final boolean isSortable() {
+    return false;
   }
 
   @Override
@@ -75,9 +77,11 @@ public enum ListType implements Type {
       final InputInfo ii) throws QueryException {
 
     final byte[][] values = split(normalize(item.string(ii)), ' ');
-    final ValueBuilder vb = new ValueBuilder();
-    for(final byte[] v : values) vb.add(type.cast(Str.get(v), qc, sc, ii));
-    return vb.value();
+    if(values.length == 0) throw FUNCCAST_X_X_X.get(ii, item.type, this, item);
+
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final byte[] value : values) vb.add(type.cast(Str.get(value), qc, sc, ii));
+    return vb.value(type);
   }
 
   @Override
@@ -93,29 +97,35 @@ public enum ListType implements Type {
   }
 
   @Override
-  public final SeqType seqType() {
-    if(seq == null) seq = SeqType.get(this, Occ.ZERO_MORE);
-    return seq;
+  public SeqType seqType(final Occ occ) {
+    // cannot statically be instantiated due to circular dependencies
+    if(seqTypes == null) seqTypes = new EnumMap<>(Occ.class);
+    return seqTypes.computeIfAbsent(occ, o -> new SeqType(this, o));
   }
 
   @Override
-  public final boolean eq(final Type t) {
-    return this == t;
+  public final boolean eq(final Type tp) {
+    return this == tp;
   }
 
   @Override
-  public final boolean instanceOf(final Type t) {
-    return this == t;
+  public final boolean instanceOf(final Type tp) {
+    return this == tp;
   }
 
   @Override
-  public final Type union(final Type t) {
-    return this == t ? t : AtomType.ITEM;
+  public final Type union(final Type tp) {
+    return this == tp ? tp : AtomType.ITEM;
   }
 
   @Override
-  public final Type intersect(final Type t) {
-    return this == t ? this : t.instanceOf(this) ? t : null;
+  public final Type intersect(final Type tp) {
+    return this == tp ? this : tp.instanceOf(this) ? tp : null;
+  }
+
+  @Override
+  public final AtomType atomic() {
+    return type;
   }
 
   @Override
@@ -130,7 +140,7 @@ public enum ListType implements Type {
 
   @Override
   public final String toString() {
-    return new TokenBuilder(NSGlobal.prefix(name.uri())).add(':').add(name.string()).toString();
+    return Strings.concat(NSGlobal.prefix(name.uri()), ':', name.string());
   }
 
   /**
@@ -139,7 +149,9 @@ public enum ListType implements Type {
    * @return type or {@code null}
    */
   public static ListType find(final QNm type) {
-    for(final ListType t : VALUES) if(t.name.eq(type)) return t;
+    for(final ListType lt : VALUES) {
+      if(lt.name.eq(type)) return lt;
+    }
     return null;
   }
 }

@@ -1,11 +1,8 @@
 package org.basex.query.value.item;
 
-import static org.basex.query.QueryError.*;
-
 import java.math.*;
 
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -13,20 +10,30 @@ import org.basex.util.*;
 /**
  * Integer item ({@code xs:int}, {@code xs:integer}, {@code xs:short}, etc.).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Int extends ANum {
+  /** Maximum values. */
+  public static final Int MAX;
+  /** Value 0. */
+  public static final Int ZERO;
+  /** Value 1. */
+  public static final Int ONE;
+
   /** Constant values. */
-  private static final Int[] NUMS;
+  private static final Int[] INTSS;
   /** Integer value. */
   private final long value;
 
   // caches the first 128 integers
   static {
     final int nl = 128;
-    NUMS = new Int[nl];
-    for(int n = 0; n < nl; n++) NUMS[n] = new Int(n);
+    INTSS = new Int[nl];
+    for(int n = 0; n < nl; n++) INTSS[n] = new Int(n);
+    MAX = get(Long.MAX_VALUE);
+    ZERO = INTSS[0];
+    ONE = INTSS[1];
   }
 
   /**
@@ -34,7 +41,7 @@ public final class Int extends ANum {
    * @param value value
    */
   private Int(final long value) {
-    this(value, AtomType.ITR);
+    this(value, AtomType.INTEGER);
   }
 
   /**
@@ -53,7 +60,7 @@ public final class Int extends ANum {
    * @return instance
    */
   public static Int get(final long value) {
-    return value >= 0 && value < NUMS.length ? NUMS[(int) value] : new Int(value);
+    return value >= 0 && value < INTSS.length ? INTSS[(int) value] : new Int(value);
   }
 
   /**
@@ -63,7 +70,7 @@ public final class Int extends ANum {
    * @return instance
    */
   public static Int get(final long value, final Type type) {
-    return type == AtomType.ITR ? get(value) : new Int(value, type);
+    return type == AtomType.INTEGER ? get(value) : new Int(value, type);
   }
 
   @Override
@@ -103,7 +110,7 @@ public final class Int extends ANum {
 
   @Override
   public Int abs() {
-    return value < 0 ? get(-value) : type == AtomType.ITR ? this : get(value);
+    return value < 0 ? get(-value) : this;
   }
 
   @Override
@@ -144,52 +151,55 @@ public final class Int extends ANum {
   }
 
   @Override
-  public boolean eq(final Item it, final Collation coll, final StaticContext sc,
+  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
       final InputInfo ii) throws QueryException {
-    return value == (it instanceof Int ? ((Int) it).value : it.dbl(ii));
+    return item instanceof Int ? value == ((Int) item).value :
+           item.type != AtomType.DECIMAL ? value == item.dbl(ii) :
+           item.eq(this, coll, sc, ii);
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    if(it instanceof Int) {
-      final long i = ((Int) it).value;
-      return value < i ? -1 : value > i ? 1 : 0;
-    }
-    final double n = it.dbl(ii);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    if(item instanceof Int) return Long.compare(value, ((Int) item).value);
+    final double n = item.dbl(ii);
     return Double.isNaN(n) ? UNDEF : value < n ? -1 : value > n ? 1 : 0;
   }
 
   @Override
   public Object toJava() {
     switch((AtomType) type) {
-      case BYT: return (byte) value;
-      case SHR:
-      case UBY: return (short) value;
+      case BYTE: return (byte) value;
+      case SHORT:
+      case UNSIGNED_BYTE: return (short) value;
       case INT:
-      case USH: return (int) value;
-      case LNG:
-      case UIN: return value;
+      case UNSIGNED_SHORT: return (int) value;
+      case LONG:
+      case UNSIGNED_INT: return value;
       default:  return new BigInteger(toString());
     }
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof Int)) return false;
-    final Int i = (Int) cmp;
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Int)) return false;
+    final Int i = (Int) obj;
     return type == i.type && value == i.value;
   }
 
+  // STATIC METHODS ===============================================================================
+
   /**
-   * Converts the given value to a long primitive.
-   * @param value value to be converted
+   * Converts the given item to a long primitive.
+   * @param item item to be converted
    * @param ii input info
    * @return long value
    * @throws QueryException query exception
    */
-  public static long parse(final byte[] value, final InputInfo ii) throws QueryException {
+  public static long parse(final Item item, final InputInfo ii) throws QueryException {
+    final byte[] value = item.string(ii);
     final long l = Token.toLong(value);
-    if(l != Long.MIN_VALUE || Token.eq(Token.trim(value), Token.MINLONG)) return l;
-    throw castError(AtomType.ITR, value, ii);
+    if(l != Long.MIN_VALUE || Token.eq(Token.trim(value), Token.MIN_LONG)) return l;
+    throw AtomType.INTEGER.castError(item, ii);
   }
 }

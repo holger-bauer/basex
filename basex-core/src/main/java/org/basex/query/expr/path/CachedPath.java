@@ -16,10 +16,10 @@ import org.basex.util.hash.*;
 /**
  * Axis path expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class CachedPath extends AxisPath {
+public final class CachedPath extends AxisPath {
   /**
    * Constructor.
    * @param info input info
@@ -31,29 +31,33 @@ final class CachedPath extends AxisPath {
   }
 
   @Override
-  protected NodeIter nodeIter(final QueryContext qc) throws QueryException {
-    final QueryFocus qf = qc.focus, focus = new QueryFocus();
-    final Value r = root != null ? qc.value(root) : qf.value;
-    qc.focus = focus;
-    final ANodeList list = new ANodeList().check();
+  protected Iter iterator(final QueryContext qc) throws QueryException {
+    return nodes(qc).iter();
+  }
+
+  @Override
+  protected Value nodes(final QueryContext qc) throws QueryException {
+    final ANodeBuilder list = new ANodeBuilder();
+
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    final Value rt = root != null ? root.value(qc) : focus.value;
+    qc.focus = qf;
     try {
-      if(r != null) {
-        final Iter ir = qc.iter(r);
-        for(Item it; (it = ir.next()) != null;) {
-          // ensure that root only returns nodes
-          if(root != null && !(it instanceof ANode))
-            throw PATHNODE_X_X_X.get(info, steps[0], it.type, it);
-          focus.value = it;
-          iter(0, list, qc);
+      if(rt != null) {
+        final Iter iter = rt.iter(qc);
+        for(Item item; (item = iter.next()) != null;) {
+          if(root != null && !(item instanceof ANode))
+            throw PATHNODE_X_X_X.get(info, steps[0], item.type, item);
+          qf.value = item;
+          iterate(0, list, qc);
         }
       } else {
-        focus.value = null;
-        iter(0, list, qc);
+        iterate(0, list, qc);
       }
     } finally {
-      qc.focus = qf;
+      qc.focus = focus;
     }
-    return list.iter();
+    return list.value(this);
   }
 
   /**
@@ -63,19 +67,17 @@ final class CachedPath extends AxisPath {
    * @param qc query context
    * @throws QueryException query exception
    */
-  private void iter(final int step, final ANodeList list, final QueryContext qc)
+  private void iterate(final int step, final ANodeBuilder list, final QueryContext qc)
       throws QueryException {
 
     // cast is safe (steps will always return a {@link NodeIter} instance)
-    final NodeIter ni = (NodeIter) qc.iter(steps[step]);
-    final boolean more = step + 1 != steps.length;
-    for(ANode node; (node = ni.next()) != null;) {
-      if(more) {
+    final NodeIter ni = (NodeIter) steps[step].iter(qc);
+    if(step + 1 == steps.length) {
+      for(ANode node; (node = ni.next()) != null;) list.add(node);
+    } else {
+      for(ANode node; (node = ni.next()) != null;) {
         qc.focus.value = node;
-        iter(step + 1, list, qc);
-      } else {
-        qc.checkStop();
-        list.add(node);
+        iterate(step + 1, list, qc);
       }
     }
   }

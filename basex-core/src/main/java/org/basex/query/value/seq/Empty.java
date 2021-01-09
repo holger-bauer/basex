@@ -3,28 +3,42 @@ package org.basex.query.value.seq;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.*;
 import org.basex.query.iter.*;
+import org.basex.query.util.collation.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Empty sequence.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class Empty extends Value {
+public final class Empty extends Item {
   /** Single instance. */
-  public static final Empty SEQ = new Empty();
+  public static final Empty VALUE = new Empty();
   /** Empty iterator. */
-  public static final ValueIter ITER = new ValueIter() {
-    @Override public Item next() { return null; }
-    @Override public Item get(final long i) { return null; }
-    @Override public Value value() { return SEQ; }
-    @Override public long size() { return 0; }
+  public static final BasicIter<Item> ITER = new BasicIter<Item>(0) {
+    @Override
+    public Item next() {
+      return null;
+    }
+    @Override
+    public Item get(final long i) {
+      return null;
+    }
+    @Override
+    public Value iterValue() {
+      return VALUE;
+    }
+    @Override
+    public Value value(final QueryContext qc, final Expr expr) {
+      return VALUE;
+    }
   };
 
   /**
@@ -35,12 +49,7 @@ public final class Empty extends Value {
   }
 
   @Override
-  public boolean isEmpty() {
-    return true;
-  }
-
-  @Override
-  public boolean isVacuous() {
+  public boolean vacuous() {
     return true;
   }
 
@@ -55,13 +64,8 @@ public final class Empty extends Value {
   }
 
   @Override
-  public ValueIter iter() {
+  public BasicIter<Item> iter() {
     return ITER;
-  }
-
-  @Override
-  public Item item(final QueryContext qc, final InputInfo ii) {
-    return null;
   }
 
   @Override
@@ -75,13 +79,24 @@ public final class Empty extends Value {
   }
 
   @Override
-  public SeqType seqType() {
-    return SeqType.EMP;
+  public byte[] string(final InputInfo ii) {
+    throw Util.notExpected();
   }
 
   @Override
-  public boolean iterable() {
-    return true;
+  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
+      final InputInfo ii) {
+    throw Util.notExpected();
+  }
+
+  @Override
+  public Empty subsequence(final long start, final long length, final QueryContext qc) {
+    return this;
+  }
+
+  @Override
+  public SeqType seqType() {
+    return SeqType.EMPTY_SEQUENCE_Z;
   }
 
   @Override
@@ -90,41 +105,8 @@ public final class Empty extends Value {
   }
 
   @Override
-  public int writeTo(final Item[] arr, final int index) {
-    return 0;
-  }
-
-  @Override
-  public Item itemAt(final long pos) {
-    throw Util.notExpected();
-  }
-
-  @Override
-  public Value reverse() {
-    return this;
-  }
-
-  @Override
-  public boolean homogeneous() {
-    return true;
-  }
-
-  @Override
-  public Value subSeq(final long start, final long len) {
-    return this;
-  }
-
-  @Override
-  public void materialize(final InputInfo ii) { }
-
-  @Override
-  public Value atomValue(final InputInfo ii) {
-    return this;
-  }
-
-  @Override
-  public Item atomItem(final QueryContext qc, final InputInfo ii) {
-    return null;
+  public Iter atomIter(final QueryContext qc, final InputInfo ii) {
+    return ITER;
   }
 
   @Override
@@ -133,17 +115,28 @@ public final class Empty extends Value {
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(SIZE, 0));
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
+    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
+      cc.simplify(this, Bln.FALSE) : this;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return obj == VALUE;
   }
 
   @Override
   public String description() {
-    return EMPTY_SEQUENCE + "()";
+    return EMPTYY + ' ' + SEQUENCE;
   }
 
   @Override
-  public String toString() {
-    return "()";
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this));
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.paren("");
   }
 }

@@ -1,29 +1,24 @@
 package org.basex.query.expr.path;
 
-import static org.basex.query.expr.path.PathCache.State;
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
+import org.basex.query.expr.path.PathCache.*;
 import org.basex.query.iter.*;
+import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Abstract axis path expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class AxisPath extends Path {
-  /** Thread-safe path caching. */
-  private final ThreadLocal<PathCache> caches = new ThreadLocal<PathCache>() {
-    @Override
-    public PathCache initialValue() {
-      return new PathCache();
-    }
-  };
-
   /**
    * Constructor.
    * @param info input info
@@ -31,18 +26,34 @@ public abstract class AxisPath extends Path {
    * @param steps axis steps
    */
   AxisPath(final InputInfo info, final Expr root, final Expr... steps) {
-    super(info, root, steps);
+    super(info, NodeType.NODE, root, steps);
   }
 
   @Override
   public final Iter iter(final QueryContext qc) throws QueryException {
-    final PathCache cache = caches.get();
+    final Value result = cache(qc);
+    return result != null ? result.iter() : iterator(qc);
+  }
+
+  @Override
+  public final Value value(final QueryContext qc) throws QueryException {
+    final Value result = cache(qc);
+    return result != null ? result : nodes(qc);
+  }
+
+  /**
+   * Updates the cache and returns a cached value.
+   * @param qc query context
+   * @return cached value or {@code null}
+   * @throws QueryException query context
+   */
+  private Value cache(final QueryContext qc) throws QueryException {
+    final PathCache cache = qc.threads.get(this).get();
     switch(cache.state) {
       case INIT:
         // first invocation: initialize caching flag
-        cache.state = !hasFreeVars() && !has(Flag.NDT) && !has(Flag.UPD)
-            ? State.ENABLED : State.DISABLED;
-        return iter(qc);
+        cache.state = !hasFreeVars() && !has(Flag.NDT) ? State.ENABLED : State.DISABLED;
+        return cache(qc);
       case ENABLED:
         // second invocation, caching is enabled: cache context value (copy light-weight db nodes)
         final Value value = qc.focus.value;
@@ -52,7 +63,7 @@ public abstract class AxisPath extends Path {
       case READY:
         // third invocation, ready for caching: cache result if context has not changed
         if(cache.sameContext(qc.focus.value, root)) {
-          cache.result = nodeIter(qc).value();
+          cache.result = iterator(qc).value(qc, this);
           cache.state = State.CACHED;
         } else {
           // disable caching if context has changed
@@ -68,10 +79,7 @@ public abstract class AxisPath extends Path {
         break;
       case DISABLED:
     }
-
-    // iterate or return cached values
-    final Value result = cache.result;
-    return result == null ? nodeIter(qc) : result.iter();
+    return cache.result;
   }
 
   /**
@@ -80,53 +88,61 @@ public abstract class AxisPath extends Path {
    * @return iterator
    * @throws QueryException query exception
    */
-  protected abstract NodeIter nodeIter(QueryContext qc) throws QueryException;
+  protected abstract Iter iterator(QueryContext qc) throws QueryException;
 
   /**
-   * Inverts a location path.
-   * @param rt new root node
-   * @param curr current location step
-   * @return inverted path
+   * Returns a node sequence.
+   * @param qc query context
+   * @return iterator
+   * @throws QueryException query exception
    */
-  public final Path invertPath(final Expr rt, final Step curr) {
-    // add predicates of last step to new root node
-    int s = steps.length - 1;
-    final Expr r = step(s).preds.length == 0 ? rt : Filter.get(info, rt, step(s).preds);
-
-    // add inverted steps in a backward manner
-    final ExprList stps = new ExprList();
-    while(--s >= 0) {
-      stps.add(Step.get(info, step(s + 1).axis.invert(), step(s).test, step(s).preds));
-    }
-    stps.add(Step.get(info, step(s + 1).axis.invert(), curr.test));
-    return Path.get(info, r, stps.finish());
-  }
+  protected abstract Value nodes(QueryContext qc) throws QueryException;
 
   /**
    * Returns the specified axis step.
-   * @param i index
+   * @param index index
    * @return step
    */
-  public final Step step(final int i) {
-    return (Step) steps[i];
+  public final Step step(final int index) {
+    return (Step) steps[index];
+  }
+
+  /**
+   * Adds predicates to the last step and returns the optimized expression.
+   * @param cc compilation context
+   * @param preds predicates to be added
+   * @return new path
+   * @throws QueryException query exception
+   */
+  public final Expr addPredicates(final CompileContext cc, final Expr... preds)
+      throws QueryException {
+
+    final ExprList list = new ExprList(steps.length).add(steps);
+    final Step step = ((Step) list.pop()).addPredicates(preds);
+    list.add(cc.get(step, () -> step.optimize(root, cc)));
+
+    exprType.assign(seqType().union(Occ.ZERO));
+    return copyType(get(cc, info, root, list.finish()));
   }
 
   @Override
-  public final boolean iterable() {
+  public final Expr mergeEbv(final Expr expr, final boolean or, final CompileContext cc)
+      throws QueryException {
+    return or && expr instanceof AxisPath ? new Union(info, this, expr).optimize(cc) : null;
+  }
+
+  @Override
+  public final boolean ddo() {
     return true;
   }
 
   @Override
-  public final boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof AxisPath)) return false;
-    final AxisPath ap = (AxisPath) cmp;
-    if(root == null ? ap.root != null : !root.sameAs(ap.root)) return false;
+  public final Data data() {
+    return data;
+  }
 
-    final int sl = steps.length;
-    if(sl != ap.steps.length) return false;
-    for(int s = 0; s < sl; s++) {
-      if(!steps[s].sameAs(ap.steps[s])) return false;
-    }
-    return true;
+  @Override
+  public final void data(final Data dt) {
+    data = dt;
   }
 }

@@ -1,36 +1,34 @@
 package org.basex.local.single;
 
-import static org.junit.Assert.*;
-
 import java.util.*;
-import java.util.List;
+import java.util.stream.Stream;
 
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.junit.*;
-import org.junit.Test;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * This test class performs some incremental updates.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@RunWith(Parameterized.class)
 public final class UpdIndexTest extends SandboxTest {
   /**
    * Test parameters.
    * @return parameters
    */
-  @Parameters
-  public static List<Object[]> params() {
-    return Arrays.asList(new Object[][] {
-        { false, false }, { true, false }, { false, true }, { true, true }
-    });
+  public static Stream<Arguments> params() {
+    return Stream.of(
+      Arguments.of(false, false),
+      Arguments.of(true, false),
+      Arguments.of(false, true),
+      Arguments.of(true, true)
+    );
   }
 
   /** Number of steps. */
@@ -38,26 +36,12 @@ public final class UpdIndexTest extends SandboxTest {
   /** Maximum number of entries. */
   private static final int MAX = 2000 / STEPS;
 
-  /** Incremental index update flag. */
-  private final boolean updindex;
-  /** Main memory flag. */
-  private final boolean mainmem;
-
-  /**
-   * Constructor.
-   * @param updindex incremental index update flag.
-   * @param mainmem main memory flag
-   */
-  public UpdIndexTest(final boolean updindex, final boolean mainmem) {
-    this.updindex = updindex;
-    this.mainmem = mainmem;
-  }
-
   /**
    * Initializes the test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Before
-  public void init() {
+  private void init(final boolean updindex, final boolean mainmem) {
     set(MainOptions.UPDINDEX, updindex);
     set(MainOptions.MAINMEM, mainmem);
     execute(new CreateDB(NAME, "<xml/>"));
@@ -68,17 +52,20 @@ public final class UpdIndexTest extends SandboxTest {
   /**
    * Finishes the test.
    */
-  @After
-  public void finish() {
+  @AfterEach public void finish() {
     set(MainOptions.TOKENINDEX, false);
     execute(new DropDB(NAME));
   }
 
   /**
    * Incremental test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void insertInto() {
+  @ParameterizedTest
+  @MethodSource("params")
+  public void insertInto(final boolean updindex, final boolean mainmem) {
+    init(updindex, mainmem);
     for(int a = 0; a < STEPS; a++) {
       final int n = MAX * a;
       for(int i = 0; i < n; i++) query("insert node <x/> into /*");
@@ -90,9 +77,13 @@ public final class UpdIndexTest extends SandboxTest {
 
   /**
    * Incremental test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void insertBefore() {
+  @ParameterizedTest
+  @MethodSource("params")
+  public void insertBefore(final boolean updindex, final boolean mainmem) {
+    init(updindex, mainmem);
     for(int a = 0; a < STEPS; a++) {
       final int n = MAX * a;
       for(int i = 0; i < n; i++) {
@@ -106,9 +97,13 @@ public final class UpdIndexTest extends SandboxTest {
 
   /**
    * Incremental test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void insertAfter() {
+  @ParameterizedTest
+  @MethodSource("params")
+  public void insertAfter(final boolean updindex, final boolean mainmem) {
+    init(updindex, mainmem);
     for(int a = 0; a < STEPS; a++) {
       final int n = MAX * a;
       for(int i = 0; i < n; i++) {
@@ -122,9 +117,13 @@ public final class UpdIndexTest extends SandboxTest {
 
   /**
    * Incremental test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void insertDeep() {
+  @ParameterizedTest
+  @MethodSource("params")
+  public void insertDeep(final boolean updindex, final boolean mainmem) {
+    init(updindex, mainmem);
     for(int a = 0; a < STEPS; a++) {
       final int n = MAX * a;
       for(int i = 0; i < n; i++) {
@@ -138,9 +137,13 @@ public final class UpdIndexTest extends SandboxTest {
 
   /**
    * Incremental test.
+   * @param updindex incremental index update flag.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void replaceValue()  {
+  @ParameterizedTest
+  @MethodSource("params")
+  public void replaceValue(final boolean updindex, final boolean mainmem)  {
+    init(updindex, mainmem);
     final Random rnd = new Random();
     final StringBuilder sb = new StringBuilder();
     for(int i = 0; i < MAX * STEPS; i++) {
@@ -149,14 +152,5 @@ public final class UpdIndexTest extends SandboxTest {
       query("replace value of node /* with '" + sb + '\'');
       query("string-length(/*)", sb.length());
     }
-  }
-
-  /**
-   * Checks if a query yields the specified string.
-   * @param query query to be run
-   * @param result query result
-   */
-  static void query(final String query, final Object result) {
-    assertEquals(result.toString(), query(query));
   }
 }

@@ -4,6 +4,9 @@
  * Copyright (c) 2005-12, Alexander Holupirek <alex@holupirek.de>, BSD license
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /* Connect to BaseX server and open session. Returns socket file descriptor. */
 int basex_connect(const char *host, const char *port);
 
@@ -19,9 +22,12 @@ int basex_authenticate(int sfd, const char *user, const char *passwd);
  *   0  | result | info  | database command has been processed successfully
  *  >0  |  NULL  | error | database command processing failed
  *
- * BaseX commands: http://docs.basex.org/wiki/Commands
+ * BaseX commands: https://docs.basex.org/wiki/Commands
  */
 int basex_execute(int sfd, const char *command, char **result, char **info);
 
 /* Close session with descriptor sfd. */
 void basex_close(int sfd);
+#ifdef __cplusplus
+}
+#endif

@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This collations is based on the ICU collator.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class UCACollation extends Collation {
@@ -44,7 +44,7 @@ final class UCACollation extends Collation {
 
   @Override
   protected int indexOf(final String string, final String contains, final Mode mode,
-      final InputInfo info) {
+      final InputInfo ii) {
 
     final Object iterS = Reflect.invoke(RBC_GCEI, collator, string);
     final Object iterC = Reflect.invoke(RBC_GCEI, collator, contains);
@@ -97,5 +97,11 @@ final class UCACollation extends Collation {
       final int c = (int) Reflect.invoke(CEI_NEXT, it);
       if(c != 0) return c;
     } while(true);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof UCACollation &&
+        collator.equals(((UCACollation) obj).collator);
   }
 }

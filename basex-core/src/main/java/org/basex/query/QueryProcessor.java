@@ -17,7 +17,7 @@ import org.basex.query.value.seq.*;
 /**
  * This class is an entry point for evaluating XQuery strings.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryProcessor extends Job implements Closeable {
@@ -80,8 +80,8 @@ public final class QueryProcessor extends Job implements Closeable {
   }
 
   /**
-   * Returns a memory-efficient result iterator. In most cases, the query will only be fully
-   * evaluated if all items of this iterator are requested.
+   * Returns a memory-efficient result iterator. The query will only be fully evaluated if all items
+   * of this iterator are requested.
    * @return result iterator
    * @throws QueryException query exception
    */
@@ -97,7 +97,7 @@ public final class QueryProcessor extends Job implements Closeable {
    */
   public Value value() throws QueryException {
     parse();
-    return qc.iter().value();
+    return qc.value();
   }
 
   /**
@@ -118,7 +118,7 @@ public final class QueryProcessor extends Job implements Closeable {
    * If the value is an {@link Expr} instance, it is directly assigned.
    * Otherwise, it is first cast to the appropriate XQuery type. If {@code "json"}
    * is specified as type, the value is interpreted according to the rules
-   * specified in {@link JsonMapConverter}.
+   * specified in {@link JsonXQueryConverter}.
    * @param name name of variable
    * @param value value to be bound
    * @param type type (may be {@code null})
@@ -171,16 +171,6 @@ public final class QueryProcessor extends Job implements Closeable {
    */
   public QueryProcessor context(final Value value) {
     qc.context(value, sc);
-    return this;
-  }
-
-  /**
-   * Binds the HTTP context to the query processor.
-   * @param value HTTP connection
-   * @return self reference
-   */
-  public QueryProcessor http(final Object value) {
-    qc.http(value);
     return this;
   }
 
@@ -284,11 +274,11 @@ public final class QueryProcessor extends Job implements Closeable {
 
   /**
    * Checks if the specified XQuery string is a library module.
-   * @param qu query string
+   * @param query query string
    * @return result of check
    */
-  public static boolean isLibrary(final String qu) {
-    return LIBMOD_PATTERN.matcher(removeComments(qu, 80)).matches();
+  public static boolean isLibrary(final String query) {
+    return LIBMOD_PATTERN.matcher(removeComments(query, 80)).matches();
   }
 
   /**
@@ -322,7 +312,7 @@ public final class QueryProcessor extends Job implements Closeable {
         s = ch <= ' ';
       }
     }
-    if(sb.length() >= max) sb.append("...");
+    if(sb.length() >= max) sb.append(Text.DOTS);
     return sb.toString().trim();
   }
 
@@ -331,7 +321,7 @@ public final class QueryProcessor extends Job implements Closeable {
    * @return root node
    */
   public FDoc plan() {
-    return new FDoc().add(qc.plan());
+    return new FDoc().add(qc.plan(qc.context.options.get(MainOptions.FULLPLAN)));
   }
 
   @Override

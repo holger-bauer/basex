@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Atomization iterator.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class AtomIter extends Iter {
@@ -27,34 +27,31 @@ public final class AtomIter extends Iter {
    * @param iter input iterator
    * @param qc query context
    * @param info input info
-   * @param array may be array
+   * @param size iterator size (can be {@code -1})
    */
-  public AtomIter(final Iter iter, final QueryContext qc, final InputInfo info,
-      final boolean array) {
+  public AtomIter(final Iter iter, final QueryContext qc, final InputInfo info, final long size) {
     this.iter = iter;
     this.info = info;
     this.qc = qc;
-    size = array ? -1 : iter.size();
+    this.size = size;
   }
 
   @Override
   public Item next() throws QueryException {
-    // shortcut if no arrays will be returned
+    // shortcut if iterator will not yield any arrays
     if(size != -1) {
-      qc.checkStop();
-      final Item it = iter.next();
-      return it == null ? null : it.atomItem(info);
+      final Item item = qc.next(iter);
+      return item == null ? null : item.atomItem(qc, info);
     }
 
     while(true) {
       if(atom == null) {
-        final Item it = iter.next();
-        if(it == null) return null;
-        atom = it.atomValue(info).iter();
+        final Item item = iter.next();
+        if(item == null) return null;
+        atom = item.atomValue(qc, info).iter();
       }
-      qc.checkStop();
-      final Item it = atom.next();
-      if(it != null) return it;
+      final Item item = qc.next(atom);
+      if(item != null) return item;
       atom = null;
     }
   }

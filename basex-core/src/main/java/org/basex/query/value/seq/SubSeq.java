@@ -12,10 +12,10 @@ import org.basex.util.*;
 /**
  * A sequence that defines a sub-range of another sequence.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-final class SubSeq extends Seq {
+public final class SubSeq extends Seq {
   /** Underlying sequence. */
   private final Seq sub;
   /** Starting index in {@link #sub}. */
@@ -25,54 +25,40 @@ final class SubSeq extends Seq {
    * Constructor.
    * @param sub underlying sequence
    * @param start starting index
-   * @param len length of the subsequence
+   * @param length length of the subsequence
    */
-  SubSeq(final Seq sub, final long start, final long len) {
-    super(len, sub.type);
+  SubSeq(final Seq sub, final long start, final long length) {
+    super(length, sub.type);
     this.sub = sub;
     this.start = start;
   }
 
   @Override
-  public Value subSeq(final long off, final long len) {
-    return len == 0   ? Empty.SEQ
-         : len == 1   ? sub.itemAt(start + off)
-         : len < size ? new SubSeq(sub, start + off, len)
-                      : this;
+  protected Seq subSeq(final long offset, final long length, final QueryContext qc) {
+    qc.checkStop();
+    return new SubSeq(sub, start + offset, length);
   }
 
   @Override
-  public Value insert(final long pos, final Item item) {
-    return copyInsert(pos, item);
+  public Value insert(final long pos, final Item item, final QueryContext qc) {
+    return copyInsert(pos, item, qc);
   }
 
   @Override
-  public Value remove(final long pos) {
-    return copyRemove(pos);
+  public Value remove(final long pos, final QueryContext qc) {
+    return copyRemove(pos, qc);
   }
 
   @Override
-  public Value reverse() {
-    final ValueBuilder vb = new ValueBuilder();
-    for(long i = 0; i < size; i++) vb.addFront(sub.itemAt(start + i));
-    return vb.value();
-  }
-
-  @Override
-  public int writeTo(final Item[] arr, final int index) {
-    final int n = (int) Math.min(arr.length - index, size);
-    for(int i = 0; i < n; i++) arr[index + i] = itemAt(i);
-    return n;
+  public Value reverse(final QueryContext qc) {
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(long i = 0; i < size; i++) vb.addFront(itemAt(i));
+    return vb.value(this);
   }
 
   @Override
   public Item itemAt(final long pos) {
     return sub.itemAt(start + pos);
-  }
-
-  @Override
-  public boolean homogeneous() {
-    return sub.homogeneous();
   }
 
   @Override
@@ -83,26 +69,21 @@ final class SubSeq extends Seq {
   }
 
   @Override
-  public SeqType seqType() {
-    return sub.seqType();
+  public void cache(final boolean lazy, final InputInfo ii) throws QueryException {
+    for(long i = 0; i < size; i++) itemAt(i).cache(lazy, ii);
   }
 
   @Override
-  public void materialize(final InputInfo ii) throws QueryException {
-    for(long i = 0; i < size; i++) itemAt(i).materialize(ii);
-  }
-
-  @Override
-  public Value atomValue(final InputInfo ii) throws QueryException {
-    final ValueBuilder vb = new ValueBuilder();
-    for(long i = 0; i < size; i++) vb.add(itemAt(i).atomValue(ii));
-    return vb.value();
+  public Value atomValue(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(long i = 0; i < size; i++) vb.add(itemAt(i).atomValue(qc, ii));
+    return vb.value(AtomType.ANY_ATOMIC_TYPE);
   }
 
   @Override
   public long atomSize() {
-    long s = 0;
-    for(int i = 0; i < size; i++) s += itemAt(i).atomSize();
-    return s;
+    long sz = 0;
+    for(int i = 0; i < size; i++) sz += itemAt(i).atomSize();
+    return sz;
   }
 }

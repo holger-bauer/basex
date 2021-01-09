@@ -2,7 +2,6 @@ package org.basex.gui.view.project;
 
 import static org.basex.core.Text.*;
 
-import java.awt.event.*;
 import java.io.*;
 import java.util.*;
 
@@ -13,13 +12,15 @@ import javax.swing.tree.*;
 import org.basex.core.cmd.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
+import org.basex.gui.listener.*;
 import org.basex.io.*;
+import org.basex.query.value.node.*;
 import org.basex.util.*;
 
 /**
  * Tree of project view.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
@@ -28,11 +29,11 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
 
   /**
    * Constructor.
-   * @param pv project view
+   * @param view project view
    */
-  ProjectTree(final ProjectView pv) {
-    super(new DefaultMutableTreeNode(), pv.gui);
-    view = pv;
+  ProjectTree(final ProjectView view) {
+    super(view.gui, new DefaultMutableTreeNode());
+    this.view = view;
 
     border(4, 4, 4, 4);
     setExpandsSelectedPaths(true);
@@ -40,11 +41,9 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     // choose common parent directories of project directories
     setCellRenderer(renderer);
     addTreeWillExpandListener(this);
-    addMouseListener(new MouseAdapter() {
-      @Override public void mousePressed(final MouseEvent e) {
-        if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2)
-          new OpenCmd().execute(pv.gui);
-      }
+    addMouseListener((MouseClickedListener) e -> {
+      if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2)
+        new OpenCmd().execute(view.gui);
     });
 
     setCellEditor(new ProjectCellEditor(this, renderer));
@@ -53,8 +52,8 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     if(h > 16) setRowHeight(Math.max(32, h));
 
     // add popup
-    new BaseXPopup(this, pv.gui,
-      new OpenCmd(), new OpenExternalCmd(), new TestCmd(), null,
+    new BaseXPopup(this, view.gui,
+      new OpenCmd(), new OpenExternalCmd(), new TestCmd(), new SetContextCmd(), null,
       new DeleteCmd(), new RenameCmd(), new NewDirCmd(), null,
       new RefreshCmd(), null, new CopyPathCmd()
     );
@@ -106,7 +105,6 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     if(obj instanceof ProjectNode) {
       final ProjectNode node = (ProjectNode) obj;
       node.expand();
-      node.updateTree();
     }
   }
 
@@ -116,15 +114,14 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     if(obj instanceof ProjectNode) {
       final ProjectNode node = (ProjectNode) obj;
       node.collapse();
-      node.updateTree();
     }
   }
 
   // PRIVATE METHOS ===============================================================================
 
   /**
-   * Returns a single selected node or {@code null} if zero or more than node is selected.
-   * @return selected node
+   * Returns a single selected node, or {@code null} if zero or more than node is selected.
+   * @return selected node or {@code null}
    */
   ProjectNode selectedNode() {
     final TreePath tp = selectedPath();
@@ -136,8 +133,8 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
   }
 
   /**
-   * Returns the selected nodes.
-   * @return selected node
+   * Returns all selected nodes.
+   * @return selected nodes
    */
   private ArrayList<ProjectNode> selectedNodes() {
     final ArrayList<ProjectNode> nodes = new ArrayList<>();
@@ -183,30 +180,33 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     NewDirCmd() { super(NEW_DIR, BaseXKeys.NEWDIR); }
 
     @Override public void execute() {
-      ProjectNode parent = selectedNode();
-      if(parent instanceof ProjectFile) parent = (ProjectNode) parent.getParent();
+      final ProjectNode node = selectedNode();
+      final ProjectNode dir = node instanceof ProjectDir ? node : (ProjectNode) node.getParent();
 
       // choose free name
       String name = '(' + NEW_DIR + ')';
-      IOFile file = new IOFile(parent.file, name);
+      IOFile file = new IOFile(dir.file, name);
       int c = 1;
       while(file.exists()) {
         name = '(' + NEW_DIR + ' ' + ++c + ')';
-        file = new IOFile(parent.file, name);
+        file = new IOFile(dir.file, name);
       }
       if(file.md()) {
-        setSelectionPaths(null);
-        parent.refresh();
-        final int cl = parent.getChildCount();
-        for(int i = 0; i < cl; i++) {
-          final ProjectNode node = (ProjectNode) parent.getChildAt(i);
-          if(node.file.name().equals(name)) {
-            final TreePath tp = node.path();
-            setSelectionPath(tp);
-            startEditingAtPath(tp);
-            break;
+        dir.expand();
+
+        final String fn = name;
+        new Thread(() -> {
+          final Enumeration<?> children = dir.children();
+          while(children.hasMoreElements()) {
+            final ProjectNode child = (ProjectNode) children.nextElement();
+            if(child.file != null && child.file.name().equals(fn)) {
+              final TreePath tp = child.path();
+              setSelectionPath(tp);
+              startEditingAtPath(tp);
+              break;
+            }
           }
-        }
+        }).start();
       }
     }
     @Override public boolean enabled(final GUI main) {
@@ -284,9 +284,14 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
         try {
           node.file.open();
         } catch(final IOException ex) {
+          Util.debug(ex);
           BaseXDialog.error(view.gui, Util.info(FILE_NOT_OPENED_X, node.file));
         }
       }
+    }
+
+    @Override public boolean enabled(final GUI main) {
+      return selectedNode() != null;
     }
   }
 
@@ -300,6 +305,10 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
         view.gui.execute(new Test(node.file.path()));
       }
     }
+
+    @Override public boolean enabled(final GUI main) {
+      return selectedNode() != null;
+    }
   }
 
   /** Copy path command. */
@@ -308,11 +317,31 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     CopyPathCmd() { super(COPY_PATH, BaseXKeys.COPYPATH); }
 
     @Override public void execute() {
-      BaseXLayout.copy(selectedNode().file.path());
+      BaseXLayout.copyPath(selectedNode().file.path());
     }
 
     @Override public boolean enabled(final GUI main) {
       return selectedNode() != null;
+    }
+  }
+
+  /** Set context command. */
+  private final class SetContextCmd extends GUIPopupCmd {
+    /** Constructor. */
+    SetContextCmd() { super(SET_CONTEXT); }
+
+    @Override public void execute() {
+      try {
+        view.gui.editor.setContext(new DBNode(selectedNode().file));
+      } catch(final IOException ex) {
+        Util.debug(ex);
+        BaseXDialog.error(view.gui, Util.info(ex));
+      }
+    }
+
+    @Override public boolean enabled(final GUI main) {
+      final ProjectNode pn = selectedNode();
+      return pn != null && !pn.file.isDir() && pn.file.hasSuffix(view.gui.gopts.xmlSuffixes());
     }
   }
 }

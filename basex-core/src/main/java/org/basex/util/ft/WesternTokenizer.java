@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Full-text tokenizer.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class WesternTokenizer extends Tokenizer {
@@ -20,7 +20,7 @@ public final class WesternTokenizer extends Tokenizer {
   private static final HashSet<Language> SUPPORTED = new HashSet<>();
 
   static {
-    final String[] nonw = { "ar", "ja", "ko", "th", "zh" };
+    final String[] nonw = { "ja", "ko", "th", "zh" };
     for(final Language l : Language.ALL.values()) {
       if(!Strings.eq(l.code(), nonw)) SUPPORTED.add(l);
     }
@@ -239,10 +239,7 @@ public final class WesternTokenizer extends Tokenizer {
    * @return current token
    */
   private byte[] token() {
-    final int sp = spos, l = epos - sp;
-    final byte[] tmp = new byte[l];
-    System.arraycopy(text, sp, tmp, 0, l);
-    return tmp;
+    return Arrays.copyOfRange(text, spos, epos);
   }
 
   @Override
@@ -264,36 +261,36 @@ public final class WesternTokenizer extends Tokenizer {
 
   /**
    * Converts the specified token to upper case.
-   * @param t token to be converted
-   * @param a ascii flag
+   * @param token token to be converted
+   * @param ascii ascii flag
    * @return the converted token
    */
-  static byte[] upper(final byte[] t, final boolean a) {
-    final int tl = t.length;
-    if(a) {
-      for(int i = 0; i < tl; ++i) t[i] = (byte) uc(t[i]);
-      return t;
+  static byte[] upper(final byte[] token, final boolean ascii) {
+    final int tl = token.length;
+    if(ascii) {
+      for(int i = 0; i < tl; ++i) token[i] = (byte) uc(token[i]);
+      return token;
     }
     final TokenBuilder tb = new TokenBuilder();
-    for(int i = 0; i < tl; i += cl(t, i)) tb.add(uc(cp(t, i)));
+    for(int i = 0; i < tl; i += cl(token, i)) tb.add(uc(cp(token, i)));
     return tb.finish();
   }
 
   /**
    * Converts the specified token to lower case.
-   * @param t token to be converted
-   * @param a ascii flag
+   * @param token token to be converted
+   * @param ascii ascii flag
    * @return the converted token
    */
-  static byte[] lower(final byte[] t, final boolean a) {
-    final int tl = t.length;
-    if(a) {
+  static byte[] lower(final byte[] token, final boolean ascii) {
+    final int tl = token.length;
+    if(ascii) {
       for(int i = 0; i < tl; ++i)
-        t[i] = (byte) lc(t[i]);
-      return t;
+        token[i] = (byte) lc(token[i]);
+      return token;
     }
     final TokenBuilder tb = new TokenBuilder();
-    for(int i = 0; i < tl; i += cl(t, i)) tb.add(lc(cp(t, i)));
+    for(int i = 0; i < tl; i += cl(token, i)) tb.add(lc(cp(token, i)));
     return tb.finish();
   }
 

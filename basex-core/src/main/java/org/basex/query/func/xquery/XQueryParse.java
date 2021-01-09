@@ -5,6 +5,7 @@ import static org.basex.util.Token.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.scope.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 import org.basex.util.options.*;
@@ -12,7 +13,7 @@ import org.basex.util.options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class XQueryParse extends StandardFunc {
@@ -35,6 +36,8 @@ public class XQueryParse extends StandardFunc {
     public static final BooleanOption COMPILE = new BooleanOption("compile", false);
     /** Pass on error info. */
     public static final BooleanOption PASS = new BooleanOption("pass", false);
+    /** Query base-uri. */
+    public static final StringOption BASE_URI = new StringOption("base-uri");
   }
 
   @Override
@@ -53,34 +56,27 @@ public class XQueryParse extends StandardFunc {
   protected final FElem parse(final QueryContext qc, final byte[] query, final String path)
       throws QueryException {
 
-    boolean compile = false, plan = true, pass = false;
-    if(exprs.length > 1) {
-      final Options opts = toOptions(1, new XQueryOptions(), qc);
-      compile = opts.get(XQueryOptions.COMPILE);
-      plan = opts.get(XQueryOptions.PLAN);
-      pass = opts.get(XQueryOptions.PASS);
-    }
+    final XQueryOptions opts = toOptions(1, new XQueryOptions(), qc);
 
+    // base-uri: choose uri specified in options, file path, or base-uri from parent query
     try(QueryContext qctx = new QueryContext(qc.context)) {
-      final Module mod = qctx.parse(string(query), path, null);
-      final boolean library = mod instanceof LibraryModule;
-
+      final AModule mod = qctx.parse(string(query), toBaseUri(path, opts));
       final FElem root;
-      if(library) {
+      if(mod instanceof LibraryModule) {
+        final QNm module = mod.sc.module;
         root = new FElem(LIBRARY_MODULE);
-        final LibraryModule lib = (LibraryModule) mod;
-        root.add(PREFIX, lib.name.string());
-        root.add(URI, lib.name.uri());
+        root.add(PREFIX, module.string());
+        root.add(URI, module.uri());
       } else {
         root = new FElem(MAIN_MODULE);
         root.add(UPDATING, token(qctx.updating));
       }
 
-      if(compile) qctx.compile();
-      if(plan) root.add(qctx.plan());
+      if(opts.get(XQueryOptions.COMPILE)) qctx.compile();
+      if(opts.get(XQueryOptions.PLAN)) root.add(qctx.plan(false));
       return root;
     } catch(final QueryException ex) {
-      if(!pass) ex.info(info);
+      if(!opts.get(XQueryOptions.PASS)) ex.info(info);
       throw ex;
     }
   }

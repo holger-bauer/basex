@@ -15,16 +15,16 @@ import org.basex.io.*;
 /**
  * Project filter.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class ProjectFilter extends BaseXBack {
   /** Files. */
-  private final BaseXTextField filesFilter;
+  private final BaseXCombo filesFilter;
   /** Contents. */
-  private final BaseXTextField contentsFilter;
+  private final BaseXCombo contentsFilter;
   /** Project view. */
-  private final ProjectView project;
+  private final ProjectView view;
 
   /** Last file search. */
   private String fileFilter = "";
@@ -33,65 +33,41 @@ final class ProjectFilter extends BaseXBack {
 
   /**
    * Constructor.
-   * @param project project view
+   * @param view project view
    */
-  ProjectFilter(final ProjectView project) {
-    this.project = project;
+  ProjectFilter(final ProjectView view) {
+    this.view = view;
 
     layout(new BorderLayout(0, 2));
-    filesFilter = new BaseXTextField(project.gui);
-    filesFilter.addFocusListener(project.lastfocus);
+    filesFilter = new BaseXCombo(view.gui, true).history(GUIOptions.PROJFILES, view.gui.gopts);
+    filesFilter.addFocusListener(view.lastfocus);
 
-    contentsFilter = new BaseXTextField(project.gui);
+    contentsFilter = new BaseXCombo(view.gui, true).history(GUIOptions.PROJCONTS, view.gui.gopts);
     contentsFilter.hint(Text.FIND_CONTENTS + Text.DOTS);
-    contentsFilter.addFocusListener(project.lastfocus);
+    contentsFilter.addFocusListener(view.lastfocus);
 
     add(filesFilter, BorderLayout.NORTH);
     add(contentsFilter, BorderLayout.CENTER);
 
-    final KeyAdapter refreshKeys = new KeyAdapter() {
-      @Override
-      public void keyPressed(final KeyEvent e) {
-        if(BaseXKeys.NEXTLINE.is(e) || BaseXKeys.PREVLINE.is(e) ||
-           BaseXKeys.NEXTPAGE.is(e) || BaseXKeys.PREVPAGE.is(e)) {
-          project.list.dispatchEvent(e);
-        } else {
-          for(final GUIPopupCmd cmd : project.list.commands) {
-            if(cmd == null) continue;
-            for(final BaseXKeys sc : cmd.shortcuts()) {
-              if(sc.is(e)) {
-                cmd.execute(project.gui);
-                e.consume();
-                return;
-              }
-            }
-          }
-        }
-      }
-      @Override
-      public void keyReleased(final KeyEvent e) {
-        refresh(false);
-      }
-    };
-    filesFilter.addKeyListener(refreshKeys);
-    contentsFilter.addKeyListener(refreshKeys);
+    addKeyListener(filesFilter);
+    addKeyListener(contentsFilter);
     refreshLayout();
   }
 
   /**
    * Refreshes the filter view.
-   * @param force force refresh
+   * @param enforce enforce refresh
    */
-  void refresh(final boolean force) {
-    final String file = filesFilter.getText();
-    final String content = contentsFilter.getText();
-    if(!force && fileFilter.equals(file) && contentFilter.equals(content)) return;
-    fileFilter = file;
-    contentFilter = content;
+  void refresh(final boolean enforce) {
+    final String files = filesFilter.getText();
+    final String contents = contentsFilter.getText();
+    if(!enforce && fileFilter.equals(files) && contentFilter.equals(contents)) return;
+    fileFilter = files;
+    contentFilter = contents;
 
-    final boolean filter = !file.isEmpty() || !content.isEmpty();
-    if(filter) filter(file, content);
-    project.showList(filter);
+    final boolean filter = !files.isEmpty() || !contents.isEmpty();
+    if(filter) filter(files, contents);
+    view.showList(filter);
   }
 
   /**
@@ -106,7 +82,7 @@ final class ProjectFilter extends BaseXBack {
         final String name = ea.file().name();
         final int i = name.lastIndexOf('.');
         final String file = filesFilter.getText();
-        final String pattern = file.isEmpty() ? project.gui.gopts.get(GUIOptions.FILES) : file;
+        final String pattern = file.isEmpty() ? view.gui.gopts.get(GUIOptions.FILES) : file;
         if(i != -1 && !pattern.contains("*") && !pattern.contains("?") ||
             !Pattern.compile(IOFile.regex(pattern)).matcher(name).matches()) {
           filesFilter.setText('*' + name.substring(i));
@@ -121,33 +97,65 @@ final class ProjectFilter extends BaseXBack {
    * Called when the GUI design has changed.
    */
   void refreshLayout() {
-    final String filter = project.gui.gopts.get(GUIOptions.FILES).trim();
+    final String filter = view.gui.gopts.get(GUIOptions.FILES).trim();
     filesFilter.hint(filter.isEmpty() ? Text.FIND_FILES + Text.DOTS : filter);
   }
 
   /**
    * Filters the entries.
-   * @param file file search string
-   * @param content content search string
+   * @param files files search string
+   * @param contents contents search string
    */
-  private void filter(final String file, final String content) {
+  private void filter(final String files, final String contents) {
     filesFilter.setCursor(CURSORWAIT);
     contentsFilter.setCursor(CURSORWAIT);
-    project.list.setCursor(CURSORWAIT);
+    view.list.setCursor(CURSORWAIT);
 
     new GUIWorker<String[]>() {
       @Override
       protected String[] doInBackground() throws Exception {
-        final String pattern = file.isEmpty() ? project.gui.gopts.get(GUIOptions.FILES) : file;
-        return project.files.filter(pattern, content, project.root.file);
+        final String pattern = files.isEmpty() ? view.gui.gopts.get(GUIOptions.FILES) : files;
+        return view.files.filter(pattern, contents, view.root.file);
       }
       @Override
-      protected void done(final String[] files) {
-        project.list.setElements(files, content);
+      protected void done(final String[] list) {
+        view.list.setElements(list, contents);
         filesFilter.setCursor(CURSORTEXT);
         contentsFilter.setCursor(CURSORTEXT);
-        project.list.setCursor(CURSORARROW);
+        view.list.setCursor(CURSORARROW);
       }
     }.execute();
+  }
+
+  /**
+   * Adds a key listener to the specified combo box.
+   * @param combo combo box
+   */
+  private void addKeyListener(final BaseXCombo combo) {
+    combo.addKeyListener(new KeyAdapter() {
+      @Override
+      public void keyPressed(final KeyEvent e) {
+        if(combo.isPopupVisible()) return;
+        if(BaseXKeys.NEXTLINE.is(e) || BaseXKeys.PREVLINE.is(e) ||
+            BaseXKeys.NEXTPAGE.is(e) || BaseXKeys.PREVPAGE.is(e)) {
+          view.list.dispatchEvent(e);
+        } else {
+          for(final GUIPopupCmd cmd : view.list.commands) {
+            if(cmd == null) continue;
+            for(final BaseXKeys sc : cmd.shortcuts()) {
+              if(sc.is(e)) {
+                cmd.execute(view.gui);
+                e.consume();
+                return;
+              }
+            }
+          }
+        }
+      }
+      @Override
+      public void keyReleased(final KeyEvent e) {
+        refresh(false);
+      }
+    });
   }
 }

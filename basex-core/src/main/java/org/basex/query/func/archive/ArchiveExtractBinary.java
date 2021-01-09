@@ -6,8 +6,8 @@ import static org.basex.util.Token.*;
 import java.io.*;
 import java.util.zip.*;
 
+import org.basex.io.out.*;
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.util.hash.*;
@@ -16,20 +16,15 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ArchiveExtractBinary extends ArchiveFn {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final ValueBuilder vb = new ValueBuilder();
-    for(final byte[] b : extract(qc)) vb.add(new B64(b));
-    return vb.value();
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final byte[] bytes : extract(qc)) vb.add(B64.get(bytes));
+    return vb.value(this);
   }
 
   /**
@@ -46,11 +41,14 @@ public class ArchiveExtractBinary extends ArchiveFn {
     try(ArchiveIn in = ArchiveIn.get(archive.input(info), info)) {
       while(in.more()) {
         final ZipEntry ze = in.entry();
-        if(!ze.isDirectory() && (hs == null || hs.delete(token(ze.getName())) != 0))
-          tl.add(in.read());
+        if(!ze.isDirectory() && (hs == null || hs.remove(token(ze.getName())) != 0)) {
+          final ArrayOutput out = new ArrayOutput();
+          in.write(out);
+          tl.add(out.finish());
+        }
       }
     } catch(final IOException ex) {
-      throw ARCH_FAIL_X.get(info, ex);
+      throw ARCHIVE_ERROR_X.get(info, ex);
     }
     return tl;
   }

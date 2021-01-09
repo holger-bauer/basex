@@ -5,11 +5,15 @@ import static org.basex.query.QueryText.*;
 
 import java.math.*;
 
+import org.basex.data.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.*;
+import org.basex.query.value.array.*;
+import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
@@ -19,7 +23,7 @@ import org.basex.util.*;
 /**
  * Abstract super class for all items.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Item extends Value {
@@ -37,17 +41,20 @@ public abstract class Item extends Value {
   }
 
   @Override
-  public final ValueIter iter() {
-    return new ValueIter() {
-      private boolean req;
+  public BasicIter<Item> iter() {
+    return new BasicIter<Item>(1) {
       @Override
-      public Item next() { if(req) return null; req = true; return Item.this; }
+      public Item get(final long i) {
+        return Item.this;
+      }
       @Override
-      public long size() { return 1; }
+      public Value iterValue() {
+        return Item.this;
+      }
       @Override
-      public Item get(final long i) { return Item.this; }
-      @Override
-      public Value value() { return Item.this; }
+      public Value value(final QueryContext qc, final Expr expr) {
+        return Item.this;
+      }
     };
   }
 
@@ -62,12 +69,12 @@ public abstract class Item extends Value {
   }
 
   @Override
-  public final Item reverse() {
+  public final Item reverse(final QueryContext qc) {
     return this;
   }
 
   @Override
-  public final Item ebv(final QueryContext qc, final InputInfo ii) {
+  public Item ebv(final QueryContext qc, final InputInfo ii) {
     return this;
   }
 
@@ -78,7 +85,7 @@ public abstract class Item extends Value {
 
   /**
    * Returns a string representation of the value.
-   * @param ii input info, use {@code null} if none is available
+   * @param ii input info (can be {@code null})
    * @return string value
    * @throws QueryException if the item cannot be atomized (caused by function or streaming items)
    */
@@ -86,7 +93,7 @@ public abstract class Item extends Value {
 
   /**
    * Returns a boolean representation of the value.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return boolean value
    * @throws QueryException query exception
    */
@@ -96,27 +103,27 @@ public abstract class Item extends Value {
 
   /**
    * Returns a decimal representation of the value.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return decimal value
    * @throws QueryException query exception
    */
   public BigDecimal dec(final InputInfo ii) throws QueryException {
-    return Dec.parse(string(ii), ii);
+    return Dec.parse(this, ii);
   }
 
   /**
    * Returns an integer (long) representation of the value.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return long value
    * @throws QueryException query exception
    */
   public long itr(final InputInfo ii) throws QueryException {
-    return Int.parse(string(ii), ii);
+    return Int.parse(this, ii);
   }
 
   /**
    * Returns a float representation of the value.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return float value
    * @throws QueryException query exception
    */
@@ -126,7 +133,7 @@ public abstract class Item extends Value {
 
   /**
    * Returns a double representation of the value.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return double value
    * @throws QueryException query exception
    */
@@ -136,6 +143,7 @@ public abstract class Item extends Value {
 
   /**
    * Checks if this item is instance of the specified type.
+   * Overwritten by {@link XQMap} and {@link XQArray}.
    * @param tp type
    * @return result of check
    */
@@ -145,71 +153,75 @@ public abstract class Item extends Value {
 
   /**
    * Checks if the items can be compared.
-   * @param it item to be compared
+   * @param item item to be compared
    * @return result of check
    */
-  public final boolean comparable(final Item it) {
-    final Type t1 = type, t2 = it.type;
-    return t1 == t2
-        || this instanceof ANum && it instanceof ANum
-        || t1.isStringOrUntyped() && t2.isStringOrUntyped()
-        || this instanceof Dur && it instanceof Dur;
+  public final boolean comparable(final Item item) {
+    final Type type1 = type, type2 = item.type;
+    return type1 == type2
+        || type1.isStringOrUntyped() && type2.isStringOrUntyped()
+        || this instanceof ANum && item instanceof ANum
+        || this instanceof Dur && item instanceof Dur;
   }
 
   /**
-   * Checks the items for equality.
-   * @param it item to be compared
-   * @param coll collation
-   * @param sc static context
-   * @param ii input info
+   * Compares the items for equality.
+   * @param item item to be compared
+   * @param coll collation (can be {@code null})
+   * @param sc static context; required for comparing items of type xs:QName (can be {@code null})
+   * @param ii input info (can be {@code null})
    * @return result of check
    * @throws QueryException query exception
    */
-  public abstract boolean eq(Item it, Collation coll, StaticContext sc, InputInfo ii)
+  public abstract boolean eq(Item item, Collation coll, StaticContext sc, InputInfo ii)
       throws QueryException;
 
   /**
-   * Checks the items for equivalence.
-   * @param it item to be compared
-   * @param coll collation
-   * @param ii input info
+   * Compares the items for equivalence. As item is equivalent to another if:
+   * <ul>
+   *   <li>both numeric values are NaN, or</li>
+   *   <li>if the items have comparable types and are equal</li>
+   * </ul>
+   * @param item item to be compared
+   * @param coll collation (can be {@code null})
+   * @param ii input info (can be {@code null})
    * @return result of check
    * @throws QueryException query exception
    */
-  public final boolean equiv(final Item it, final Collation coll, final InputInfo ii)
+  public final boolean equiv(final Item item, final Collation coll, final InputInfo ii)
       throws QueryException {
-    // check if both values are NaN, or if values are equal..
-    return it instanceof ANum && (this == Dbl.NAN || this == Flt.NAN) && Double.isNaN(it.dbl(ii)) ||
-        comparable(it) && eq(it, coll, null, ii);
+    return (this == Dbl.NAN || this == Flt.NAN) && (item == Dbl.NAN || item == Flt.NAN) ||
+        comparable(item) && eq(item, coll, null, ii);
   }
 
   /**
-   * Checks the items as keys.
-   * @param it item to be compared
-   * @param ii input info
+   * Compares the items for equality.
+   * @param item item to be compared
+   * @param ii input info (can be {@code null})
    * @return result of check
    * @throws QueryException query exception
    */
-  public boolean sameKey(final Item it, final InputInfo ii) throws QueryException {
-    return comparable(it) && eq(it, null, null, ii);
+  public boolean sameKey(final Item item, final InputInfo ii) throws QueryException {
+    return comparable(item) && eq(item, null, null, ii);
   }
 
   /**
    * Returns the difference between the current and the specified item.
-   * @param it item to be compared
-   * @param coll query context
-   * @param ii input info
+   * This function is overwritten by the corresponding implementations.
+   * @param item item to be compared
+   * @param coll collation (can be {@code null})
+   * @param ii input info (can be {@code null})
    * @return difference
    * @throws QueryException query exception
    */
   @SuppressWarnings("unused")
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    throw (type == it.type ? CMPTYPE_X : CMPTYPES_X_X).get(ii, type, it.type);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    throw diffError(this, item, ii);
   }
 
   /**
    * Returns an input stream.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return input stream
    * @throws QueryException query exception
    */
@@ -218,59 +230,85 @@ public abstract class Item extends Value {
   }
 
   @Override
-  public Value subSeq(final long start, final long len) {
-    return len == 0 ? Empty.SEQ : this;
-  }
-
-  // Overridden by B64Stream, StrStream, Map and Array.
-  @Override
-  public void materialize(final InputInfo ii) throws QueryException { }
-
-  // Overridden by Array.
-  @Override
-  public Value atomValue(final InputInfo ii) throws QueryException {
-    return atomItem(ii);
-  }
-
-  @Override
-  public final Item atomItem(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return atomItem(ii);
+  public Value subsequence(final long start, final long length, final QueryContext qc) {
+    return length == 1 ? this : Empty.VALUE;
   }
 
   /**
-   * Evaluates the expression and returns the atomized items.
-   * @param ii input info
-   * @return materialized item
-   * @throws QueryException query exception
+   * {@inheritDoc}
+   * Overwritten by {@link Lazy}, {@link XQMap} and {@link XQArray}.
    */
-  // Overridden by FItem and ANode.
-  @SuppressWarnings("unused")
-  public Item atomItem(final InputInfo ii) throws QueryException {
+  @Override
+  public void cache(final boolean lazy, final InputInfo ii) throws QueryException { }
+
+  /**
+   * {@inheritDoc}
+   * Overwritten by {@link XQArray}, {@link FuncItem} and {@link ANode}.
+   */
+  @Override
+  public Value atomValue(final QueryContext qc, final InputInfo ii) throws QueryException {
     return this;
   }
 
+  /**
+   * {@inheritDoc}
+   * Overwritten by {@link XQArray}, {@link FuncItem} and {@link ANode}.
+   */
+  @Override
+  public Item atomItem(final QueryContext qc, final InputInfo ii) throws QueryException {
+    return this;
+  }
+
+  /**
+   * {@inheritDoc}
+   * Overwritten by {@link XQArray}.
+   */
   @Override
   public long atomSize() {
     return 1;
   }
 
+  /**
+   * Returns a materialized, context-independent version of this item.
+   * @param qc query context (if {@code null}, process cannot be interrupted)
+   * @param copy create full copy
+   * @return item copy, or {@code null}) if the item cannot be materialized
+   */
+  @SuppressWarnings("unused")
+  public Item materialize(final QueryContext qc, final boolean copy) {
+    return this;
+  }
+
   @Override
-  public final SeqType seqType() {
+  public SeqType seqType() {
     return type.seqType();
   }
 
   @Override
-  public final long size() {
+  public long size() {
     return 1;
   }
 
   @Override
-  public final boolean iterable() {
-    return true;
+  public void refineType(final Expr expr) {
+  }
+
+  @Override
+  public final boolean ddo() {
+    return type instanceof NodeType;
   }
 
   /**
-   * Returns a score value.
+   * Indicates if this item references a persistent database.
+   * @return result of check
+   */
+  public final boolean persistent() {
+    final Data data = data();
+    return data != null && !data.inMemory();
+  }
+
+  /**
+   * Returns a score value. Overwritten by {@link FTNode}.
    * @return score value
    */
   public double score() {
@@ -287,40 +325,13 @@ public abstract class Item extends Value {
   }
 
   @Override
-  public String description() {
-    return type.toString();
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    try {
-      addPlan(plan, planElem(VAL, string(null), TYP, type));
-    } catch(final QueryException ex) {
-      // only function items throw exceptions in atomization, and they should
-      // override plan(Serializer) sensibly
-      throw Util.notExpected(ex);
-    }
-  }
-
-  @Override
   public int hash(final InputInfo ii) throws QueryException {
     return Token.hash(string(ii));
   }
 
-  @Override
-  public final int writeTo(final Item[] arr, final int index) {
-    arr[index] = this;
-    return 1;
-  }
-
-  @Override
-  public final boolean homogeneous() {
-    return true;
-  }
-
   /**
    * Returns data model info.
-   * Overwritten by xs:QName, attribute() and document-node().
+   * Overwritten by {@link QNm}, {@link DBNode}, {@link FTxt} and {@link FDoc}.
    * @return type string
    */
   public byte[] xdmInfo() {
@@ -329,10 +340,26 @@ public abstract class Item extends Value {
 
   /**
    * Returns a type id.
-   * Overwritten by document-node() to check if document has an element as child.
+   * Overwritten by {@link DBNode} and {@link FDoc}.
    * @return type string
    */
   public ID typeId() {
     return type.id();
+  }
+
+  @Override
+  public String description() {
+    return type + " " + ITEM;
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    try {
+      plan.add(plan.create(this), QueryString.toValue(string(null)));
+    } catch(final QueryException ex) {
+      // only function items throw exceptions in atomization, and they should
+      // override plan(Serializer) sensibly
+      throw Util.notExpected(ex);
+    }
   }
 }

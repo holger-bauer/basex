@@ -5,10 +5,10 @@ import java.util.*;
 import org.basex.util.*;
 
 /**
- * This is an efficient and memory-saving hash map for storing primitive integers.
+ * This is an efficient and memory-saving hash set for storing primitive integers.
  * It is related to the {@link TokenSet} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class IntSet extends ASet {
@@ -19,16 +19,16 @@ public class IntSet extends ASet {
    * Default constructor.
    */
   public IntSet() {
-    this(Array.CAPACITY);
+    this(Array.INITIAL_CAPACITY);
   }
 
   /**
-   * Default constructor.
-   * @param capacity initial array capacity
+   * Constructor with initial capacity.
+   * @param capacity array capacity (will be resized to a power of two)
    */
-  public IntSet(final int capacity) {
+  public IntSet(final long capacity) {
     super(capacity);
-    keys = new int[buckets.length];
+    keys = new int[capacity()];
   }
 
   /**
@@ -46,8 +46,8 @@ public class IntSet extends ASet {
    * @return unique id of stored key (larger than zero)
    */
   final int put(final int key) {
-    final int i = index(key);
-    return Math.abs(i);
+    final int id = index(key);
+    return Math.abs(id);
   }
 
   /**
@@ -65,8 +65,10 @@ public class IntSet extends ASet {
    * @return id, or {@code 0} if key does not exist
    */
   final int id(final int key) {
-    final int p = key & buckets.length - 1;
-    for(int id = buckets[p]; id != 0; id = next[id]) if(key == keys[id]) return id;
+    final int b = key & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(key == keys[id]) return id;
+    }
     return 0;
   }
 
@@ -81,25 +83,6 @@ public class IntSet extends ASet {
   }
 
   /**
-   * Deletes the specified key.
-   * The deletion of keys will lead to empty entries. If {@link #size} is called after
-   * deletions, the original number of entries will be returned.
-   * @param key key
-   * @return deleted key or 0
-   */
-  int delete(final int key) {
-    final int b = key & buckets.length - 1;
-    for(int p = 0, i = buckets[b]; i != 0; p = i, i = next[i]) {
-      if(key != keys[i]) continue;
-      if(p == 0) buckets[b] = next[i];
-      else next[p] = next[next[i]];
-      keys[i] = 0;
-      return i;
-    }
-    return 0;
-  }
-
-  /**
    * Stores the specified key and returns its id, or returns the negative id if the
    * key has already been stored.
    * @param key key to be found
@@ -107,12 +90,15 @@ public class IntSet extends ASet {
    */
   private int index(final int key) {
     checkSize();
-    final int b = key & buckets.length - 1;
-    for(int r = buckets[b]; r != 0; r = next[r]) if(key == keys[r]) return -r;
-    next[size] = buckets[b];
-    keys[size] = key;
-    buckets[b] = size;
-    return size++;
+    final int b = key & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(key == keys[id]) return -id;
+    }
+    final int s = size++;
+    next[s] = buckets[b];
+    keys[s] = key;
+    buckets[b] = s;
+    return s;
   }
 
   @Override
@@ -131,5 +117,12 @@ public class IntSet extends ASet {
    */
   public final int[] toArray() {
     return Arrays.copyOfRange(keys, 1, size);
+  }
+
+  @Override
+  public String toString() {
+    final List<Object> k = new ArrayList<>();
+    for(final int key : keys) k.add(key);
+    return toString(k.toArray());
   }
 }

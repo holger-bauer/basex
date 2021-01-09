@@ -9,7 +9,7 @@ import org.basex.util.*;
  * This class provides methods for reading XML input and recursive entities.
  * The input encoding will be guessed by analyzing the first bytes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class XMLInput extends InputStream {
@@ -80,9 +80,9 @@ public class XMLInput extends InputStream {
    * @throws IOException I/O exception
    */
   public boolean add(final byte[] value, final boolean spaces) throws IOException {
-    if(spaces) add(new NewlineInput(new ArrayInput(Token.SPACE)));
-    add(new NewlineInput(new ArrayInput(value)));
-    if(spaces) add(new NewlineInput(new ArrayInput(Token.SPACE)));
+    if(spaces) add(new NewlineInput(Token.token(" ")));
+    add(new NewlineInput(value));
+    if(spaces) add(new NewlineInput(Token.token(" ")));
     return ip < 32;
   }
 
@@ -91,7 +91,7 @@ public class XMLInput extends InputStream {
    * @param ti buffer to be added
    */
   private void add(final NewlineInput ti) {
-    if(++ip == inputs.length) inputs = Array.copy(inputs, new NewlineInput[Array.newSize(ip)]);
+    if(++ip == inputs.length) inputs = Array.copy(inputs, new NewlineInput[Array.newCapacity(ip)]);
     inputs[ip] = ti;
   }
 

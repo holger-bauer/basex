@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Replace node primitive.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class ReplaceNode extends NodeCopy {
@@ -43,5 +43,10 @@ public final class ReplaceNode extends NodeCopy {
   @Override
   public void addAtomics(final AtomicUpdateCache auc) {
     auc.addReplace(pre, insseq);
+  }
+
+  @Override
+  public int size() {
+    return Math.max(1, insseq.fragments);
   }
 }

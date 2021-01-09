@@ -20,7 +20,7 @@ import org.basex.util.list.*;
  * in some cases (e.g. when bulk insertions of new documents are performed). A tree structure could
  * be introduced to offer better general performance.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Lukas Kircher
  */
@@ -56,7 +56,7 @@ final class Docs {
    */
   synchronized void read(final DataInput in) throws IOException {
     docList = in.readDiffs();
-    pathIndex = data.meta.dbfile(DATAPTH).exists();
+    pathIndex = data.meta.dbFile(DATAPTH).exists();
   }
 
   /**
@@ -70,7 +70,7 @@ final class Docs {
       // retrieve paths (must be called before file is opened for writing!)
       final TokenList paths = paths();
       // write paths
-      try(DataOutput doc = new DataOutput(data.meta.dbfile(DATAPTH))) {
+      try(DataOutput doc = new DataOutput(data.meta.dbFile(DATAPTH))) {
         doc.writeNum(paths.size());
         for(final byte[] path : paths) doc.writeToken(path);
       }
@@ -79,32 +79,32 @@ final class Docs {
   }
 
   /**
-   * Returns the {@code pre} values of all document nodes.
-   * @return document nodes (internal representation!)
+   * Returns a list with the {@code pre} values of all document nodes.
+   * @return pre values
    */
   synchronized IntList docs() {
     if(docList == null) {
-      final IntList il = new IntList();
+      final IntList pres = new IntList();
       final int is = data.meta.size;
-      for(int i = 0; i < is;) {
-        final int k = data.kind(i);
-        if(k == Data.DOC) il.add(i);
-        i += data.size(i, k);
+      for(int pre = 0; pre < is;) {
+        final int k = data.kind(pre);
+        if(k == Data.DOC) pres.add(pre);
+        pre += data.size(pre, k);
       }
       update();
-      docList = il;
+      docList = pres;
     }
     return docList;
   }
 
   /**
-   * Returns the document paths, and initializes them if necessary.
-   * @return document paths (internal representation!)
+   * Returns a list with the document paths.
+   * @return document paths
    */
   private synchronized TokenList paths() {
     if(pathList == null && pathIndex) {
       // try to read paths from disk
-      try(DataInput in = new DataInput(data.meta.dbfile(DATAPTH))) {
+      try(DataInput in = new DataInput(data.meta.dbFile(DATAPTH))) {
         pathList = new TokenList(in.readTokens());
       } catch(final IOException ignore) { }
     }
@@ -126,8 +126,8 @@ final class Docs {
   }
 
   /**
-   * Returns the document path order, and initialize the array if necessary.
-   * @return path order (internal representation!)
+   * Returns an array with offsets to the sorted document paths.
+   * @return path order
    */
   private synchronized int[] order() {
     if(pathOrder == null) pathOrder = Array.createOrder(paths().toArray(), false, true);
@@ -215,33 +215,42 @@ final class Docs {
   /**
    * Returns the pre values of all document nodes matching the specified path.
    * @param path input path
-   * @param exact exact (no prefix) matches
+   * @param desc descendant traversal
    * @return pre values (can be internal representation!)
    */
-  synchronized IntList docs(final String path, final boolean exact) {
+  synchronized IntList docs(final String path, final boolean desc) {
     // invalid path, or no documents: return empty list
     final String pth = MetaData.normPath(path);
     if(pth == null) return new IntList(0);
 
     // empty path: return all documents
     final IntList docs = docs();
-    if(pth.isEmpty()) return docs;
+    if(desc && pth.isEmpty()) return docs;
 
     // normalize paths
-    byte[] exct = EMPTY, pref = normalize(token(pth));
+    byte[] exact = EMPTY, prefix = normalize(token(pth));
     // check for explicit directory indicator
-    if(!pth.endsWith("/")) {
-      exct = pref;
-      pref = concat(exct, SLASH);
+    if(!(pth.isEmpty() || Strings.endsWith(pth, '/'))) {
+      exact = prefix;
+      prefix = concat(exact, SLASH);
     }
 
     // relevant paths: exact hits and prefixes
+    final TokenSet set = new TokenSet();
     final IntList il = new IntList();
     final TokenList paths = paths();
     final int ps = paths.size();
     for(int p = 0; p < ps; p++) {
       final byte[] pt = paths.get(p);
-      if(eq(pt, exct) || !exact && startsWith(pt, pref)) il.add(docs.get(p));
+      boolean add = eq(pt, exact);
+      if(!add) {
+        add = startsWith(pt, prefix);
+        if(add && !desc) {
+          final int i = indexOf(pt, SLASH, prefix.length + 1);
+          if(i != -1) add = set.add(substring(pt, prefix.length, i));
+        }
+      }
+      if(add) il.add(docs.get(p));
     }
     return il.sort();
   }
@@ -265,7 +274,9 @@ final class Docs {
    */
   synchronized boolean isDir(final byte[] path) {
     final byte[] pref = concat(path, SLASH);
-    for(final byte[] pth : paths()) if(startsWith(pth, pref)) return true;
+    for(final byte[] pth : paths()) {
+      if(startsWith(pth, pref)) return true;
+    }
     return false;
   }
 
@@ -336,7 +347,9 @@ final class Docs {
     final TokenList tl = new TokenList();
     final int ds = paths().size();
     for(int d = 0; d < ds; d++) {
-      table.contents.add(tl.add(docList.get(d)).add(pathList.get(d)));
+      final int doc = docList != null ? docList.get(d) : 0;
+      final byte[] path = pathList != null ? pathList.get(d) : EMPTY;
+      table.contents.add(tl.add(doc).add(path));
     }
     return table.toString();
   }

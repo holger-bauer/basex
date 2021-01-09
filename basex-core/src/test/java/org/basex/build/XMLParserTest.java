@@ -1,34 +1,32 @@
 package org.basex.build;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.io.serial.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for parsing XML documents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XMLParserTest extends SandboxTest {
   /**
    * Prepares the tests.
    */
-  @Before
-  public void before() {
+  @BeforeEach public void before() {
     set(MainOptions.MAINMEM, true);
   }
 
   /**
    * Finishes the tests.
    */
-  @Before
-  public void after() {
+  @AfterEach public void after() {
     set(MainOptions.MAINMEM, false);
     set(MainOptions.CHOP, true);
     set(MainOptions.STRIPNS, false);
@@ -39,8 +37,7 @@ public final class XMLParserTest extends SandboxTest {
   /**
    * Tests the internal parser (Option {@link MainOptions#INTPARSE}).
    */
-  @Test
-  public void intParse() {
+  @Test public void intParse() {
     set(MainOptions.CHOP, false);
 
     final StringBuilder sb = new StringBuilder();
@@ -76,15 +73,30 @@ public final class XMLParserTest extends SandboxTest {
 
     // list all errors
     if(sb.length() != 0) fail(sb.toString());
+  }
 
-    set(MainOptions.MAINMEM, false);
+  /**
+   * Empty elements with 31 attributes.
+   * @throws Exception exception
+   */
+  @Test public void gh1648() throws Exception {
+    set(MainOptions.INTPARSE, true);
+
+    // build document with various number of arguments (30..33)
+    for(int a = 30; a <= 33; a++) {
+      final StringBuilder doc = new StringBuilder("<_");
+      for(int i = 0; i < a; i++) doc.append(" a").append(a).append("=''");
+      doc.append("/>");
+
+      new CreateDB(NAME, doc.toString()).execute(context);
+      new XQuery("_[_]").execute(context);
+    }
   }
 
   /**
    * Tests the namespace stripping option (Option {@link MainOptions#STRIPNS}).
    */
-  @Test
-  public void parse() {
+  @Test public void parse() {
     set(MainOptions.STRIPNS, true);
     set(MainOptions.SERIALIZER, SerializerMode.NOINDENT.get());
 
@@ -100,8 +112,7 @@ public final class XMLParserTest extends SandboxTest {
   /**
    * Tests the xml:space attribute.
    */
-  @Test
-  public void xmlSpace() {
+  @Test public void xmlSpace() {
     set(MainOptions.SERIALIZER, SerializerMode.NOINDENT.get());
 
     final String in = "<x><a xml:space='default'> </a><a> </a>" +
@@ -112,7 +123,7 @@ public final class XMLParserTest extends SandboxTest {
     for(final boolean b : new boolean[] { true, false }) {
       set(MainOptions.INTPARSE, b);
       execute(new CreateDB(NAME, in));
-      assertEquals("Internal parser: " + b, out, query("."));
+      assertEquals(out, query("."), "Internal parser: " + b);
     }
   }
 }

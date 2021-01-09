@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbProperty extends DbAccess {
@@ -20,7 +20,7 @@ public final class DbProperty extends DbAccess {
     final Data data = checkData(qc);
     final String name = string(toToken(exprs[1], qc));
     final MetaProp prop = MetaProp.get(name);
-    if(prop == null) throw BXDB_PROP_X.get(info, name);
+    if(prop == null) throw DB_PROPERTY_X.get(info, name);
 
     final Object value = prop.value(data.meta);
     if(value instanceof Boolean) return Bln.get((Boolean) value);

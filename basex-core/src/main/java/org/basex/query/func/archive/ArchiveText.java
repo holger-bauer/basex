@@ -1,5 +1,6 @@
 package org.basex.query.func.archive;
 
+import static org.basex.util.Token.*;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.expr.path.*;
@@ -8,7 +9,7 @@ import org.basex.query.value.item.*;
 /**
  * Archive constants.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 interface ArchiveText {
@@ -20,18 +21,18 @@ interface ArchiveText {
   /** QName. */
   QNm Q_ENTRY = new QNm(ARCHIVE_PREFIX, "entry", ARCHIVE_URI);
   /** Root node test. */
-  NodeTest ENTRY = new NodeTest(Q_ENTRY);
+  NameTest ENTRY = new NameTest(Q_ENTRY);
 
   /** Level. */
-  String LEVEL = "compression-level";
+  byte[] LEVEL = token("compression-level");
   /** Encoding. */
-  String ENCODING = "encoding";
+  byte[] ENCODING = token("encoding");
   /** Last modified. */
-  String LAST_MOD = "last-modified";
+  byte[] LAST_MODIFIED = token("last-modified");
   /** Compressed size. */
-  String COMP_SIZE = "compressed-size";
+  byte[] COMPRESSED_SIZE = token("compressed-size");
   /** Uncompressed size. */
-  String SIZE = "size";
+  byte[] SIZE = token("size");
 
   /** Option: algorithm: deflate. */
   String DEFLATE = "deflate";

@@ -8,12 +8,12 @@ import org.basex.*;
 import org.basex.api.client.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class offers utility methods to perform simple benchmarks.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Benchmark extends SandboxTest {
@@ -30,8 +30,7 @@ public abstract class Benchmark extends SandboxTest {
    * Initializes the benchmark.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void init() throws IOException {
+  @BeforeAll public static void init() throws IOException {
     // check if server is (not) running
     final int sp = context.soptions.get(StaticOptions.SERVERPORT);
     server = local || BaseXServer.ping(S_LOCALHOST, sp) ? null : createServer();
@@ -45,8 +44,7 @@ public abstract class Benchmark extends SandboxTest {
    * Stops the server.
    * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void stop() throws IOException {
+  @AfterAll public static void stop() throws IOException {
     stopServer(server);
   }
 

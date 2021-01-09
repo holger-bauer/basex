@@ -7,6 +7,7 @@ import java.util.regex.*;
 
 import javax.xml.transform.stream.*;
 
+import org.basex.io.in.*;
 import org.basex.io.out.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
@@ -15,34 +16,20 @@ import org.xml.sax.*;
 /**
  * {@link IO} reference, representing a local file or directory path.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class IOFile extends IO {
+  /** Ignore files starting with a dot. */
+  public static final FileFilter NO_HIDDEN = file -> !Strings.startsWith(file.getName(), '.');
   /** Pattern for valid file names. */
   private static final Pattern VALIDNAME =
-      Pattern.compile("^[^\\\\/" + (Prop.WIN ? ":*?\"<>\\|" : "") + "]+$");
+      Pattern.compile("^[^\\\\/" + (Prop.WIN ? ":*?\"<>|" : "") + "]+$");
+
   /** Absolute flag. */
   private final boolean absolute;
   /** File reference. */
   private final File file;
-
-  /**
-   * Constructor.
-   * @param file file reference
-   * @param last last path segment
-   */
-  public IOFile(final File file, final String last) {
-    super(create(file.getAbsolutePath(), last));
-    boolean abs = file.isAbsolute();
-    this.file = abs ? file : new File(pth);
-    // Windows: checks if the original file path starts with a slash
-    if(!abs && Prop.WIN) {
-      final String p = file.getPath();
-      abs = p.startsWith("/") || p.startsWith("\\");
-    }
-    absolute = abs;
-  }
 
   /**
    * Constructor.
@@ -76,6 +63,24 @@ public final class IOFile extends IO {
    */
   public IOFile(final IOFile dir, final String child) {
     this(new File(dir.file, child), child);
+  }
+
+  /**
+   * Constructor.
+   * @param file file reference
+   * @param last last path segment; if it ends with a slash, it indicates a directory
+   */
+  private IOFile(final File file, final String last) {
+    super(create(file.getAbsolutePath(), Strings.endsWith(last, '/') ||
+        Strings.endsWith(last, '\\')));
+    boolean abs = file.isAbsolute();
+    this.file = abs ? file : new File(pth);
+    // Windows: checks if the original file path starts with a slash
+    if(!abs && Prop.WIN) {
+      final String p = file.getPath();
+      abs = Strings.startsWith(p, '/') || Strings.startsWith(p, '\\');
+    }
+    absolute = abs;
   }
 
   /**
@@ -141,8 +146,17 @@ public final class IOFile extends IO {
   }
 
   @Override
-  public InputStream inputStream() throws IOException {
+  public FileInputStream inputStream() throws IOException {
     return new FileInputStream(file);
+  }
+
+  /**
+   * Returns an output stream.
+   * @return output stream
+   * @throws IOException I/O exception
+   */
+  public FileOutputStream outputStream() throws IOException {
+    return new FileOutputStream(file);
   }
 
   /**
@@ -157,7 +171,7 @@ public final class IOFile extends IO {
 
   /**
    * Recursively creates the directory if it does not exist yet.
-   * @return {@code true} if the directory exists or has been created.
+   * @return {@code true} if the directory exists or has been created
    */
   public boolean md() {
     return file.exists() || file.mkdirs();
@@ -177,7 +191,7 @@ public final class IOFile extends IO {
    * @return children
    */
   public IOFile[] children() {
-    return children(".*");
+    return children((FileFilter) null);
   }
 
   /**
@@ -186,15 +200,17 @@ public final class IOFile extends IO {
    * @return children
    */
   public IOFile[] children(final String regex) {
-    final File[] ch = file.listFiles();
-    if(ch == null) return new IOFile[0];
+    final File[] children = file.listFiles();
+    if(children == null) return new IOFile[0];
 
-    final ArrayList<IOFile> io = new ArrayList<>(ch.length);
-    final Pattern p = Pattern.compile(regex, Prop.CASE ? 0 : Pattern.CASE_INSENSITIVE);
-    for(final File f : ch) {
-      if(p.matcher(f.getName()).matches()) io.add(new IOFile(f));
+    final ArrayList<IOFile> io = new ArrayList<>();
+    final Pattern pattern = Pattern.compile(regex, Prop.CASE ? 0 : Pattern.CASE_INSENSITIVE);
+    for(final File child : children) {
+      if(pattern.matcher(child.getName()).matches()) {
+        io.add(child.isDirectory() ? new IOFile(child.getPath() + '/') : new IOFile(child));
+      }
     }
-    return io.toArray(new IOFile[io.size()]);
+    return io.toArray(new IOFile[0]);
   }
 
   /**
@@ -203,14 +219,14 @@ public final class IOFile extends IO {
    * @return children
    */
   public IOFile[] children(final FileFilter filter) {
-    final File[] ch = filter == null ? file.listFiles() : file.listFiles(filter);
-    if(ch == null) return new IOFile[0];
+    final File[] children = filter == null ? file.listFiles() : file.listFiles(filter);
+    if(children == null) return new IOFile[0];
 
-    final ArrayList<IOFile> io = new ArrayList<>(ch.length);
-    for(final File f : ch) {
-      io.add(new IOFile(f));
+    final ArrayList<IOFile> io = new ArrayList<>(children.length);
+    for(final File child : children) {
+      io.add(child.isDirectory() ? new IOFile(child + "/") : new IOFile(child));
     }
-    return io.toArray(new IOFile[io.size()]);
+    return io.toArray(new IOFile[0]);
   }
 
   /**
@@ -228,10 +244,20 @@ public final class IOFile extends IO {
    */
   public StringList descendants(final FileFilter filter) {
     final StringList files = new StringList();
-    final File[] ch = filter == null ? file.listFiles() : file.listFiles(filter);
-    if(ch == null) return files;
-    if(exists()) addDescendants(this, files, filter, path().length() + 1);
+    if(isDir()) {
+      final int offset = path().length() + (Strings.endsWith(path(), '/') ? 0 : 1);
+      addDescendants(this, files, filter, offset);
+    }
     return files;
+  }
+
+  /**
+   * Writes the specified string as UTF8.
+   * @param string string
+   * @throws IOException I/O exception
+   */
+  public void write(final String string) throws IOException {
+    write(Token.token(string));
   }
 
   /**
@@ -245,18 +271,18 @@ public final class IOFile extends IO {
 
   /**
    * Writes the specified input. The specified input stream is eventually closed.
-   * @param in input stream
+   * @param is input stream
    * @throws IOException I/O exception
    */
-  public void write(final InputStream in) throws IOException {
-    try(BufferOutput out = new BufferOutput(pth)) {
+  public void write(final InputStream is) throws IOException {
+    try(BufferInput in = BufferInput.get(is); BufferOutput out = new BufferOutput(this)) {
       for(int i; (i = in.read()) != -1;) out.write(i);
     }
   }
 
   /**
    * Deletes the file, or the directory and its children.
-   * @return {@code true} if the file does not exist or has been deleted.
+   * @return {@code true} if the file does not exist or has been deleted
    */
   public boolean delete() {
     boolean ok = true;
@@ -296,20 +322,18 @@ public final class IOFile extends IO {
 
   @Override
   public boolean eq(final IO io) {
-    return io instanceof IOFile && (Prop.CASE ? pth.equals(io.pth) :
-      pth.equalsIgnoreCase(io.pth));
+    return io instanceof IOFile && (Prop.CASE ? pth.equals(io.pth) : pth.equalsIgnoreCase(io.pth));
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return obj instanceof IOFile && pth.equals(((IOFile) obj).pth);
   }
 
   @Override
   public String url() {
-    final TokenBuilder tb = new TokenBuilder(FILEPREF);
-    String path = pth;
-    if(path.startsWith("/")) {
-      path = path.substring(1);
-    } else {
-      // add leading slash for Windows paths
-      tb.add("//");
-    }
+    final String path = Strings.startsWith(pth, '/') ? pth.substring(1) : pth;
+    final TokenBuilder tb = new TokenBuilder().add(FILEPREF).add("//");
     final int pl = path.length();
     for(int p = 0; p < pl; p++) {
       // replace spaces with %20
@@ -342,10 +366,28 @@ public final class IOFile extends IO {
    */
   public IOFile normalize() {
     try {
-      return new IOFile(toPath().toRealPath().toFile());
+      final Path path = toPath().toRealPath();
+      return new IOFile(path + (Files.isDirectory(path) ? "/" : ""));
     } catch(final IOException ex) {
+      Util.debug(ex);
       return this;
     }
+  }
+
+  /**
+   * Checks if a file is hidden.
+   * @return result of check
+   */
+  public boolean isHidden() {
+    return file.isHidden() || Strings.startsWith(name(), '.') || name().equals("node_modules");
+  }
+
+  /**
+   * Checks if the parent directory of this file can be ignored.
+   * @return result of check
+   */
+  public boolean ignore() {
+    return name().equals(".ignore");
   }
 
   // STATIC METHODS ===============================================================================
@@ -374,8 +416,9 @@ public final class IOFile extends IO {
   private static void addDescendants(final IOFile io, final StringList files,
       final FileFilter filter, final int offset) {
     if(io.isDir()) {
-      for(final IOFile f : io.children(filter))
-        addDescendants(f, files, filter, offset);
+      for(final IOFile child : io.children(filter)) {
+        addDescendants(child, files, filter, offset);
+      }
     } else {
       if(filter == null || filter.accept(io.file)) {
         files.add(io.path().substring(offset));
@@ -398,14 +441,10 @@ public final class IOFile extends IO {
    * @return result of check
    */
   public static boolean isValid(final String path) {
-    // no colon: treat as file path
+    // check if path starts with Windows drive letter
     final int c = path.indexOf(':');
-    if(c == -1) return true;
-    // Windows drive letter?
-    final int fs = path.indexOf('/'), bs = path.indexOf('\\');
-    if(Prop.WIN && c == 1 && Token.letter(path.charAt(0)) && (fs == 2 || bs == 2)) return true;
-    // ensure that slash occurs before colon
-    return fs != -1 && fs < c || bs != -1 && bs < c;
+    return c == -1 || !Prop.WIN || c == 1 && Token.letter(path.charAt(0)) &&
+        (path.indexOf('/') == 2 || path.indexOf('\\') == 2);
   }
 
   /**
@@ -422,28 +461,28 @@ public final class IOFile extends IO {
    * contain asterisks (*) and question marks (?); commas (,) are used to
    * separate multiple filters.
    * @param glob filter
-   * @param sub accept substring in the result
+   * @param substring accept substring in the result
    * @return regular expression
    */
-  public static String regex(final String glob, final boolean sub) {
+  public static String regex(final String glob, final boolean substring) {
     final StringBuilder sb = new StringBuilder();
     for(final String globs : Strings.split(glob, ',')) {
       final String glb = globs.trim();
       if(sb.length() != 0) sb.append('|');
       // loop through single pattern
-      boolean suf = false;
+      boolean suffix = false;
       final int gl = glb.length();
       for(int g = 0; g < gl; g++) {
         char ch = glb.charAt(g);
         if(ch == '*') {
           // don't allow other dots if pattern ends with a dot
-          suf = true;
-          sb.append(glb.endsWith(".") ? "[^.]" : ".");
+          suffix = true;
+          sb.append(Strings.endsWith(glb, '.') ? "[^.]" : ".");
         } else if(ch == '?') {
           ch = '.';
-          suf = true;
+          suffix = true;
         } else if(ch == '.') {
-          suf = true;
+          suffix = true;
           // last character is dot: disallow file suffix
           if(g + 1 == glb.length()) break;
           sb.append('\\');
@@ -452,7 +491,7 @@ public final class IOFile extends IO {
         }
         sb.append(ch);
       }
-      if(!suf && sub) sb.append(".*");
+      if(!suffix && substring) sb.append(".*");
     }
     return Prop.CASE ? sb.toString() : sb.toString().toLowerCase(Locale.ENGLISH);
   }
@@ -462,10 +501,10 @@ public final class IOFile extends IO {
   /**
    * Creates a path.
    * @param path input path
-   * @param last last segment
+   * @param directory directory flag
    * @return path
    */
-  private static String create(final String path, final String last) {
+  private static String create(final String path, final boolean directory) {
     final StringList sl = new StringList();
     final int l = path.length();
     final TokenBuilder tb = new TokenBuilder(l);
@@ -478,12 +517,12 @@ public final class IOFile extends IO {
     if(path.startsWith("\\\\") || path.startsWith("//")) tb.add("//");
     final int size = sl.size();
     for(int s = 0; s < size; ++s) {
-      if(s != 0 || path.startsWith("/")) tb.add('/');
+      if(s != 0 || Strings.startsWith(path, '/')) tb.add('/');
       tb.add(sl.get(s));
     }
 
     // add slash if original file ends with a slash, or if path is a Windows root directory
-    boolean dir = last.endsWith("/") || last.endsWith("\\");
+    boolean dir = directory;
     if(!dir && Prop.WIN && tb.size() == 2) {
       final int c = Character.toLowerCase(tb.get(0));
       dir = c >= 'a' && c <= 'z' && tb.get(1) == ':';

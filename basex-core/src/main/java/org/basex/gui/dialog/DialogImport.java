@@ -3,7 +3,6 @@ package org.basex.gui.dialog;
 import static org.basex.core.Text.*;
 import static org.basex.util.Strings.*;
 
-import java.awt.event.*;
 import java.io.*;
 import java.util.*;
 
@@ -13,8 +12,8 @@ import org.basex.core.*;
 import org.basex.core.MainOptions.MainParser;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
-import org.basex.gui.layout.BaseXFileChooser.Mode;
-import org.basex.gui.layout.BaseXLayout.DropHandler;
+import org.basex.gui.layout.BaseXFileChooser.*;
+import org.basex.gui.layout.BaseXLayout.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.util.*;
@@ -24,14 +23,14 @@ import org.basex.util.list.*;
  * Panel for importing new database resources. Embedded by both the database creation and
  * properties dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogImport extends BaseXBack {
   /** User feedback. */
   final BaseXLabel info;
   /** Resource to add. */
-  final BaseXTextField input;
+  final BaseXCombo input;
   /** Browse button. */
   final BaseXButton browse;
   /** Chosen parser. */
@@ -39,8 +38,10 @@ final class DialogImport extends BaseXBack {
   /** DB name. */
   String dbName;
 
-  /** Dialog reference. */
+  /** GUI reference. */
   private final GUI gui;
+  /** Dialog reference. */
+  private final BaseXDialog dialog;
   /** Parsing options. */
   private final DialogParsing parsing;
   /** Add contents of archives. */
@@ -56,32 +57,32 @@ final class DialogImport extends BaseXBack {
 
   /**
    * Constructor.
-   * @param dial dialog reference
+   * @param dialog dialog reference
    * @param panel feature panel
    * @param parsing parsing dialog
    */
-  DialogImport(final BaseXDialog dial, final BaseXBack panel, final DialogParsing parsing) {
-    gui = dial.gui;
+  DialogImport(final BaseXDialog dialog, final BaseXBack panel, final DialogParsing parsing) {
+    this.dialog = dialog;
     this.parsing = parsing;
+    gui = dialog.gui;
 
-    layout(new TableLayout(11, 1));
+    layout(new RowLayout());
     border(8);
 
     // add options
     add(new BaseXLabel(FILE_OR_DIR + COL, true, true).border(0, 0, 6, 0));
 
     final String path = gui.gopts.get(GUIOptions.INPUTPATH);
-    input = new BaseXTextField(path, dial).history(GUIOptions.INPUTS, dial);
+    input = new BaseXCombo(dialog, true).history(GUIOptions.INPUTS, gui.gopts);
+    BaseXLayout.setWidth(input, BaseXTextField.DWIDTH);
+    input.setText(path);
 
     final IO io = IO.get(path);
     if(io instanceof IOFile && !path.isEmpty()) dbName = io.dbName();
 
-    browse = new BaseXButton(BROWSE_D, dial);
-    browse.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) { choose(); }
-    });
-    final BaseXBack b = new BaseXBack(new TableLayout(1, 2, 8, 0));
+    browse = new BaseXButton(dialog, BROWSE_D);
+    browse.addActionListener(e -> choose());
+    final BaseXBack b = new BaseXBack(new ColumnLayout(8));
     b.add(input);
     b.add(browse);
     add(b);
@@ -93,16 +94,16 @@ final class DialogImport extends BaseXBack {
     final MainOptions opts = gui.context.options;
     final StringList ps = new StringList();
     for(final MainParser mp : MainParser.values()) ps.add(mp.name());
-    parsers = new BaseXCombo(dial, ps.finish());
+    parsers = new BaseXCombo(dialog, ps.finish());
     parsers.setSelectedItem(opts.get(MainOptions.PARSER).name());
 
-    createFilter = new BaseXTextField(opts.get(MainOptions.CREATEFILTER), dial);
+    createFilter = new BaseXTextField(dialog, opts.get(MainOptions.CREATEFILTER));
     createFilter.setColumns(30);
 
-    addRaw = new BaseXCheckBox(ADD_RAW_FILES, MainOptions.ADDRAW, opts, dial);
-    skipCorrupt = new BaseXCheckBox(SKIP_CORRUPT_FILES, MainOptions.SKIPCORRUPT, opts, dial);
-    addArchives = new BaseXCheckBox(PARSE_ARCHIVES, MainOptions.ADDARCHIVES, opts, dial);
-    archiveName = new BaseXCheckBox(ADD_ARCHIVE_NAME, MainOptions.ARCHIVENAME, opts, dial);
+    addRaw = new BaseXCheckBox(dialog, ADD_RAW_FILES, MainOptions.ADDRAW, opts);
+    skipCorrupt = new BaseXCheckBox(dialog, SKIP_CORRUPT_FILES, MainOptions.SKIPCORRUPT, opts);
+    addArchives = new BaseXCheckBox(dialog, PARSE_ARCHIVES, MainOptions.ADDARCHIVES, opts);
+    archiveName = new BaseXCheckBox(dialog, ADD_ARCHIVE_NAME, MainOptions.ARCHIVENAME, opts);
 
     final BaseXBack p = new BaseXBack(new TableLayout(2, 2, 20, 0));
     p.add(new BaseXLabel(INPUT_FORMAT, false, true).border(0, 0, 6, 0));
@@ -120,12 +121,9 @@ final class DialogImport extends BaseXBack {
     info = new BaseXLabel(" ").border(20, 0, 6, 0);
     add(info);
 
-    final DropHandler dh = new DropHandler() {
-      @Override
-      public void drop(final Object object) {
-        input.setText(object.toString());
-        action(input, dial instanceof DialogNew);
-      }
+    final DropHandler dh = object -> {
+      input.setText(object.toString());
+      action(input, dialog instanceof DialogNew);
     };
 
     BaseXLayout.addDrop(this, dh);
@@ -138,20 +136,6 @@ final class DialogImport extends BaseXBack {
    */
   String input() {
     return input.getText().trim();
-  }
-
-  /**
-   * Returns an XML file chosen by the user.
-   * @return file chooser
-   */
-  private IOFile inputFile() {
-    final String path = gui.gopts.get(GUIOptions.INPUTPATH);
-    final BaseXFileChooser fc = new BaseXFileChooser(FILE_OR_DIR, path, gui);
-    fc.textFilters();
-    fc.filter(ZIP_ARCHIVES, IO.ZIPSUFFIXES);
-    final IOFile file = fc.select(Mode.FDOPEN);
-    if(file != null) gui.gopts.set(GUIOptions.INPUTPATH, file.path());
-    return file;
   }
 
   /**
@@ -199,7 +183,7 @@ final class DialogImport extends BaseXBack {
     gui.set(MainOptions.ARCHIVENAME, archiveName.isSelected());
     gui.set(MainOptions.SKIPCORRUPT, skipCorrupt.isSelected());
     gui.set(MainOptions.ADDRAW, addRaw.isSelected());
-    input.store();
+    input.updateHistory();
     parsing.setOptions();
   }
 
@@ -208,11 +192,16 @@ final class DialogImport extends BaseXBack {
    * and updates the panel.
    */
   private void choose() {
-    // get user input (may be canceled)
-    final IOFile in = inputFile();
-    if(in == null) return;
-    input.setText(in.path());
-    setType(in.path());
+    String path = input.getText();
+    final BaseXFileChooser fc = new BaseXFileChooser(dialog, FILE_OR_DIR, path);
+    fc.textFilters().filter(ZIP_ARCHIVES, IO.ZIPSUFFIXES);
+    final IOFile file = fc.select(Mode.FDOPEN);
+    if(file == null) return;
+
+    gui.gopts.setFile(GUIOptions.INPUTPATH, file);
+    path = file.path();
+    input.setText(path);
+    setType(path);
   }
 
   /**
@@ -236,7 +225,7 @@ final class DialogImport extends BaseXBack {
     if(i != -1) {
       // analyze file suffix
       final String suf = path.substring(i).toLowerCase(Locale.ENGLISH);
-      if(eq(suf, IO.XMLSUFFIXES) || eq(suf, IO.XSLSUFFIXES)) type = MainParser.XML;
+      if(eq(suf, gui.gopts.xmlSuffixes()) || eq(suf, IO.XSLSUFFIXES)) type = MainParser.XML;
       else if(eq(suf, IO.HTMLSUFFIXES)) type = MainParser.HTML;
       else if(eq(suf, IO.CSVSUFFIX)) type = MainParser.CSV;
       else if(eq(suf, IO.TXTSUFFIXES)) type = MainParser.TEXT;
@@ -254,20 +243,20 @@ final class DialogImport extends BaseXBack {
   /**
    * Guesses the content type of the specified input.
    * @param in input stream
-   * @return type
+   * @return type or {@code null}
    */
   private static MainParser guess(final IO in) {
     if(!in.exists() || in instanceof IOUrl) return null;
 
-    try(BufferInput ti = new BufferInput(in)) {
-      int b = ti.read();
+    try(BufferInput bi = BufferInput.get(in)) {
+      int b = bi.read();
       // input starts with opening bracket: may be xml
       if(b == '<') return MainParser.XML;
 
       for(int c = 0; b >= 0 && ++c < IO.BLOCKSIZE;) {
         // treat as raw data if characters are no ascii
         if(b < ' ' && !Token.ws(b) || b >= 128) return MainParser.RAW;
-        b = ti.read();
+        b = bi.read();
       }
       // all characters were of type ascii
       return MainParser.TEXT;

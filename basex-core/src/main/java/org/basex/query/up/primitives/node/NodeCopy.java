@@ -1,6 +1,7 @@
 package org.basex.query.up.primitives.node;
 
 import org.basex.data.*;
+import org.basex.query.*;
 import org.basex.query.up.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.util.*;
@@ -13,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract update primitive which holds a copy of nodes to be inserted.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 abstract class NodeCopy extends NodeUpdate {
@@ -37,14 +38,14 @@ abstract class NodeCopy extends NodeUpdate {
   }
 
   @Override
-  public final void prepare(final MemData tmp) {
+  public final void prepare(final MemData tmp, final QueryContext qc) {
     // merge texts. after that, text nodes still need to be merged,
     // as two adjacent iterators may lead to two adjacent text nodes
     final ANodeList list = mergeNodeCacheText(nodes);
     nodes = null;
     // build main memory representation of nodes to be copied
     final int start = tmp.meta.size;
-    new DataBuilder(tmp).build(list);
+    new DataBuilder(tmp, qc).build(list);
     insseq = new DataClip(tmp, start, tmp.meta.size, list.size());
   }
 
@@ -78,9 +79,9 @@ abstract class NodeCopy extends NodeUpdate {
     final ANodeList s = new ANodeList(ns);
     ANode n = nl.get(0);
     for(int c = 0; c < ns;) {
-      if(n.type == NodeType.TXT) {
+      if(n.type == NodeType.TEXT) {
         final TokenBuilder tb = new TokenBuilder();
-        while(n.type == NodeType.TXT) {
+        while(n.type == NodeType.TEXT) {
           tb.add(n.string());
           if(++c == ns) break;
           n = nl.get(c);
@@ -95,13 +96,12 @@ abstract class NodeCopy extends NodeUpdate {
   }
 
   @Override
-  public final int size() {
+  public int size() {
     return insseq.fragments;
   }
 
   @Override
   public final String toString() {
-    return Util.className(this) + '[' + ']' + ", " +
-        (insseq != null ? size() : nodes.size()) + " ops]";
+    return Util.className(this) + "[], " + (insseq != null ? size() : nodes.size()) + " ops]";
   }
 }

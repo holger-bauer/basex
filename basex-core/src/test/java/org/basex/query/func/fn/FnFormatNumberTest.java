@@ -5,11 +5,10 @@ import org.basex.query.*;
 /**
  * XQuery functions tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFormatNumberTest extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
       { "DecFormat 1", integers(1),
@@ -72,6 +71,7 @@ public final class FnFormatNumberTest extends QueryTest {
       { "formnum 290", strings("1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1"),
         "format-number(xs:decimal('11111111111111111111'), '#,#')" },
       { "formnum 300", strings("12.346e2"), "format-number(1234.5678, '00.000e0')" },
+      { "formnum 301", strings("-9,999"), "format-number(-9999, '#,###')" },
 
       { "formnum 310", strings("\u0a66,i"),
           "declare default decimal-format zero-digit = '&#xA66;';"

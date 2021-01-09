@@ -4,7 +4,7 @@ import javax.xml.xquery.*;
 
 import net.xqj.basex.*;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Base class for all XQJ local tests.
@@ -22,8 +22,7 @@ public abstract class XQJBaseTest {
    * @throws XQException query exception
    */
   @SuppressWarnings("unused")
-  @Before
-  public void setUp() throws XQException {
+  @BeforeEach public void setUp() throws XQException {
     xqds = new BaseXXQDataSource();
     xqc = xqds.getConnection();
   }
@@ -32,8 +31,7 @@ public abstract class XQJBaseTest {
    * Finalizes a test.
    * @throws XQException xquery exception
    */
-  @After
-  public void tearDown() throws XQException {
+  @AfterEach public void tearDown() throws XQException {
     xqc.close();
   }
 

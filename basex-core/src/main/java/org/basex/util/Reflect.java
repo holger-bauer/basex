@@ -7,7 +7,7 @@ import java.util.*;
  * This class assembles some reflection methods. Most exceptions are caught and replaced
  * by a {@code null} value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Reflect {
@@ -32,19 +32,21 @@ public final class Reflect {
       forName(Util.info(pattern, ext));
       return true;
     } catch(final Throwable ex) {
+      Util.debug(ex);
       return false;
     }
   }
 
   /**
-   * Caches and returns a reference to the specified class or {@code null}.
+   * Caches and returns a reference to the specified class.
    * @param name fully qualified class name
-   * @return reference or {@code null} if the class is not found
+   * @return reference, or {@code null} if the class is not found
    */
   public static Class<?> find(final String name) {
     try {
       return forName(name);
     } catch(final Throwable ex) {
+      Util.debug(ex);
       return null;
     }
   }
@@ -95,24 +97,11 @@ public final class Reflect {
   }
 
   /**
-   * Returns a class reference to one of the specified classes or {@code null}.
-   * @param names fully qualified class names
-   * @return reference or {@code null} if the class is not found
-   */
-  public static Class<?> find(final String[] names) {
-    for(final String n : names) {
-      final Class<?> c = find(n);
-      if(c != null) return c;
-    }
-    return null;
-  }
-
-  /**
    * Caches and returns a constructor by parameter types.
    * @param clazz class to search for the constructor
    * @param types constructor parameters
    * @param <O> class type
-   * @return {@code null} if the constructor is not found
+   * @return constructor, or {@code null} if the constructor is not found
    */
   public static <O> Constructor<O> find(final Class<O> clazz, final Class<?>... types) {
     if(clazz == null) return null;
@@ -128,6 +117,7 @@ public final class Reflect {
         try {
           m = clazz.getConstructor(types);
         } catch(final Throwable ex) {
+          Util.debug(ex);
           m = clazz.getDeclaredConstructor(types);
           m.setAccessible(true);
         }
@@ -144,7 +134,7 @@ public final class Reflect {
    * @param clazz class to search for the method
    * @param name method name
    * @param types method parameters
-   * @return reference or {@code null} if the method is not found
+   * @return method, or {@code null} if the method is not found
    */
   public static Method method(final Class<?> clazz, final String name, final Class<?>... types) {
     if(clazz == null) return null;
@@ -153,6 +143,7 @@ public final class Reflect {
       try {
         m = clazz.getMethod(name, types);
       } catch(final Throwable ex) {
+        Util.debug(ex);
         m = clazz.getDeclaredMethod(name, types);
         m.setAccessible(true);
       }
@@ -163,14 +154,14 @@ public final class Reflect {
   }
 
   /**
-   * Returns a class instance, or throws a runtime exception.
+   * Returns a class instance.
    * @param clazz class
    * @param <O> type
-   * @return instance
+   * @return instance or {@code null}
    */
   public static <O> O get(final Class<O> clazz) {
     try {
-      return clazz != null ? clazz.newInstance() : null;
+      return clazz != null ? clazz.getDeclaredConstructor().newInstance() : null;
     } catch(final Throwable ex) {
       Util.debug(ex);
       return null;
@@ -182,7 +173,7 @@ public final class Reflect {
    * @param clazz class
    * @param args arguments
    * @param <O> class type
-   * @return instance
+   * @return instance or {@code null}
    */
   public static <O> O get(final Constructor<O> clazz, final Object... args) {
     try {
@@ -198,11 +189,26 @@ public final class Reflect {
    * @param method method to run
    * @param object object ({@code null} for static methods)
    * @param args arguments
-   * @return result of method call
+   * @return result of method call or {@code null}
    */
   public static Object invoke(final Method method, final Object object, final Object... args) {
     try {
       return method != null ? method.invoke(object, args) : null;
+    } catch(final Throwable ex) {
+      Util.debug(ex);
+      return null;
+    }
+  }
+
+  /**
+   * Returns the value of a field.
+   * @param field field to access
+   * @param object object ({@code null} for static methods)
+   * @return value of field
+   */
+  public static Object get(final Field field, final Object object) {
+    try {
+      return field != null ? field.get(object) : null;
     } catch(final Throwable ex) {
       Util.debug(ex);
       return null;

@@ -13,6 +13,7 @@ import org.basex.index.*;
 import org.basex.index.query.*;
 import org.basex.index.stats.*;
 import org.basex.io.random.*;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
@@ -21,7 +22,7 @@ import org.basex.util.list.*;
  * This class provides access to attribute values and text contents stored on disk.
  * The data structure is described in the {@link DiskValuesBuilder} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class DiskValues extends ValueIndex {
@@ -45,8 +46,7 @@ public class DiskValues extends ValueIndex {
    * @param type index type
    * @throws IOException I/O Exception
    */
-  public DiskValues(final Data data, final IndexType type)
-      throws IOException {
+  public DiskValues(final Data data, final IndexType type) throws IOException {
     this(data, type, fileSuffix(type));
   }
 
@@ -59,8 +59,8 @@ public class DiskValues extends ValueIndex {
    */
   DiskValues(final Data data, final IndexType type, final String pref) throws IOException {
     super(data, type);
-    idxl = new DataAccess(data.meta.dbfile(pref + 'l'));
-    idxr = new DataAccess(data.meta.dbfile(pref + 'r'));
+    idxl = new DataAccess(data.meta.dbFile(pref + 'l'));
+    idxr = new DataAccess(data.meta.dbFile(pref + 'r'));
     size.set(idxl.read4());
   }
 
@@ -73,7 +73,7 @@ public class DiskValues extends ValueIndex {
     final IndexStats stats = new IndexStats(options.get(MainOptions.MAXSTAT));
     synchronized(monitor) {
       final long l = idxl.length() + idxr.length();
-      tb.add(LI_SIZE).add(Performance.format(l, true)).add(NL);
+      tb.add(LI_SIZE).add(Performance.format(l)).add(NL);
       final int entries = size();
       for(int index = 0; index < entries; index++) {
         final long pos = idxr.read5(index * 5L);
@@ -91,18 +91,35 @@ public class DiskValues extends ValueIndex {
   }
 
   @Override
-  public final int costs(final IndexToken it) {
-    if(it instanceof StringRange) return Math.max(1, data.meta.size / 10);
-    if(it instanceof NumericRange) return Math.max(1, data.meta.size / 3);
-    return entry(it.get()).size;
+  public final IndexCosts costs(final IndexSearch search) {
+    return IndexCosts.get(
+      search instanceof StringRange ? Math.max(1, data.meta.size / 10) :
+      search instanceof NumericRange ? Math.max(1, data.meta.size / 3) :
+      entry(search.token()).size);
   }
 
   @Override
-  public final IndexIterator iter(final IndexToken it) {
-    if(it instanceof StringRange) return idRange((StringRange) it);
-    if(it instanceof NumericRange) return idRange((NumericRange) it);
-    final IndexEntry ie = entry(it.get());
-    return iter(ie.size, ie.offset);
+  public final IndexIterator iter(final IndexSearch search) {
+    final IntList pres;
+    if(search instanceof StringRange) {
+      pres = idRange((StringRange) search);
+    } else if(search instanceof NumericRange) {
+      pres = idRange((NumericRange) search);
+    } else {
+      final IndexEntry ie = entry(search.token());
+      pres = pres(ie.size, ie.offset);
+    }
+
+    return new IndexIterator() {
+      final int s = pres.size();
+      int p;
+      @Override
+      public boolean more() { return p < s; }
+      @Override
+      public int pre() { return pres.get(p++); }
+      @Override
+      public int size() { return s; }
+    };
   }
 
   @Override
@@ -119,21 +136,21 @@ public class DiskValues extends ValueIndex {
   }
 
   @Override
-  public void add(final ValueCache vc) {
+  public void add(final ValueCache values) {
     throw Util.notExpected();
   }
 
   @Override
-  public void delete(final ValueCache vc) {
+  public void delete(final ValueCache values) {
     throw Util.notExpected();
   }
 
   @Override
-  public final EntryIterator entries(final IndexEntries input) {
-    final byte[] key = input.get();
-    if(key.length == 0) return allKeys(input.descending);
-    if(input.prefix) return keysWithPrefix(key);
-    return keysFrom(key, input.descending);
+  public final EntryIterator entries(final IndexEntries entries) {
+    final byte[] token = entries.token();
+    if(token.length == 0) return allKeys(entries.descending);
+    if(entries.prefix) return keysWithPrefix(token);
+    return keysFrom(token, entries.descending);
   }
 
   @Override
@@ -189,15 +206,15 @@ public class DiskValues extends ValueIndex {
   /**
    * Returns an index entry.
    * <p><em>Important:</em> This method is thread-safe.</p>
-   * @param key key to be found or cached
+   * @param token token to be found or cached
    * @return cache entry
    */
-  private IndexEntry entry(final byte[] key) {
-    final IndexEntry entry = cache.get(key);
+  private IndexEntry entry(final byte[] token) {
+    final IndexEntry entry = cache.get(token);
     if(entry != null) return entry;
 
-    final long index = get(key);
-    if(index < 0) return new IndexEntry(key, 0, 0);
+    final long index = get(token);
+    if(index < 0) return new IndexEntry(token, 0, 0);
 
     final int count;
     final long offset;
@@ -209,7 +226,7 @@ public class DiskValues extends ValueIndex {
       offset = idxl.cursor();
     }
 
-    return cache.add(key, count, offset);
+    return cache.add(token, count, offset);
   }
 
   /**
@@ -244,8 +261,8 @@ public class DiskValues extends ValueIndex {
     final int i = get(prefix);
     return new EntryIterator() {
       final int s = size();
-      int ix = (i < 0 ? -i - 1 : i) - 1; // -1 in order to use the faster ++ix operator
-      int count = -1;
+      // -1 in order to use the faster ++ix operator
+      int ix = (i < 0 ? -i - 1 : i) - 1, count = -1;
 
       @Override
       public byte[] next() {
@@ -360,20 +377,20 @@ public class DiskValues extends ValueIndex {
    * <p><em>Important:</em> This method is thread-safe.</p>
    * @param sz number of values
    * @param offset offset
-   * @return iterator
+   * @return sorted pre values
    */
-  private IndexIterator iter(final int sz, final long offset) {
+  protected IntList pres(final int sz, final long offset) {
     final IntList pres = new IntList(sz);
     synchronized(monitor) {
       idxl.cursor(offset);
       for(int i = 0, id = 0; i < sz; i++) {
         id += idxl.readNum();
-        // pass over token position
+        // token index: skip position
         if(type == IndexType.TOKEN) idxl.readNum();
         pres.add(pre(id));
       }
     }
-    return iter(pres.sort());
+    return pres;
   }
 
   /**
@@ -382,7 +399,7 @@ public class DiskValues extends ValueIndex {
    * @param tok index term
    * @return results
    */
-  private IndexIterator idRange(final StringRange tok) {
+  private IntList idRange(final StringRange tok) {
     // check if min and max are positive integers with the same number of digits
     final IntList pres = new IntList();
     synchronized(monitor) {
@@ -401,7 +418,7 @@ public class DiskValues extends ValueIndex {
         }
       }
     }
-    return iter(pres.sort());
+    return pres.sort();
   }
 
   /**
@@ -410,7 +427,7 @@ public class DiskValues extends ValueIndex {
    * @param tok index term
    * @return results
    */
-  private IndexIterator idRange(final NumericRange tok) {
+  private IntList idRange(final NumericRange tok) {
     // check if min and max are positive integers with the same number of digits
     final double min = tok.min, max = tok.max;
     final int len = max > 0 && (long) max == max ? token(max).length : 0;
@@ -440,25 +457,7 @@ public class DiskValues extends ValueIndex {
         }
       }
     }
-    return iter(pres.sort());
-  }
-
-  /**
-   * Returns an iterator for the specified id list.
-   * @param pres pre values
-   * @return iterator
-   */
-  private static IndexIterator iter(final IntList pres) {
-    return new IndexIterator() {
-      final int s = pres.size();
-      int p = -1;
-      @Override
-      public boolean more() { return ++p < s; }
-      @Override
-      public int pre() { return pres.get(p); }
-      @Override
-      public int size() { return s; }
-    };
+    return pres.sort();
   }
 
   /**
@@ -474,12 +473,12 @@ public class DiskValues extends ValueIndex {
   /**
    * Returns a string representation of the index structure.
    * @param all include database contents in the representation. During updates, database lookups
-   *        must be avoided, as the data structures will be inconsistent.
+   *        must be avoided, as the data structures will be inconsistent
    * @return string
    */
   public final String toString(final boolean all) {
     final TokenBuilder tb = new TokenBuilder();
-    tb.addExt(type).add(" INDEX, '").add(data.meta.name).add("':\n");
+    tb.add(type).add(" INDEX, '").add(data.meta.name).add("':\n");
     final int entries = size();
     for(int index = 0; index < entries; index++) {
       final long pos = idxr.read5(index * 5L);

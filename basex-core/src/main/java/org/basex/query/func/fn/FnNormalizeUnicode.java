@@ -14,13 +14,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnNormalizeUnicode extends StandardFunc {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] str = toEmptyToken(exprs[0], qc);
+  public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final byte[] str = toZeroToken(exprs[0], qc);
 
     Form form = Form.NFC;
     if(exprs.length == 2) {

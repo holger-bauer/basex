@@ -7,46 +7,34 @@ import org.basex.util.list.*;
 /**
  * Variable stack.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  */
-public final class VarStack extends ElementList {
-  /** Variable expressions. */
-  private Var[] vars;
-
+public final class VarStack extends ObjectList<Var, VarStack> {
   /**
    * Default constructor.
    */
   public VarStack() {
-    this(Array.CAPACITY);
-  }
-
-  /**
-   * Default constructor.
-   * @param c initial capacity
-   */
-  public VarStack(final int c) {
-    vars = new Var[c];
-  }
-
-  /**
-   * Adds the specified variable.
-   * @param var variable
-   */
-  public void push(final Var var) {
-    if(size == vars.length) vars = Array.copy(vars, new Var[newSize()]);
-    vars[size++] = var;
+    super(new Var[Array.INITIAL_CAPACITY]);
   }
 
   /**
    * Returns a variable with the specified name; should only be
-   * used while parsing because it ignores ids of variables.
+   * used while parsing, because it ignores the ids of variables.
    * @param name variable name
-   * @return variable
+   * @return variable or {@code null}
    */
   public Var get(final QNm name) {
-    for(int i = size; i-- > 0;) if(name.eq(vars[i].name)) return vars[i];
+    for(int l = size; l-- > 0;) {
+      final Var var = list[l];
+      if(name.eq(var.name)) return var;
+    }
     return null;
+  }
+
+  @Override
+  protected Var[] newArray(final int s) {
+    return new Var[s];
   }
 }

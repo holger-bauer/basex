@@ -9,8 +9,8 @@ while [ -h "$FILE" ] ; do
 done
 MAIN="$( cd -P "$(dirname "$FILE")/.." && pwd )"
 
-# Core classes
-CP=$MAIN/target/classes:$MAIN/lib/*:$CLASSPATH
+# Core and library classes
+CP=$MAIN/target/classes:$MAIN/lib/custom/*:$MAIN/lib/*:$CLASSPATH
 
 # Run code
-java -cp "$CP" $BASEX_JVM org.basex.BaseXServer "$@" stop
+exec java -cp "$CP" $BASEX_JVM org.basex.BaseXServer "$@" stop

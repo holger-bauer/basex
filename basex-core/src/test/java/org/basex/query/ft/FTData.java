@@ -5,7 +5,7 @@ import org.basex.query.*;
 /**
  * Full-text document and queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class FTData extends QueryTest {
@@ -57,6 +57,7 @@ abstract class FTData extends QueryTest {
       { "Simple 9", booleans(true), "true() contains text 'true'" },
       { "Simple 10", booleans(true), "false() contains text 'false'" },
       { "Simple 11", booleans(false), "'text' contains text ''" },
+      { "Simple 12", booleans(false), "'t' contains text ftnot { 't' } distance at most 0 words" },
 
       { "FT 1", nodes(14), "//w[text() contains text 'HELLO']" },
       { "FT 2", nodes(14), "//w[text() contains text 'hello']" },
@@ -106,13 +107,16 @@ abstract class FTData extends QueryTest {
       { "AndOr 4", nodes(25, 29),
         "//fti[text() contains text 'eens' and text() contains text 'ook' or " +
         "text() contains text 'a']" },
-      { "AndOr 5", nodes(31),
-        "//fti[text() contains text 'adf s' or text() contains text 's adf']" },
+      { "AndOr 5", nodes(25, 29),
+        "//fti[text() contains text 'ook' and text() contains text 'eens' or " +
+        "text() contains text 'a']" },
       { "AndOr 6", nodes(31),
+        "//fti[text() contains text 'adf s' or text() contains text 's adf']" },
+      { "AndOr 7", nodes(31),
         "//fti[contains(text(), 'adf') and text() contains text 'adf']" },
-      { "AndOr 7", nodes(3),
+      { "AndOr 8", nodes(3),
         "//*[text() contains text 'sentence' and text() contains text 'xml']" },
-      { "AndOr 8", nodes(42, 46),
+      { "AndOr 9", nodes(42, 46),
         "//mix[text() contains text 'A'][text() contains text 'B']" },
 
       { "Phrase 1", nodes(7, 9, 11),
@@ -407,7 +411,7 @@ abstract class FTData extends QueryTest {
         "//w[. contains text 'fifth' ftand 'third' " +
         "ftand 'second' window 7 words ordered]" },
 
-      { "FTScope 1", nodes(25, 27, 29, 31, 33),
+      { "FTScope 1", nodes(27, 29, 33),
         "//fti[. contains text 'wordt ook' same sentence]" },
       { "FTScope 2", nodes(27, 29, 33),
         "//fti[text() contains text 'wordt' ftand 'ook' same sentence]" },

@@ -1,6 +1,7 @@
 package org.basex.query.iter;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
@@ -8,22 +9,22 @@ import org.basex.query.value.seq.*;
 /**
  * Iterator interface.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Iter {
   /**
-   * Returns the next item or {@code null} if no other items are found.
-   * @return resulting item or {@code null}
+   * Returns the next item.
+   * @return resulting item, or {@code null} if all items have been returned
    * @throws QueryException query exception
    */
   public abstract Item next() throws QueryException;
 
   /**
    * Returns the specified item, or an arbitrary item if the index is invalid.
-   * If this method is implemented by an iterator, {@link #size} needs to be implemented as well.
-   * @param i value offset
-   * @return specified item
+   * If this method returns items, {@link #size()} needs to be implemented as well.
+   * @param i value offset (starting with 0)
+   * @return specified item or {@code null}
    * @throws QueryException query exception
    */
   @SuppressWarnings("unused")
@@ -32,30 +33,45 @@ public abstract class Iter {
   }
 
   /**
-   * Returns the iterator size. Note: {@code -1} is returned if the result size is unknown.
-   * If this method is implemented by an iterator, {@link #get} needs to be implemented as well.
+   * Returns the iterator size. {@code -1} is returned if the result size is unknown.
+   * If this method returns a positive value, {@link #get(long)} needs to be implemented as well.
    * @return number of entries
+   * @throws QueryException query exception
    */
-  public long size() {
+  @SuppressWarnings("unused")
+  public long size() throws QueryException {
     return -1;
   }
 
   /**
-   * Returns a value with all iterated items.
-   * Must only be called if {@link #next} has not been called before.
-   * @return sequence
+   * If available, returns a value on which the iterator is based on.
+   * @return value or {@code null}
+   */
+  public Value iterValue() {
+    return null;
+  }
+
+  /**
+   * Returns a value with all iterated items. This method should always be called before single
+   * items have been requested. Otherwise, it might not return all items.
+   * @param qc query context
+   * @param expr original expression (can be {@code null}; if assigned,
+   *   type of result sequence will be refined)
+   * @return value
    * @throws QueryException query exception
    */
-  public Value value() throws QueryException {
+  public Value value(final QueryContext qc, final Expr expr) throws QueryException {
     // check if sequence is empty
-    final Item i1 = next();
-    if(i1 == null) return Empty.SEQ;
+    final Item item1 = next();
+    if(item1 == null) return Empty.VALUE;
 
-    final Item i2 = next();
-    if(i2 == null) return i1;
+    // check for single result
+    final Item item2 = next();
+    if(item2 == null) return item1;
 
-    final ValueBuilder vb = new ValueBuilder().add(i1).add(i2);
-    for(Item i; (i = next()) != null;) vb.add(i);
-    return vb.value();
+    // more results: build sequence
+    final ValueBuilder vb = new ValueBuilder(qc, item1, item2);
+    for(Item item; (item = qc.next(this)) != null;) vb.add(item);
+    return vb.value(expr);
   }
 }

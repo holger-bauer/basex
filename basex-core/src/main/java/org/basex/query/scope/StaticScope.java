@@ -2,7 +2,6 @@ package org.basex.query.scope;
 
 import java.io.*;
 
-import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
@@ -15,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Superclass for static functions, variables and the main expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public abstract class StaticScope extends ExprInfo implements Scope {
@@ -57,48 +56,33 @@ public abstract class StaticScope extends ExprInfo implements Scope {
    * no documentation exists. The main description is flagged with the "description" key.
    * The supported tags are defined in {@link Inspect#DOC_TAGS} (other tags will be
    * included in the map, too).
-   * @return documentation
+   * @return documentation or {@code null}
    */
   public final TokenObjMap<TokenList> doc() {
     if(doc == null) return null;
 
     final TokenObjMap<TokenList> map = new TokenObjMap<>();
-    byte[] key = null;
-    final TokenBuilder val = new TokenBuilder();
-    final TokenBuilder line = new TokenBuilder();
-    try {
-      final NewlineInput nli = new NewlineInput(new IOContent(doc));
-      while(nli.readLine(line)) {
-        String l = line.toString().replaceAll("^\\s*: ?", "");
-        if(l.startsWith("@")) {
-          add(key, val, map);
-          key = Token.token(l.replaceAll("^@(\\w*).*", "$1"));
-          l = l.replaceAll("^@\\w+ *", "");
+    final TokenBuilder key = new TokenBuilder(), value = new TokenBuilder();
+    final Runnable add = () -> {
+      final byte[] k = key.isEmpty() ? Inspect.DOC_TAGS[0] : key.next();
+      map.computeIfAbsent(k, TokenList::new).add(value.trim().next());
+    };
+
+    final TokenBuilder input = new TokenBuilder();
+    try(NewlineInput nli = new NewlineInput(doc)) {
+      while(nli.readLine(input)) {
+        String line = input.toString().replaceAll("^\\s*:? *", "");
+        if(line.matches("^@\\w+\\s+.*")) {
+          add.run();
+          key.add(line.replaceAll("^@|\\s+.*", ""));
+          line = line.replaceAll("^@\\w+\\s+", "");
         }
-        val.add(l).add('\n');
+        value.add(line).add('\n');
       }
     } catch(final IOException ex) {
       throw Util.notExpected(ex);
     }
-    add(key, val, map);
+    add.run();
     return map;
-  }
-
-  /**
-   * Adds a key and a value to the specified map.
-   * @param key key
-   * @param val value
-   * @param map map
-   */
-  private static void add(final byte[] key, final TokenBuilder val,
-      final TokenObjMap<TokenList> map) {
-
-    final byte[] k = key == null ? Inspect.DOC_TAGS[0] : key;
-    TokenList tl = map.get(k);
-    if(tl == null) {
-      tl = new TokenList();
-      map.put(k, tl);
-    }
-    tl.add(val.trim().next());
   }
 }

@@ -3,6 +3,7 @@ package org.basex.query.func;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
+import static org.basex.util.Token.normalize;
 
 import org.basex.core.*;
 import org.basex.io.serial.*;
@@ -11,6 +12,7 @@ import org.basex.query.expr.path.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.options.*;
@@ -18,19 +20,19 @@ import org.basex.util.options.*;
 /**
  * This class parses options specified in function arguments.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FuncOptions {
   /** QName. */
-  public static final QNm Q_SPARAM = new QNm(SERIALIZATION_PARAMETERS, OUTPUT_URI);
+  public static final QNm Q_SPARAM = new QNm(OUTPUT_PREFIX, SERIALIZATION_PARAMETERS, OUTPUT_URI);
   /** Value. */
   private static final byte[] VALUE = token("value");
 
   /** Root element. */
   private final QNm root;
-  /** Root node test. */
-  private final NodeTest test;
+  /** Root node test (can be {@code null}). */
+  private final NameTest test;
   /** Input info. */
   private final InputInfo info;
 
@@ -51,7 +53,7 @@ public final class FuncOptions {
    * @param info input info
    */
   public FuncOptions(final QNm root, final InputInfo info) {
-    test = root == null ? null : new NodeTest(root);
+    test = root == null ? null : new NameTest(root);
     this.root = root;
     this.info = info;
   }
@@ -66,8 +68,8 @@ public final class FuncOptions {
   }
 
   /**
-   * Assign options to the specified options.
-   * @param item item to be converted
+   * Assigns values to the specified options.
+   * @param item item to be converted (can be {@link Empty#VALUE})
    * @param options options
    * @param <T> option type
    * @return specified options
@@ -78,27 +80,25 @@ public final class FuncOptions {
   }
 
   /**
-   * Assigns options to the specified options.
-   * @param item item to be parsed
+   * Assigns values to the specified options.
+   * @param item item to be parsed (can be {@link Empty#VALUE})
    * @param options options
    * @param <T> option type
-   * @param error raise error code
+   * @param error error to be raised
    * @return specified options
    * @throws QueryException query exception
    */
-  public <T extends Options> T assign(final Item item, final T options, final QueryError error)
+  private <T extends Options> T assign(final Item item, final T options, final QueryError error)
       throws QueryException {
 
-    if(item != null) {
-      final TokenBuilder tb = new TokenBuilder();
+    if(item != Empty.VALUE) {
       try {
-        if(item instanceof Map) {
-          options.assign((Map) item, !acceptUnknown, info);
+        if(item instanceof XQMap) {
+          options.assign((XQMap) item, !acceptUnknown, info);
         } else {
           if(test == null) throw MAP_X_X.get(info, item.type, item);
-          if(!test.eq(item)) throw ELMMAP_X_X_X.get(info, root.prefixId(XML), item.type, item);
-          final String opts = optString((ANode) item, error);
-          options.assign(tb.add(opts).toString());
+          if(!test.matches(item)) throw ELMMAP_X_X_X.get(info, root.prefixId(XML), item.type, item);
+          options.assign(toString((ANode) item, error));
         }
       } catch(final BaseXException ex) {
         throw error.get(info, ex);
@@ -110,18 +110,18 @@ public final class FuncOptions {
   /**
    * Builds a string representation of the specified node.
    * @param node node
-   * @param error raise error code
+   * @param error error to be raised
    * @return string
    * @throws QueryException query exception
    */
-  private String optString(final ANode node, final QueryError error) throws QueryException {
-    final ANode n = node.attributes().next();
+  private String toString(final ANode node, final QueryError error) throws QueryException {
+    final ANode n = node.attributeIter().next();
     if(n != null) throw error.get(info, Util.info("Invalid attribute: '%'", n.name()));
 
     final TokenBuilder tb = new TokenBuilder();
     // interpret options
-    for(final ANode child : node.children()) {
-      if(child.type != NodeType.ELM) continue;
+    for(final ANode child : node.childIter()) {
+      if(child.type != NodeType.ELEMENT) continue;
 
       // ignore elements in other namespace
       final QNm qname = child.qname();
@@ -131,25 +131,29 @@ public final class FuncOptions {
         continue;
       }
       // retrieve key from element name and value from "value" attribute or text node
-      byte[] value = null;
       final String name = string(qname.local());
-      if(hasElements(child)) {
-        value = token(optString(child, error));
+      String value = null;
+
+      if(name.equals(SerializerOptions.USE_CHARACTER_MAPS.name())) {
+        value = SerializerOptions.characterMap(child);
+        if(value == null) throw error.get(info, "Character map is invalid.");
+      } else if(hasElements(child)) {
+        value = toString(child, error);
       } else {
-        for(final ANode attr : child.attributes()) {
+        for(final ANode attr : child.attributeIter()) {
           if(eq(attr.name(), VALUE)) {
-            value = attr.string();
+            value = string(attr.string());
             if(name.equals(SerializerOptions.CDATA_SECTION_ELEMENTS.name())) {
-              value = resolve(child, value);
+              value = cDataSectionElements(child, value);
             }
           } else {
             // Conflicts with QT3TS, Serialization-json-34 etc.
-            //throw error.get(info, Util.info("Invalid attribute: '%'", attr.name()));
+            throw error.get(info, Util.info("Invalid attribute: '%'", attr.name()));
           }
         }
-        if(value == null) value = child.string();
+        if(value == null) value = string(child.string());
       }
-      tb.add(name).add('=').add(string(value).trim().replace(",", ",,")).add(',');
+      tb.add(name).add('=').add(value.trim().replace(",", ",,")).add(',');
     }
     return tb.toString();
   }
@@ -160,25 +164,25 @@ public final class FuncOptions {
    * @param value value
    * @return name with resolved QNames
    */
-  private static byte[] resolve(final ANode elem, final byte[] value) {
-    if(!contains(value, ':')) return value;
+  private static String cDataSectionElements(final ANode elem, final String value) {
+    if(!Strings.contains(value, ':')) return value;
 
     final TokenBuilder tb = new TokenBuilder();
-    for(final byte[] name : split(normalize(value), ' ')) {
+    for(final byte[] name : split(normalize(token(value)), ' ')) {
       final int i = indexOf(name, ':');
       if(i == -1) {
         tb.add(name);
       } else {
         final byte[] vl = elem.nsScope(null).value(substring(name, 0, i));
         if(vl != null) {
-          tb.add("Q{").add(vl).add('}').add(substring(name, i + 1));
+          tb.add(QNm.eqName(vl, substring(name, i + 1)));
         } else {
           tb.add(name);
         }
       }
       tb.add(' ');
     }
-    return tb.finish();
+    return tb.toString();
   }
 
   /**
@@ -187,8 +191,8 @@ public final class FuncOptions {
    * @return result of check
    */
   private static boolean hasElements(final ANode node) {
-    for(final ANode n : node.children()) {
-      if(n.type == NodeType.ELM) return true;
+    for(final ANode nd : node.childIter()) {
+      if(nd.type == NodeType.ELEMENT) return true;
     }
     return false;
   }
@@ -196,27 +200,27 @@ public final class FuncOptions {
   /**
    * Converts the specified output parameter item to serialization parameters.
    * @param item input item
-   * @param info input info
+   * @param ii input info
    * @return serialization parameters
    * @throws QueryException query exception
    */
-  public static SerializerOptions serializer(final Item item, final InputInfo info)
+  public static SerializerOptions serializer(final Item item, final InputInfo ii)
       throws QueryException {
     final SerializerOptions so = new SerializerOptions();
     so.set(SerializerOptions.METHOD, SerialMethod.XML);
-    return serializer(item, so, info);
+    return serializer(item, so, ii);
   }
 
   /**
-   * Converts the specified output parameter item to serialization parameters.
+   * Converts the specified output parameter item to serializer options.
    * @param item input item
    * @param sopts serialization parameters
-   * @param info input info
+   * @param ii input info
    * @return serialization parameters
    * @throws QueryException query exception
    */
   public static SerializerOptions serializer(final Item item, final SerializerOptions sopts,
-      final InputInfo info) throws QueryException {
-    return new FuncOptions(Q_SPARAM, info).assign(item, sopts, SEROPT_X);
+      final InputInfo ii) throws QueryException {
+    return new FuncOptions(Q_SPARAM, ii).assign(item, sopts, SEROPT_X);
   }
 }

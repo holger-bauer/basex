@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * This class organizes the namespaces of a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Namespaces {
@@ -93,14 +93,14 @@ public final class Namespaces {
    * @param id id of prefix
    * @return prefix
    */
-  public byte[] prefix(final int id) {
+  byte[] prefix(final int id) {
     return prefixes.key(id);
   }
 
   /**
    * Returns a namespace URI for the name with the specified id.
    * @param id id of namespace URI ({@code 0}: no namespace)
-   * @return namespace URI, or {@code null}
+   * @return namespace URI or {@code null}
    */
   public byte[] uri(final int id) {
     return uris.key(id);
@@ -116,32 +116,34 @@ public final class Namespaces {
   }
 
   /**
-   * Returns the id of the specified prefix.
-   * @param prefix prefix
-   * @return id, or {@code 0} if no entry is found
+   * Returns the common default namespace of all documents of the database.
+   * @param ndocs number of documents
+   * @return namespace, or {@code null} if there is no common namespace
    */
-  public int prefixId(final byte[] prefix) {
-    return prefixes.id(prefix);
-  }
-
-  /**
-   * Returns the default namespace URI for all documents of the database.
-   * @return global default namespace, or {@code null} if there is more than one such namespace
-   */
-  public byte[] globalUri() {
+  byte[] defaultNs(final int ndocs) {
     // no namespaces defined: default namespace is empty
     final int ch = root.children();
     if(ch == 0) return Token.EMPTY;
-    // give up if more than one namespace is defined
-    if(ch > 1) return null;
-    // give up if child node has more children or more than one namespace
-    final NSNode child = root.child(0);
-    final int[] values = child.values();
-    if(child.children() > 0 || child.pre() != 1 || values.length != 2) return null;
-    // give up if namespace has a non-empty prefix
-    if(prefix(values[0]).length != 0) return null;
-    // return default namespace
-    return uri(values[1]);
+    // give up if number of default namespaces differs from number of documents
+    if(ch != ndocs) return null;
+
+    int id = 0;
+    for(int c = 0; c < ch; c++) {
+      final NSNode child = root.child(0);
+      final int[] values = child.values();
+      // give up if child node has more children or more than one namespace
+      if(child.children() > 0 || child.pre() != 1 || values.length != 2) return null;
+      // give up if namespace has a non-empty prefix
+      if(prefix(values[0]).length != 0) return null;
+      // check if all documents have the same default namespace
+      if(c == 0) {
+        id = values[1];
+      } else if(id != values[1]) {
+        return null;
+      }
+    }
+    // return common default namespace
+    return uri(id);
   }
 
   // Requesting Namespaces Based on Context =======================================================
@@ -154,7 +156,7 @@ public final class Namespaces {
    */
   public int uriIdForPrefix(final byte[] prefix, final boolean element) {
     if(isEmpty()) return 0;
-    return prefix.length != 0 ? uriId(prefix, cursor) : element ? defaults.get(level) : 0;
+    return prefix.length == 0 ? element ? defaults.get(level) : 0 : uriId(prefix, cursor);
   }
 
   /**
@@ -172,7 +174,7 @@ public final class Namespaces {
    * Returns the id of a namespace URI for the specified prefix and node.
    * @param prefix prefix
    * @param node node to start with
-   * @return id of the namespace uri, or {@code 0} if namespace is not found.
+   * @return id of the namespace uri, or {@code 0} if namespace is not found
    */
   private int uriId(final byte[] prefix, final NSNode node) {
     final int prefId = prefixes.id(prefix);
@@ -194,7 +196,7 @@ public final class Namespaces {
    * @param data data reference
    * @return key and value ids
    */
-  public Atts values(final int pre, final Data data) {
+  Atts values(final int pre, final Data data) {
     final Atts as = new Atts();
     final int[] values = cursor.find(pre, data).values();
     final int nl = values.length;
@@ -249,7 +251,7 @@ public final class Namespaces {
 
   /**
    * Caches and returns all namespace nodes in the namespace structure with a minimum pre value.
-   * @param pre minimum pre value of a namespace node.
+   * @param pre minimum pre value of a namespace node
    * @return list of namespace nodes
    */
   ArrayList<NSNode> cache(final int pre) {
@@ -265,11 +267,11 @@ public final class Namespaces {
    * @param pre pre value
    */
   private static void addNodes(final NSNode node, final List<NSNode> list, final int pre) {
-    final int sz = node.children();
-    int i = Math.max(0, node.find(pre));
-    while(i > 0 && (i == sz || node.child(i).pre() >= pre)) i--;
-    for(; i < sz; i++) {
-      final NSNode child = node.child(i);
+    final int size = node.children();
+    int n = Math.max(0, node.find(pre));
+    while(n > 0 && (n == size || node.child(n).pre() >= pre)) n--;
+    for(; n < size; n++) {
+      final NSNode child = node.child(n);
       if(child.pre() >= pre) list.add(child);
       addNodes(child, list, pre);
     }
@@ -389,7 +391,7 @@ public final class Namespaces {
    * @param end last pre value
    * @return namespaces
    */
-  public byte[] table(final int start, final int end) {
+  byte[] table(final int start, final int end) {
     if(root.children() == 0) return Token.EMPTY;
 
     final Table t = new Table();
@@ -435,7 +437,7 @@ public final class Namespaces {
    * @param end end pre value
    * @return string
    */
-  public String toString(final int start, final int end) {
+  String toString(final int start, final int end) {
     return root.toString(this, start, end);
   }
 

@@ -11,10 +11,13 @@ import org.basex.util.list.*;
 /**
  * This class summarizes the result of a search.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class SearchContext {
+  /** Maximum number of hits. */
+  private static final int MAX = 10000000;
+
   /** Search bar. */
   final SearchBar bar;
   /** Mode: match case. */
@@ -26,7 +29,7 @@ final class SearchContext {
   /** Mode: whole word. */
   final boolean word;
   /** Search string. */
-  final String search;
+  final String string;
   /** Number of results. */
   int nr;
 
@@ -45,22 +48,24 @@ final class SearchContext {
     // speed up regular expressions starting with wildcards
     if(regex && (srch.startsWith(".*") || srch.startsWith("(.*") ||
         srch.startsWith(".+") || srch.startsWith("(.+"))) srch = '^' + srch;
-    search = srch;
+    string = srch;
   }
 
   /**
-   * Performs the search.
+   * Performs the search and refreshes the editor.
    * @param txt text to be searched
+   * @param jump jump to next search result
    * @return result positions
    */
-  IntList[] search(final byte[] txt) {
+  IntList[] search(final byte[] txt, final boolean jump) {
     final IntList start = new IntList(), end = new IntList();
-    if(!search.isEmpty()) {
+    if(!string.isEmpty()) {
       if(regex) searchRegEx(start, end, txt);
       else searchSimple(start, end, txt);
     }
+    InterruptibleString.checkStop();
     nr = start.size();
-    bar.refresh(this);
+    bar.refresh(this, jump);
     return new IntList[] { start, end };
   }
 
@@ -73,10 +78,10 @@ final class SearchContext {
   private void searchRegEx(final IntList start, final IntList end, final byte[] text) {
     int flags = Pattern.DOTALL;
     if(!mcase) flags |= Pattern.CASE_INSENSITIVE;
-    final Pattern pattern = Pattern.compile(search, flags);
+    final Pattern pattern = Pattern.compile(string, flags);
     if(multi) {
       int c = 0, p = 0;
-      final Matcher m = pattern.matcher(string(text));
+      final Matcher m = pattern.matcher(new InterruptibleString(string(text)));
       while(m.find()) {
         final int s = m.start(), e = m.end();
         while(c < s) {
@@ -89,14 +94,16 @@ final class SearchContext {
           c++;
         }
         end.add(p);
+        if(start.size() >= MAX) return;
       }
     } else {
       final int os = text.length;
       final TokenBuilder tb = new TokenBuilder(os);
       for(int t = 0, o = 0; o <= os; o++) {
+        InterruptibleString.checkStop();
         if(o < os ? text[o] == '\n' : o != t) {
           int c = 0, p = t;
-          final Matcher m = pattern.matcher(string(text, t, o - t));
+          final Matcher m = pattern.matcher(new InterruptibleString(string(text, t, o - t)));
           while(m.find()) {
             final int s = m.start(), e = m.end();
             while(c < s) {
@@ -109,6 +116,7 @@ final class SearchContext {
               c++;
             }
             end.add(p);
+            if(start.size() >= MAX) return;
           }
           if(o < os) tb.add('\n');
           t = o + 1;
@@ -124,53 +132,55 @@ final class SearchContext {
    * @param text text to be searched
    */
   private void searchSimple(final IntList start, final IntList end, final byte[] text) {
-    final byte[] srch = token(search);
-    final int ss = srch.length, os = text.length;
+    final byte[] srch = token(string);
+    final int sl = srch.length, tl = text.length;
     boolean s = true;
-    for(int o = 0; o < os;) {
+    for(int t = 0; t < tl;) {
+      InterruptibleString.checkStop();
       int sp = 0;
-      if(o + ss <= os && s) {
+      if(t + sl <= tl && s) {
         if(mcase) {
-          while(sp < ss && text[o + sp] == srch[sp]) sp++;
+          while(sp < sl && text[t + sp] == srch[sp]) sp++;
         } else {
-          while(sp < ss && lc(cp(text, o + sp)) == cp(srch, sp)) sp += cl(srch, sp);
+          while(sp < sl && lc(cp(text, t + sp)) == cp(srch, sp)) sp += cl(srch, sp);
         }
       }
-      if(sp == ss && (!word || o + ss == os ||
-          !Character.isLetterOrDigit(cp(text, o + ss)))) {
-        start.add(o);
-        end.add(o + ss);
-        o += ss;
+      if(sp == sl && (!word || t + sl == tl || !Character.isLetterOrDigit(cp(text, t + sl)))) {
+        start.add(t);
+        end.add(t + sl);
+        if(start.size() >= MAX) return;
+        t += sl;
         s = !word;
       } else if(word) {
-        s = !Character.isLetterOrDigit(cp(text, o));
-        o += cl(text, o);
+        s = !Character.isLetterOrDigit(cp(text, t));
+        t += cl(text, t);
       } else {
-        o++;
+        t++;
       }
     }
   }
 
   /**
    * Checks if the specified string matches the search string.
-   * @param string string to be checked
+   * @param str string to be checked
    * @return result of check
    */
-  boolean matches(final String string) {
+  boolean matches(final String str) {
     // ignore empty strings and others that stretch over multiple lines
-    if(string.isEmpty() || string.contains("\n")) return true;
+    if(str.isEmpty() || str.contains("\n")) return true;
 
     if(regex) {
       try {
         int flags = Pattern.DOTALL;
         if(!mcase) flags |= Pattern.CASE_INSENSITIVE;
-        final Pattern pattern = Pattern.compile(search, flags);
-        return pattern.matcher(string).matches();
+        final Pattern pattern = Pattern.compile(string, flags);
+        return pattern.matcher(str).matches();
       } catch(final Exception ex) {
+        Util.debug(ex);
         return false;
       }
     }
-    return mcase ? search.equals(string) : search.equalsIgnoreCase(string);
+    return mcase ? string.equals(str) : string.equalsIgnoreCase(str);
   }
 
   /**
@@ -181,13 +191,12 @@ final class SearchContext {
     return nr;
   }
 
-  /**
-   * Compares a search context with another.
-   * @param sc search context
-   * @return result of check
-   */
-  public boolean sameAs(final SearchContext sc) {
-    return sc != null && mcase == sc.mcase && word == sc.word && regex == sc.regex &&
-        multi == sc.multi && Strings.eq(search, sc.search);
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof SearchContext)) return false;
+    final SearchContext sc = (SearchContext) obj;
+    return mcase == sc.mcase && word == sc.word && regex == sc.regex &&
+        multi == sc.multi && Strings.eq(string, sc.string);
   }
 }

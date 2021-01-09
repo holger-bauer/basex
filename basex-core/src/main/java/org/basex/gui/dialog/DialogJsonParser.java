@@ -20,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * JSON parser panel.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogJsonParser extends DialogParser {
@@ -52,29 +52,28 @@ final class DialogJsonParser extends DialogParser {
 
   /**
    * Constructor.
-   * @param d dialog reference
+   * @param dialog dialog reference
    * @param opts main options
    */
-  DialogJsonParser(final BaseXDialog d, final MainOptions opts) {
-    super(d);
+  DialogJsonParser(final BaseXDialog dialog, final MainOptions opts) {
     jopts = new JsonParserOptions(opts.get(MainOptions.JSONPARSER));
 
-    encoding = DialogExport.encoding(d, jopts.get(JsonParserOptions.ENCODING));
+    encoding = encoding(dialog, jopts.get(JsonParserOptions.ENCODING));
 
     final JsonFormat[] formats = JsonFormat.values();
     final int fl = formats.length - 1;
     final StringList frmts = new StringList(fl);
     for(int f = 0; f < fl; f++) frmts.add(formats[f].toString());
-    format = new BaseXCombo(d, frmts.finish());
+    format = new BaseXCombo(dialog, frmts.finish());
     format.setSelectedItem(jopts.get(JsonOptions.FORMAT));
 
-    liberal = new BaseXCheckBox(LIBERAL_PARSING, JsonParserOptions.LIBERAL, jopts, d);
-    escape = new BaseXCheckBox(ESCAPE_CHARS, JsonParserOptions.ESCAPE, jopts, d);
-    merge = new BaseXCheckBox(MERGE_TYPES, JsonOptions.MERGE, jopts, d);
-    strings = new BaseXCheckBox(INCLUDE_STRINGS, JsonOptions.STRINGS, jopts, d);
-    lax = new BaseXCheckBox(LAX_NAME_CONVERSION, JsonOptions.LAX, jopts, d);
+    liberal = new BaseXCheckBox(dialog, LIBERAL_PARSING, JsonParserOptions.LIBERAL, jopts);
+    escape = new BaseXCheckBox(dialog, ESCAPE_CHARS, JsonParserOptions.ESCAPE, jopts);
+    merge = new BaseXCheckBox(dialog, MERGE_TYPES, JsonOptions.MERGE, jopts);
+    strings = new BaseXCheckBox(dialog, INCLUDE_STRINGS, JsonOptions.STRINGS, jopts);
+    lax = new BaseXCheckBox(dialog, LAX_NAME_CONVERSION, JsonOptions.LAX, jopts);
 
-    final BaseXBack pp = new BaseXBack(new TableLayout(2, 1, 0, 8));
+    final BaseXBack pp = new BaseXBack(new RowLayout(8));
     BaseXBack p = new BaseXBack(new TableLayout(2, 2, 8, 4));
     p.add(new BaseXLabel(ENCODING + COL, true, true));
     p.add(encoding);
@@ -82,7 +81,7 @@ final class DialogJsonParser extends DialogParser {
     p.add(format);
     pp.add(p);
 
-    p = new BaseXBack(new TableLayout(5, 1));
+    p = new BaseXBack(new RowLayout());
     p.add(liberal);
     p.add(escape);
     p.add(merge);
@@ -91,7 +90,7 @@ final class DialogJsonParser extends DialogParser {
     pp.add(p);
     add(pp, BorderLayout.WEST);
 
-    example = new TextPanel(false, d);
+    example = new TextPanel(dialog, false);
     add(example, BorderLayout.CENTER);
 
     action(true);

@@ -5,7 +5,7 @@ import org.basex.data.*;
 /**
  * Atomic insert that inserts a given insertion sequence data instance into a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class Insert extends StructuralUpdate {
@@ -35,8 +35,8 @@ final class Insert extends StructuralUpdate {
    * @return instance
    */
   static Insert getInstance(final int pre, final int par, final DataClip clip) {
-    final int s = clip.size();
-    return new Insert(pre, s, s, pre, par, clip);
+    final int size = clip.size();
+    return new Insert(pre, size, size, pre, par, clip);
   }
 
   @Override
@@ -56,8 +56,8 @@ final class Insert extends StructuralUpdate {
 
   @Override
   public BasicUpdate merge(final Data data, final BasicUpdate bu) {
-    if(bu != null && parent == bu.parent && bu instanceof Delete && location == bu.location
-        && data.kind(bu.location) != Data.ATTR) {
+    if(bu instanceof Delete && parent == bu.parent && location == bu.location &&
+        data.kind(bu.location) != Data.ATTR) {
       final Delete del = (Delete) bu;
       return new Replace(location, shifts + del.shifts,
           del.accumulatedShifts, del.preOfAffectedNode, clip, parent);
@@ -67,6 +67,6 @@ final class Insert extends StructuralUpdate {
 
   @Override
   public String toString() {
-    return "\n Insert: " + super.toString();
+    return "\nInsert: " + super.toString();
   }
 }

@@ -19,7 +19,7 @@ import org.xml.sax.*;
  * be a local file ({@link IOFile}), a URL ({@link IOUrl}), a byte array
  * ({@link IOContent}), or a stream ({@link IOStream}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class IO {
@@ -43,8 +43,6 @@ public abstract class IO {
   public static final String JSONSUFFIX = ".json";
   /** JAR file suffix. */
   public static final String JARSUFFIX = ".jar";
-  /** JS file suffix. */
-  public static final String JSSUFFIX = ".js";
   /** TGZIP file suffix. */
   public static final String TARGZSUFFIX = ".tar.gz";
   /** TGZIP file suffix. */
@@ -70,17 +68,16 @@ public abstract class IO {
   /** Archive suffixes. */
   public static final String[] ZIPSUFFIXES = {
     ZIPSUFFIX, GZSUFFIX, TGZSUFFIX, TARSUFFIX, XARSUFFIX,
-    ".docx", ".pptx", ".xslx", ".odt", ".odp", ".ods"
+    ".docx", ".pptx", ".xslx", ".odt", ".odp", ".ods", ".epub", ".idml"
   };
-  /** XML suffixes. */
-  public static final String[] XMLSUFFIXES =
-    { XMLSUFFIX, ".xsd", ".svg", ".rdf", ".rss", ".rng", ".sch", ".xhtml" };
   /** XSL suffixes. */
   public static final String[] XSLSUFFIXES = { ".xsl", ".xslt", ".fo", ".fob" };
   /** HTML suffixes. */
   public static final String[] HTMLSUFFIXES = { ".html", ".htm" };
   /** Text suffixes. */
   public static final String[] TXTSUFFIXES = { ".txt", ".text", ".ini", ".conf", ".md", ".log" };
+  /** JS file suffixes. */
+  public static final String[] JSSUFFIXES = { ".js", ".java", ".ts", ".vue" };
 
   /** Disk block/page size (4096). */
   public static final int BLOCKSIZE = 1 << 12;
@@ -93,17 +90,13 @@ public abstract class IO {
 
   /** Maximum number of attributes (see bit layout in {@link Data} class). */
   public static final int MAXATTS = 0x1F;
-  /** Offset for inlining numbers (see bit layout in {@link Data} class). */
-  public static final long OFFNUM = 0x8000000000L;
-  /** Offset for compressing texts (see bit layout in {@link Data} class). */
-  public static final long OFFCOMP = 0x4000000000L;
 
   /** Absolute file path. All paths have forward slashes, no matter which OS is used. */
   protected String pth;
   /** File size (in bytes). */
   protected long len = -1;
   /** File name. */
-  protected String nm;
+  private String nm;
 
   /**
    * Protected constructor.
@@ -111,7 +104,7 @@ public abstract class IO {
    */
   IO(final String path) {
     pth = path;
-    final String p = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+    final String p = Strings.endsWith(path, '/') ? path.substring(0, path.length() - 1) : path;
     nm = p.substring(p.lastIndexOf('/') + 1);
   }
 
@@ -137,8 +130,8 @@ public abstract class IO {
     final String s = location.trim();
     return s.indexOf('<') == 0 ? new IOContent(s) :
            IOUrl.isFileURL(s)  ? new IOFile(IOUrl.toFile(s)) :
-           IOFile.isValid(s)   ? new IOFile(s) :
            IOUrl.isValid(s)    ? new IOUrl(s) :
+           IOFile.isValid(s)   ? new IOFile(s) :
            new IOContent(s);
   }
 
@@ -169,7 +162,7 @@ public abstract class IO {
   }
 
   /**
-   * Tests if this is a directory instance.
+   * Tests if this is a local directory instance, or if the path ends with a slash.
    * @return result of check
    */
   public boolean isDir() {
@@ -190,11 +183,7 @@ public abstract class IO {
    * @return result of check
    */
   public final boolean hasSuffix(final String... suffixes) {
-    final int i = pth.lastIndexOf('.');
-    if(i == -1) return false;
-    final String suf = pth.substring(i).toLowerCase(Locale.ENGLISH);
-    for(final String z : suffixes) if(suf.equals(z)) return true;
-    return false;
+    return checkSuffix(pth, suffixes);
   }
 
   /**
@@ -249,7 +238,7 @@ public abstract class IO {
   public final IO merge(final String path) {
     if(path.isEmpty()) return this;
     final IO io = get(path);
-    return io.isAbsolute() ? io : get((pth.endsWith("/") ? pth : dir()) + path);
+    return io.isAbsolute() ? io : get((Strings.endsWith(pth, '/') ? pth : dir()) + path);
   }
 
   /**
@@ -334,5 +323,21 @@ public abstract class IO {
   @Override
   public String toString() {
     return pth;
+  }
+
+  /**
+   * Tests if the file suffix of a path matches the specified suffixes.
+   * @param path path
+   * @param suffixes suffixes to compare with
+   * @return result of check
+   */
+  public static boolean checkSuffix(final String path, final String... suffixes) {
+    final int i = path.lastIndexOf('.');
+    if(i == -1) return false;
+    final String suf = path.substring(i).toLowerCase(Locale.ENGLISH);
+    for(final String suffix : suffixes) {
+      if(suf.equals(suffix)) return true;
+    }
+    return false;
   }
 }

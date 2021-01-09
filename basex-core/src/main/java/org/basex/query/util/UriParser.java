@@ -5,7 +5,7 @@ import java.util.regex.*;
 /**
  * A parser for RFC 3986 URIs.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class UriParser {
@@ -48,7 +48,6 @@ public final class UriParser {
   /** <pre>path-rootless = segment-nz *( "/" segment )</pre>. */
   private static final String PATH_ROOTLESS = "(?<pathRootless>" + SEGMENT_NZ +
       "(/" + SEGMENT + ")*)";
-
 
   /** <pre>reg-name = *( unreserved / pct-encoded / sub-delims )</pre>. */
   private static final String REG_NAME = "(" + UNRESERVED + "|" + PCT_ENCODED + "|" +
@@ -185,32 +184,12 @@ public final class UriParser {
     final ParsedUri pu = new ParsedUri();
     pu.scheme = matcher.group("scheme");
     pu.valid = true;
-    /*
-    pu.authority = matcher.group("authority");
-    pu.userInfo = matcher.group("userinfo");
-    pu.host = matcher.group("host");
-    final String port = matcher.group("port");
-    pu.port = port == null ? -1 : Integer.parseInt(port);
-    pu.query = matcher.group("query");
-    pu.fragment = matcher.group("fragment");
-    String path = matcher.group("pathAbempty");
-    if(path == null) {
-      path = matcher.group("pathAbsolute");
-      if(path == null) {
-        path = matcher.group("pathRootless");
-        if(path == null) {
-          path = matcher.group("pathNoScheme");
-        }
-      }
-    }
-    pu.path = path;
-    */
     return pu;
   }
 
   /**
    * URI builder.
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Dimitar Popov
    */
   public static final class ParsedUri {
@@ -221,20 +200,6 @@ public final class UriParser {
     private String scheme;
     /** Valid flag. */
     private boolean valid;
-    /* Authority.
-    private String authority;
-    /** User info.
-    private String userInfo;
-    /** Host.
-    private String host;
-    /** Port.
-    private int port;
-    /** Path.
-    private String path;
-    /** Query.
-    private String query;
-    /** Fragment.
-    private String fragment; */
 
     /**
      * Indicates if the URI is valid.

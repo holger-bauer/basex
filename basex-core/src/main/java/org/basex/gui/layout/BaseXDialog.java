@@ -13,31 +13,30 @@ import org.basex.core.*;
 import org.basex.gui.*;
 import org.basex.gui.GUIConstants.*;
 import org.basex.gui.dialog.*;
+import org.basex.gui.listener.*;
 import org.basex.util.*;
 
 /**
  * This superclass in inherited by all dialog windows.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public abstract class BaseXDialog extends JDialog {
-  /** Reference to main window. */
+public abstract class BaseXDialog extends JDialog implements BaseXWindow {
+  /** Reference to the main window. */
   public GUI gui;
   /** Used mnemonics. */
   final StringBuilder mnem = new StringBuilder();
+
   /** Remembers if the window was correctly closed. */
   protected boolean ok;
   /** Reference to the root panel. */
   protected BaseXBack panel;
 
   /** Key listener, triggering an action with each click. */
-  public final KeyAdapter keys = new KeyAdapter() {
-    @Override
-    public void keyReleased(final KeyEvent e) {
-      // don't trigger any action for modifier keys
-      if(!modifier(e) && e.getKeyChar() != KeyEvent.CHAR_UNDEFINED) action(e.getSource());
-    }
+  public final KeyListener keys = (KeyReleasedListener) e -> {
+    // don't trigger any action for modifier keys
+    if(!modifier(e) && e.getKeyChar() != KeyEvent.CHAR_UNDEFINED) action(e.getSource());
   };
 
   /**
@@ -47,35 +46,35 @@ public abstract class BaseXDialog extends JDialog {
    */
   protected BaseXDialog(final BaseXDialog dialog, final String title) {
     super(dialog, title, true);
-    init(dialog.gui);
+    gui = dialog.gui;
+    init();
   }
 
   /**
    * Constructor, called from the main window.
-   * @param main reference to main window
+   * @param gui reference to the main window
    * @param title dialog title
    */
-  protected BaseXDialog(final GUI main, final String title) {
-    this(main, title, true);
+  protected BaseXDialog(final GUI gui, final String title) {
+    this(gui, title, true);
   }
 
   /**
    * Constructor, called from the main window.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    * @param title dialog title
    * @param modal modal flag
    */
-  protected BaseXDialog(final GUI main, final String title, final boolean modal) {
-    super(main, title, modal);
-    init(main);
+  protected BaseXDialog(final GUI gui, final String title, final boolean modal) {
+    super(gui, title, modal);
+    this.gui = gui;
+    init();
   }
 
   /**
    * Initializes the dialog.
-   * @param main reference to the main window
    */
-  private void init(final GUI main) {
-    gui = main;
+  private void init() {
     panel = new BaseXBack(new BorderLayout()).border(10, 10, 10, 10);
     add(panel, BorderLayout.CENTER);
     setResizable(false);
@@ -131,8 +130,20 @@ public abstract class BaseXDialog extends JDialog {
 
   @Override
   public void dispose() {
+    // modal dialog: save options, remove GUI reference
+    if(gui != null && modal()) {
+      gui.saveOptions();
+      gui = null;
+    }
     super.dispose();
-    gui.gopts.write();
+  }
+
+  /**
+   * Indicates if this is a modal dialog.
+   * @return result of check
+   */
+  public final boolean modal() {
+    return getModalityType() != ModalityType.MODELESS;
   }
 
   /**
@@ -162,13 +173,8 @@ public abstract class BaseXDialog extends JDialog {
       border(12, 0, 0, 0).layout(new TableLayout(1, buttons.length, 8, 0));
 
     for(final Object obj : buttons) {
-      final BaseXButton b;
-      if(obj instanceof BaseXButton) {
-        b = (BaseXButton) obj;
-      } else {
-        b = new BaseXButton(obj.toString(), this);
-      }
-      pnl.add(b);
+      pnl.add(obj instanceof BaseXButton ? (BaseXButton) obj :
+        new BaseXButton(this, obj.toString()));
     }
 
     final BaseXBack but = new BaseXBack(false).layout(new BorderLayout());
@@ -234,7 +240,23 @@ public abstract class BaseXDialog extends JDialog {
     try {
       Desktop.getDesktop().browse(new URI(url));
     } catch(final Exception ex) {
-      error(gui, Util.info(H_BROWSER_ERROR_X, Prop.URL));
+      Util.debug(ex);
+      error(gui, Util.info(H_BROWSER_ERROR_X, PUBLIC_URL));
     }
+  }
+
+  @Override
+  public GUI gui() {
+    return gui;
+  }
+
+  @Override
+  public BaseXDialog dialog() {
+    return this;
+  }
+
+  @Override
+  public BaseXDialog component() {
+    return this;
   }
 }

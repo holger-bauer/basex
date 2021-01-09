@@ -11,7 +11,7 @@ import org.basex.util.list.*;
  * This class provides access and update functions to attribute values and text contents stored on
  * disk. The data structure is described in the {@link DiskValuesBuilder} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UpdatableDiskValues extends DiskValues {
@@ -103,6 +103,11 @@ public final class UpdatableDiskValues extends DiskValues {
     deleteKeys(keys);
   }
 
+  @Override
+  protected IntList pres(final int sz, final long offset) {
+    return super.pres(sz, offset).sort();
+  }
+
   /**
    * Removes record ids from the index.
    * @param index index of the key
@@ -174,7 +179,7 @@ public final class UpdatableDiskValues extends DiskValues {
    * @param newIndex new position
    */
   private void copy(final byte[] tmp, final int oldIndex, final int newIndex) {
-    System.arraycopy(tmp, oldIndex * 5, tmp, newIndex * 5, 5);
+    Array.copy(tmp, oldIndex * 5, 5, tmp, newIndex * 5);
     ctext.put(newIndex, ctext.put(oldIndex, null));
   }
 

@@ -15,7 +15,7 @@ import org.basex.io.out.*;
  *
  * <p>The class is implemented by the {@link ClientSession} and {@link LocalSession} classes.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Session implements Closeable {
@@ -116,7 +116,7 @@ public abstract class Session implements Closeable {
     return out;
   }
 
-  // PROTECTED METHODS ========================================================
+  // PROTECTED METHODS ============================================================================
 
   /**
    * Constructor.

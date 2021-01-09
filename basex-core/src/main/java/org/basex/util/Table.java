@@ -12,7 +12,7 @@ import org.basex.util.list.*;
  * It should be guaranteed that the {@link #header} object has the
  * same number of entries as all {@link #contents} string arrays.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Table {
@@ -74,12 +74,7 @@ public final class Table {
    * @return self reference
    */
   public Table sort() {
-    Collections.sort(contents, new Comparator<TokenList>() {
-      @Override
-      public int compare(final TokenList tl1, final TokenList tl2) {
-        return diff(lc(tl1.get(0)), lc(tl2.get(0)));
-      }
-    });
+    contents.sort((tl1, tl2) -> diff(lc(tl1.get(0)), lc(tl2.get(0))));
     return this;
   }
 
@@ -104,8 +99,8 @@ public final class Table {
    */
   public byte[] finish() {
     final int[] ind = new int[header.size()];
-    final int sz = header.size();
-    for(int s = 0; s < sz; ++s) {
+    final int size = header.size();
+    for(int s = 0; s < size; ++s) {
       for(final TokenList e : contents) {
         ind[s] = Math.max(ind[s], e.get(s).length);
       }
@@ -113,19 +108,19 @@ public final class Table {
     }
 
     final TokenBuilder tb = new TokenBuilder();
-    for(int u = 0; u < sz; ++u) {
+    for(int u = 0; u < size; ++u) {
       final byte[] s = header.get(u);
       final int is = ind[u] - s.length + DIST;
       tb.add(s);
       for(int i = 0; i < is; ++i) tb.add(' ');
     }
     tb.add(NL);
-    for(int u = 0; u < sz; ++u) {
-      for(int i = 0; i < ind[u] + (u + 1 == sz ? 0 : DIST); ++i) tb.add('-');
+    for(int u = 0; u < size; ++u) {
+      for(int i = 0; i < ind[u] + (u + 1 == size ? 0 : DIST); ++i) tb.add('-');
     }
     tb.add(NL);
     for(final TokenList e : contents) {
-      for(int u = 0; u < sz; ++u) {
+      for(int u = 0; u < size; ++u) {
         final byte[] s = e.get(u);
         final int is = ind[u] - s.length;
         if(u < align.size() && align.get(u)) {

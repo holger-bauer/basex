@@ -5,7 +5,7 @@ import org.basex.data.*;
 /**
  * Atomic update operation that deletes a node.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class Delete extends StructuralUpdate {
@@ -50,18 +50,18 @@ final class Delete extends StructuralUpdate {
   }
 
   @Override
-  public String toString() {
-    return "\n Delete: " + super.toString();
-  }
-
-  @Override
   public BasicUpdate merge(final Data data, final BasicUpdate bu) {
-    if(bu != null && parent == bu.parent && bu instanceof Insert &&
-        location - shifts == bu.location && data.kind(location) != Data.ATTR) {
+    if(bu instanceof Insert && parent == bu.parent && location - shifts == bu.location &&
+        data.kind(location) != Data.ATTR) {
       final Insert ins = (Insert) bu;
       return new Replace(location, shifts + ins.shifts,
           ins.accumulatedShifts, preOfAffectedNode, ins.clip, parent);
     }
     return null;
+  }
+
+  @Override
+  public String toString() {
+    return "\nDelete: " + super.toString();
   }
 }

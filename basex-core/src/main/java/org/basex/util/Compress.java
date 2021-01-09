@@ -2,14 +2,19 @@ package org.basex.util;
 
 import java.util.*;
 
+import org.basex.data.*;
+
 /**
  * This class compresses and decompresses tokens. It is inspired by the
  * Huffman coding, but was simplified to speed up processing.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Compress {
+  /** Offset for compressing texts (see {@link DiskData}). */
+  public static final long COMPRESS = 0x4000000000L;
+
   /** Private constructor. */
   private Compress() { }
 
@@ -20,12 +25,12 @@ public final class Compress {
    */
   public static byte[] pack(final byte[] text) {
     // only compress texts with more than 4 characters
-    final int length = text.length - 1;
-    if(length < 4) return text;
+    final int tl = text.length - 1;
+    if(tl < 4) return text;
 
     // store length at beginning of array
-    final byte[] bytes = new byte[length];
-    int size = Num.set(bytes, length + 1);
+    final byte[] bytes = new byte[tl];
+    int size = Num.set(bytes, tl + 1);
 
     // find lower-case and non-ascii characters
     int lc = 0, uc = 0, out = 0;
@@ -71,7 +76,7 @@ public final class Compress {
         off = (off + 1) & 7;
         if(off == 0) {
           // skip compression if packed array gets too large
-          if(size == length) return text;
+          if(size == tl) return text;
           bytes[size++] = (byte) out;
           out = 0;
         }
@@ -79,10 +84,10 @@ public final class Compress {
     }
     if(off != 0) {
       // skip compression if packed array gets too large
-      if(size == length) return text;
+      if(size == tl) return text;
       bytes[size++] = (byte) out;
     }
-    return size < length ? Arrays.copyOf(bytes, size) : bytes;
+    return size < tl ? Arrays.copyOf(bytes, size) : bytes;
   }
 
   /**
@@ -122,6 +127,15 @@ public final class Compress {
       bytes[b] = (byte) (out >= 0x80 ? out : map[out]);
     }
     return bytes;
+  }
+
+  /**
+   * Indicates if the specified value is inlined.
+   * @param value value
+   * @return result of check
+   */
+  public static boolean compressed(final long value) {
+    return (value & COMPRESS) != 0;
   }
 
   /**

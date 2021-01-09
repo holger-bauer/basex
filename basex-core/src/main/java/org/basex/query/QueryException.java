@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Thrown to indicate an exception during the parsing or evaluation of a query.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class QueryException extends Exception {
@@ -30,8 +30,8 @@ public class QueryException extends Exception {
   /** Error QName. */
   private final QNm name;
   /** Error value. */
-  private Value value = Empty.SEQ;
-  /** Error reference. */
+  private Value value = Empty.VALUE;
+  /** Error reference ({@code null} for dynamic error messages). */
   private QueryError error;
   /** Code suggestions. */
   private StringList suggest;
@@ -43,7 +43,7 @@ public class QueryException extends Exception {
   private boolean catchable = true;
 
   /**
-   * Constructor, specifying an exception or error. {@link QueryError#BASX_GENERIC_X} will be set
+   * Constructor, specifying an exception or error. {@link QueryError#BASEX_ERROR_X} will be set
    * as error code.
    * @param cause exception or error
    */
@@ -53,28 +53,28 @@ public class QueryException extends Exception {
   }
 
   /**
-   * Constructor, specifying a simple error message. {@link QueryError#BASX_GENERIC_X} will be set
+   * Constructor, specifying a simple error message. {@link QueryError#BASEX_ERROR_X} will be set
    * as error code.
    * @param message error message
    */
   public QueryException(final String message) {
-    this(null, BASX_GENERIC_X, message);
+    this(null, BASEX_ERROR_X, message);
   }
 
   /**
    * Default constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param error error reference
    * @param ext error extension
    */
   public QueryException(final InputInfo info, final QueryError error, final Object... ext) {
-    this(info, error.qname(), error.desc, ext);
+    this(info, error.qname(), error.message, ext);
     this.error = error;
   }
 
   /**
    * Constructor, specifying the error code and message as string.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param name error code
    * @param message error message
    * @param ext error extension
@@ -237,13 +237,13 @@ public class QueryException extends Exception {
   @Override
   public String getMessage() {
     final TokenBuilder tb = new TokenBuilder();
-    if(info != null) tb.add(STOPPED_AT).add(info.toString()).add(COL).add(NL);
+    if(info != null) tb.add(STOPPED_AT).add(info).add(COL).add(NL);
     final byte[] code = name.local();
     if(code.length != 0) tb.add('[').add(name.prefixId(QueryText.ERROR_URI)).add("] ");
     tb.add(getLocalizedMessage());
     if(!stack.isEmpty()) {
       tb.add(NL).add(NL).add(STACK_TRACE).add(COL);
-      for(final InputInfo ii : stack) tb.add(NL).add(LI).add(ii.toString());
+      for(final InputInfo ii : stack) tb.add(NL).add(LI).add(ii);
     }
     return tb.toString();
   }
@@ -272,9 +272,11 @@ public class QueryException extends Exception {
    * @return argument
    */
   private static String message(final String text, final Object[] ext) {
-    final int es = ext.length;
-    for(int e = 0; e < es; e++) {
-      if(ext[e] instanceof ExprInfo) ext[e] = chop(((ExprInfo) ext[e]).toErrorString(), null);
+    final int el = ext.length;
+    for(int e = 0; e < el; e++) {
+      if(ext[e] instanceof ExprInfo) {
+        ext[e] = normalize(((ExprInfo) ext[e]).toErrorString(), null);
+      }
     }
     return Util.info(text, ext);
   }

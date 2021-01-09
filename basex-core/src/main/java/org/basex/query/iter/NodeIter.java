@@ -6,7 +6,7 @@ import org.basex.query.value.node.*;
 /**
  * ANode iterator interface.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class NodeIter extends Iter {
@@ -16,5 +16,10 @@ public abstract class NodeIter extends Iter {
   @Override
   public ANode get(final long i) {
     return null;
+  }
+
+  @Override
+  public long size() {
+    return -1;
   }
 }

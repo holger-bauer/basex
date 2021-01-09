@@ -1,11 +1,17 @@
 package org.basex.query.expr;
 
+import static org.basex.query.QueryText.*;
+
+import java.util.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.util.*;
+import org.basex.query.util.list.*;
 import org.basex.query.value.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -13,12 +19,12 @@ import org.basex.util.hash.*;
 /**
  * Project specific try/catch expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Try extends Single {
   /** Catch clauses. */
-  private final Catch[] catches;
+  private Catch[] catches;
 
   /**
    * Constructor.
@@ -27,63 +33,71 @@ public final class Try extends Single {
    * @param catches catch expressions
    */
   public Try(final InputInfo info, final Expr expr, final Catch[] catches) {
-    super(info, expr);
+    super(info, expr, SeqType.ITEM_ZM);
     this.catches = catches;
   }
 
   @Override
   public void checkUp() throws QueryException {
     // check if no or all try/catch expressions are updating
-    final int cl = catches.length;
-    final Expr[] tmp = new Expr[cl + 1];
-    tmp[0] = expr;
-    for(int c = 0; c < cl; ++c) tmp[c + 1] = catches[c].expr;
-    checkAllUp(tmp);
+    final ExprList exprs = new ExprList(catches.length + 1).add(expr);
+    for(final Catch ctch : catches) exprs.add(ctch.expr);
+    checkAllUp(exprs.finish());
   }
 
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
     try {
       super.compile(cc);
-      if(expr.isValue()) return optPre(expr, cc);
     } catch(final QueryException ex) {
       if(!ex.isCatchable()) throw ex;
-      for(final Catch c : catches) {
-        if(c.matches(ex)) {
-          // found a matching clause, compile and inline error message
-          return optPre(c.compile(cc).asExpr(ex, cc), cc);
-        }
+      for(final Catch ctch : catches) {
+        // found a matching clause: compile and inline error message
+        if(ctch.matches(ex)) return cc.replaceWith(this, ctch.compile(cc).inline(ex, cc));
       }
       throw ex;
     }
-
-    for(final Catch c : catches) c.compile(cc);
+    for(final Catch ctch : catches) ctch.compile(cc);
     return optimize(cc);
   }
 
   @Override
   public Expr optimize(final CompileContext cc) {
-    seqType = expr.seqType();
-    for(final Catch c : catches) {
-      if(!c.expr.isFunction(Function.ERROR)) seqType = seqType.union(c.seqType());
+    if(expr instanceof Value) return cc.replaceWith(this, expr);
+
+    // remove duplicates and too specific catch clauses
+    final ArrayList<Catch> list = new ArrayList<>();
+    final ArrayList<NameTest> tests = new ArrayList<>();
+    for(final Catch ctch : catches) {
+      if(ctch.simplify(tests, cc)) list.add(ctch);
     }
+    catches = list.toArray(new Catch[0]);
+
+    // join types of try and catch expressions
+    SeqType st = expr.seqType();
+    for(final Catch ctch : catches) {
+      if(!Function.ERROR.is(ctch.expr)) st = st.union(ctch.seqType());
+    }
+    exprType.assign(st);
     return this;
   }
 
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
+  public Data data() {
+    final ExprList list = new ExprList(catches.length + 1).add(expr);
+    for(final Catch ctch : catches) list.add(ctch);
+    return data(list.finish());
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
     // don't catch errors from error handlers
     try {
-      return qc.value(expr);
+      return expr.value(qc);
     } catch(final QueryException ex) {
       if(ex.isCatchable()) {
-        for(final Catch c : catches) {
-          if(c.matches(ex)) return c.value(qc, ex);
+        for(final Catch ctch : catches) {
+          if(ctch.matches(ex)) return ctch.value(qc, ex);
         }
       }
       throw ex;
@@ -96,63 +110,68 @@ public final class Try extends Single {
   }
 
   @Override
-  public Expr inline(final Var var, final Expr ex, final CompileContext cc) throws QueryException {
-    boolean change = false;
+  public Expr inline(final InlineContext ic) throws QueryException {
+    boolean changed = false;
+    final CompileContext cc = ic.cc;
     try {
-      final Expr sub = expr.inline(var, ex, cc);
-      if(sub != null) {
-        if(sub.isValue()) return optPre(sub, cc);
-        expr = sub;
-        change = true;
+      final Expr inlined = expr.inline(ic);
+      if(inlined != null) {
+        if(inlined instanceof Value) return cc.replaceWith(this, inlined);
+        expr = inlined;
+        changed = true;
       }
     } catch(final QueryException qe) {
       if(!qe.isCatchable()) throw qe;
-      for(final Catch c : catches) {
-        if(c.matches(qe)) {
+      for(final Catch ctch : catches) {
+        if(ctch.matches(qe)) {
           // found a matching clause, inline variable and error message
-          final Catch nw = c.inline(var, ex, cc);
-          return optPre((nw == null ? c : nw).asExpr(qe, cc), cc);
+          final Catch ct = ctch.inline(ic);
+          return cc.replaceWith(this, (ct == null ? ctch : ct).inline(qe, cc));
         }
       }
       throw qe;
     }
 
-    for(final Catch c : catches) change |= c.inline(var, ex, cc) != null;
-    return change ? this : null;
+    for(final Catch ctch : catches) {
+      changed |= ctch.inline(ic) != null;
+    }
+    return changed ? optimize(ic.cc) : null;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Try(info, expr.copy(cc, vm), Arr.copyAll(cc, vm, catches));
+    return copyType(new Try(info, expr.copy(cc, vm), Arr.copyAll(cc, vm, catches)));
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    for(final Catch c : catches) if(c.has(flag)) return true;
-    return super.has(flag);
+  public boolean vacuous() {
+    return expr.vacuous() && ((Checks<Catch>) ctch -> ctch.expr.vacuous()).all(catches);
   }
 
   @Override
-  public boolean removable(final Var var) {
-    for(final Catch c : catches) if(!c.removable(var)) return false;
-    return super.removable(var);
+  public boolean ddo() {
+    return expr.ddo() && ((Checks<Catch>) ctch -> ctch.expr.ddo()).all(catches);
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(), expr, catches);
+  public boolean has(final Flag... flags) {
+    for(final Catch ctch : catches) {
+      if(ctch.has(flags)) return true;
+    }
+    return super.has(flags);
+  }
+
+  @Override
+  public boolean inlineable(final InlineContext ic) {
+    for(final Catch ctch : catches) {
+      if(!ctch.inlineable(ic)) return false;
+    }
+    return super.inlineable(ic);
   }
 
   @Override
   public void markTailCalls(final CompileContext cc) {
-    for(final Catch c : catches) c.markTailCalls(cc);
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder("try { " + expr + " }");
-    for(final Catch c : catches) sb.append(' ').append(c);
-    return sb.toString();
+    for(final Catch ctch : catches) ctch.markTailCalls(cc);
   }
 
   @Override
@@ -162,8 +181,24 @@ public final class Try extends Single {
 
   @Override
   public int exprSize() {
-    int sz = 1;
-    for(final Expr e : catches) sz += e.exprSize();
-    return sz;
+    int size = 1;
+    for(final Catch ctch : catches) size += ctch.exprSize();
+    return size;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Try && Array.equals(catches, ((Try) obj).catches) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), expr, catches);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(TRY).brace(expr).tokens(catches);
   }
 }

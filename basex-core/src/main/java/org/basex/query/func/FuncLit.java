@@ -14,7 +14,7 @@ import org.basex.util.hash.*;
 /**
  * A named function literal.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class FuncLit extends Single implements Scope {
@@ -23,12 +23,9 @@ public final class FuncLit extends Single implements Scope {
   /** Function name. */
   private final QNm name;
   /** Formal parameters. */
-  private final Var[] args;
-  /** If the function's type should be checked at compile time. */
-  private final boolean check;
-
+  private final Var[] params;
   /** Annotations. */
-  private AnnList anns;
+  private final AnnList anns;
   /** Compilation flag. */
   private boolean compiled;
 
@@ -36,34 +33,26 @@ public final class FuncLit extends Single implements Scope {
    * Constructor.
    * @param anns annotations
    * @param name function name
-   * @param args formal parameters
+   * @param params formal parameters
    * @param expr function body
-   * @param ft function type
+   * @param seqType sequence type
    * @param vs variable scope
    * @param info input info
    */
-  FuncLit(final AnnList anns, final QNm name, final Var[] args, final Expr expr, final FuncType ft,
-      final VarScope vs, final InputInfo info) {
+  FuncLit(final AnnList anns, final QNm name, final Var[] params, final Expr expr,
+      final SeqType seqType, final VarScope vs, final InputInfo info) {
 
-    super(info, expr);
+    super(info, expr, seqType);
     this.anns = anns;
     this.name = name;
-    this.args = args;
+    this.params = params;
     this.vs = vs;
-    check = ft == null;
-    seqType = (ft == null ? FuncType.arity(args.length) : ft).seqType();
   }
 
   @Override
-  public void comp(final CompileContext cc) throws QueryException {
+  public void comp(final CompileContext cc) {
     if(compiled) return;
     compiled = true;
-
-    if(check) {
-      final StaticFunc sf = cc.qc.funcs.get(name, args.length, info, true);
-      anns = sf.anns;
-      seqType = sf.funcType().seqType();
-    }
 
     cc.pushScope(vs);
     try {
@@ -79,39 +68,35 @@ public final class FuncLit extends Single implements Scope {
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
     comp(cc);
-    return expr.isValue() ? preEval(cc) : this;
+    return optimize(cc);
   }
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) {
-    return new FuncItem(vs.sc, anns, name, args, (FuncType) seqType.type, expr, qc.focus,
-        vs.stackSize());
+    return new FuncItem(vs.sc, anns, name, params, funcType(), expr, qc.focus.copy(),
+        vs.stackSize(), info);
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final VarScope scp = new VarScope(vs.sc);
-    cc.pushScope(scp);
+    final VarScope vsc = new VarScope(vs.sc);
+    cc.pushScope(vsc);
     try {
-      final int al = args.length;
-      final Var[] arg = new Var[al];
-      for(int a = 0; a < al; a++) arg[a] = cc.copy(args[a], vm);
-
-      final Expr call = expr.copy(cc, vm);
-      return new FuncLit(anns, name, arg, call, (FuncType) seqType.type, scp, info);
+      final int pl = params.length;
+      final Var[] vars = new Var[pl];
+      for(int p = 0; p < pl; p++) vars[p] = cc.copy(params[p], vm);
+      final Expr ex = expr.copy(cc, vm);
+      return copyType(new FuncLit(anns, name, vars, ex, seqType(), vsc, info));
     } finally {
       cc.removeScope();
     }
   }
 
-  @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.CTX || flag == Flag.POS;
-  }
-
-  @Override
+    @Override
   public boolean visit(final ASTVisitor visitor) {
-    for(final Var v : args) if(!visitor.declared(v)) return false;
+    for(final Var var : params) {
+      if(!visitor.declared(var)) return false;
+    }
     return expr.accept(visitor);
   }
 
@@ -126,7 +111,13 @@ public final class FuncLit extends Single implements Scope {
   }
 
   @Override
-  public String toString() {
-    return new TokenBuilder(name.string()).add('#').addExt(args.length).toString();
+  public boolean equals(final Object obj) {
+    // [CG] could be enhanced
+    return this == obj;
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.concat(name.prefixId(), "#", params.length);
   }
 }

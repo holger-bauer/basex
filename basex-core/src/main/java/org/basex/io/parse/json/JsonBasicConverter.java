@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * <p>This class converts a JSON document to XML.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JsonBasicConverter extends JsonXmlConverter {
@@ -35,7 +35,7 @@ public final class JsonBasicConverter extends JsonXmlConverter {
     addPairs.add(true);
     final JsonDuplicates dupl = jopts.get(JsonParserOptions.DUPLICATES);
     if(dupl == JsonDuplicates.USE_LAST) throw new QueryIOException(
-        BXJS_INVALID_X.get(null, JsonParserOptions.DUPLICATES.name(), dupl));
+        JSON_OPTIONS_X.get(null, JsonParserOptions.DUPLICATES.name(), dupl));
   }
 
   @Override
@@ -83,8 +83,8 @@ public final class JsonBasicConverter extends JsonXmlConverter {
   @Override
   public void stringLit(final byte[] value) {
     if(add()) {
-      final FElem e = addElem(STRING).add(value);
-      if(escape && contains(value, '\\')) e.add(ESCAPED, TRUE);
+      final FElem elem = addElem(STRING).add(value);
+      if(escape && contains(value, '\\')) elem.add(ESCAPED, TRUE);
     }
   }
 
@@ -104,19 +104,19 @@ public final class JsonBasicConverter extends JsonXmlConverter {
    * @return new element
    */
   private FElem addElem(final byte[] type) {
-    final FElem e = new FElem(type, QueryText.FN_URI);
+    final FElem elem = new FElem(type, QueryText.FN_URI);
     // root node: declare namespace
-    if(curr == null) e.declareNS();
+    if(curr == null) elem.declareNS();
 
     if(name != null) {
-      e.add(KEY, name);
-      if(escape && contains(name, '\\')) e.add(ESCAPED_KEY, TRUE);
+      elem.add(KEY, name);
+      if(escape && contains(name, '\\')) elem.add(ESCAPED_KEY, TRUE);
       name = null;
     }
 
-    if(curr != null) curr.add(e);
-    else curr = e;
-    return e;
+    if(curr != null) curr.add(elem);
+    else curr = elem;
+    return elem;
   }
 
   /**

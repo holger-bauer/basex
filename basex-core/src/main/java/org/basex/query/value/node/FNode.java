@@ -1,22 +1,22 @@
 package org.basex.query.value.node;
 
 import java.util.*;
-
 import org.basex.api.dom.*;
-import org.basex.core.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
-import org.basex.query.value.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Main-memory node fragment.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class FNode extends ANode {
+  /** Parent node (can be {@code null}). */
+  FNode parent;
+
   /**
    * Constructor.
    * @param type item type
@@ -32,25 +32,19 @@ public abstract class FNode extends ANode {
   }
 
   @Override
-  public abstract FNode deepCopy(MainOptions options);
-
-  @Override
   public FNode finish() {
     return this;
   }
 
   @Override
   public final boolean is(final ANode node) {
-    return id == node.id;
+    return this == node;
   }
 
   @Override
   public final int diff(final ANode node) {
-    // compare fragment with database node
-    if(node instanceof DBNode) return diff(this, node);
-    // compare fragments. due to subtraction, node id can overflow
-    final int d = id - node.id;
-    return d > 0 ? 1 : d < 0 ? -1 : 0;
+    // fragments: compare node ids. otherwise, find LCA
+    return this == node ? 0 : node instanceof FNode ? id - node.id : diff(this, node);
   }
 
   @Override
@@ -59,47 +53,18 @@ public abstract class FNode extends ANode {
   }
 
   @Override
-  public final BasicNodeIter ancestor() {
-    return new BasicNodeIter() {
-      private ANode node = FNode.this;
-
-      @Override
-      public ANode next() {
-        node = node.parent();
-        return node;
-      }
-    };
-  }
-
-  @Override
-  public final BasicNodeIter ancestorOrSelf() {
-    return new BasicNodeIter() {
-      private ANode node = FNode.this;
-
-      @Override
-      public ANode next() {
-        if(node == null) return null;
-        final ANode n = node;
-        node = n.parent();
-        return n;
-      }
-    };
-  }
-
-  @Override
-  public BasicNodeIter attributes() {
-    return BasicNodeIter.EMPTY;
-  }
-
-  @Override
-  public BasicNodeIter children() {
-    return BasicNodeIter.EMPTY;
-  }
-
-  @Override
-  public final FNode parent(final ANode par) {
+  public final void parent(final FNode par) {
     parent = par;
-    return this;
+  }
+
+  @Override
+  public BasicNodeIter attributeIter() {
+    return BasicNodeIter.EMPTY;
+  }
+
+  @Override
+  public BasicNodeIter childIter() {
+    return BasicNodeIter.EMPTY;
   }
 
   @Override
@@ -108,32 +73,13 @@ public abstract class FNode extends ANode {
   }
 
   @Override
-  public final BasicNodeIter descendant() {
+  public final BasicNodeIter descendantIter() {
     return desc(false);
   }
 
   @Override
-  public final BasicNodeIter descendantOrSelf() {
+  public final BasicNodeIter descendantOrSelfIter() {
     return desc(true);
-  }
-
-  /**
-   * Iterates all nodes of the specified iterator.
-   * @param iter iterator
-   * @return node iterator
-   */
-  static BasicNodeIter iter(final ANodeList iter) {
-    return new BasicNodeIter() {
-      int c;
-      @Override
-      public ANode next() { return iter != null && c != iter.size() ? iter.get(c++) : null; }
-      @Override
-      public ANode get(final long i) { return iter.get((int) i); }
-      @Override
-      public long size() { return iter.size(); }
-      @Override
-      public Value value() { return iter.value(); }
-    };
   }
 
   /**
@@ -145,7 +91,7 @@ public abstract class FNode extends ANode {
     if(value == null) {
       final TokenBuilder tb = new TokenBuilder();
       for(final ANode nc : iter) {
-        if(nc.type == NodeType.ELM || nc.type == NodeType.TXT) tb.add(nc.string());
+        if(nc.type == NodeType.ELEMENT || nc.type == NodeType.TEXT) tb.add(nc.string());
       }
       value = tb.finish();
     }
@@ -164,8 +110,8 @@ public abstract class FNode extends ANode {
 
       @Override
       public ANode next() {
-        final BasicNodeIter iter = last != null ? last.children() : self ? self() : children();
-        last = iter.next();
+        final BasicNodeIter ir = last != null ? last.childIter() : self ? selfIter() : childIter();
+        last = ir.next();
         if(last == null) {
           while(!iters.isEmpty()) {
             last = iters.peek().next();
@@ -173,7 +119,7 @@ public abstract class FNode extends ANode {
             iters.pop();
           }
         } else {
-          iters.add(iter);
+          iters.add(ir);
         }
         return last;
       }
@@ -181,56 +127,19 @@ public abstract class FNode extends ANode {
   }
 
   @Override
-  public final BasicNodeIter followingSibling() {
-    return new BasicNodeIter() {
-      private BasicNodeIter iter;
-
-      @Override
-      public ANode next() {
-        if(iter == null) {
-          final ANode r = parent();
-          if(r == null) return null;
-          iter = r.children();
-          for(ANode n; (n = iter.next()) != null && !n.is(FNode.this););
-        }
-        return iter.next();
-      }
-    };
-  }
-
-  @Override
-  public final BasicNodeIter following() {
-    return new BasicNodeIter() {
-      private BasicNodeIter iter;
-
-      @Override
-      public ANode next() {
-        if(iter == null) {
-          final ANodeList list = new ANodeList();
-          ANode node = FNode.this, par = node.parent();
-          while(par != null) {
-            final BasicNodeIter i = par.children();
-            if(node.type != NodeType.ATT) {
-              for(final ANode n : i) {
-                if(n.is(node)) break;
-              }
-            }
-            for(final ANode n : i) {
-              list.add(n.finish());
-              addDesc(n.children(), list);
-            }
-            node = par;
-            par = par.parent();
-          }
-          iter = list.iter();
-        }
-        return iter.next();
-      }
-    };
-  }
-
-  @Override
   public final BXNode toJava() {
     return BXNode.get(this);
+  }
+
+  @Override
+  public final int hashCode() {
+    return id;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(!(obj instanceof FNode)) return false;
+    final FNode n = (FNode) obj;
+    return type.eq(n.type) && Token.eq(value, n.value) && parent == n.parent;
   }
 }

@@ -9,18 +9,18 @@ import org.basex.query.value.item.*;
 /**
  * Unit function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class UnitFn extends StandardFunc {
   /**
    * Returns an error with the specified item as value.
-   * @param it item (may be {@code null})
+   * @param item item (may be {@code null})
    * @return error
    * @throws QueryException query exception
    */
-  final QueryException error(final Item it) throws QueryException {
-    return (it == null ? UNIT_ASSERT.get(info) :
-      UNIT_MESSAGE_X.get(info, it.string(info))).value(it);
+  final QueryException error(final Item item) throws QueryException {
+    return (item == null ? UNIT_FAIL.get(info) :
+      UNIT_FAIL_X.get(info, item.string(info))).value(item);
   }
 }

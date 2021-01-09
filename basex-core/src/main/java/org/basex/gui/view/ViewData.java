@@ -14,7 +14,7 @@ import org.basex.util.list.*;
  * access is needed, it is advisable to directly work on the {@link Data}
  * class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ViewData {
@@ -24,18 +24,18 @@ public final class ViewData {
   /**
    * Checks if the specified node is a text node.
    * @param opts gui options
-   * @param d data reference
+   * @param data data reference
    * @param pre pre value
    * @return result of check
    */
-  public static boolean leaf(final GUIOptions opts, final Data d, final int pre) {
-    final int kind = d.kind(pre);
+  public static boolean leaf(final GUIOptions opts, final Data data, final int pre) {
+    final int kind = data.kind(pre);
     if(kind == Data.ATTR) return true;
 
     final boolean atts = opts.get(GUIOptions.MAPATTS);
-    final int last = pre + (atts ? 1 : d.attSize(pre, kind));
-    return last == d.meta.size || d.parent(pre, kind) >=
-      d.parent(last, d.kind(last));
+    final int last = pre + (atts ? 1 : data.attSize(pre, kind));
+    return last == data.meta.size || data.parent(pre, kind) >=
+      data.parent(last, data.kind(last));
   }
 
   /**
@@ -47,70 +47,67 @@ public final class ViewData {
   public static byte[] path(final Data data, final int pre) {
     if(data == null || pre >= data.meta.size) return Token.EMPTY;
 
-    int p = pre;
-    int k = data.kind(p);
-    final IntList il = new IntList();
+    final IntList pres = new IntList();
+    int p = pre, k = data.kind(p);
     while(k != Data.DOC) {
-      il.add(p);
+      pres.add(p);
       p = data.parent(p, k);
       k = data.kind(p);
     }
 
-    final byte[] doc = content(data, p, true);
     final TokenBuilder tb = new TokenBuilder();
-    tb.add(Function._DB_OPEN.args(data.meta.name, Token.string(doc)));
-    for(int i = il.size() - 1; i >= 0; i--) {
-      tb.add('/').add(content(data, il.get(i), true));
+    tb.add(Function._DB_OPEN.args(data.meta.name, Token.string(data.text(p, true))).trim());
+    for(int i = pres.size() - 1; i >= 0; i--) {
+      p = pres.get(i);
+      k = data.kind(p);
+      final byte[] txt;
+      switch(k) {
+        case Data.TEXT: txt = TEXT; break;
+        case Data.COMM: txt = COMMENT; break;
+        case Data.PI:   txt = PI; break;
+        case Data.ATTR: txt = Token.concat(ATT, data.name(p, k)); break;
+        // element node
+        default: txt = data.name(p, k); break;
+      }
+      tb.add('/').add(txt);
     }
     return tb.finish();
   }
 
   /**
-   * Returns the contents of the specified node.
+   * Returns textual contents for the specified node.
    * @param data data reference
-   * @param p pre value
-   * @param s if specified, a short representation is returned
-   * (no full-text nodes, only attribute names)
-   * @return name
+   * @param pre pre value
+   * @return text
    */
-  public static byte[] content(final Data data, final int p, final boolean s) {
-    final int k = data.kind(p);
-    switch(k) {
-      case Data.ELEM: return data.name(p, k);
-      case Data.DOC:  return data.text(p, true);
-      case Data.TEXT: return s ? TEXT : data.text(p, true);
-      case Data.COMM: return s ? COMMENT : data.text(p, true);
-      case Data.PI:   return s ? PI : data.text(p, true);
+  public static byte[] text(final Data data, final int pre) {
+    final int kind = data.kind(pre);
+    switch(kind) {
+      case Data.ELEM:
+        return data.name(pre, kind);
+      case Data.ATTR:
+        return Token.concat(ATT, data.name(pre, kind), ATT1, data.text(pre, false), ATT2);
+      default:
+        return data.text(pre, true);
     }
-
-    final TokenBuilder tb = new TokenBuilder();
-    tb.add(ATT);
-    tb.add(data.name(p, k));
-    if(!s) {
-      tb.add(ATT1);
-      tb.add(data.text(p, false));
-      tb.add(ATT2);
-    }
-    return tb.finish();
   }
 
   /**
-   * Returns the name of the specified element.
-   * Note that the pre value must reference an element node.
+   * Returns the name of the specified node or a standard text representation.
    * @param opts gui options
    * @param data data reference
    * @param pre pre value
    * @return name
    */
-  public static byte[] name(final GUIOptions opts, final Data data, final int pre) {
-    if(data.kind(pre) == Data.ELEM) {
+  public static byte[] namedText(final GUIOptions opts, final Data data, final int pre) {
+    if(opts.get(GUIOptions.SHOWNAME) && data.kind(pre) == Data.ELEM) {
       final int id = nameID(data);
-      if(id != 0 && opts.get(GUIOptions.SHOWNAME)) {
-        final byte[] att = data.attValue(id, pre);
-        if(att != null) return att;
+      if(id != 0) {
+        final byte[] attr = data.attValue(id, pre);
+        if(attr != null) return attr;
       }
     }
-    return content(data, pre, true);
+    return Token.chop(text(data, pre), 32);
   }
 
   /**

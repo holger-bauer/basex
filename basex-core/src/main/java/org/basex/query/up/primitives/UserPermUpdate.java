@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Update that operates on a global user.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class UserPermUpdate extends UserUpdate {
@@ -24,7 +24,7 @@ public abstract class UserPermUpdate extends UserUpdate {
   /**
    * Constructor.
    * @param type type of this operation
-   * @param user user
+   * @param user user ({@code null} if operation is global)
    * @param perms permissions (can be {@code null})
    * @param patterns patterns
    * @param qc query context
@@ -32,8 +32,8 @@ public abstract class UserPermUpdate extends UserUpdate {
    * @throws QueryException query exception
    */
   protected UserPermUpdate(final UpdateType type, final User user, final ArrayList<Perm> perms,
-                           final StringList patterns, final QueryContext qc, final InputInfo info)
-          throws QueryException {
+      final StringList patterns, final QueryContext qc, final InputInfo info)
+      throws QueryException {
 
     super(type, user, qc, info);
     this.perms = perms;
@@ -42,7 +42,7 @@ public abstract class UserPermUpdate extends UserUpdate {
     final StringList tmp = new StringList();
     for(final String pattern : patterns) {
       if(tmp.contains(pattern)) throw pattern.isEmpty()
-        ? USER_SAMEPERM_X_X.get(info, user.name(), operation()) : USER_SAMEPAT_X.get(info, pattern);
+        ? USER_UPDATE3_X_X.get(info, user.name(), operation()) : USER_UPDATE2_X.get(info, pattern);
       tmp.add(pattern);
     }
   }
@@ -53,7 +53,7 @@ public abstract class UserPermUpdate extends UserUpdate {
     if(!name().equals(up.name())) return;
     for(final String pattern : up.patterns) {
       if(patterns.contains(pattern)) throw pattern.isEmpty()
-        ? USER_UPDATE_X_X.get(info, name(), operation()) : USER_SAMEPAT_X.get(info, pattern);
+        ? USER_UPDATE1_X_X.get(info, name(), operation()) : USER_UPDATE2_X.get(info, pattern);
     }
   }
 
@@ -61,7 +61,9 @@ public abstract class UserPermUpdate extends UserUpdate {
    * Grants the specified permissions.
    */
   protected final void grant() {
-    final int ps = perms.size();
-    for(int p = 0; p < ps; p++) user.perm(perms.get(p), patterns.get(p));
+    final int ps = perms.size(), ts = patterns.size();
+    for(int p = 0; p < ps; p++) {
+      user.perm(perms.get(p), p < ts ? patterns.get(p) : "");
+    }
   }
 }

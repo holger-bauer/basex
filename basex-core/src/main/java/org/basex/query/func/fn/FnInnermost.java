@@ -6,10 +6,10 @@ import org.basex.query.iter.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FnInnermost extends Nodes {
+public final class FnInnermost extends FnOutermost {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
     return most(qc, false);

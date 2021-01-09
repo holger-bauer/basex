@@ -3,13 +3,15 @@ package org.basex.query.func.fn;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
+import org.basex.query.util.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFunctionLookup extends StandardFunc {
@@ -24,12 +26,19 @@ public final class FnFunctionLookup extends StandardFunc {
       } catch(final QueryException ignore) { }
     }
     // function not found
-    return null;
+    return Empty.VALUE;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    cc.qc.funcs.compile(cc, true);
+    // make sure that all functions are compiled
+    cc.qc.funcs.compileAll(cc);
     return this;
+  }
+
+  @Override
+  public boolean accept(final ASTVisitor visitor) {
+    // locked resources cannot be detected statically
+    return visitor.lock(null, false) && super.accept(visitor);
   }
 }

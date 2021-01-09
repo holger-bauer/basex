@@ -8,58 +8,67 @@ import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.seq.tree.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFoldRight extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Value v = qc.value(exprs[0]);
-    Value res = qc.value(exprs[1]);
-    final FItem fun = checkArity(exprs[2], 2, qc);
-    if(v instanceof TreeSeq) {
-      final ListIterator<Item> iter = ((TreeSeq) v).iterator(v.size());
-      while(iter.hasPrevious()) res = fun.invokeValue(qc, info, iter.previous(), res);
-    } else {
-      for(long i = v.size(); --i >= 0;) res = fun.invokeValue(qc, info, v.itemAt(i), res);
-    }
-    return res;
+    final Value seq = exprs[0].value(qc);
+    return value(seq, qc);
   }
 
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Value v = qc.value(exprs[0]);
-    final FItem fun = checkArity(exprs[2], 2, qc);
+    final Value seq = exprs[0].value(qc);
+    return seq.isEmpty() ? exprs[1].iter(qc) : value(seq, qc).iter();
+  }
 
-    // evaluate start value lazily if it's passed straight through
-    if(v.isEmpty()) return exprs[1].iter(qc);
+  /**
+   * Evaluates the expression.
+   * @param items items to process
+   * @param qc query context
+   * @return result
+   * @throws QueryException query exception
+   */
+  private Value value(final Value items, final QueryContext qc) throws QueryException {
+    Value value = exprs[1].value(qc);
+    final FItem func = checkArity(exprs[2], 2, qc);
 
-    Value res = qc.value(exprs[1]);
-    if(v instanceof TreeSeq) {
-      final ListIterator<Item> iter = ((TreeSeq) v).iterator(v.size());
-      while(iter.hasPrevious()) res = fun.invokeValue(qc, info, iter.previous(), res);
+    if(items instanceof TreeSeq) {
+      final ListIterator<Item> iter = ((TreeSeq) items).iterator(items.size());
+      while(iter.hasPrevious()) {
+        value = func.invoke(qc, info, iter.previous(), value);
+      }
     } else {
-      for(long i = v.size(); --i >= 0;) res = fun.invokeValue(qc, info, v.itemAt(i), res);
+      for(long i = items.size(); --i >= 0;) {
+        value = func.invoke(qc, info, items.itemAt(i), value);
+      }
     }
-    return res.iter();
+    return value;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    if(allAreValues() && exprs[0].size() < FnForEach.UNROLL_LIMIT) {
+    final Expr expr1 = exprs[0], expr2 = exprs[1];
+    if(expr1 == Empty.VALUE) return expr2;
+
+    FnFoldLeft.opt(this, cc, false, false);
+
+    if(allAreValues(false) && expr1.size() <= UNROLL_LIMIT) {
       // unroll the loop
-      cc.info(QueryText.OPTUNROLL_X, this);
-      final Value seq = (Value) exprs[0];
-      Expr e = exprs[1];
-      for(int i = (int) seq.size(); --i >= 0;) {
-        e = new DynFuncCall(info, sc, exprs[2], seq.itemAt(i), e).optimize(cc);
+      Expr expr = expr2;
+      for(final Item item : ((Value) expr1).reverse(cc.qc)) {
+        expr = new DynFuncCall(info, sc, exprs[2], item, expr).optimize(cc);
       }
-      return e;
+      cc.info(QueryText.OPTUNROLL_X, this);
+      return expr;
     }
     return this;
   }

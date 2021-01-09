@@ -8,6 +8,7 @@ import org.basex.index.*;
 import org.basex.index.query.*;
 import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
@@ -15,7 +16,7 @@ import org.basex.util.list.*;
 /**
  * <p>This index organizes the resources of a database (XML documents and raw files).</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Resources implements Index {
@@ -26,11 +27,11 @@ public final class Resources implements Index {
 
   /**
    * Constructor.
-   * @param d data reference
+   * @param data data reference
    */
-  public Resources(final Data d) {
-    docs = new Docs(d);
-    bins = new Binaries(d);
+  public Resources(final Data data) {
+    docs = new Docs(data);
+    bins = new Binaries(data);
   }
 
   /**
@@ -92,7 +93,17 @@ public final class Resources implements Index {
    * @return pre values (internal representation!)
    */
   public synchronized IntList docs(final String path) {
-    return docs.docs(path, false);
+    return docs(path, true);
+  }
+
+  /**
+   * Returns the pre values of all document nodes that start with the specified path.
+   * @param path input path
+   * @param desc descendant traversal
+   * @return pre values (internal representation!)
+   */
+  public synchronized IntList docs(final String path, final boolean desc) {
+    return docs.docs(path, desc);
   }
 
   /**
@@ -135,7 +146,7 @@ public final class Resources implements Index {
     return tbm;
   }
 
-  // Inherited methods ========================================================
+  // Inherited methods ============================================================================
 
   @Override
   public boolean drop() {
@@ -146,12 +157,12 @@ public final class Resources implements Index {
   public void close() { }
 
   @Override
-  public IndexIterator iter(final IndexToken token) {
+  public IndexIterator iter(final IndexSearch search) {
     throw Util.notExpected();
   }
 
   @Override
-  public int costs(final IndexToken token) {
+  public IndexCosts costs(final IndexSearch search) {
     throw Util.notExpected();
   }
 

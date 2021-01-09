@@ -1,20 +1,21 @@
 package org.basex.http.restxq;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
 import org.basex.core.*;
 import org.basex.http.*;
+import org.basex.http.web.*;
 import org.basex.io.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class contains RESTXQ tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class RestXqTest extends HTTPTest {
@@ -29,8 +30,7 @@ public abstract class RestXqTest extends HTTPTest {
    * Start server.
    * @throws Exception exception
    */
-  @BeforeClass
-  public static void start() throws Exception {
+  @BeforeAll public static void start() throws Exception {
     init(HTTP_ROOT, true);
   }
 
@@ -87,9 +87,9 @@ public abstract class RestXqTest extends HTTPTest {
     final String path = context.soptions.get(StaticOptions.WEBPATH);
     for(final IOFile f : new IOFile(path).children()) assertTrue(f.delete());
     // create new module
-    module().write(new TokenBuilder(HEADER).add(function).finish());
+    module().write(HEADER + function);
     // invalidate module cache
-    RestXqModules.get(context).init();
+    WebModules.get(context).init(false);
   }
 
   /**

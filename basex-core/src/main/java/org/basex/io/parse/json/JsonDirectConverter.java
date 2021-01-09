@@ -43,7 +43,7 @@ import org.basex.util.*;
  * </ol></li>
  * </ol>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  */
@@ -126,12 +126,12 @@ public final class JsonDirectConverter extends JsonXmlConverter {
    * @return the element
    */
   private FElem addElem(final byte[] type) {
-    final FElem e = new FElem(name);
-    addType(e, e.name(), type);
+    final FElem elem = new FElem(name);
+    addType(elem, elem.name(), type);
 
-    if(curr != null) curr.add(e);
-    else curr = e;
+    if(curr != null) curr.add(elem);
+    else curr = elem;
     name = null;
-    return e;
+    return elem;
   }
 }

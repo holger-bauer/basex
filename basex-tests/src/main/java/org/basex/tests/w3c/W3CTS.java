@@ -26,7 +26,7 @@ import org.basex.util.options.Options.YesNo;
 /**
  * XQuery Test Suite wrapper.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class W3CTS extends Main {
@@ -203,7 +203,7 @@ public abstract class W3CTS extends Main {
 
     final String time = perf.getTime();
     Util.outln("Writing log file..." + NL);
-    try(PrintOutput po = new PrintOutput(path + pathlog)) {
+    try(PrintOutput po = new PrintOutput(new IOFile(path + pathlog))) {
       po.println("TEST RESULTS ________________________________________________");
       po.println(NL + "Total #Queries: " + total);
       po.println("Correct / Empty Results: " + ok + " / " + ok2);
@@ -222,7 +222,7 @@ public abstract class W3CTS extends Main {
     }
 
     if(reporting) {
-      try(PrintOutput po = new PrintOutput(report + Prop.NAME + IO.XMLSUFFIX)) {
+      try(PrintOutput po = new PrintOutput(new IOFile(report + Prop.NAME + IO.XMLSUFFIX))) {
         print(po, report + Prop.NAME + "Pre" + IO.XMLSUFFIX);
         po.print(logReport.toString());
         print(po, report + Prop.NAME + "Pos" + IO.XMLSUFFIX);
@@ -315,7 +315,7 @@ public abstract class W3CTS extends Main {
           // serialize query
           final SerializerOptions sopts = context.options.get(MainOptions.SERIALIZER);
           try(Serializer ser = Serializer.get(ao, sopts)) {
-            for(final Item it : value) ser.serialize(it);
+            for(final Item item : value) ser.serialize(item);
           }
 
         } catch(final Exception ex) {
@@ -403,9 +403,9 @@ public abstract class W3CTS extends Main {
 
             if(xml || frag) {
               try {
-                final Value v = toValue(expect.replaceAll("^<\\?xml.*?\\?>", "").trim(), frag);
-                if(new DeepEqual().equal(value.iter(), v.iter())) break;
-                if(new DeepEqual().equal(toValue(actual, frag).iter(), v.iter())) break;
+                final Value val = toValue(expect.replaceAll("^<\\?xml.*?\\?>", "").trim(), frag);
+                if(new DeepEqual().equal(value.iter(), val.iter())) break;
+                if(new DeepEqual().equal(toValue(actual, frag).iter(), val.iter())) break;
               } catch(final Throwable ex) {
                 Util.errln('\n' + outname + ':');
                 Util.stack(ex);
@@ -482,7 +482,7 @@ public abstract class W3CTS extends Main {
     }
 
     // print verbose/timing information
-    final long nano = perf.time();
+    final long nano = perf.ns();
     final boolean slow = nano / 1000000 > timer;
     if(verbose) {
       if(slow) Util.out(": " + Performance.getTime(nano, 1));
@@ -506,7 +506,7 @@ public abstract class W3CTS extends Main {
       final Data d = new DBNode(IO.get(str)).data();
       final IntList il = new IntList();
       for(int p = frag ? 2 : 0; p < d.meta.size; p += d.size(p, d.kind(p))) il.add(p);
-      return DBNodeSeq.get(il, d, false, false);
+      return DBNodeSeq.get(il.finish(), d, null);
     } catch(final IOException ex) {
       Util.debug(ex);
       return Str.get(Long.toString(System.nanoTime()));
@@ -574,8 +574,8 @@ public abstract class W3CTS extends Main {
     for(int n = 0; n < ns; ++n) {
       final String nm = string(nodes.itemAt(n).string(null));
       final String src = srcs.get(nm);
-      final Item it = src == null ? coll(nm, qp) : Str.get(src);
-      qp.bind(string(vars.itemAt(n).string(null)), it);
+      final Item item = src == null ? coll(nm, qp) : Str.get(src);
+      qp.bind(string(vars.itemAt(n).string(null)), item);
     }
   }
 
@@ -763,7 +763,7 @@ public abstract class W3CTS extends Main {
    * @return database path
    */
   private IOFile sandbox() {
-    return new IOFile(Prop.TMP, testid);
+    return new IOFile(Prop.TEMPDIR, testid);
   }
 
   @Override

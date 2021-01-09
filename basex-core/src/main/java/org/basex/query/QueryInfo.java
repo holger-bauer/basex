@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 import static org.basex.util.Token.*;
 
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.core.*;
 import org.basex.core.locks.*;
@@ -19,15 +20,13 @@ import org.basex.util.list.*;
 /**
  * This class remembers descriptive query information sent back to the client.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryInfo {
   /** Verbose info. */
   private final boolean verbose;
 
-  /** Read locked databases. */
-  public Locks locks;
   /** Parsing time (nano seconds). */
   public long parsing;
   /** Compilation time (nano seconds). */
@@ -61,12 +60,20 @@ public final class QueryInfo {
    */
   void compInfo(final String string, final Object... ext) {
     if(verbose) {
-      String info = Util.info(string,  ext);
-      if(runtime) {
-        info = "RUNTIME: " + info;
-        if(Prop.debug) Util.stack(info);
+      final int el = ext.length;
+      for(int e = 0; e < el; e++) {
+        final Object o = ext[e];
+        ext[e] = o instanceof Supplier<?> ? ((Supplier<?>) o).get() :
+          QueryError.normalize(token(o), null);
       }
-      compile.add(info);
+      String info = Util.info(string, ext);
+      if(!info.isEmpty()) {
+        if(runtime) {
+          info = "RUNTIME: " + info;
+          if(Prop.debug) Util.stack(info);
+        }
+        compile.add(info);
+      }
     }
   }
 
@@ -77,7 +84,9 @@ public final class QueryInfo {
   void evalInfo(final String string) {
     if(verbose) {
       synchronized(evaluate) {
-        evaluate.add(token(string.replaceAll("\r?\n", "|")));
+        if(evaluate.size() < 500000) {
+          evaluate.add(chop(token(string.replaceAll("\r?\n", "|")), 1 << 14));
+        }
       }
     }
   }
@@ -87,16 +96,15 @@ public final class QueryInfo {
    * @param qp query processor
    * @param printed printed bytes
    * @param hits number of returned hits
-   * @param detailed return detailed query info
+   * @param locks read and write locks
    * @return query string
    */
   public String toString(final QueryProcessor qp, final long printed, final long hits,
-      final boolean detailed) {
-
+      final Locks locks) {
     final int runs = Math.max(1, qp.qc.context.options.get(MainOptions.RUNS));
     final TokenBuilder tb = new TokenBuilder();
     final long total = parsing + compiling + evaluating + serializing;
-    if(detailed) {
+    if(qp.qc.context.options.get(MainOptions.QUERYINFO)) {
       final int up = qp.updates();
       tb.add(toString(qp.qc)).add(NL);
       tb.add(PARSING_CC).add(Performance.getTime(parsing, runs)).add(NL);
@@ -108,8 +116,8 @@ public final class QueryInfo {
       tb.add(UPDATED_CC + up).add(' ').add(up == 1 ? ITEM : ITEMS).add(NL);
       tb.add(PRINTED_CC).add(Performance.format(printed)).add(NL);
       if(locks != null) {
-        tb.add(READ_LOCKING_CC).addExt(locks.reads).add(NL);
-        tb.add(WRITE_LOCKING_CC).addExt(locks.writes).add(NL);
+        tb.add(READ_LOCKING_CC).add(locks.reads).add(NL);
+        tb.add(WRITE_LOCKING_CC).add(locks.writes).add(NL);
       }
     }
     final IO baseIO = qp.sc.baseIO();
@@ -132,9 +140,9 @@ public final class QueryInfo {
     if(!compile.isEmpty()) {
       tb.add(NL).add(COMPILING).add(COL).add(NL);
       for(final byte[] line : compile) tb.add(LI).add(line).add(NL);
-      tb.add(NL).add(OPTIMIZED_QUERY).add(COL).add(NL);
-      tb.add(qc.root == null ? qc.funcs.toString() : usedDecls(qc.root)).add(NL);
     }
+    tb.add(NL).add(OPTIMIZED_QUERY).add(COL).add(NL);
+    tb.add(qc.root == null ? qc.funcs : usedDecls(qc.root)).add(NL);
     if(!evaluate.isEmpty()) {
       tb.add(NL).add(EVALUATING).add(COL).add(NL);
       for(final byte[] line : evaluate) tb.add(LI).add(line).add(NL);
@@ -144,13 +152,13 @@ public final class QueryInfo {
 
   /**
    * Serializes all functions and variables reachable from the given main module.
-   * @param mod module to start from
+   * @param module module to start from
    * @return the string representation
    */
-  private static String usedDecls(final MainModule mod) {
+  static String usedDecls(final MainModule module) {
     final IdentityHashMap<Scope, Object> map = new IdentityHashMap<>();
     final StringBuilder sb = new StringBuilder();
-    mod.visit(new ASTVisitor() {
+    module.visit(new ASTVisitor() {
       @Override
       public boolean staticVar(final StaticVar var) {
         if(map.put(var, var) == null) {
@@ -171,8 +179,8 @@ public final class QueryInfo {
       }
 
       @Override
-      public boolean inlineFunc(final Scope sub) {
-        if(map.put(sub, sub) == null) sub.visit(this);
+      public boolean inlineFunc(final Scope scope) {
+        if(map.put(scope, scope) == null) scope.visit(this);
         return true;
       }
 
@@ -182,6 +190,6 @@ public final class QueryInfo {
         return true;
       }
     });
-    return sb.append(mod).toString();
+    return sb.append(module).toString();
   }
 }

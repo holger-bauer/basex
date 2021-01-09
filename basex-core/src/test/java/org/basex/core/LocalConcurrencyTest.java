@@ -1,6 +1,6 @@
 package org.basex.core;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.atomic.*;
 
@@ -8,18 +8,17 @@ import org.basex.*;
 import org.basex.api.client.*;
 import org.basex.core.cmd.*;
 import org.basex.util.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Local concurrency tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class LocalConcurrencyTest extends SandboxTest {
   /** Test for concurrently accessing and modifying users. */
-  @Test
-  public void userTest() {
+  @Test public void userTest() {
     final AtomicInteger counter = new AtomicInteger();
     final Exception[] error = new Exception[1];
     final int runs = 500;
@@ -31,17 +30,14 @@ public final class LocalConcurrencyTest extends SandboxTest {
 
       for(int d = 0; d < runs; d++) {
         execute(new Grant("write", "user", "doc" + d));
-        new Thread() {
-          @Override
-          public void run() {
-            try(Session session = new LocalSession(context, "user", "")) {
-              session.execute(new Open("store"));
-            } catch(final Exception ex) {
-              error[0] = ex;
-            }
-            counter.incrementAndGet();
+        new Thread(() -> {
+          try(Session session = new LocalSession(context, "user", "")) {
+            session.execute(new Open("store"));
+          } catch(final Exception ex) {
+            error[0] = ex;
           }
-        }.start();
+          counter.incrementAndGet();
+        }).start();
       }
     } finally {
       while(counter.get() < runs) Performance.sleep(1);

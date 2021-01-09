@@ -10,18 +10,19 @@ import org.basex.query.up.primitives.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class DbNew extends DbAccess {
   /**
    * Creates a {@link Data} instance for the specified document.
    * @param input input item (node or string)
-   * @param path optional path argument
+   * @param path path argument (optional, can be empty)
    * @return database instance
    * @throws QueryException query exception
    */
@@ -45,7 +46,7 @@ abstract class DbNew extends DbAccess {
       }
 
       // adding a document node
-      if(node.type == NodeType.ATT) throw UPDOCTYPE_X.get(info, node);
+      if(node.type == NodeType.ATTRIBUTE) throw UPDOCTYPE_X.get(info, node);
       ni.node = node;
       ni.path = string(name);
       return ni;
@@ -59,8 +60,8 @@ abstract class DbNew extends DbAccess {
 
     // add slash to the target if the addressed file is an archive or directory
     String name = string(path);
-    if(name.endsWith(".")) throw RESINV_X.get(info, path);
-    if(!name.endsWith("/") && (io.isDir() || io.isArchive())) name += "/";
+    if(Strings.endsWith(name, '.')) throw RESINV_X.get(info, path);
+    if(!Strings.endsWith(name, '/') && (io.isDir() || io.isArchive())) name += "/";
     String target = "";
     final int s = name.lastIndexOf('/');
     if(s != -1) {

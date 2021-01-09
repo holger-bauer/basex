@@ -3,9 +3,12 @@ package org.basex.query.expr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
-import org.basex.query.expr.CmpV.OpV;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.CmpG.*;
+import org.basex.query.expr.CmpV.*;
+import org.basex.query.func.*;
+import org.basex.query.util.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -13,161 +16,181 @@ import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
- * Pos expression.
+ * Position range check.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class Pos extends Simple {
-  /** Minimum position. */
-  final long min;
-  /** Maximum position. */
-  final long max;
-
+public final class Pos extends Arr implements CmpPos {
   /**
    * Constructor.
-   * @param min minimum value (1 or larger)
-   * @param max minimum value (1 or larger)
    * @param info input info
+   * @param min min expression
+   * @param max max expression
    */
-  private Pos(final long min, final long max, final InputInfo info) {
-    super(info);
-    this.min = min;
-    this.max = max;
-    seqType = SeqType.BLN;
+  private Pos(final InputInfo info, final Expr min, final Expr max) {
+    super(info, SeqType.BOOLEAN_O, min, max);
   }
 
   /**
-   * Returns a position expression for the specified index, or an optimized boolean item.
-   * @param index index position
-   * @param info input info
-   * @return expression
-   */
-  public static Expr get(final long index, final InputInfo info) {
-    return get(index, index, info);
-  }
-
-  /**
-   * Returns a position expression for the specified range, or an optimized boolean item.
-   * @param min minimum value
-   * @param max minimum value
-   * @param info input info
-   * @return expression
-   */
-  public static Expr get(final long min, final long max, final InputInfo info) {
-    // suppose that positions always fit in long values..
-    return min > max || max < 1 ? Bln.FALSE : min <= 1 && max == Long.MAX_VALUE ? Bln.TRUE :
-      new Pos(Math.max(1, min), Math.max(1, max), info);
-  }
-
-  /**
-   * Returns a position expression for the specified range comparison.
-   * @param expr range comparison
-   * @return expression
-   */
-  public static Expr get(final CmpR expr) {
-    final double min = expr.min, max = expr.max;
-    final long mn = (long) (expr.mni ? (long) Math.ceil(min) : Math.floor(min + 1));
-    final long mx = (long) (expr.mxi ? (long) Math.floor(max) : Math.ceil(max - 1));
-    return get(mn, mx, expr.info);
-  }
-
-  /**
-   * Returns an instance of this class if possible, and the input expression otherwise.
-   * @param cmp comparator
-   * @param expr argument
-   * @param fallback fallback expression (optional, may be {@code null})
+   * Tries to rewrite {@code fn:position() CMP number(s)} to this expression.
+   * Returns an instance of this class, an optimized expression, or {@code null}
+   * @param expr positions to be matched
+   * @param op comparator
    * @param ii input info
-   * @return resulting or fallback expression
+   * @param cc compilation context
+   * @return optimized expression or {@code null}
+   * @throws QueryException query exception
    */
-  public static Expr get(final OpV cmp, final Expr expr, final Expr fallback, final InputInfo ii) {
-    if(expr instanceof RangeSeq && cmp == OpV.EQ) {
-      final RangeSeq rs = (RangeSeq) expr;
-      return get(rs.start(), rs.end(), ii);
-    }
-    if(expr instanceof ANum) {
-      final ANum it = (ANum) expr;
-      final long p = it.itr();
-      final boolean ex = p == it.dbl();
-      switch(cmp) {
-        case EQ: return ex ? get(p, ii) : Bln.FALSE;
-        case GE: return get(ex ? p : p + 1, Long.MAX_VALUE, ii);
-        case GT: return get(p + 1, Long.MAX_VALUE, ii);
-        case LE: return get(1, p, ii);
-        case LT: return get(1, ex ? p - 1 : p, ii);
-        default:
+  static Expr get(final Expr expr, final OpV op, final InputInfo ii, final CompileContext cc)
+      throws QueryException {
+
+    Expr min = null, max = null;
+    final SeqType st2 = expr.seqType();
+
+    // rewrite only simple expressions that may be simplified even further later on
+    if(expr.isSimple()) {
+      if(expr instanceof Range && op == OpV.EQ) {
+        final Range range = (Range) expr;
+        final Expr start = range.exprs[0], end = range.exprs[1];
+        if(st2.type.instanceOf(AtomType.INTEGER)) {
+          min = start;
+          max = start.equals(end) ? start : end;
+        }
+      } else if(st2.one() && !st2.mayBeArray()) {
+        switch(op) {
+          case EQ:
+            min = expr;
+            max = expr;
+            break;
+          case GE:
+            min = expr;
+            max = Int.MAX;
+            break;
+          case GT:
+            min = new Arith(ii, st2.type.instanceOf(AtomType.INTEGER) ? expr :
+              cc.function(Function.FLOOR, ii, expr), Int.ONE, Calc.PLUS).optimize(cc);
+            max = Int.MAX;
+            break;
+          case LE:
+            min = Int.ONE;
+            max = expr;
+            break;
+          case LT:
+            min = Int.ONE;
+            max = new Arith(ii, st2.type.instanceOf(AtomType.INTEGER) ? expr :
+              cc.function(Function.CEILING, ii, expr), Int.ONE, Calc.MINUS).optimize(cc);
+            break;
+          default:
+        }
+      } else if(expr == Empty.VALUE) {
+        return Bln.FALSE;
       }
     }
-    return fallback;
+    return min != null ? new Pos(ii, min, max) : null;
+  }
+
+  @Override
+  public Expr optimize(final CompileContext cc) throws QueryException {
+    simplifyAll(Simplify.NUMBER, cc);
+
+    final Expr expr1 = exprs[0], expr2 = exprs[1];
+    if(expr1 instanceof Int && expr2 instanceof Int) {
+      return cc.replaceWith(this, ItrPos.get(((Int) expr1).itr(), ((Int) expr2).itr(), info));
+    }
+    return this;
   }
 
   @Override
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
     ctxValue(qc);
-    return Bln.get(matches(qc.focus.pos));
+    return Bln.get(test(qc.focus.pos, qc) != 0);
   }
 
   @Override
   public Pos copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Pos(min, max, info);
-  }
-
-  /**
-   * Returns false if no more results can be expected.
-   * @param pos current position
-   * @return result of check
-   */
-  public boolean skip(final long pos) {
-    return pos >= max;
-  }
-
-  /**
-   * Checks if the current position lies within the given position.
-   * @param pos current position
-   * @return result of check
-   */
-  public boolean matches(final long pos) {
-    return pos >= min && pos <= max;
-  }
-
-  /**
-   * Creates an intersection of the existing and the specified position
-   * expressions.
-   * @param pos second position expression
-   * @param ii input info
-   * @return resulting expression
-   */
-  Expr intersect(final Pos pos, final InputInfo ii) {
-    return get(Math.max(min, pos.min), Math.min(max, pos.max), ii);
+    final Expr min = exprs[0].copy(cc, vm), max = exact() ? min : exprs[1].copy(cc, vm);
+    return copyType(new Pos(info, min, max));
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.POS;
-  }
-
-  @Override
-  public boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof Pos)) return false;
-    final Pos p = (Pos) cmp;
-    return min == p.min && max == p.max;
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(MIN, min, MAX, max == Long.MAX_VALUE ? INF : max));
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder("position() ");
-    if(min == max) {
-      sb.append("= ").append(min);
-    } else {
-      if(max == Long.MAX_VALUE) sb.append('>');
-      sb.append("= ").append(min);
-      if(max != Long.MAX_VALUE) sb.append(" to ").append(max);
+  public Expr mergeEbv(final Expr ex, final boolean or, final CompileContext cc) {
+    if(or || !(ex instanceof Pos)) return null;
+    final Pos pos = (Pos) ex;
+    final Expr[] posExpr = pos.exprs;
+    if(!exact() && !pos.exact()) {
+      final Expr expr1 = exprs[0], expr2 = exprs[1];
+      final Expr min = expr1 == Int.ONE ? posExpr[0] : posExpr[0] == Int.ONE ? expr1 : null;
+      final Expr max = expr2 == Int.MAX ? posExpr[1] : posExpr[1] == Int.MAX ? expr2 : null;
+      if(min != null && max != null) return new Pos(info, min, max);
     }
-    return sb.toString();
+    return null;
+  }
+
+  @Override
+  public Expr invert(final CompileContext cc) throws QueryException {
+    if(exprs[0].seqType().one()) {
+      final Expr pos = cc.function(Function.POSITION, info);
+      final Expr expr1 = exprs[0], expr2 = exprs[1];
+      if(exact()) {
+        return new CmpG(pos, expr1, OpG.NE, null, cc.sc(), info).optimize(cc);
+      } else if(expr1 == Int.ONE) {
+        return new CmpG(pos, expr2, OpG.GT, null, cc.sc(), info).optimize(cc);
+      } else if(expr2 == Int.MAX) {
+        return new CmpG(pos, expr1, OpG.LT, null, cc.sc(), info).optimize(cc);
+      }
+    }
+    return this;
+  }
+
+  @Override
+  public boolean exact() {
+    return exprs[0] == exprs[1];
+  }
+
+  @Override
+  public boolean simple() {
+    return exprs[0].isSimple() && (exact() || exprs[1].isSimple());
+  }
+
+  @Override
+  public int test(final long pos, final QueryContext qc) throws QueryException {
+    final Item item1 = exprs[0].atomItem(qc, info);
+    if(item1 == Empty.VALUE) return 0;
+    final double min = toDouble(item1), max;
+    if(exact()) {
+      max = min;
+    } else {
+      final Item item2 = exprs[1].atomItem(qc, info);
+      if(item2 == Empty.VALUE) return 0;
+      max = toDouble(item2);
+    }
+    return pos == max ? 2 : pos >= min && pos <= max ? 1 : 0;
+  }
+
+  @Override
+  public boolean has(final Flag... flags) {
+    return Flag.POS.in(flags) || Flag.CTX.in(flags);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Pos && super.equals(obj);
+  }
+
+  @Override
+  public String description() {
+    return "positional access";
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.function(Function.POSITION).token("=").token(exprs[0]);
+    if(!exact()) qs.token(TO).token(exprs[1]);
   }
 }

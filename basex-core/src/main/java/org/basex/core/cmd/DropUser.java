@@ -11,7 +11,7 @@ import org.basex.server.*;
 /**
  * Evaluates the 'drop user' command and drops a user.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DropUser extends AUser {
@@ -38,7 +38,7 @@ public final class DropUser extends AUser {
   }
 
   @Override
-  protected boolean run(final String name, final String pattern) {
+  protected boolean run(final String name, final String db) {
     // admin cannot be dropped
     if(name.equals(UserText.ADMIN)) return !info(ADMIN_STATIC);
 
@@ -46,15 +46,15 @@ public final class DropUser extends AUser {
     final Users users = context.users;
     final User user = users.get(name);
     if(user != null) {
-      if(pattern.isEmpty()) {
-        for(final ClientListener s : context.sessions) {
-          if(s.context().user().name().equals(name)) return !info(USER_LOGGED_IN_X, name);
+      if(db.isEmpty()) {
+        for(final ClientListener cl : context.sessions) {
+          if(cl.context().user().name().equals(name)) return !info(USER_LOGGED_IN_X, name);
         }
         users.drop(user);
       } else {
-        user.drop(pattern);
+        user.drop(db);
       }
-      return info(pattern.isEmpty() ? USER_DROPPED_X : USER_DROPPED_X_X, name, pattern);
+      return info(db.isEmpty() ? USER_DROPPED_X : USER_DROPPED_X_X, name, db);
     }
     return true;
   }

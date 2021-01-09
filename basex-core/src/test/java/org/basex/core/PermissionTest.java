@@ -2,22 +2,23 @@ package org.basex.core;
 
 import static org.basex.core.users.UserText.*;
 import static org.basex.query.func.Function.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
 import org.basex.*;
 import org.basex.api.client.*;
 import org.basex.core.cmd.*;
-import org.basex.core.parse.Commands.CmdIndex;
+import org.basex.core.parse.Commands.*;
+import org.basex.io.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests user permissions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Andreas Weiler
  */
 public final class PermissionTest extends SandboxTest {
@@ -39,8 +40,7 @@ public final class PermissionTest extends SandboxTest {
    * Starts the server.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void start() throws IOException {
+  @BeforeAll public static void start() throws IOException {
     server = createServer();
   }
 
@@ -48,14 +48,13 @@ public final class PermissionTest extends SandboxTest {
    * Stops the server.
    * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void stop() throws IOException {
+  @AfterAll public static void stop() throws IOException {
     stopServer(server);
+    new IOFile(Prop.TEMPDIR, NAME + "-export").delete();
   }
 
   /** Set up method. */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     try {
       adminSession = createClient();
       if(server.context.users.get(NAME) != null) {
@@ -75,23 +74,19 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Clean up method. */
-  @After
-  public void cleanUp() {
+  @AfterEach public void cleanUp() {
     try {
       testSession.close();
       adminSession.execute(new DropDB(NAME2));
       adminSession.execute(new DropDB(NAME));
       adminSession.close();
-      // give the server some time to clean up the sessions before next test
-      Performance.sleep(500);
     } catch(final Exception ex) {
       fail(Util.message(ex));
     }
   }
 
   /** Tests all commands where no permission is needed. */
-  @Test
-  public void noPermsNeeded() {
+  @Test public void noPermsNeeded() {
     ok(new Grant("none", NAME), adminSession);
 
     ok(new Password(NAME), testSession);
@@ -140,8 +135,7 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Tests all commands where read permission is needed. */
-  @Test
-  public void readPermsNeeded() {
+  @Test public void readPermsNeeded() {
     ok(new Grant("read", NAME), adminSession);
 
     ok(new Open(NAME), testSession);
@@ -173,7 +167,7 @@ public final class PermissionTest extends SandboxTest {
     no(new DropIndex("SUMMARY"), testSession);
     no(new CreateUser(NAME, NAME), testSession);
     no(new DropUser(NAME), testSession);
-    no(new Export(Prop.TMP + NAME + "-export"), testSession);
+    no(new Export(Prop.TEMPDIR + NAME + "-export"), testSession);
     no(new Kill("dada"), testSession);
     ok(new ShowUsers("Users"), testSession);
     no(new Grant("read", NAME), testSession);
@@ -188,8 +182,7 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Tests all commands where write permission is needed. */
-  @Test
-  public void writePermsNeeded() {
+  @Test public void writePermsNeeded() {
     ok(new Grant("write", NAME), adminSession);
     ok(new Open(NAME2), testSession);
     ok(new Rename(NAME2, NAME2 + '2'), testSession);
@@ -227,7 +220,7 @@ public final class PermissionTest extends SandboxTest {
     no(new DropDB(NAME), testSession);
     no(new CreateUser(NAME, NAME), testSession);
     no(new DropUser(NAME), testSession);
-    no(new Export(Prop.TMP + NAME + "-export"), testSession);
+    no(new Export(Prop.TEMPDIR + NAME + "-export"), testSession);
     no(new Kill("dada"), testSession);
     ok(new ShowUsers("Users"), testSession);
     no(new Grant("read", NAME), testSession);
@@ -240,8 +233,7 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Tests all commands where create permission is needed. */
-  @Test
-  public void createPermsNeeded() {
+  @Test public void createPermsNeeded() {
     ok(new Grant("create", NAME), adminSession);
     ok(new XQuery(_DB_CREATE.args(NAME)), testSession);
 
@@ -250,7 +242,7 @@ public final class PermissionTest extends SandboxTest {
     for(final CmdIndex cmd : CmdIndex.values()) {
       ok(new CreateIndex(cmd), testSession);
     }
-    ok(new Export(Prop.TMP + NAME + "-export"), testSession);
+    ok(new Export(Prop.TEMPDIR + NAME + "-export"), testSession);
 
     // repo stuff
     ok(new RepoInstall(REPO + "/pkg3.xar", null), testSession);
@@ -271,8 +263,7 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Tests all commands where admin permission is needed. */
-  @Test
-  public void adminPermsNeeded() {
+  @Test public void adminPermsNeeded() {
     ok(new Grant(ADMIN, NAME), adminSession);
     if(server.context.users.get("test2") != null) {
       ok(new DropUser("test2"), testSession);
@@ -302,8 +293,7 @@ public final class PermissionTest extends SandboxTest {
   }
 
   /** Drops users. */
-  @Test
-  public void dropUsers() {
+  @Test public void dropUsers() {
     no(new DropUser(NAME), testSession);
     no(new DropUser(NAME), adminSession);
     ok(new Exit(), testSession);

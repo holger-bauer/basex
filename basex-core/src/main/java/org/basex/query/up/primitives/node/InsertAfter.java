@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Insert after primitive.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class InsertAfter extends NodeCopy {
@@ -29,7 +29,7 @@ public final class InsertAfter extends NodeCopy {
   @Override
   public void merge(final Update update) {
     final ANodeList newInsert = ((NodeCopy) update).nodes;
-    for(final ANode n : newInsert) nodes.add(n);
+    for(final ANode node : newInsert) nodes.add(node);
   }
 
   @Override

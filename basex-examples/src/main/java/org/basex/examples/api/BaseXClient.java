@@ -10,9 +10,9 @@ import java.util.*;
  * Java client for BaseX.
  * Works with BaseX 7.0 and later
  *
- * Documentation: http://docs.basex.org/wiki/Clients
+ * Documentation: https://docs.basex.org/wiki/Clients
  *
- * (C) BaseX Team 2005-17, BSD License
+ * (C) BaseX Team 2005-20, BSD License
  */
 public final class BaseXClient implements Closeable {
   /** UTF-8 charset. */
@@ -39,6 +39,7 @@ public final class BaseXClient implements Closeable {
       final String password) throws IOException {
 
     socket = new Socket();
+    socket.setTcpNoDelay(true);
     socket.connect(new InetSocketAddress(host, port), 5000);
     in = new BufferedInputStream(socket.getInputStream());
     out = socket.getOutputStream();

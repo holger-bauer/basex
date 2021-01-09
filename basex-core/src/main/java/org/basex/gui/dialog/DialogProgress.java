@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Dialog window for displaying the progress of a command execution.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogProgress extends BaseXDialog implements ActionListener {
@@ -37,12 +37,12 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
 
   /**
    * Default constructor.
-   * @param main main window
+   * @param gui main window
    * @param cmd progress reference
    */
-  private DialogProgress(final GUI main, final Command cmd) {
-    super(main, "");
-    init(main, cmd);
+  private DialogProgress(final GUI gui, final Command cmd) {
+    super(gui, "");
+    init(gui, cmd);
   }
 
   /**
@@ -50,17 +50,17 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
    * @param dialog dialog window
    * @param cmd progress reference
    */
-  private DialogProgress(final BaseXDialog dialog, final Command cmd) {
+  public DialogProgress(final BaseXDialog dialog, final Command cmd) {
     super(dialog, "");
     init(dialog, cmd);
   }
 
   /**
    * Initializes all components.
-   * @param parent parent component
+   * @param win window
    * @param cmd progress reference
    */
-  private void init(final Component parent, final Command cmd) {
+  private void init(final BaseXWindow win, final Command cmd) {
     info = new BaseXLabel(" ", true, true);
     set(info, BorderLayout.NORTH);
 
@@ -73,15 +73,14 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
     BaseXLayout.setWidth(info, MAX);
 
     final BaseXBack s = new BaseXBack(new BorderLayout()).border(10, 0, 0, 0);
-    final BaseXBack m = new BaseXBack(new TableLayout(1, 2, 5, 0));
+    final BaseXBack m = new BaseXBack(new ColumnLayout(5));
     mem = new BaseXMem(this, false);
     m.add(new BaseXLabel(MEMUSED_C));
     m.add(mem);
     s.add(m, BorderLayout.WEST);
 
-
     if(cmd.stoppable()) {
-      cancel = new BaseXButton(B_CANCEL, this);
+      cancel = new BaseXButton(this, B_CANCEL);
       s.add(cancel, BorderLayout.EAST);
     }
     set(s, BorderLayout.SOUTH);
@@ -89,7 +88,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
     command = cmd;
     timer.start();
     pack();
-    setLocationRelativeTo(parent);
+    setLocationRelativeTo(win.component());
   }
 
   @Override
@@ -106,6 +105,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
   @Override
   public void dispose() {
     timer.stop();
+    command = null;
     super.dispose();
   }
 
@@ -155,7 +155,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
    * {@link BaseXDialog#action} if the dialog is closed.
    * @param gui reference to the main window
    * @param dialog reference to the dialog window (may be {@code null})
-   * @param post post-processing step
+   * @param post post-processing step (may be {@code null})
    * @param cmds commands to be run
    */
   private static void execute(final GUI gui, final BaseXDialog dialog, final Runnable post,
@@ -171,34 +171,31 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
         new DialogProgress(gui, cmd);
 
       // start command thread
-      new Thread() {
-        @Override
-        public void run() {
-          // execute command
-          final Performance perf = new Performance();
-          gui.updating = cmd.updating(gui.context);
-          boolean ok = true;
-          String info;
-          try {
-            cmd.execute(gui.context);
-            info = cmd.info();
-          } catch(final BaseXException ex) {
-            ok = false;
-            info = Util.message(ex);
-          } finally {
-            gui.updating = false;
-          }
-
-          // return status information
-          final String time = perf.toString();
-          gui.info.setInfo(info, cmd, time, ok, true);
-          gui.status.setText(cmd + ": " + time);
-
-          // close progress window and show error if command failed
-          wait.dispose();
-          if(!ok) BaseXDialog.error(gui, info.equals(INTERRUPTED) ? COMMAND_CANCELED : info);
+      new Thread(() -> {
+        // execute command
+        final Performance perf = new Performance();
+        gui.updating = cmd.updating(gui.context);
+        boolean ok = true;
+        String info;
+        try {
+          cmd.execute(gui.context);
+          info = cmd.info();
+        } catch(final BaseXException ex) {
+          ok = false;
+          info = Util.message(ex);
+        } finally {
+          gui.updating = false;
         }
-      }.start();
+
+        // return status information
+        final String time = perf.toString();
+        gui.info.setInfo(info, cmd, time, ok, true);
+        gui.status.setText(cmd + ": " + time);
+
+        // close progress window and show error if command failed
+        wait.dispose();
+        if(!ok) BaseXDialog.error(gui, info.equals(INTERRUPTED) ? COMMAND_CANCELED : info);
+      }).start();
 
       // show progress windows until being disposed
       wait.setVisible(true);
@@ -206,8 +203,9 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
       // initialize views if database was closed before
       if(newData) gui.notify.init();
       else if(cmd.updating(gui.context)) gui.notify.update();
+      gui.editor.refreshContextLabel();
     }
-    if(dialog != null) dialog.action(dialog);
+    if(dialog != null && dialog.isVisible()) dialog.action(dialog);
     if(post != null) SwingUtilities.invokeLater(post);
   }
 }

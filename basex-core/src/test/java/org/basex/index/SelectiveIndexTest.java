@@ -1,50 +1,47 @@
 package org.basex.index;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import java.util.Map.*;
 
+import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.query.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Storage tests for the selective index feature (#59).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class SelectiveIndexTest extends AdvancedQueryTest {
+public final class SelectiveIndexTest extends SandboxTest {
   /** Test file. */
   private static final String FILE = "src/test/resources/selective.xml";
 
   /**
    * Tests the text index.
    */
-  @Test
-  public void textIndex() {
-    for(final Entry<String, Integer> entry : map().entrySet()) {
-      set(MainOptions.TEXTINCLUDE, entry.getKey());
+  @Test public void textIndex() {
+    map().forEach((key, value) -> {
+      set(MainOptions.TEXTINCLUDE, key);
       execute(new CreateDB(NAME, FILE));
       final int size = context.data().textIndex.size();
-      assertEquals("TextIndex: \"" + entry.getKey() + "\": ", entry.getValue().intValue(), size);
-    }
+      assertEquals(value.intValue(), size, "TextIndex: \"" + key + "\": ");
+    });
   }
 
   /**
    * Tests the attribute index.
    */
-  @Test
-  public void attrIndex() {
+  @Test public void attrIndex() {
     try {
-      for(final Entry<String, Integer> entry : map().entrySet()) {
-        set(MainOptions.ATTRINCLUDE, entry.getKey());
+      map().forEach((key, value) -> {
+        set(MainOptions.ATTRINCLUDE, key);
         execute(new CreateDB(NAME, FILE));
         final int size = context.data().attrIndex.size();
-        assertEquals("AttrIndex: \"" + entry.getKey() + "\": ", entry.getValue().intValue(), size);
-      }
+        assertEquals(value.intValue(), size, "AttrIndex: \"" + key + "\": ");
+      });
     } finally {
       set(MainOptions.ATTRINCLUDE, "");
     }
@@ -53,16 +50,15 @@ public final class SelectiveIndexTest extends AdvancedQueryTest {
   /**
    * Tests the token index.
    */
-  @Test
-  public void tokenIndex() {
+  @Test public void tokenIndex() {
     set(MainOptions.TOKENINDEX, true);
     try {
-      for(final Entry<String, Integer> entry : map().entrySet()) {
-        set(MainOptions.TOKENINCLUDE, entry.getKey());
+      map().forEach((key, value) -> {
+        set(MainOptions.TOKENINCLUDE, key);
         execute(new CreateDB(NAME, FILE));
         final int size = context.data().tokenIndex.size();
-        assertEquals("TokenIndex: \"" + entry.getKey() + "\": ", entry.getValue().intValue(), size);
-      }
+        assertEquals(value.intValue(), size, "TokenIndex: \"" + key + "\": ");
+      });
     } finally {
       set(MainOptions.TOKENINCLUDE, "");
       set(MainOptions.TOKENINDEX, false);
@@ -72,17 +68,14 @@ public final class SelectiveIndexTest extends AdvancedQueryTest {
   /**
    * Tests the full-text index.
    */
-  @Test
-  public void ftIndex() {
+  @Test public void ftIndex() {
     set(MainOptions.FTINDEX, true);
     try {
-      for(final Entry<String, Integer> entry : map().entrySet()) {
-        final String key = entry.getKey();
-        final int value = entry.getValue();
+      map().forEach((key, value) -> {
         set(MainOptions.FTINCLUDE, key);
         execute(new CreateDB(NAME, FILE));
-        assertEquals("FTIndex: \"" + key + "\": ", value, context.data().ftIndex.size());
-      }
+        assertEquals((int) value, context.data().ftIndex.size(), "FTIndex: \"" + key + "\": ");
+      });
     } finally {
       set(MainOptions.FTINCLUDE, "");
       set(MainOptions.FTINDEX, false);
@@ -92,8 +85,7 @@ public final class SelectiveIndexTest extends AdvancedQueryTest {
   /**
    * Tests the id functions.
    */
-  @Test
-  public void id() {
+  @Test public void id() {
     set(MainOptions.TOKENINDEX, true);
     try {
       final String idref = "idref=\"B C\"";

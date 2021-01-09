@@ -7,12 +7,13 @@ import org.basex.core.locks.*;
 import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.*;
+import org.basex.util.*;
 
 /**
  * Evaluates the 'check' command: opens an existing database or
  * creates a new one.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Check extends Command {
@@ -27,21 +28,19 @@ public final class Check extends Command {
   @Override
   protected boolean run() {
     // close existing database
-    close(context);
+    Close.close(context);
 
     // input (can be path or XML string)
-    final String input = args[0];
+    final String input = args[0].trim();
+    if(input.isEmpty()) return true;
+
     // get path and database name, overwrite database name with generated name
     final IO io = IO.get(input);
     final String dbName = io.dbName();
 
     // choose OPEN if user has no create permissions, or if database exists
-    final Command cmd;
-    if(open(io, dbName)) {
-      cmd = new Open(dbName);
-    } else {
-      cmd = new CreateDB(dbName, io.exists() ? input : null);
-    }
+    final Command cmd = open(io, dbName) ? new Open(dbName) :
+      new CreateDB(dbName, io.exists() ? input : null);
 
     // execute command
     try {
@@ -72,6 +71,7 @@ public final class Check extends Command {
     try {
       meta.read();
     } catch(final IOException ex) {
+      Util.debug(ex);
       return false;
     }
     return meta.time == input.timeStamp();
@@ -94,6 +94,6 @@ public final class Check extends Command {
 
   @Override
   public boolean newData(final Context ctx) {
-    return close(ctx);
+    return Close.close(ctx);
   }
 }

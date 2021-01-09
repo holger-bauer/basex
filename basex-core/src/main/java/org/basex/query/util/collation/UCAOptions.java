@@ -7,13 +7,14 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import org.basex.core.*;
+import org.basex.util.Util;
 import org.basex.util.list.*;
 import org.basex.util.options.*;
 
 /**
  * UCA collation options.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UCAOptions extends CollationOptions {
@@ -73,13 +74,14 @@ public final class UCAOptions extends CollationOptions {
         if(vi == null || vic == null || ((Comparable<Object>) vi).compareTo(vic) > 0)
           throw error(VERSION);
       } catch(final IllegalArgumentException ex) {
+        Util.debug(ex);
         throw new BaseXException("Version not supported: %.", v);
       }
     }
 
     if(contains(STRENGTH)) {
       final String v = get(STRENGTH);
-      Integer s;
+      final int s;
       if(eq(v, "primary", "1")) s = 0;         // Collator.PRIMARY
       else if(eq(v, "secondary", "2")) s = 1;  // Collator.SECONDARY
       else if(eq(v, "tertiary", "3")) s = 2;   // Collator.TERTIARY
@@ -91,7 +93,7 @@ public final class UCAOptions extends CollationOptions {
 
     if(contains(ALTERNATE)) {
       final String v = get(ALTERNATE);
-      boolean b;
+      final boolean b;
       if(eq(v, "non-ignorable")) b = false;
       else if(eq(v, "shifted", "blanked")) b = true;
       else throw error(ALTERNATE);
@@ -111,11 +113,12 @@ public final class UCAOptions extends CollationOptions {
     }
 
     if(contains(CASEFIRST)) {
-      final String v = get(CASEFIRST);
-      String f;
-      if(v.equals("upper")) f = "setUpperCaseFirst";
-      else if(v.equals("lower")) f = "setLowerCaseFirst";
-      else throw error(CASEFIRST);
+      final String v = get(CASEFIRST), f;
+      switch(v) {
+        case "upper": f = "setUpperCaseFirst"; break;
+        case "lower": f = "setLowerCaseFirst"; break;
+        default: throw error(CASEFIRST);
+      }
       invoke(method(RBC, f, boolean.class), coll, true);
     }
 

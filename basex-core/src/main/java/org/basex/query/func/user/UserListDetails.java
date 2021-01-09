@@ -1,50 +1,26 @@
 package org.basex.query.func.user;
 
-import static org.basex.core.users.UserText.*;
-
-import java.util.*;
-import java.util.Map.*;
-
 import org.basex.core.*;
 import org.basex.core.users.*;
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
-import org.basex.query.value.node.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UserListDetails extends UserList {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
+    // return information on single user
+    if(exprs.length > 0) return toUser(0, qc).toXML(qc);
+
+    // return information for all users
     final Context ctx = qc.context;
-    final User u = exprs.length > 0 ? toUser(0, qc) : null;
-    final ValueBuilder vb = new ValueBuilder();
-    for(final User us : u != null ? Collections.singletonList(u) : ctx.users.users(null, ctx)) {
-      final String perm = us.perm((String) null).toString();
-      final FElem user = new FElem(USER).add(NAME, us.name()).add(PERMISSION, perm);
-      for(final Entry<Algorithm, EnumMap<Code, String>> codes : us.alg().entrySet()) {
-        final FElem password = new FElem(PASSWORD).add(ALGORITHM, codes.getKey().toString());
-        for(final Entry<Code, String> code : codes.getValue().entrySet()) {
-          password.add(new FElem(code.getKey().toString()).add(code.getValue()));
-        }
-        user.add(password);
-      }
-      for(final Entry<String, Perm> local : us.locals().entrySet()) {
-        user.add(new FElem(DATABASE).add(PATTERN, local.getKey()).
-            add(PERMISSION, local.getValue().toString()));
-      }
-      vb.add(user);
-    }
-    return vb.value();
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final User us : ctx.users.users(null, ctx)) vb.add(us.toXML(qc));
+    return vb.value(this);
   }
 }

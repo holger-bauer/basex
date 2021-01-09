@@ -5,13 +5,13 @@ import java.util.*;
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * This test replaces texts in-place and checks if the database text files increase
  * in size. Currently, the actual test is wrapped in comments.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ReplaceInPlaceTest extends SandboxTest {
@@ -22,11 +22,8 @@ public final class ReplaceInPlaceTest extends SandboxTest {
   /** Result counter. */
   static int counter;
 
-  /**
-   * Runs the test.
-   */
-  @Test
-  public void run() {
+  /** Runs the test. */
+  @Test public void run() {
     set(MainOptions.TEXTINDEX, false);
     set(MainOptions.ATTRINDEX, false);
     set(MainOptions.AUTOFLUSH, false);

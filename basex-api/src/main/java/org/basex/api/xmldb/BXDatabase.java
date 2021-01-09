@@ -15,10 +15,10 @@ import org.xmldb.api.base.Collection;
 /**
  * Implementation of the Database Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class BXDatabase implements Database {
+public final class BXDatabase implements Database {
   /** Database context. */
   final Context ctx = new Context();
 
@@ -44,16 +44,13 @@ final class BXDatabase implements Database {
 
   @Override
   public String getName() {
-    return Prop.PROJECT_NAME;
+    return Prop.PROJECT;
   }
 
   @Override
   public String getProperty(final String name) {
-    try {
-      return Get.get(name.toUpperCase(Locale.ENGLISH), ctx);
-    } catch(final BaseXException ex) {
-      return null;
-    }
+    final Object value = Get.get(name.toUpperCase(Locale.ENGLISH), ctx);
+    return value == null ? null : value.toString();
   }
 
   @Override
@@ -61,6 +58,7 @@ final class BXDatabase implements Database {
     try {
       new Set(name, value).execute(ctx);
     } catch(final BaseXException ex) {
+      Util.debug(ex);
       throw new XMLDBException(ErrorCodes.VENDOR_ERROR, ERR_PROP + name);
     }
   }

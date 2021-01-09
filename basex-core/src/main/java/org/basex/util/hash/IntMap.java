@@ -9,7 +9,7 @@ import org.basex.util.*;
  * It extends the {@link IntSet} class. All values except for {@link Integer#MIN_VALUE}
  * can be stored as values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class IntMap extends IntSet {
@@ -20,16 +20,16 @@ public final class IntMap extends IntSet {
    * Default constructor.
    */
   public IntMap() {
-    this(Array.CAPACITY);
+    this(Array.INITIAL_CAPACITY);
   }
 
   /**
-   * Default constructor.
-   * @param capacity initial array capacity
+   * Constructor with initial capacity.
+   * @param capacity array capacity (will be resized to a power of two)
    */
-  public IntMap(final int capacity) {
+  public IntMap(final long capacity) {
     super(capacity);
-    values = new int[Array.CAPACITY];
+    values = new int[capacity()];
     values[0] = Integer.MIN_VALUE;
   }
 
@@ -59,18 +59,16 @@ public final class IntMap extends IntSet {
   }
 
   @Override
-  protected void rehash(final int sz) {
-    super.rehash(sz);
-    values = Arrays.copyOf(values, sz);
+  protected void rehash(final int newSize) {
+    super.rehash(newSize);
+    values = Arrays.copyOf(values, newSize);
   }
 
   @Override
   public String toString() {
-    final TokenBuilder tb = new TokenBuilder(Util.className(this)).add('[');
-    for(int i = 1; i < size; i++) {
-      tb.add(Integer.toString(keys[i])).add(": ").addExt(get(keys[i]));
-      if(i < size - 1) tb.add(",\n\t");
-    }
-    return tb.add(']').toString();
+    final List<Object> k = new ArrayList<>(), v = new ArrayList<>();
+    for(final int key : keys) k.add(key);
+    for(final int value : values) v.add(value);
+    return toString(k.toArray(), v.toArray());
   }
 }

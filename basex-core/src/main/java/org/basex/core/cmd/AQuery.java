@@ -13,7 +13,6 @@ import org.basex.core.parse.*;
 import org.basex.core.users.*;
 import org.basex.io.out.*;
 import org.basex.io.serial.*;
-import org.basex.io.serial.dot.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
@@ -23,30 +22,31 @@ import org.basex.util.*;
 /**
  * Abstract class for database queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class AQuery extends Command {
-  /** Variables. */
-  protected final HashMap<String, String[]> vars = new HashMap<>();
+  /** External variable bindings. */
+  protected final HashMap<String, Object> vars = new HashMap<>();
+  /** External properties. */
+  protected final HashMap<String, Object> props = new HashMap<>();
 
-  /** HTTP connection. */
-  private Object http;
   /** Query processor. */
   private QueryProcessor qp;
   /** Query info. */
   private QueryInfo info;
   /** Query result. */
   private Value result;
+  /** Query plan was serialized. */
+  private boolean plan;
 
   /**
    * Protected constructor.
-   * @param perm required permission
    * @param openDB requires opened database
    * @param args arguments
    */
-  AQuery(final Perm perm, final boolean openDB, final String... args) {
-    super(perm, openDB, args);
+  AQuery(final boolean openDB, final String... args) {
+    super(Perm.NONE, openDB, args);
   }
 
   /**
@@ -63,6 +63,7 @@ public abstract class AQuery extends Command {
         long hits = 0;
         final boolean run = options.get(MainOptions.RUNQUERY);
         final boolean serial = options.get(MainOptions.SERIALIZE);
+        final boolean compplan = options.get(MainOptions.COMPPLAN);
         final int runs = Math.max(1, options.get(MainOptions.RUNS));
         for(int r = 0; r < runs; ++r) {
           // reuse existing processor instance
@@ -71,55 +72,69 @@ public abstract class AQuery extends Command {
             popJob();
           }
           init(query, context);
-
-          if(r == 0) plan(false);
+          if(!compplan) queryPlan();
 
           final Performance perf = new Performance();
+          for(final Entry<String, Object> entry : vars.entrySet()) {
+            final String name = entry.getKey();
+            final Object value = entry.getValue();
+            if(value instanceof Value) {
+              final Value val = (Value) value;
+              if(name == null) qp.context(val);
+              else qp.bind(name, val);
+            } else {
+              // will always be a string array
+              final String[] strings = (String[]) value;
+              if(name == null) qp.context(strings[0], strings[1]);
+              else qp.bind(name, strings[0], strings[1]);
+            }
+          }
+
           qp.compile();
-          info.compiling += perf.time();
-          if(r == 0) plan(true);
+          info.compiling += perf.ns();
+          if(compplan) queryPlan();
           if(!run) continue;
 
           final PrintOutput po = r == 0 && serial ? out : new NullOutput();
           try(Serializer ser = qp.getSerializer(po)) {
             if(maxResults >= 0) {
               result = qp.cache(maxResults);
-              info.evaluating += perf.time();
+              info.evaluating += perf.ns();
               result.serialize(ser);
               hits = result.size();
             } else {
               hits = 0;
-              final Iter ir = qp.iter();
-              info.evaluating += perf.time();
-              for(Item it; (it = ir.next()) != null;) {
-                ser.serialize(it);
+              final Iter iter = qp.iter();
+              info.evaluating += perf.ns();
+              for(Item item; (item = iter.next()) != null;) {
+                ser.serialize(item);
                 ++hits;
                 checkStop();
               }
             }
           }
           qp.close();
-          info.serializing += perf.time();
+          info.serializing += perf.ns();
         }
-        return info(info.toString(qp, out.size(), hits, options.get(MainOptions.QUERYINFO)));
+        return info(info.toString(qp, out.size(), hits, jc().locks));
 
       } catch(final QueryException | IOException ex) {
         exception = ex;
         error = Util.message(ex);
       } catch(final JobException ex) {
-        error = INTERRUPTED;
+        error = ex.getMessage();
       } catch(final StackOverflowError ex) {
         Util.debug(ex);
-        error = BASX_STACKOVERFLOW.desc;
+        error = BASEX_OVERFLOW.message;
       } catch(final RuntimeException ex) {
         extError("");
-        Util.debug(info());
         throw ex;
       } finally {
         // close processor after exceptions
         if(qp != null) qp.close();
       }
     }
+    queryPlan();
     return extError(error);
   }
 
@@ -150,20 +165,12 @@ public abstract class AQuery extends Command {
   private void init(final String query, final Context ctx) throws QueryException {
     final Performance perf = new Performance();
     if(qp == null) qp = pushJob(new QueryProcessor(query, uri, ctx));
-    if(info == null) {
-      info = qp.qc.info;
-      info.locks = jc().locks;
-    }
+    if(info == null) info = qp.qc.info;
 
-    qp.http(http);
-    for(final Entry<String, String[]> entry : vars.entrySet()) {
-      final String name = entry.getKey();
-      final String[] value = entry.getValue();
-      if(name == null) qp.context(value[0], value[1]);
-      else qp.bind(name, value[0], value[1]);
-    }
+    for(final Map.Entry<String, Object> entry : props.entrySet())
+      qp.qc.putProperty(entry.getKey(), entry.getValue());
     qp.parse();
-    qp.qc.info.parsing += perf.time();
+    qp.qc.info.parsing += perf.ns();
   }
 
   /**
@@ -185,52 +192,44 @@ public abstract class AQuery extends Command {
   }
 
   /**
-   * Binds the HTTP context.
-   * @param value HTTP context
+   * Caches an external property.
+   * @param key key
+   * @param value value
    */
-  public final void http(final Object value) {
-    http = value;
+  public void putExternal(final String key, final Object value) {
+    props.put(key, value);
   }
 
   /**
    * Returns an extended error message.
-   * @param err error message
+   * @param message error message
    * @return result of check
    */
-  private boolean extError(final String err) {
+  private boolean extError(final String message) {
     // will only be evaluated when an error has occurred
     final StringBuilder sb = new StringBuilder();
     if(options.get(MainOptions.QUERYINFO)) {
       sb.append(info()).append(qp.info()).append(NL).append(ERROR).append(COL).append(NL);
     }
-    sb.append(err);
+    sb.append(message);
     return error(sb.toString());
   }
 
   /**
-   * Creates query plans.
-   * @param comp compiled flag
+   * Generates a query plan.
    */
-  private void plan(final boolean comp) {
-    if(comp != options.get(MainOptions.COMPPLAN)) return;
-
-    // show dot plan
-    try {
-      if(options.get(MainOptions.DOTPLAN)) {
-        try(BufferOutput bo = new BufferOutput("plan.dot")) {
-          try(DOTSerializer d = new DOTSerializer(bo, options.get(MainOptions.DOTCOMPACT))) {
-            d.serialize(qp.plan());
-          }
+  private void queryPlan() {
+    if(!plan && qp != null) {
+      try {
+        // show XML plan
+        if(options.get(MainOptions.XMLPLAN)) {
+          info(NL + QUERY_PLAN + COL);
+          info(qp.plan().serialize().toString());
         }
+        plan = true;
+      } catch(final Exception ex) {
+        Util.stack(ex);
       }
-
-      // show XML plan
-      if(options.get(MainOptions.XMLPLAN)) {
-        info(NL + QUERY_PLAN + COL);
-        info(qp.plan().serialize().toString());
-      }
-    } catch(final Exception ex) {
-      Util.stack(ex);
     }
   }
 
@@ -255,7 +254,7 @@ public abstract class AQuery extends Command {
 
   @Override
   public void build(final CmdBuilder cb) {
-    cb.init().xquery(0);
+    cb.init().add(0);
   }
 
   @Override

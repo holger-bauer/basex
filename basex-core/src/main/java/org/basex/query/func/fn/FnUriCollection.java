@@ -9,7 +9,7 @@ import org.basex.query.value.node.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnUriCollection extends Docs {
@@ -19,15 +19,17 @@ public final class FnUriCollection extends Docs {
     return new Iter() {
       @Override
       public Item next() throws QueryException {
-        final Item it = coll.next();
+        final Item item = qc.next(coll);
         // all items will be nodes
-        return it == null ? null : Uri.uri(((ANode) it).baseURI(), false);
+        return item == null ? null : Uri.uri(((ANode) item).baseURI(), false);
       }
     };
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return iter(qc).value();
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final Item item : collection(qc)) vb.add(Uri.uri(((ANode) item).baseURI(), false));
+    return vb.value(this);
   }
 }

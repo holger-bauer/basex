@@ -2,28 +2,33 @@ package org.basex.query.expr;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 
+import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.util.pkg.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests the EXPath package API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
-public final class PackageAPITest extends AdvancedQueryTest {
+public final class PackageAPITest extends SandboxTest {
   /** Test repository. */
-  private static final String REPO = "src/test/resources/repo/";
+  private static final String SOURCE = "src/test/resources/repo/";
+  /** Test repository. */
+  private static final String REPO = sandbox() + "repo/";
 
   /** Pkg1 URI. */
   private static final String PKG1 = "http://www.pkg1.com";
@@ -44,19 +49,41 @@ public final class PackageAPITest extends AdvancedQueryTest {
   /** Pkg4 identifier. */
   private static final String PKG4ID = PKG4 + "-2.0";
 
-  /** Prepare test. */
-  @Before
-  public void setUpBeforeClass() {
-    for(final IOFile f : new IOFile(REPO).children()) {
-      if(f.isDir() && f.name().contains(".")) f.delete();
+  /**
+   * Prepares a test.
+   * @throws IOException I/O exception
+   */
+  @BeforeEach public void init() throws IOException {
+    new IOFile(REPO).delete();
+    copy(Paths.get(SOURCE), Paths.get(REPO));
+  }
+
+  /**
+   * Finalizes a test.
+   */
+  @AfterEach public void finish() {
+    new IOFile(REPO).delete();
+  }
+
+  /**
+   * Recursively copies files.
+   * @param source source
+   * @param target target
+   * @throws IOException I/O exception
+   */
+  private static void copy(final Path source, final Path target) throws IOException {
+    if(Files.isDirectory(source)) {
+      Files.createDirectory(target);
+      try(DirectoryStream<Path> paths = Files.newDirectoryStream(source)) {
+        for(final Path path : paths) copy(path, target.resolve(path.getFileName()));
+      }
+    } else {
+      Files.copy(source, target);
     }
-    context = new Context();
-    context.soptions.set(StaticOptions.REPOPATH, REPO);
   }
 
   /** Tests repository initialization. */
-  @Test
-  public void repoInit() {
+  @Test public void repoInit() {
     // check namespace dictionary
     final HashMap<String, HashSet<String>> nsDict = context.repo.nsDict();
     final HashMap<String, Pkg> pkgDict = context.repo.pkgDict();
@@ -79,86 +106,79 @@ public final class PackageAPITest extends AdvancedQueryTest {
     assertEquals(pkgDict.size(), 2);
     assertTrue(pkgDict.containsKey(PKG1ID));
     assertTrue(pkgDict.containsKey(PKG2ID));
-    assertEquals("pkg1", pkgDict.get(PKG1ID).dir());
-    assertEquals("pkg2", pkgDict.get(PKG2ID).dir());
+    assertEquals("pkg1", pkgDict.get(PKG1ID).path());
+    assertEquals("pkg2", pkgDict.get(PKG2ID).path());
   }
 
   /** Test for missing mandatory attributes. */
-  @Test
-  public void mandatoryAttr() {
+  @Test public void mandatoryAttr() {
     error(new IOContent("<package xmlns:http='http://expath.org/ns/pkg' spec='1.0'/>"),
-        BXRE_DESC_X, "Missing mandatory attribute not detected.");
+        REPO_DESCRIPTOR_X, "Missing mandatory attribute not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * no specific versions.
    */
-  @Test
-  public void notInstalledDeps() {
+  @Test public void notInstalledDeps() {
     error(
         desc(PKG5, "pkg5", "12.0",
             "<dependency package='" + PKG4 + "'/>"),
-        BXRE_NOTINST_X, "Missing dependency not detected.");
+        REPO_NOTFOUND_X, "Missing dependency not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * version set.
    */
-  @Test
-  public void notInstalledDepVersion() {
+  @Test public void notInstalledDepVersion() {
     error(
         desc(PKG5, "pkg5", "12.0",
             "<dependency package='" + PKG1 + "' versions='1.0 7.0'/>"),
-        BXRE_NOTINST_X, "Missing dependency not detected.");
+        REPO_NOTFOUND_X, "Missing dependency not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * version template.
    */
-  @Test
-  public void notInstalledDepTemp() {
+  @Test public void notInstalledDepTemp() {
     error(
         desc(PKG5, "pkg5", "12.0",
             "<dependency package='" + PKG1 + "' versions='12.7'/>"),
-        BXRE_NOTINST_X, "Missing dependency not detected.");
+        REPO_NOTFOUND_X, "Missing dependency not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * version template for minimal acceptable version.
    */
-  @Test
-  public void notInstalledMin() {
+  @Test public void notInstalledMin() {
     error(
         desc(PKG5, "pkg5", "12.0",
             "<dependency package='" + PKG1 + "' versions='12.7'/>"),
-        BXRE_NOTINST_X, "Missing dependency not detected.");
+        REPO_NOTFOUND_X, "Missing dependency not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * version template for maximal acceptable version.
    */
-  @Test
-  public void notInstalledMax() {
+  @Test public void notInstalledMax() {
     error(
         desc(PKG5, "pkg5", "12.0",
             "<dependency package='" + PKG1 + "' semver-max='11'/>"),
-        BXRE_NOTINST_X, "Missing dependency not detected.");
+        REPO_NOTFOUND_X, "Missing dependency not detected.");
   }
 
   /**
    * Tests package with not installed dependencies - dependency is defined with
    * version templates for minimal and maximal acceptable version.
    */
-  @Test
-  public void notInstalledMinMax() {
+  @Test public void notInstalledMinMax() {
     error(desc(PKG5, "pkg5", "12.0",
         "<dependency package='" + PKG1 + "' semver-min='5.7' "
-            + "semver-max='11'/>"), BXRE_NOTINST_X,
+            + "semver-max='11'/>"), REPO_NOTFOUND_X,
         "Missing dependency not detected.");
   }
 
@@ -166,20 +186,18 @@ public final class PackageAPITest extends AdvancedQueryTest {
    * Tests package with component which is already installed as part of another
    * package.
    */
-  @Test
-  public void alreadyAnotherInstalled() {
+  @Test public void alreadyAnotherInstalled() {
     error(desc(PKG5, "pkg5", "12.0",
         "<xquery><namespace>ns1</namespace><file>pkg1mod1.xql</file></xquery>"),
-        BXRE_INST_X, "Already installed component not detected.");
+        REPO_INSTALLED_X, "Already installed component not detected.");
   }
 
   /**
    * Tests package with dependency on an older version of BaseX.
    */
-  @Test
-  public void notSupported() {
+  @Test public void notSupported() {
     error(desc(PKG5, "pkg5", "12.0",
-        "<dependency processor='basex' semver='5.0'/>"), BXRE_VERSION,
+        "<dependency processor='basex' semver='5.0'/>"), REPO_VERSION,
         "Unsupported package not detected.");
   }
 
@@ -187,8 +205,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
    * Tests package with component which is already installed as part of another
    * version of the same package.
    */
-  @Test
-  public void alreadyAnotherSame() {
+  @Test public void alreadyAnotherSame() {
     ok(desc(PKG1, "pkg1", "10.0",
         "<xquery><namespace>ns1</namespace><file>pkg1mod1.xql</file></xquery>"));
   }
@@ -196,8 +213,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
   /**
    * Tests valid package.
    */
-  @Test
-  public void valid() {
+  @Test public void valid() {
     ok(desc(PKG1, "pkg1", "10.0", "<dependency package='" + PKG1 + "' semver-min='11'/>"
         + "<xquery><namespace>ns3</namespace>"
         + "<file>pkg5mod1.xql</file></xquery>"));
@@ -207,8 +223,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
    * Tests ability to import two modules from the same package.
    * @throws Exception exception
    */
-  @Test
-  public void importTwoModulesFromPkg() throws Exception {
+  @Test public void importTwoModulesFromPkg() throws Exception {
     try(QueryProcessor qp = new QueryProcessor(
       "import module namespace ns1='ns1';" +
       "import module namespace ns3='ns3';" +
@@ -221,14 +236,13 @@ public final class PackageAPITest extends AdvancedQueryTest {
   /**
    * Tests package installation.
    */
-  @Test
-  public void repoInstall() {
+  @Test public void repoInstall() {
     // try to install non-existing package
     try {
       new RepoManager(context).install("src/test/resources/pkg");
       fail("Not existing package not detected.");
     } catch(final QueryException ex) {
-      check(null, ex, BXRE_WHICH_X);
+      error(null, ex, REPO_NOTFOUND_X);
     }
 
     // try to install a XAR package
@@ -247,11 +261,10 @@ public final class PackageAPITest extends AdvancedQueryTest {
   }
 
   /**
-   * Tests installing of a package containing a jar file.
+   * Tests installation of a XAR file.
    * @throws Exception exception
    */
-  @Test
-  public void installJar() throws Exception {
+  @Test public void installXar() throws Exception {
     // install package
     execute(new RepoInstall(REPO + "testJar.xar", null));
 
@@ -271,16 +284,52 @@ public final class PackageAPITest extends AdvancedQueryTest {
     }
 
     // delete package
-    assertTrue("Repo directory could not be deleted.", new IOFile(REPO, dir).delete());
+    assertTrue(new IOFile(REPO, dir).delete(), "Repo directory could not be deleted.");
     assertFalse(new IOFile(REPO, dir).exists());
   }
 
   /**
-   * Tests installing of a package containing a jar file with packaged dependencies.
+   * Tests installation of a JAR file.
+   */
+  @Test public void installJar() {
+    // ensure that all files are installed
+    execute(new RepoInstall(REPO + "Hello.jar", null));
+
+    final IOFile jar = new IOFile(REPO, "org/basex/modules/Hello.jar");
+    final IOFile xqm = new IOFile(REPO, "org/basex/modules/Hello.xqm");
+    assertTrue(jar.exists(), "File not found: " + jar);
+    assertTrue(xqm.exists(), "File not found: " + xqm);
+
+    // run query
+    String query = "import module namespace h='http://basex.org/modules/Hello';h:hello('Universe')";
+    assertEquals("Hello Universe", execute(new XQuery(query)));
+
+    // run query, ensure that wrong types will be rejected
+    query = "import module namespace h='http://basex.org/modules/Hello';h:hello(123)";
+    try(QueryProcessor qp = new QueryProcessor(query, context)) {
+      qp.value();
+    } catch(final QueryException ex) {
+      assertEquals(INVPROMOTE_X_X_X, ex.error());
+    }
+
+    // ensure that all files were deleted
+    execute(new RepoDelete("org.basex.modules.Hello", null));
+    assertFalse(jar.exists(), "File was not deleted:" + jar);
+    assertFalse(xqm.exists(), "File was not deleted:" + xqm);
+
+    // ensure that package can only be deleted once
+    try {
+      new RepoDelete("org.basex.modules.Hello", null).execute(context);
+    } catch(final BaseXException ex) {
+      assertTrue(ex.toString().contains(REPO_NOTFOUND_X.toString()));
+    }
+  }
+
+  /**
+   * Tests installation of a package containing a jar file with packaged dependencies.
    * @throws Exception exception
    */
-  @Test
-  public void installJarWithDependencies() throws Exception {
+  @Test public void installJarWithDependencies() throws Exception {
     // install package
     execute(new RepoInstall(REPO + "testJarInJar.jar", null));
 
@@ -301,16 +350,15 @@ public final class PackageAPITest extends AdvancedQueryTest {
     new RepoManager(context).delete("test." + jar);
     final boolean existAfterDelete = isFile(dir + "/." +
         jar + "/Greeter.jar") || isFile(dir + '/' + jar + IO.JARSUFFIX);
-    assertTrue("Repo directory could not be deleted.", new IOFile(REPO, dir).delete());
-    assertFalse("Package could not be deleted.", existAfterDelete);
+    assertTrue(new IOFile(REPO, dir).delete(), "Repo directory could not be deleted.");
+    assertFalse(existAfterDelete, "Package could not be deleted.");
   }
 
   /**
    * Tests usage of installed packages.
    * @throws Exception exception
    */
-  @Test
-  public void importPkg() throws Exception {
+  @Test public void importPkg() throws Exception {
     // try with a package without dependencies
     try(QueryProcessor qp = new QueryProcessor(
         "import module namespace ns3='ns3'; ns3:test()", context)) {
@@ -326,14 +374,13 @@ public final class PackageAPITest extends AdvancedQueryTest {
   /**
    * Tests package delete.
    */
-  @Test
-  public void delete() {
+  @Test public void delete() {
     // try to delete a package which is not installed
     try {
       new RepoManager(context).delete("xyz");
       fail("Not installed package not detected.");
     } catch(final QueryException ex) {
-      check(null, ex, BXRE_WHICH_X);
+      error(null, ex, REPO_NOTFOUND_X);
     }
     // install a package without dependencies (pkg3)
     execute(new RepoInstall(REPO + "pkg3.xar", null));
@@ -366,7 +413,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
       new RepoManager(context).delete(PKG3ID);
       fail("Package involved in a dependency was deleted.");
     } catch(final QueryException ex) {
-      check(null, ex, BXRE_DEP_X_X);
+      error(null, ex, REPO_DELETE_X_X);
     }
     // try to delete pkg4 (use package name)
     execute(new RepoDelete(PKG4, null));
@@ -383,7 +430,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
     assertFalse(isDir(pkg3Dir));
   }
 
-  // PRIVATE METHODS ==========================================================
+  // PRIVATE METHODS ==============================================================================
 
   /** Header string. */
   private static final byte[] HEADER = token("<package "
@@ -428,7 +475,7 @@ public final class PackageAPITest extends AdvancedQueryTest {
       new PkgValidator(context.repo, null).check(new PkgParser(null).parse(desc));
       fail(exp);
     } catch(final QueryException ex) {
-      check(null, ex, err);
+      error(null, ex, err);
     }
   }
 

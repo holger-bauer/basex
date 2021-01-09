@@ -1,16 +1,16 @@
 package org.basex.data;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
 import org.basex.index.*;
 import org.basex.util.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Base class with common functionality for all ID -> PRE mapping tests.
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public abstract class IdPreMapBulkTestBase {
@@ -18,16 +18,15 @@ public abstract class IdPreMapBulkTestBase {
   int opcount = 7000;
   /** Initial number of records. */
   int baseid = 400;
-  /** ID -> PRE map to compare to. */
+  /** ID-PRE map to compare to. */
   private DummyIdPreMap basemap;
-  /** ID -> PRE map to test. */
+  /** ID-PRE map to test. */
   private IdPreMap testedmap;
   /** Sequence of performed operations and parameters. */
   private ArrayList<int[]> ops;
 
   /** Set-up method. */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     final int ml = baseid + 1;
     final int[] map = new int[ml];
     for(int m = 0; m < ml; m++) map[m] = m;
@@ -90,7 +89,7 @@ public abstract class IdPreMapBulkTestBase {
 
   /**
    * Dummy implementation of ID -> PRE map: very slow, but simple and correct.
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Dimitar Popov
    */
   protected static class DummyIdPreMap extends IdPreMap {
@@ -99,7 +98,7 @@ public abstract class IdPreMapBulkTestBase {
 
     /**
      * Constructor.
-     * @param list initial list of ids.
+     * @param list initial list of ids
      */
     public DummyIdPreMap(final int[] list) {
       super(list.length - 1);

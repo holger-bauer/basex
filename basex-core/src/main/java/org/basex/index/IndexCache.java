@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This class caches sizes and offsets from index results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class IndexCache {
@@ -19,7 +19,7 @@ public final class IndexCache {
   /** Read-write lock. */
   private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock(true);
   /** Hash table buckets. */
-  private BucketEntry[] buckets = new BucketEntry[Array.CAPACITY];
+  private BucketEntry[] buckets = new BucketEntry[Array.INITIAL_CAPACITY];
   /** Number of entries in the cache. */
   private int size;
 
@@ -43,7 +43,6 @@ public final class IndexCache {
     } finally {
       rwl.readLock().unlock();
     }
-
     return null;
   }
 
@@ -175,8 +174,8 @@ public final class IndexCache {
   private void rehash() {
     purge();
 
-    final int s = size << 1;
-    final BucketEntry[] tmp = new BucketEntry[s];
+    final int newSize = size << 1;
+    final BucketEntry[] tmp = new BucketEntry[newSize];
 
     final int l = buckets.length;
     for(int i = 0; i < l; ++i) {

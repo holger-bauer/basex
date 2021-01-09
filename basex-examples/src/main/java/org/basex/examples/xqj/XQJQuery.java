@@ -6,7 +6,7 @@ import javax.xml.xquery.*;
  * This class serves as an example for executing XQuery requests
  * with the XQuery for Java (XQJ) API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  */
 public final class XQJQuery {
   /** Database driver. */
@@ -24,7 +24,8 @@ public final class XQJQuery {
     System.out.println("\n* Run query via XQJ:");
 
     // Create a new data source.
-    XQDataSource source = (XQDataSource) Class.forName(DRIVER).newInstance();
+    XQDataSource source = (XQDataSource) Class.forName(DRIVER).
+        getDeclaredConstructor().newInstance();
 
     // Build a connection to the specified driver.
     XQConnection conn = source.getConnection("admin", "admin");

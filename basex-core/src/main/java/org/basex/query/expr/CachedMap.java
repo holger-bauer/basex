@@ -9,50 +9,47 @@ import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
- * Simple map expression.
+ * Cached map expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class CachedMap extends SimpleMap {
+public final class CachedMap extends SimpleMap {
   /**
    * Constructor.
    * @param info input info
    * @param exprs expressions
    */
-  CachedMap(final InputInfo info, final Expr... exprs) {
+  public CachedMap(final InputInfo info, final Expr... exprs) {
     super(info, exprs);
   }
 
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
-    Value result = qc.value(exprs[0]);
+    Value value = exprs[0].value(qc);
 
-    final QueryFocus qf = qc.focus, focus = new QueryFocus();
-    qc.focus = focus;
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    qc.focus = qf;
     try {
       final int el = exprs.length;
       for(int e = 1; e < el; e++) {
-        final Expr ex = exprs[e];
-        focus.pos = 0;
-        focus.size = result.size();
-        final ValueBuilder vb = new ValueBuilder();
-        for(final Item it : result) {
-          focus.pos++;
-          focus.value = it;
-          vb.add(qc.value(ex));
+        final Expr expr = exprs[e];
+        qf.size = value.size();
+        qf.pos = 0;
+        final ValueBuilder vb = new ValueBuilder(qc);
+        final Iter iter = value.iter();
+        for(Item item; (item = qc.next(iter)) != null;) {
+          qf.value = item;
+          qf.pos++;
+          vb.add(expr.value(qc));
         }
-        result = vb.value();
+        value = vb.value(expr);
       }
-      return result;
     } finally {
-      qc.focus = qf;
+      qc.focus = focus;
     }
+
+    return value;
   }
 
   @Override

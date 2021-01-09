@@ -16,7 +16,7 @@ import org.basex.query.value.item.*;
  * discarded in the transformation process. More details are found in the
  * <a href="http://jsonml.org/XML/">JsonML documentation</a>.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JsonMLSerializer extends JsonSerializer {
@@ -89,6 +89,6 @@ public final class JsonMLSerializer extends JsonSerializer {
 
   @Override
   protected void atomic(final Item value) throws IOException {
-    throw BXJS_SERIAL_X.getIO("Atomic values cannot be serialized");
+    throw JSON_SERIALIZE_X.getIO("Atomic values cannot be serialized");
   }
 }

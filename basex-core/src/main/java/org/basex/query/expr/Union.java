@@ -2,12 +2,18 @@ package org.basex.query.expr;
 
 import static org.basex.query.QueryText.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
+import org.basex.query.util.*;
 import org.basex.query.util.list.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
+import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -15,7 +21,7 @@ import org.basex.util.hash.*;
 /**
  * Union expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Union extends Set {
@@ -29,59 +35,75 @@ public final class Union extends Set {
   }
 
   @Override
-  public Expr optimize(final CompileContext cc) throws QueryException {
-    super.optimize(cc);
+  Expr opt(final CompileContext cc) throws QueryException {
+    flatten(cc);
 
-    final ExprList el = new ExprList(exprs.length);
-    for(final Expr ex : exprs) {
-      if(ex.isEmpty()) {
-        // remove empty operands
-        cc.info(OPTREMOVE_X_X, this, ex);
-      } else {
-        el.add(ex);
+    // determine type
+    SeqType st = null;
+    for(final Expr expr : exprs) {
+      final SeqType st2 = expr.seqType();
+      if(!st2.zero()) st = st == null ? st2 : st.union(st2);
+    }
+    // check if all operands yield an empty sequence
+    if(st == null) st = SeqType.NODE_ZM;
+
+    // skip optimizations if operands do not have the correct type
+    if(st.type instanceof NodeType) {
+      exprType.assign(st.union(Occ.ONE_OR_MORE));
+
+      final ExprList list = new ExprList(exprs.length);
+      for(final Expr expr : exprs) {
+        if(expr == Empty.VALUE || list.contains(expr) && !expr.has(Flag.CNS, Flag.NDT)) {
+          // remove empty operands: * union ()  ->  *
+          // remove duplicates: * union *  ->  *
+          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+        } else {
+          list.add(expr);
+        }
+      }
+      exprs = list.finish();
+
+      final Expr ex = rewrite(Intersect.class, (invert, ops) ->
+        invert ? new Intersect(info, ops) : new Union(info, ops), cc);
+      if(ex != null) {
+        cc.info(OPTREWRITE_X_X, (Supplier<?>) this::description, ex);
+        return ex;
       }
     }
-    // no expressions: return empty sequence
-    if(el.isEmpty()) return Empty.SEQ;
-    // ensure that results are always sorted
-    if(el.size() == 1 && iterable) return el.get(0);
-    // replace expressions with optimized list
-    exprs = el.finish();
-    return this;
+    return null;
   }
 
   @Override
-  public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final Union un = new Union(info, copyAll(cc, vm, exprs));
-    un.iterable = iterable;
-    return copyType(un);
+  Or mergePredicates(final Expr[] preds, final CompileContext cc) {
+    return new Or(info, preds);
   }
 
   @Override
-  public ANodeList eval(final Iter[] iter) throws QueryException {
-    final ANodeList list = new ANodeList().check();
-    for(final Iter ir : iter) {
-      for(Item it; (it = ir.next()) != null;) list.add(toNode(it));
+  Value nodes(final QueryContext qc) throws QueryException {
+    final ANodeBuilder nodes = new ANodeBuilder();
+    for(final Expr expr : exprs) {
+      final Iter iter = expr.iter(qc);
+      for(Item item; (item = qc.next(iter)) != null;) nodes.add(toNode(item));
     }
-    return list;
+    return nodes.value(this);
   }
 
   @Override
-  protected NodeIter iter(final Iter[] iter) {
-    return new SetIter(iter) {
+  NodeIter iterate(final QueryContext qc) throws QueryException {
+    return new SetIter(qc, iters(qc)) {
       @Override
       public ANode next() throws QueryException {
-        if(item == null) {
+        if(nodes == null) {
           final int il = iter.length;
-          item = new ANode[il];
+          nodes = new ANode[il];
           for(int i = 0; i < il; i++) next(i);
         }
 
         int m = -1;
-        final int il = item.length;
+        final int il = nodes.length;
         for(int i = 0; i < il; i++) {
-          if(item[i] == null) continue;
-          final int d = m == -1 ? 1 : item[m].diff(item[i]);
+          if(nodes[i] == null) continue;
+          final int d = m == -1 ? 1 : nodes[m].diff(nodes[i]);
           if(d == 0) {
             next(i--);
           } else if(d > 0) {
@@ -90,10 +112,27 @@ public final class Union extends Set {
         }
         if(m == -1) return null;
 
-        final ANode it = item[m];
+        final ANode node = nodes[m];
         next(m);
-        return it;
+        return node;
       }
     };
+  }
+
+  @Override
+  public Data data() {
+    return data(exprs);
+  }
+
+  @Override
+  public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
+    final Union un = new Union(info, copyAll(cc, vm, exprs));
+    un.iterative = iterative;
+    return copyType(un);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Union && super.equals(obj);
   }
 }

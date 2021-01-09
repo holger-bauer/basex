@@ -8,7 +8,7 @@ import org.xmldb.api.modules.*;
  * This class serves as an example for executing XPath requests with the XML:DB API.
  * You first need to run {@link XMLDBCreate} in order to create the addressed database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  */
 public final class XMLDBQuery {
   /** Database driver. */
@@ -36,7 +36,7 @@ public final class XMLDBQuery {
     try {
       // Register the database
       Class<?> c = Class.forName(DRIVER);
-      Database db = (Database) c.newInstance();
+      Database db = (Database) c.getDeclaredConstructor().newInstance();
       DatabaseManager.registerDatabase(db);
 
       // Receive the database

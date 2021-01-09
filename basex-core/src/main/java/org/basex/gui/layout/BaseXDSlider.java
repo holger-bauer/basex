@@ -9,7 +9,7 @@ import java.awt.event.*;
 /**
  * DoubleSlider implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXDSlider extends BaseXPanel {
@@ -17,18 +17,16 @@ public final class BaseXDSlider extends BaseXPanel {
   public static final int LABELW = 300;
   /** Slider width. */
   private static final int ARROW = 17;
-  /** Label space (scaled). */
-  private static final int SLABELW = (int) (LABELW * scale);
 
   /** Minimum slider value. */
-  public final double totMin;
+  public final double min;
   /** Maximum slider value. */
-  public final double totMax;
+  public final double max;
 
   /** Current slider value. */
-  public double min;
+  public double currMin;
   /** Current slider value. */
-  public double max;
+  public double currMax;
   /** Integer flag. */
   public boolean itr;
 
@@ -51,29 +49,30 @@ public final class BaseXDSlider extends BaseXPanel {
 
   /**
    * Constructor.
-   * @param mn min value
-   * @param mx max value
-   * @param main reference to the main window
-   * @param list listener
+   * @param win reference to the main window
+   * @param min min value
+   * @param max max value
+   * @param listener listener
    */
-  public BaseXDSlider(final double mn, final double mx, final Window main,
-      final ActionListener list) {
+  public BaseXDSlider(final BaseXWindow win, final double min, final double max,
+      final ActionListener listener) {
 
-    super(main);
-    listener = list;
-    totMin = mn;
-    totMax = mx;
-    min = mn;
-    max = mx;
+    super(win);
+    this.listener = listener;
+    this.min = min;
+    this.max = max;
+    currMin = min;
+    currMax = max;
+
     // choose logarithmic scaling for larger ranges
-    log = StrictMath.log(totMax) - StrictMath.log(totMin) > 5 && totMax - totMin > 100;
+    log = StrictMath.log(max) - StrictMath.log(min) > 5 && max - min > 100;
     setOpaque(false);
     setFocusable(true);
 
     BaseXLayout.setWidth(this, 200 + LABELW);
     setPreferredSize(new Dimension(getPreferredSize().width, getFont().getSize() + 9));
 
-    addFocusListener(new FocusAdapter() {
+    addFocusListener(new FocusListener() {
       @Override
       public void focusGained(final FocusEvent e) {
         repaint();
@@ -97,8 +96,8 @@ public final class BaseXDSlider extends BaseXPanel {
     left = mouX >= r.xs && mouX <= r.xs + ARROW;
     right = mouX >= r.xe && mouX <= r.xe + ARROW;
     center = mouX + ARROW > r.xs && mouX < r.xe;
-    oldMin = encode(min);
-    oldMax = encode(max);
+    oldMin = encode(currMin);
+    oldMax = encode(currMax);
   }
 
   @Override
@@ -114,16 +113,16 @@ public final class BaseXDSlider extends BaseXPanel {
     final double prop = r.dist * (mouX - e.getX()) / r.w;
 
     if(left) {
-      min = limit(totMin, max, decode(oldMin - prop) - 1);
+      currMin = limit(min, currMax, decode(oldMin - prop) - 1);
     } else if(right) {
-      max = limit(min, totMax, decode(oldMax - prop) - 1);
+      currMax = limit(currMin, max, decode(oldMax - prop) - 1);
     } else {
-      min = limit(totMin, totMax, decode(oldMin - prop) - 1);
-      max = limit(totMin, totMax, decode(oldMax - prop) - 1);
+      currMin = limit(min, max, decode(oldMin - prop) - 1);
+      currMax = limit(min, max, decode(oldMax - prop) - 1);
     }
     if(itr) {
-      min = (long) min;
-      max = (long) max;
+      currMin = (long) currMin;
+      currMax = (long) currMax;
     }
     listener.actionPerformed(null);
     setToolTip();
@@ -134,8 +133,8 @@ public final class BaseXDSlider extends BaseXPanel {
    * Sets a new tooltip.
    */
   private void setToolTip() {
-    final double mn = (long) (min * 100) / 100.0;
-    final double mx = (long) (max * 100) / 100.0;
+    final double mn = (long) (currMin * 100) / 100.0;
+    final double mx = (long) (currMax * 100) / 100.0;
     setToolTipText(BaseXLayout.value(mn) + " - " + BaseXLayout.value(mx));
   }
 
@@ -148,8 +147,8 @@ public final class BaseXDSlider extends BaseXPanel {
 
   @Override
   public void keyPressed(final KeyEvent e) {
-    oldMin = min;
-    oldMax = min;
+    oldMin = currMin;
+    oldMax = currMin;
     double diffMin = 0;
     double diffMax = 0;
     if(PREVCHAR.is(e)) {
@@ -165,31 +164,31 @@ public final class BaseXDSlider extends BaseXPanel {
       diffMin = 1;
       diffMax = -1;
     } else if(LINESTART.is(e)) {
-      min = totMin;
+      currMin = min;
     } else if(LINEEND.is(e)) {
-      max = totMax;
+      currMax = max;
     }
     if(e.isShiftDown()) {
       diffMin /= 10;
       diffMax /= 10;
     }
 
-    final double dist = encode(totMax) - encode(totMin);
+    final double dist = encode(max) - encode(min);
     diffMin = dist / 20 * diffMin;
     diffMax = dist / 20 * diffMax;
 
     if(diffMin != 0) {
-      min = limit(totMin, max, decode(Math.max(0, encode(min) + diffMin)));
+      currMin = limit(min, currMax, decode(Math.max(0, encode(currMin) + diffMin)));
     }
     if(diffMax != 0) {
-      max = limit(min, totMax, decode(Math.max(0, encode(max) + diffMax)));
+      currMax = limit(currMin, max, decode(Math.max(0, encode(currMax) + diffMax)));
     }
-    if(min != oldMin || max != oldMax) {
+    if(currMin != oldMin || currMax != oldMax) {
       if(itr) {
-        if(min != oldMin) min = min > oldMin ? Math.max(oldMin + 1,
-            (long) min) : Math.min(oldMin - 1, (long) min);
-        if(max != oldMax) max = max > oldMax ? Math.max(oldMax + 1,
-            (long) max) : Math.min(oldMax - 1, (long) max);
+        if(currMin != oldMin) currMin = currMin > oldMin ? Math.max(oldMin + 1,
+            (long) currMin) : Math.min(oldMin - 1, (long) currMin);
+        if(currMax != oldMax) currMax = currMax > oldMax ? Math.max(oldMax + 1,
+            (long) currMax) : Math.min(oldMax - 1, (long) currMax);
       }
       listener.actionPerformed(null);
       repaint();
@@ -200,10 +199,10 @@ public final class BaseXDSlider extends BaseXPanel {
   public void paintComponent(final Graphics g) {
     super.paintComponent(g);
 
-    final int w = getWidth() - SLABELW;
+    final int w = getWidth() - LABELW;
     final int h = getHeight();
     final int hc = h / 2;
-    final int s = (int) (4 * ascale);
+    final int s = 4;
 
     final boolean focus = hasFocus();
     g.setColor(BACK);
@@ -252,8 +251,8 @@ public final class BaseXDSlider extends BaseXPanel {
 
     // draw range info
     g.setColor(TEXT);
-    final double mn = (long) (min * 100) / 100.0;
-    final double mx = (long) (max * 100) / 100.0;
+    final double mn = (long) (currMin * 100) / 100.0;
+    final double mx = (long) (currMax * 100) / 100.0;
 
     g.drawString(BaseXLayout.value(mn) + " - " + BaseXLayout.value(mx),
         w + 15, h - (h - getFont().getSize()) / 2);
@@ -304,10 +303,10 @@ public final class BaseXDSlider extends BaseXPanel {
      * @param s slider reference
      */
     Range(final BaseXDSlider s) {
-      w = s.getWidth() - SLABELW - (ARROW << 1);
-      dist = s.encode(s.totMax - s.totMin);
-      xs = (int) (s.encode(s.min - s.totMin) * w / dist);
-      xe = (s.totMin == s.totMax ? w : (int) (s.encode(s.max - s.totMin) * w / dist)) + ARROW;
+      w = s.getWidth() - LABELW - (ARROW << 1);
+      dist = s.encode(s.max - s.min);
+      xs = (int) (s.encode(s.currMin - s.min) * w / dist);
+      xe = (s.min == s.max ? w : (int) (s.encode(s.currMax - s.min) * w / dist)) + ARROW;
     }
   }
 }

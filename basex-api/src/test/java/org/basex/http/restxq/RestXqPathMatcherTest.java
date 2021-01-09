@@ -1,59 +1,49 @@
 package org.basex.http.restxq;
 
-import static java.math.BigInteger.ONE;
-import static java.math.BigInteger.ZERO;
-import static java.math.BigInteger.TEN;
-import static org.junit.Assert.*;
+import static java.math.BigInteger.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import org.basex.query.value.item.QNm;
-import org.hamcrest.CustomTypeSafeMatcher;
-import org.junit.Ignore;
-import org.junit.Test;
+import java.math.*;
+import java.util.*;
 
-import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Objects;
+import org.basex.query.util.hash.*;
+import org.basex.query.value.item.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Path matcher tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class RestXqPathMatcherTest {
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseEmptyPath() throws Exception {
+  @Test public void testParseEmptyPath() throws Exception {
     testParse("", "/", 0, ZERO);
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseSimplePath() throws Exception {
+  @Test public void testParseSimplePath() throws Exception {
     testParse("/a/b/c#xyz", "/a/b/c#xyz", 3, ZERO);
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseSimplePathWithoutSlash() throws Exception {
+  @Test public void testParseSimplePathWithoutSlash() throws Exception {
     testParse("a/b/c#xyz", "/a/b/c#xyz", 3, ZERO);
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseRegexEscape() throws Exception {
+  @Test public void testParseRegexEscape() throws Exception {
     testParse("/a/b/c-d.f#xyz", "/a/b/c\\-d\\.f#xyz", 3, ZERO);
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseSimpleVariables() throws Exception {
+  @Test public void testParseSimpleVariables() throws Exception {
     testParse(
             "/a1/{ $var1 }/a2/{ $var2 }/a3",
             "/a1/([^/]+?)/a2/([^/]+?)/a3", 5, TEN, new QNm("var1"),
@@ -62,8 +52,7 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseQualifiedVariables() throws Exception {
+  @Test public void testParseQualifiedVariables() throws Exception {
     testParse(
             "/a1/{ $n:var1 }/a2/{ $m:var2 }/a3",
             "/a1/([^/]+?)/a2/([^/]+?)/a3", 5, TEN, new QNm("n:var1"),
@@ -72,9 +61,8 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Ignore
-  @Test
-  public void testParseExtendedQualifiedVariables() throws Exception {
+  @Disabled
+  @Test public void testParseExtendedQualifiedVariables() throws Exception {
     testParse(
             "/a1/{ $n:var1 }/a2/{ $Q{m}var2 }/a3",
             "/a1/([^/]+?)/a2/([^/]+?)/a3", 5, TEN, new QNm("n:var1"),
@@ -83,8 +71,7 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseVariablesWithSimpleRegex() throws Exception {
+  @Test public void testParseVariablesWithSimpleRegex() throws Exception {
     testParse(
             "/a1/{  $n:var1\t=\t.+ }/a2/{$m:var2=[1-9][0-9]+}/a3",
             "/a1/(.+)/a2/([1-9][0-9]+)/a3", 5, TEN, new QNm("n:var1"),
@@ -93,8 +80,7 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseVariablesWithComplexRegex() throws Exception {
+  @Test public void testParseVariablesWithComplexRegex() throws Exception {
     testParse(
             "/a1/{  $n:var1\t=\t.+ }/a2/{ $m:var2 = [1-9][0-9]{3,10} }/a3",
             "/a1/(.+)/a2/([1-9][0-9]{3,10})/a3", 5, TEN, new QNm("n:var1"),
@@ -103,8 +89,7 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testParseVariablesWithGroupsInRegex() throws Exception {
+  @Test public void testParseVariablesWithGroupsInRegex() throws Exception {
     testParse(
             "/a1{$p=(/.*)?}",
             "/a1((/.*)?)", 1, ONE, new QNm("p"));
@@ -112,36 +97,31 @@ public final class RestXqPathMatcherTest {
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testValuesNoMatch() throws Exception {
+  @Test public void testValuesNoMatch() throws Exception {
     testValues("/a1{$p=(/.*)?}", "/a1b/c", "p", null);
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testValuesNoTrailingSlash() throws Exception {
+  @Test public void testValuesNoTrailingSlash() throws Exception {
     testValues("/a1{$p=(/.*)?}", "/a1", "p", "");
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testValuesWithTrailingSlash() throws Exception {
+  @Test public void testValuesWithTrailingSlash() throws Exception {
     testValues("/a1{$p=(/.*)?}", "/a1/", "p", "/");
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testValuesMatched() throws Exception {
+  @Test public void testValuesMatched() throws Exception {
     testValues("/a1{$p=(/.*)?}", "/a1/b/c/d", "p", "/b/c/d");
   }
 
   /** Test.
    * @throws Exception exception */
-  @Test
-  public void testValuesMatchedSeveralVariables() throws Exception {
+  @Test public void testValuesMatchedSeveralVariables() throws Exception {
     testValues("/a1/{$l=(b|d)}/{$d=(0|((12)?3))}", "/a1/b/123", "l", "b");
     testValues("/a1/{$l=(b|d)}/{$d=(0|((12)?3))}", "/a1/b/123", "d", "123");
   }
@@ -157,13 +137,8 @@ public final class RestXqPathMatcherTest {
   private static void testValues(final String template, final String path, final String var,
       final String val) throws Exception {
 
-    final Map<QNm, String> actual = RestXqPathMatcher.parse(template, null).values(path);
-    assertThat(actual, new CustomTypeSafeMatcher<Map<QNm, String>>("values differ") {
-      @Override
-      protected boolean matchesSafely(final Map<QNm, String> item) {
-        return Objects.equals(val, item.get(new QNm(var)));
-      }
-    });
+    final QNmMap<String> actual = RestXqPathMatcher.parse(template, null).values(path);
+    assertEquals(val, actual.get(new QNm(var)), "values differ");
   }
 
   /**
@@ -180,7 +155,7 @@ public final class RestXqPathMatcherTest {
 
     final RestXqPathMatcher p = RestXqPathMatcher.parse(input, null);
     assertEquals(regex, p.pattern.toString());
-    assertEquals(Arrays.asList(vars), p.vars);
+    assertEquals(Arrays.asList(vars), p.varNames);
     assertEquals(segments, p.segments);
     assertEquals(variables, p.varsPos);
   }

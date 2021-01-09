@@ -3,14 +3,15 @@ package org.basex.query.expr;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 
+import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -18,14 +19,16 @@ import org.basex.util.hash.*;
 /**
  * Checks the argument expression's result type.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-public final class TypeCheck extends Single {
+public class TypeCheck extends Single {
+  /** Static context. */
+  final StaticContext sc;
   /** Flag for function conversion. */
   public final boolean promote;
-  /** Static context. */
-  private final StaticContext sc;
+  /** Only check occurrence indicator. */
+  private boolean occ;
 
   /**
    * Constructor.
@@ -37,118 +40,142 @@ public final class TypeCheck extends Single {
    */
   public TypeCheck(final StaticContext sc, final InputInfo info, final Expr expr,
       final SeqType seqType, final boolean promote) {
-    super(info, expr);
+    super(info, expr, seqType);
     this.sc = sc;
-    this.seqType = seqType;
     this.promote = promote;
   }
 
   @Override
-  public Expr compile(final CompileContext cc) throws QueryException {
-    expr = expr.compile(cc);
-    return optimize(cc);
+  public final Expr compile(final CompileContext cc) throws QueryException {
+    return super.compile(cc).optimize(cc);
   }
 
   @Override
-  public Expr optimize(final CompileContext cc) throws QueryException {
-    final SeqType argType = expr.seqType();
+  public final Expr optimize(final CompileContext cc) throws QueryException {
+    final SeqType st = seqType();
+    if(st.type.instanceOf(AtomType.ANY_ATOMIC_TYPE)) {
+      expr = expr.simplifyFor(Simplify.DATA, cc);
+    }
+    final SeqType et = expr.seqType();
+    occ = et.type.instanceOf(st.type) && et.kindInstanceOf(st);
 
-    // return type is already correct
-    if(argType.instanceOf(seqType)) {
-      cc.info(OPTTYPE_X, seqType);
+    // remove redundant type check
+    if(expr instanceof TypeCheck) {
+      final TypeCheck tc = (TypeCheck) expr;
+      if(promote == tc.promote && st.instanceOf(et)) {
+        return cc.replaceWith(this, get(tc.expr, st).optimize(cc));
+      }
+    }
+
+    // skip check if return type is already correct
+    if(et.instanceOf(st)) {
+      cc.info(OPTTYPE_X_X, st, expr);
       return expr;
     }
 
     // function item coercion
-    if(expr instanceof FuncItem && seqType.type instanceof FuncType) {
-      if(!seqType.occ.check(1)) throw typeError(expr, seqType, null, info);
-      final FuncItem fi = (FuncItem) expr;
-      return optPre(fi.coerceTo((FuncType) seqType.type, cc.qc, info, true), cc);
+    final FuncType ft = expr.funcType();
+    if(ft != null && expr instanceof FuncItem) {
+      if(!st.occ.check(1)) throw error(expr, st);
+      return cc.replaceWith(this, ((FuncItem) expr).coerceTo(ft, cc.qc, info, true));
     }
 
-    // we can type check immediately
-    if(expr.isValue()) {
-      return optPre(value(cc.qc), cc);
+    // pre-evaluate (check value and result size)
+    final long es = expr.size();
+    if(expr instanceof Value && es <= CompileContext.MAX_PREEVAL) {
+      return cc.preEval(this);
     }
 
-    // check at each call
-    if(argType.type.instanceOf(seqType.type) && !expr.has(Flag.NDT) && !expr.has(Flag.UPD)) {
-      final Occ occ = argType.occ.intersect(seqType.occ);
-      if(occ == null) throw typeError(expr, seqType, null, info);
+    // push type check inside expression
+    final Expr checked = expr.typeCheck(this, cc);
+    if(checked != null) {
+      cc.info(OPTTYPE_X_X, st, checked);
+      return checked;
     }
 
-    final Expr opt = expr.typeCheck(this, cc);
-    if(opt != null) {
-      cc.info(OPTTYPE_X, seqType);
-      return opt;
+    // refine occurrence indicator and result size
+    if(!expr.seqType().mayBeArray()) {
+      final Occ o = et.occ.intersect(st.occ);
+      if(o == null) throw error(expr, st);
+      exprType.assign(st, o, et.occ == st.occ ? es : -1);
     }
 
     return this;
   }
 
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
+  public final Iter iter(final QueryContext qc) throws QueryException {
+    final SeqType st = seqType();
     final Iter iter = expr.iter(qc);
+    final Value value = iter.iterValue();
+    if(value != null) {
+      if(st.instance(value)) return iter;
+      if(!promote) throw error(value, st);
+    }
 
+    // only check occurrence indicator
+    if(occ) {
+      return new Iter() {
+        int c;
+
+        @Override
+        public Item next() throws QueryException {
+          final Item item = qc.next(iter);
+          if(item != null ? ++c > st.occ.max : c < st.occ.min) throw error(expr, st);
+          return item;
+        }
+      };
+    }
+
+    // check item type and (optionally) occurrence indicator
     return new Iter() {
-      /** Item cache. */
-      final ItemList cache = new ItemList();
-      /** Item cache index. */
-      int c;
-      /** Result index. */
-      int i;
+      final ItemList items = new ItemList();
+      int i, c;
 
       @Override
       public Item next() throws QueryException {
-        final SeqType st = seqType;
-        while(c == cache.size()) {
-          qc.checkStop();
-          cache.size(0);
-          c = 0;
+        while(i == items.size()) {
+          items.reset();
+          i = 0;
 
-          final Item it = iter.next();
-          if(it == null || st.instance(it)) {
-            cache.add(it);
+          final Item item = qc.next(iter);
+          if(item == null || st.instance(item)) {
+            items.add(item);
           } else {
-            st.promote(it, null, cache, qc, sc, info, false);
+            if(!promote) throw error(expr, st);
+            st.promote(item, null, items, qc, sc, info, false);
           }
         }
 
-        final Item it = cache.get(c);
-        cache.set(c++, null);
-
-        if(it == null && i < st.occ.min || i > st.occ.max)
-          throw typeError(TypeCheck.this, st, null, info);
-
-        i++;
-        return it;
+        final Item item = items.get(i);
+        items.set(i++, null);
+        if(item != null ? ++c > st.occ.max : c < st.occ.min) throw error(expr, st);
+        return item;
       }
     };
   }
 
   @Override
-  public Value value(final QueryContext qc) throws QueryException {
-    final Value val = expr.value(qc);
-    if(seqType.instance(val)) return val;
-    if(promote) return seqType.promote(val, null, qc, sc, info, false);
-    throw INVCAST_X_X_X.get(info, val.seqType(), seqType, val);
+  public final Value value(final QueryContext qc) throws QueryException {
+    final Value value = expr.value(qc);
+    final SeqType st = seqType();
+
+    // only check occurrence indicator
+    if(occ) {
+      if(!st.occ.check(value.size())) throw error(value, st);
+      return value;
+    }
+    // check occurrence indicator and item type
+    if(st.instance(value)) return value;
+
+    if(!promote) throw error(value, st);
+    return st.promote(value, null, qc, sc, info, false);
   }
 
   @Override
-  public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new TypeCheck(sc, info, expr.copy(cc, vm), seqType, promote);
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    final FElem elem = planElem(TYP, seqType);
-    if(promote) elem.add(planAttr(FUNCTION, Token.TRUE));
-    addPlan(plan, elem, expr);
-  }
-
-  @Override
-  public String toString() {
-    return "((: " + seqType + ", " + promote + " :) " + expr + ')';
+  public final Expr simplifyFor(final Simplify mode, final CompileContext cc)
+      throws QueryException {
+    return promote ? simplifyForCast(mode, cc) : super.simplifyFor(mode, cc);
   }
 
   /**
@@ -156,18 +183,82 @@ public final class TypeCheck extends Single {
    * @param var variable
    * @return result of check
    */
-  public boolean isRedundant(final Var var) {
-    return (!promote || var.promotes()) && var.declaredType().instanceOf(seqType);
+  public final boolean isRedundant(final Var var) {
+    return (!promote || var.promotes()) && var.declaredType().instanceOf(seqType());
   }
 
   /**
    * Creates an expression that checks the given expression's return type.
    * @param ex expression to check
    * @param cc compilation context
-   * @return the resulting expression
+   * @return the resulting expression, or {@code null} if no type check is necessary
    * @throws QueryException query exception
    */
-  public Expr check(final Expr ex, final CompileContext cc) throws QueryException {
-    return new TypeCheck(sc, info, ex, seqType, promote).optimize(cc);
+  public final Expr check(final Expr ex, final CompileContext cc) throws QueryException {
+    final SeqType st = seqType();
+    return ex.seqType().instanceOf(st) ? null : get(ex, st).optimize(cc);
+  }
+
+  /**
+   * Returns the used error code.
+   * @return error code
+   */
+  public QueryError error() {
+    return promote ? INVPROMOTE_X_X_X : INVTREAT_X_X_X;
+  }
+
+  /**
+   * Throws a type error.
+   * @param ex expression that triggers the error
+   * @param st target type
+   * @return query exception
+   */
+  private QueryException error(final Expr ex, final SeqType st) {
+    return typeError(ex, st, null, info, error());
+  }
+
+  /**
+   * Returns a new instance of this class ({@link TypeCheck} or ({@link Treat}).
+   * @param ex expression
+   * @param st sequence type
+   * @return error code
+   */
+  TypeCheck get(final Expr ex, final SeqType st) {
+    return new TypeCheck(sc, info, ex, st, promote);
+  }
+
+  @Override
+  public final Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
+    final TypeCheck ex = copyType(get(expr.copy(cc, vm), seqType()));
+    ex.occ = occ;
+    return ex;
+  }
+
+  @Override
+  public final Data data() {
+    return seqType().type instanceof NodeType ? expr.data() : null;
+  }
+
+  @Override
+  public final boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof TypeCheck)) return false;
+    final TypeCheck tc = (TypeCheck) obj;
+    return seqType().eq(tc.seqType()) && promote == tc.promote && super.equals(obj);
+  }
+
+  @Override
+  public final void plan(final QueryPlan plan) {
+    final FElem elem = plan.create(this, AS, seqType());
+    if(promote) plan.addAttribute(elem, PROMOTE, true);
+    plan.add(elem, expr);
+  }
+
+  @Override
+  public final void plan(final QueryString qs) {
+    qs.token("(").token(expr);
+    if(promote) qs.token(PROMOTE).token(TO);
+    else qs.token(TREAT).token(AS);
+    qs.token(seqType()).token(')');
   }
 }

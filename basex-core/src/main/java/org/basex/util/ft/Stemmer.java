@@ -7,14 +7,14 @@ import org.basex.util.*;
 /**
  * Implementation of common stemmer methods.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public abstract class Stemmer extends LanguageImpl {
   /** List of available stemmers. */
   static final ArrayList<Stemmer> IMPL = new ArrayList<>();
 
-  /** Load stemmers and order them by precedence. */
+  /* Load stemmers and order them by precedence. */
   static {
     // built-in stemmers
     IMPL.add(new EnglishStemmer(null));
@@ -43,7 +43,7 @@ public abstract class Stemmer extends LanguageImpl {
 
   /**
    * Constructor.
-   * @param iter full-text iterator.
+   * @param iter full-text iterator
    */
   Stemmer(final FTIterator iter) {
     this.iter = iter;
@@ -51,11 +51,13 @@ public abstract class Stemmer extends LanguageImpl {
 
   /**
    * Checks if the language is supported by the available stemmers.
-   * @param l language to be found
+   * @param language language to be found
    * @return result of check
    */
-  public static boolean supportFor(final Language l) {
-    for(final Stemmer s : IMPL) if(s.supports(l)) return true;
+  public static boolean supportFor(final Language language) {
+    for(final Stemmer impl : IMPL) {
+      if(impl.supports(language)) return true;
+    }
     return false;
   }
 

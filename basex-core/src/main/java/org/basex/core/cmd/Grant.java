@@ -9,7 +9,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'grant' command and grants permissions to users.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Grant extends AUser {
@@ -57,14 +57,14 @@ public final class Grant extends AUser {
   }
 
   @Override
-  protected boolean run(final String name, final String pattern) {
+  protected boolean run(final String name, final String db) {
     // admin cannot be modified
     if(name.equals(UserText.ADMIN)) return !info(ADMIN_STATIC);
 
     final Users users = context.users;
     final User user = users.get(name);
-    user.perm(prm, pattern);
-    return info(pattern.isEmpty() ? GRANTED_X_X : GRANTED_ON_X_X_X, args[0], name, pattern);
+    user.perm(prm, db);
+    return info(db.isEmpty() ? GRANTED_X_X : GRANTED_ON_X_X_X, args[0], name, db);
   }
 
   @Override

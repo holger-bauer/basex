@@ -1,15 +1,15 @@
 package org.basex.query;
 
 import static org.basex.util.Token.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.query.expr.ft.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Wild-card parsing and matching tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class FTWildcardTest {
@@ -57,31 +57,29 @@ public final class FTWildcardTest {
   };
 
   /** Test if wild-card expressions are correctly parsed. */
-  @Test
-  public void testParse() {
-    for(final String wc : VALIDWC) assertTrue(new FTWildcard(token(wc)).parse());
-    for(final String wc : INVALIDWC) assertFalse(new FTWildcard(token(wc)).parse());
+  @Test public void testParse() {
+    for(final String wc : VALIDWC) assertTrue(new FTWildcard(token(wc)).valid());
+    for(final String wc : INVALIDWC) assertFalse(new FTWildcard(token(wc)).valid());
   }
 
   /**
    * Test wild-card matching.
    */
-  @Test
-  public void testMatch() {
+  @Test public void testMatch() {
     final int vl = VALIDWC.length;
     for(int i = 0; i < vl; i++) {
       final String q = VALIDWC[i];
       final FTWildcard wc = new FTWildcard(token(q));
-      assertTrue(wc.parse());
+      assertTrue(wc.valid());
 
       final String[] good = TEXTS_GOOD[i];
       for(final String g : good) {
-        assertTrue('"' + q + "\" did NOT match \"" + g + '"', wc.match(token(g)));
+        assertTrue(wc.match(token(g)), '"' + q + "\" did NOT match \"" + g + '"');
       }
 
       final String[] bad = TEXTS_BAD[i];
       for(final String b : bad) {
-        assertFalse('"' + q + "\" matched \"" + b + '"', wc.match(token(b)));
+        assertFalse(wc.match(token(b)), '"' + q + "\" matched \"" + b + '"');
       }
     }
   }

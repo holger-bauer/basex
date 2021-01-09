@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Japanese lexer using igo (http://igo.sourceforge.jp/).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Toshio HIRAI
  */
 final class JapaneseTokenizer extends Tokenizer {
@@ -93,10 +93,8 @@ final class JapaneseTokenizer extends Tokenizer {
     if(Reflect.available(PATTERN)) {
       dic = new IOFile(LANG);
       if(!dic.exists()) {
-        dic = new IOFile(Prop.HOME, "etc/" + LANG);
-        if(!dic.exists()) {
-          available = false;
-        }
+        dic = new IOFile(Prop.HOMEDIR, "etc/" + LANG);
+        if(!dic.exists()) available = false;
       }
     } else {
       available = false;

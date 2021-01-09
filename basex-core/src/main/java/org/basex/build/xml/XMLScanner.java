@@ -20,7 +20,7 @@ import org.basex.util.hash.*;
 /**
  * This class scans an XML document and creates atomic tokens.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class XMLScanner extends Job {
@@ -85,14 +85,14 @@ final class XMLScanner extends Job {
       for(int e = 0; e < el; e += 2) ents.put(ENTITIES[e], ENTITIES[e + 1]);
       dtd = opts.get(MainOptions.DTD);
 
-      String enc;
+      final String encoding;
       // process document declaration...
       if(consume(DOCDECL)) {
         if(s()) {
           if(!version()) throw error(DECLSTART);
           boolean s = s();
-          enc = encoding();
-          if(enc != null) {
+          encoding = encoding();
+          if(encoding != null) {
             if(!s) throw error(WSERROR);
             s = s();
           }
@@ -513,7 +513,7 @@ final class XMLScanner extends Job {
 
   /**
    * Scans a PEReference. [69]
-   * @return entity, or {@code null}
+   * @return entity or {@code null}
    * @throws IOException I/O exception
    */
   private byte[] peRef() throws IOException {
@@ -610,15 +610,15 @@ final class XMLScanner extends Job {
 
   /**
    * Consumes an XML name. [5]
-   * @param force force parsing
-   * @return name, or {@code null}
+   * @param enforce enforce parsing
+   * @return name or {@code null}
    * @throws IOException I/O exception
    */
-  private byte[] name(final boolean force) throws IOException {
+  private byte[] name(final boolean enforce) throws IOException {
     final TokenBuilder name = new TokenBuilder();
     int c = consume();
     if(!isStartChar(c)) {
-      if(force) throw error(INVNAME);
+      if(enforce) throw error(INVNAME);
       prev(1);
       return null;
     }
@@ -662,7 +662,7 @@ final class XMLScanner extends Job {
    * Scans an external ID.
    * @param full full flag
    * @param root root flag
-   * @return id, or {@code null}
+   * @return id or {@code null}
    * @throws IOException I/O exception
    */
   private byte[] externalID(final boolean full, final boolean root) throws IOException {
@@ -698,7 +698,8 @@ final class XMLScanner extends Job {
         if(consume(XDECL)) {
           check(XML); s();
           if(version()) checkS();
-          s(); if(encoding() == null) throw error(TEXTENC);
+          s();
+          if(encoding() == null) throw error(TEXTENC);
           ch = nextChar();
           if(s(ch)) ch = nextChar();
           if(ch != '?') throw error(WRONGCHAR, '?', ch);
@@ -908,7 +909,7 @@ final class XMLScanner extends Job {
   /**
    * Scans an entity value. [9]
    * @param p pe reference flag
-   * @return value, or {@code null}
+   * @return value or {@code null}
    * @throws IOException I/O exception
    */
   private byte[] entityValue(final boolean p) throws IOException {
@@ -953,7 +954,7 @@ final class XMLScanner extends Job {
 
   /**
    * Scans a document encoding.
-   * @return encoding, or {@code null}
+   * @return encoding or {@code null}
    * @throws IOException I/O exception
    */
   private String encoding() throws IOException {
@@ -962,26 +963,26 @@ final class XMLScanner extends Job {
       return null;
     }
     s(); check('='); s();
-    final TokenBuilder enc = new TokenBuilder();
+    final TokenBuilder tb = new TokenBuilder();
     final int d = qu();
     int ch = nextChar();
     if(letter(ch) && ch != '_') {
       while(letterOrDigit(ch) || ch == '.' || ch == '-') {
-        enc.add(ch);
+        tb.add(ch);
         ch = nextChar();
       }
       prev(1);
     }
     check((char) d);
-    if(enc.isEmpty()) throw error(DECLENCODE, enc);
-    final String e = string(enc.finish());
+    if(tb.isEmpty()) throw error(DECLENCODE, tb);
+    final String e = string(tb.finish());
     input.encoding(e);
     return e;
   }
 
   /**
    * Scans a standalone flag.
-   * @return flag, or {@code null}
+   * @return flag or {@code null}
    * @throws IOException I/O exception
    */
   private byte[] sddecl() throws IOException {

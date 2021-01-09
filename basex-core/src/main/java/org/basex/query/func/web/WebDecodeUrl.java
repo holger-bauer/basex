@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class WebDecodeUrl extends WebFn {
@@ -24,14 +24,15 @@ public final class WebDecodeUrl extends WebFn {
       final byte[] token = token(URLDecoder.decode(string(uri), Strings.UTF8));
       final TokenParser tp = new TokenParser(token);
       while(tp.more()) {
-        if(!XMLToken.valid(tp.next())) throw BXWE_CODES_X.get(info, uri);
+        if(!XMLToken.valid(tp.next())) throw WEB_INVALID1_X.get(info, uri);
       }
       return Str.get(token);
     } catch(final UnsupportedEncodingException ex) {
-      /* UTF8 is always supported */
-      throw Util.notExpected();
+      // UTF8 is always supported
+      throw Util.notExpected(ex);
     } catch(final IllegalArgumentException ex) {
-      throw BXWE_INVALID_X.get(info, ex.getLocalizedMessage());
+      Util.debug(ex);
+      throw WEB_INVALID2_X.get(info, ex.getLocalizedMessage());
     }
   }
 }

@@ -9,6 +9,7 @@ import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.server.*;
 import org.basex.util.*;
@@ -18,7 +19,7 @@ import org.basex.util.*;
  * client/server architecture. All sent data is received by the
  * {@link ClientListener} and interpreted by the {@link ServerQuery}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ClientQuery extends Query {
@@ -60,7 +61,7 @@ public class ClientQuery extends Query {
   public void bind(final String name, final Object value, final String type) throws IOException {
     cache = null;
 
-    final Object vl = value  instanceof BXNode ? ((BXNode) value).getNode() : value;
+    final Object vl = value instanceof BXNode ? ((BXNode) value).getNode() : value;
     String t = type == null ? "" : type;
     final String v;
     if(vl instanceof Value) {
@@ -70,14 +71,14 @@ public class ClientQuery extends Query {
 
       try {
         final TokenBuilder tb = new TokenBuilder();
-        for(final Item it : val) {
-          if(!tb.isEmpty()) tb.add(1);
-          if(it.type instanceof NodeType) {
-            tb.add(it.serialize(SerializerMode.NOINDENT.get()).finish());
+        for(final Item item : val) {
+          if(!tb.isEmpty()) tb.addByte((byte) 1);
+          if(item instanceof ANode) {
+            tb.add(item.serialize(SerializerMode.NOINDENT.get()).finish());
           } else {
-            tb.add(it.string(null));
+            tb.add(item.string(null));
           }
-          if(it.type != tp) tb.add(2).add(it.type.toString());
+          if(item.type != tp) tb.addByte((byte) 2).add(item.type);
         }
         v = tb.toString();
       } catch(final QueryException ex) {
@@ -113,8 +114,7 @@ public class ClientQuery extends Query {
     cs.send(id);
     cs.sout.flush();
 
-    @SuppressWarnings("resource")
-    final BufferInput bi = new BufferInput(cs.sin);
+    final BufferInput bi = BufferInput.get(cs.sin);
     cache(bi, full);
     if(!ClientSession.ok(bi)) throw new BaseXException(bi.readString());
   }

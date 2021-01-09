@@ -1,6 +1,6 @@
 package org.basex.api.client;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.util.*;
@@ -12,12 +12,12 @@ import org.basex.io.in.*;
 import org.basex.io.out.*;
 import org.basex.server.*;
 import org.basex.util.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the correctness of the item types of the client API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XdmInfoTest extends SandboxTest {
@@ -30,8 +30,7 @@ public final class XdmInfoTest extends SandboxTest {
    * Starts a session.
    * @throws Exception exception
    */
-  @BeforeClass
-  public static void start() throws Exception {
+  @BeforeAll public static void start() throws Exception {
     server = createServer();
     session = new TestSession(Text.S_LOCALHOST, DB_PORT, UserText.ADMIN, UserText.ADMIN);
   }
@@ -40,8 +39,7 @@ public final class XdmInfoTest extends SandboxTest {
    * Stops a session.
    * @throws Exception exception
    */
-  @AfterClass
-  public static void stop() throws Exception {
+  @AfterAll public static void stop() throws Exception {
     session.close();
     stopServer(server);
   }
@@ -50,14 +48,13 @@ public final class XdmInfoTest extends SandboxTest {
    * Tests the returned item types.
    * @throws IOException I/O exception
    */
-  @Test
-  public void testIter() throws IOException {
+  @Test public void testIter() throws IOException {
     for(final Object[] exp : TYPES) {
       if(exp.length < 2) continue;
       try(TestQuery tq = session.query(exp[1].toString())) {
         final TestResult tr = tq.iter();
         final Object[] type = TYPES[tr.type];
-        assertSame("Types are different.\nExpected: " + exp[0] + "\nFound: " + type[0], exp, type);
+        assertSame(exp, type, "Types are different.\nExpected: " + exp[0] + "\nFound: " + type[0]);
         assertEquals(Token.string(tr.result), type[2]);
       }
     }
@@ -67,14 +64,13 @@ public final class XdmInfoTest extends SandboxTest {
    * Tests the returned XDM information.
    * @throws IOException I/O exception
    */
-  @Test
-  public void testFull() throws IOException {
+  @Test public void testFull() throws IOException {
     for(final Object[] exp : TYPES) {
       if(exp.length < 2) continue;
       try(TestQuery tq = session.query(exp[1].toString())) {
-        final TestResult tr = tq.full();
+        final TestResult tr = tq.full(exp);
         final Object[] type = TYPES[tr.type];
-        assertSame("Types are different.\nExpected: " + exp[0] + "\nFound: " + type[0], exp, type);
+        assertSame(exp, type, "Types are different.\nExpected: " + exp[0] + "\nFound: " + type[0]);
         assertEquals(Token.string(tr.result), type[2]);
         if(exp.length > 3) assertEquals(Token.string(tr.uri), type[3]);
       }
@@ -115,11 +111,10 @@ public final class XdmInfoTest extends SandboxTest {
       sout.write(cmd.code);
       send(arg);
       sout.flush();
-      @SuppressWarnings("resource")
-      final BufferInput bi = new BufferInput(sin);
+      final BufferInput bi = BufferInput.get(sin);
       ClientSession.receive(bi, ao);
       if(!ClientSession.ok(bi)) throw new BaseXException(bi.readString());
-      return ao.toArray();
+      return ao.finish();
     }
   }
 
@@ -139,25 +134,29 @@ public final class XdmInfoTest extends SandboxTest {
 
     /**
      * Returns a full result item.
+     * @param exp expected data
      * @return full string
      * @throws IOException I/O exception
      */
-    TestResult full() throws IOException {
+    TestResult full(final Object[] exp) throws IOException {
       final byte[] result = ((TestSession) cs).exec(ServerCmd.FULL, id);
       final TestResult tr = new TestResult();
       tr.type = result[0];
       final int rl = result.length, b = Token.indexOf(result, 0);
-      if(b != -1) {
+      if(b == -1) {
+        tr.result = Arrays.copyOfRange(result, 1, rl);
+      } else {
         // result includes URI
         tr.uri = Arrays.copyOfRange(result, 1, b);
         tr.result = Arrays.copyOfRange(result, b + 1, rl);
-      } else {
-        tr.result = Arrays.copyOfRange(result, 1, rl);
       }
 
-      final boolean uriResult = tr.uri != null, uriExpected = tr.uri != null;
-      if(uriResult && !uriExpected) fail("No URI expected for " + TYPES[tr.type][0]);
-      if(!uriResult && uriExpected) fail("URI expected for " + TYPES[tr.type][0]);
+      final boolean expected = exp.length > 3;
+      if(tr.uri == null) {
+        if(expected) fail("URI expected for " + TYPES[tr.type][0]);
+      } else if(!expected) {
+        fail("No URI expected for " + TYPES[tr.type][0] + ": " + Token.string(tr.result));
+      }
       return tr;
     }
 

@@ -13,10 +13,10 @@ import org.basex.util.hash.*;
 /**
  * Step expression, caching all results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class CachedStep extends Step {
+public final class CachedStep extends Step {
   /**
    * Constructor.
    * @param info input info
@@ -24,47 +24,51 @@ final class CachedStep extends Step {
    * @param test node test
    * @param preds predicates
    */
-  CachedStep(final InputInfo info, final Axis axis, final Test test, final Expr[] preds) {
+  public CachedStep(final InputInfo info, final Axis axis, final Test test, final Expr... preds) {
     super(info, axis, test, preds);
   }
 
   @Override
-  public NodeIter iter(final QueryContext qc) throws QueryException {
+  public Iter iter(final QueryContext qc) throws QueryException {
     // evaluate step
     final ANodeList list = new ANodeList();
-    for(final ANode n : axis.iter(checkNode(qc))) {
-      if(test.eq(n)) list.add(n.finish());
+    for(final ANode node : axis.iter(checkNode(qc))) {
+      if(test.matches(node)) list.add(node.finish());
     }
 
     // evaluate predicates
-    final QueryFocus qf = qc.focus;
-    final boolean scoring = qc.scoring;
-    for(final Expr pred : preds) {
-      final long nl = list.size();
-      qf.size = nl;
-      qf.pos = 1;
-      int c = 0;
-      for(int n = 0; n < nl; ++n) {
-        final ANode node = list.get(n);
-        qf.value = node;
-        final Item tst = pred.test(qc, info);
-        if(tst != null) {
-          // assign score value
-          if(scoring) node.score(tst.score());
-          list.set(c++, node);
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    qc.focus = qf;
+    try {
+      final boolean scoring = qc.scoring;
+      for(final Expr expr : exprs) {
+        final long nl = list.size();
+        qf.size = nl;
+        int c = 0;
+        for(int n = 0; n < nl; n++) {
+          final ANode node = list.get(n);
+          qf.value = node;
+          qf.pos = n + 1;
+          final Item tst = expr.test(qc, info);
+          if(tst != null) {
+            // assign score value
+            if(scoring) node.score(tst.score());
+            list.set(c++, node);
+          }
         }
-        qf.pos++;
+        list.size(c);
       }
-      list.size(c);
+    } finally {
+      qc.focus = focus;
     }
-    return list.iter();
+    return list.clean().iter();
   }
 
   @Override
   public Step copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final int pl = preds.length;
+    final int pl = exprs.length;
     final Expr[] pred = new Expr[pl];
-    for(int p = 0; p < pl; p++) pred[p] = preds[p].copy(cc, vm);
+    for(int p = 0; p < pl; p++) pred[p] = exprs[p].copy(cc, vm);
     return copyType(new CachedStep(info, axis, test.copy(), pred));
   }
 }

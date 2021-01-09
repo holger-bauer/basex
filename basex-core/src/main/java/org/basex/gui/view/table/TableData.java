@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * This is a container for the table data.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class TableData {
@@ -216,14 +216,14 @@ final class TableData {
 
   /**
    * Sets the column widths, based on the contents.
-   * @param force force zero widths
+   * @param enforce enforce zero widths
    */
-  void setWidths(final boolean force) {
+  void setWidths(final boolean enforce) {
     // calculate width of each column
     double sum = 0;
     for(final TableCol col : cols) sum += col.width;
     // avoid too small columns
-    final double min = force ? 0.0 : 0.5;
+    final double min = enforce ? 0.0 : 0.5;
     final int cs = cols.length;
     for(final TableCol col : cols) col.width = Math.max(min / cs, col.width / sum);
     // recalculate column widths
@@ -308,7 +308,7 @@ final class TableData {
 
   /**
    * Builds and returns an XQuery for the filtered terms.
-   * @return query
+   * @return query, or {@code null} if the query is identical to the last one
    */
   String find() {
     final Data data = ctx.data();

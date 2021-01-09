@@ -1,12 +1,11 @@
 package org.basex.query.expr.ft;
 
-import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -15,7 +14,7 @@ import org.basex.util.hash.*;
 /**
  * FTMildnot expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTMildNot extends FTExpr {
@@ -24,12 +23,9 @@ public final class FTMildNot extends FTExpr {
    * @param info input info
    * @param expr1 first expression
    * @param expr2 second expression
-   * @throws QueryException query exception
    */
-  public FTMildNot(final InputInfo info, final FTExpr expr1, final FTExpr expr2)
-      throws QueryException {
+  public FTMildNot(final InputInfo info, final FTExpr expr1, final FTExpr expr2) {
     super(info, expr1, expr2);
-    if(usesExclude()) throw FTMILD.get(info);
   }
 
   @Override
@@ -40,82 +36,79 @@ public final class FTMildNot extends FTExpr {
   @Override
   public FTIter iter(final QueryContext qc) throws QueryException {
     return new FTIter() {
-      final FTIter i1 = exprs[0].iter(qc);
-      final FTIter i2 = exprs[1].iter(qc);
-      FTNode it1 = i1.next();
-      FTNode it2 = i2.next();
+      final FTIter iter1 = exprs[0].iter(qc), iter2 = exprs[1].iter(qc);
+      FTNode item1 = iter1.next(), item2 = iter2.next();
 
       @Override
       public FTNode next() throws QueryException {
-        while(it1 != null && it2 != null) {
-          final int d = it1.pre() - it2.pre();
+        while(item1 != null && item2 != null) {
+          final int d = item1.pre() - item2.pre();
           if(d < 0) break;
 
           if(d > 0) {
-            it2 = i2.next();
+            item2 = iter2.next();
           } else {
-            if(!mildnot(it1, it2).matches().isEmpty()) break;
-            it1 = i1.next();
+            if(!mildnot(item1, item2).matches().isEmpty()) break;
+            item1 = iter1.next();
           }
         }
-        final FTNode it = it1;
-        it1 = i1.next();
-        return it;
+        final FTNode item = item1;
+        item1 = iter1.next();
+        return item;
       }
     };
   }
 
   /**
    * Processes a hit.
-   * @param it1 first item
-   * @param it2 second item
+   * @param item1 first item
+   * @param item2 second item
    * @return specified item
    */
-  private static FTNode mildnot(final FTNode it1, final FTNode it2) {
-    it1.matches(mildnot(it1.matches(), it2.matches()));
-    return it1;
+  private static FTNode mildnot(final FTNode item1, final FTNode item2) {
+    item1.matches(mildnot(item1.matches(), item2.matches()));
+    return item1;
   }
 
   /**
    * Performs a mild not operation.
-   * @param m1 first match list
-   * @param m2 second match list
+   * @param matches1 first match list
+   * @param matches2 second match list
    * @return resulting match
    */
-  private static FTMatches mildnot(final FTMatches m1, final FTMatches m2) {
-    final FTMatches all = new FTMatches(m1.pos);
-    for(final FTMatch s1 : m1) {
+  private static FTMatches mildnot(final FTMatches matches1, final FTMatches matches2) {
+    final FTMatches all = new FTMatches(matches1.pos);
+    for(final FTMatch match1 : matches1) {
       boolean n = true;
-      for(final FTMatch s2 : m2) n &= s1.notin(s2);
-      if(n) all.add(s1);
+      for(final FTMatch match2 : matches2) n &= match1.notin(match2);
+      if(n) all.add(match1);
     }
     return all;
   }
 
   @Override
   public boolean indexAccessible(final IndexInfo ii) throws QueryException {
-    int costs = ii.costs;
+    IndexCosts costs = ii.costs;
     for(final FTExpr expr : exprs) {
       if(!expr.indexAccessible(ii)) return false;
-      costs += ii.costs;
+      costs = IndexCosts.add(costs, ii.costs);
     }
-    // use summarized costs for estimation
     ii.costs = costs;
     return true;
   }
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    try {
-      return new FTMildNot(info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm));
-    } catch(final QueryException e) {
-      // checks were already done
-      throw Util.notExpected(e);
-    }
+    return copyType(new FTMildNot(info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm)));
   }
 
   @Override
-  public String toString() {
-    return toString(' ' + NOT + ' ' + IN + ' ');
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTMildNot && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.tokens(exprs, ' ' + NOT + ' ' + IN + ' ', true);
   }
 }

@@ -10,7 +10,6 @@ import org.basex.core.*;
 import org.basex.core.parse.*;
 import org.basex.core.parse.Commands.Cmd;
 import org.basex.core.parse.Commands.CmdCreate;
-import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.util.*;
@@ -19,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'backup' command and creates a backup of a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CreateBackup extends ABackup {
@@ -33,12 +32,12 @@ public final class CreateBackup extends ABackup {
 
   @Override
   protected boolean run() {
-    final String name = args[0];
-    if(!Databases.validName(name, true)) return error(NAME_INVALID_X, name);
+    final String pattern = args[0];
+    if(!Databases.validPattern(pattern)) return error(NAME_INVALID_X, pattern);
 
     // retrieve all databases
-    final StringList dbs = context.filter(Perm.READ, context.databases.listDBs(name));
-    if(dbs.isEmpty()) return error(DB_NOT_FOUND_X, name);
+    final StringList dbs = context.listDBs(pattern);
+    if(dbs.isEmpty()) return error(DB_NOT_FOUND_X, pattern);
 
     // loop through all databases
     boolean ok = true;
@@ -54,6 +53,7 @@ public final class CreateBackup extends ABackup {
           // backup was successful
           info(DB_BACKUP_X, db, jc().performance);
         } catch(final IOException ex) {
+          Util.debug(ex);
           info(DB_NOT_BACKUP_X, db);
           ok = false;
         }
@@ -80,8 +80,8 @@ public final class CreateBackup extends ABackup {
       if(cmd != null) cmd.pushJob(zip);
       final IOFile dbpath = sopts.dbPath(db);
       final StringList files = dbpath.descendants();
-      // delete file indicating an update (this file is generated when using XQuery)
-      files.delete(DATAUPD + IO.BASEXSUFFIX);
+      // ignore file indicating an update (this file is generated when using XQuery)
+      files.removeAll(DATAUPD + IO.BASEXSUFFIX);
       zip.zip(dbpath, files);
     } finally {
       if(cmd != null) cmd.popJob();

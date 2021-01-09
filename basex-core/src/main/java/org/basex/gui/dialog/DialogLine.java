@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * Go to line dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogLine extends BaseXDialog {
@@ -25,13 +25,13 @@ public final class DialogLine extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    * @param curr current line
    */
-  public DialogLine(final GUI main, final int curr) {
-    super(main, GO_TO_LINE);
+  public DialogLine(final GUI gui, final int curr) {
+    super(gui, GO_TO_LINE);
 
-    line = new BaseXTextField(Integer.toString(curr), this);
+    line = new BaseXTextField(this, Integer.toString(curr));
     line.addKeyListener(keys);
     info = new BaseXLabel(" ");
 
@@ -57,8 +57,7 @@ public final class DialogLine extends BaseXDialog {
 
   @Override
   public void close() {
-    if(!ok) return;
-    super.close();
+    if(ok) super.close();
   }
 
   /**
@@ -69,6 +68,7 @@ public final class DialogLine extends BaseXDialog {
     try {
       return Integer.parseInt(line.getText());
     } catch(final NumberFormatException ex) {
+      Util.debug(ex);
       return -1;
     }
   }

@@ -3,15 +3,17 @@ package org.basex.query.value.seq;
 import java.util.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
+import org.basex.util.list.*;
 
 /**
  * Sequence of items of type {@link Int xs:integer}, containing at least two of them.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class IntSeq extends NativeSeq {
@@ -34,71 +36,119 @@ public final class IntSeq extends NativeSeq {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof IntSeq)) return false;
-    final IntSeq is = (IntSeq) cmp;
-    return type == is.type && Arrays.equals(values, is.values);
+  public Value reverse(final QueryContext qc) {
+    final int sz = (int) size;
+    final long[] tmp = new long[sz];
+    for(int i = 0; i < sz; i++) tmp[sz - i - 1] = values[i];
+    return get(tmp, type);
+  }
+
+  /**
+   * Returns the internal values.
+   * @return values
+   */
+  public long[] values() {
+    return values;
+  }
+
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    if(mode == Simplify.DISTINCT) {
+      final long[] tmp = new LongList((int) size).add(values).sort().distinct().finish();
+      final int tl = tmp.length;
+      if(seqType().type == AtomType.INTEGER) {
+        // try to rewrite to range sequence
+        int t = 0;
+        while(++t < tl && tmp[0] + t == tmp[t]);
+        if(t == tl) return cc.replaceWith(this, RangeSeq.get(tmp[0], tl, true));
+      }
+      // replace with new, sorted (possibly smaller) sequence
+      return cc.replaceWith(this, get(tmp, type));
+    }
+    return super.simplifyFor(mode, cc);
   }
 
   @Override
   public Object toJava() {
     switch((AtomType) type) {
-      case BYT:
+      case BYTE:
         final byte[] t1 = new byte[(int) size];
         for(int s = 0; s < size; s++) t1[s] = (byte) values[s];
         return t1;
-      case SHR:
-      case UBY:
+      case SHORT:
+      case UNSIGNED_BYTE:
         final short[] t2 = new short[(int) size];
         for(int s = 0; s < size; s++) t2[s] = (short) values[s];
         return t2;
       case INT:
-      case USH:
-        final short[] t3 = new short[(int) size];
-        for(int s = 0; s < size; s++) t3[s] = (short) values[s];
+      case UNSIGNED_SHORT:
+        final int[] t3 = new int[(int) size];
+        for(int s = 0; s < size; s++) t3[s] = (int) values[s];
         return t3;
       default:
         return values;
     }
   }
 
-  // STATIC METHODS =====================================================================
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof IntSeq)) return super.equals(obj);
+    final IntSeq is = (IntSeq) obj;
+    return type == is.type && Arrays.equals(values, is.values);
+  }
+
+  // STATIC METHODS ===============================================================================
 
   /**
-   * Creates a sequence with the specified items.
-   * @param items items
-   * @param type type
+   * Creates an xs:integer sequence with the specified items.
+   * @param values values
    * @return value
    */
-  public static Value get(final long[] items, final Type type) {
-    return items.length == 0 ? Empty.SEQ : items.length == 1 ? Int.get(items[0], type) :
-      new IntSeq(items, type);
+  public static Value get(final int[] values) {
+    final LongList list = new LongList(values.length);
+    for(final int value : values) list.add(value);
+    return get(list.finish(), AtomType.INTEGER);
   }
 
   /**
-   * Creates a sequence with the items in the specified expressions.
+   * Creates an xs:integer sequence with the specified items.
    * @param values values
+   * @return value
+   */
+  public static Value get(final long[] values) {
+    return get(values, AtomType.INTEGER);
+  }
+
+  /**
+   * Creates a sequence with the specified items.
+   * @param values values
+   * @param type type
+   * @return value
+   */
+  public static Value get(final long[] values, final Type type) {
+    final int vl = values.length;
+    return vl == 0 ? Empty.VALUE : vl == 1 ? Int.get(values[0], type) : new IntSeq(values, type);
+  }
+
+  /**
+   * Creates a typed sequence with the items of the specified values.
    * @param size size of resulting sequence
    * @param type item type
+   * @param values values
    * @return value
    * @throws QueryException query exception
    */
-  public static Value get(final Value[] values, final int size, final Type type)
-      throws QueryException {
-
-    final long[] tmp = new long[size];
-    int t = 0;
-    for(final Value val : values) {
+  static Value get(final Type type, final int size, final Value... values) throws QueryException {
+    final LongList tmp = new LongList(size);
+    for(final Value value : values) {
       // speed up construction, depending on input
-      final int vs = (int) val.size();
-      if(val instanceof IntSeq) {
-        final IntSeq sq = (IntSeq) val;
-        System.arraycopy(sq.values, 0, tmp, t, vs);
-        t += vs;
+      if(value instanceof IntSeq) {
+        tmp.add(((IntSeq) value).values);
       } else {
-        for(int v = 0; v < vs; v++) tmp[t++] = val.itemAt(v).itr(null);
+        for(final Item item : value) tmp.add(item.itr(null));
       }
     }
-    return get(tmp, type);
+    return get(tmp.finish(), type);
   }
 }

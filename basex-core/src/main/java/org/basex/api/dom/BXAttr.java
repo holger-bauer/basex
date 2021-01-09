@@ -8,7 +8,7 @@ import org.w3c.dom.*;
 /**
  * DOM - Attribute implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BXAttr extends BXNode implements Attr {
@@ -16,7 +16,7 @@ public final class BXAttr extends BXNode implements Attr {
    * Constructor.
    * @param node node reference
    */
-  BXAttr(final ANode node) {
+  BXAttr(final FNode node) {
     super(node);
   }
 
@@ -93,7 +93,7 @@ public final class BXAttr extends BXNode implements Attr {
 
   @Override
   public BXNList getChildNodes() {
-    return new BXNList(new ANodeList(text()));
+    return new BXNList(new ANodeList().add(text()));
   }
 
   /**
@@ -101,6 +101,8 @@ public final class BXAttr extends BXNode implements Attr {
    * @return text node
    */
   private FNode text() {
-    return new FTxt(nd.string()).parent(nd);
+    final FNode txt = new FTxt(nd.string());
+    txt.parent((FNode) nd);
+    return txt;
   }
 }

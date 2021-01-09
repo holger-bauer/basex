@@ -3,6 +3,7 @@ package org.basex.query.expr.constr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
@@ -15,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * Comment fragment.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CComm extends CNode {
@@ -23,11 +24,18 @@ public final class CComm extends CNode {
    * Constructor.
    * @param sc static context
    * @param info input info
+   * @param computed computed constructor
    * @param comment comment
    */
-  public CComm(final StaticContext sc, final InputInfo info, final Expr comment) {
-    super(sc, info, comment);
-    seqType = SeqType.COM;
+  public CComm(final StaticContext sc, final InputInfo info, final boolean computed,
+      final Expr comment) {
+    super(sc, info, SeqType.COMMENT_O, computed, comment);
+  }
+
+  @Override
+  public Expr optimize(final CompileContext cc) throws QueryException {
+    simplifyAll(Simplify.STRING, cc);
+    return this;
   }
 
   @Override
@@ -36,9 +44,9 @@ public final class CComm extends CNode {
 
     final TokenBuilder tb = new TokenBuilder();
     boolean more = false;
-    for(Item it; (it = iter.next()) != null;) {
+    for(Item item; (item = qc.next(iter)) != null;) {
       if(more) tb.add(' ');
-      tb.add(it.string(info));
+      tb.add(item.string(info));
       more = true;
     }
     return new FComm(FComm.parse(tb.finish(), info));
@@ -46,16 +54,20 @@ public final class CComm extends CNode {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new CComm(sc, info, exprs[0].copy(cc, vm));
+    return copyType(new CComm(sc, info, computed, exprs[0].copy(cc, vm)));
   }
 
   @Override
-  public String description() {
-    return info(COMMENT);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof CComm && super.equals(obj);
   }
 
   @Override
-  public String toString() {
-    return toString(COMMENT);
+  public void plan(final QueryString qs) {
+    if(computed) {
+      plan(qs, COMMENT);
+    } else {
+      qs.concat("<!--", QueryString.toValue(((Str) exprs[0]).string()), "-->");
+    }
   }
 }

@@ -3,8 +3,8 @@ package org.basex.query.func.ft;
 import static org.basex.util.ft.FTFlag.*;
 
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.ft.*;
 import org.basex.util.list.*;
@@ -12,15 +12,10 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class FtTokenize extends FtAccess {
-  @Override
-  public final Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
   @Override
   public Value value(final QueryContext qc) throws QueryException {
     return StrSeq.get(tokens(qc, false));
@@ -34,23 +29,25 @@ public class FtTokenize extends FtAccess {
    * @throws QueryException query exception
    */
   protected final TokenList tokens(final QueryContext qc, final boolean all) throws QueryException {
-    final byte[] token = toToken(exprs[0], qc);
+    final Item item = exprs[0].atomItem(qc, info);
     final FtTokenizeOptions opts = toOptions(1, new FtTokenizeOptions(), qc);
 
-    final FTOpt opt = new FTOpt().assign(qc.ftOpt());
-    final FTDiacritics dc = opts.get(FtTokenizeOptions.DIACRITICS);
-    if(dc != null) opt.set(DC, dc == FTDiacritics.SENSITIVE);
-    final Boolean st = opts.get(FtTokenizeOptions.STEMMING);
-    if(st != null) opt.set(ST, st);
-    final String ln = opts.get(FtTokenizeOptions.LANGUAGE);
-    if(ln != null) opt.ln = Language.get(ln);
-    final FTCase cs = opts.get(FtTokenizeOptions.CASE);
-    if(cs != null) opt.cs = cs;
-
     final TokenList tl = new TokenList();
-    final FTLexer lexer = new FTLexer(opt).init(token);
-    if(all) lexer.all();
-    while(lexer.hasNext()) tl.add(lexer.nextToken());
+    if(item != Empty.VALUE) {
+      final FTOpt opt = new FTOpt().assign(qc.ftOpt());
+      final FTDiacritics dc = opts.get(FtTokenizeOptions.DIACRITICS);
+      if(dc != null) opt.set(DC, dc == FTDiacritics.SENSITIVE);
+      final Boolean st = opts.get(FtTokenizeOptions.STEMMING);
+      if(st != null) opt.set(ST, st);
+      final String ln = opts.get(FtTokenizeOptions.LANGUAGE);
+      if(ln != null) opt.ln = Language.get(ln);
+      final FTCase cs = opts.get(FtTokenizeOptions.CASE);
+      if(cs != null) opt.cs = cs;
+
+      final FTLexer lexer = new FTLexer(opt).init(toToken(item));
+      if(all) lexer.all();
+      while(lexer.hasNext()) tl.add(lexer.nextToken());
+    }
     return tl;
   }
 }

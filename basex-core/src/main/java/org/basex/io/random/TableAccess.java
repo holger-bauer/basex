@@ -1,6 +1,7 @@
 package org.basex.io.random;
 
 import java.io.*;
+import java.util.*;
 
 import org.basex.data.*;
 import org.basex.io.*;
@@ -9,7 +10,7 @@ import org.basex.io.*;
  * This abstract class defines the methods for accessing the
  * database table representation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class TableAccess {
@@ -48,78 +49,78 @@ public abstract class TableAccess {
 
   /**
    * Reads a byte value and returns it as an integer value.
-   * @param p pre value
-   * @param o offset
+   * @param pre pre value
+   * @param offset offset
    * @return integer value
    */
-  public abstract int read1(int p, int o);
+  public abstract int read1(int pre, int offset);
 
   /**
    * Reads a short value and returns it as an integer value.
-   * @param p pre value
-   * @param o offset
+   * @param pre pre value
+   * @param offset offset
    * @return integer value
    */
-  public abstract int read2(int p, int o);
+  public abstract int read2(int pre, int offset);
 
   /**
    * Reads an integer value.
-   * @param p pre value
-   * @param o offset
+   * @param pre pre value
+   * @param offset offset
    * @return integer value
    */
-  public abstract int read4(int p, int o);
+  public abstract int read4(int pre, int offset);
 
   /**
    * Reads a 5-byte value and returns it as a long value.
-   * @param p pre value
-   * @param o offset
+   * @param pre pre value
+   * @param offset offset
    * @return integer value
    */
-  public abstract long read5(int p, int o);
+  public abstract long read5(int pre, int offset);
 
   /**
    * Writes a byte value to the specified position.
-   * @param p pre value
-   * @param o offset
-   * @param v value to be written
+   * @param pre pre value
+   * @param offset offset
+   * @param value value to be written
    */
-  public abstract void write1(int p, int o, int v);
+  public abstract void write1(int pre, int offset, int value);
 
   /**
    * Writes a short value to the specified position.
-   * @param p pre value
-   * @param o offset
-   * @param v value to be written
+   * @param pre pre value
+   * @param offset offset
+   * @param value value to be written
    */
-  public abstract void write2(int p, int o, int v);
+  public abstract void write2(int pre, int offset, int value);
 
   /**
    * Writes an integer value to the specified position.
-   * @param p pre value
-   * @param o offset
-   * @param v value to be written
+   * @param pre pre value
+   * @param offset offset
+   * @param value value to be written
    */
-  public abstract void write4(int p, int o, int v);
+  public abstract void write4(int pre, int offset, int value);
 
   /**
    * Writes a 5-byte value to the specified position.
-   * @param p pre value
-   * @param o offset
-   * @param v value to be written
+   * @param pre pre value
+   * @param offset offset
+   * @param value value to be written
    */
-  public abstract void write5(int p, int o, long v);
+  public abstract void write5(int pre, int offset, long value);
 
   /**
    * Replaces entries in the database.
    * @param pre node to be replaced
    * @param entries new entries
-   * @param sub size of the subtree that is replaced
+   * @param count number of entries to be replaced
    */
-  public final void replace(final int pre, final byte[] entries, final int sub) {
+  public final void replace(final int pre, final byte[] entries, final int count) {
     dirty();
     final int nsize = entries.length >>> IO.NODEPOWER;
-    final int diff = sub - nsize;
+    final int diff = count - nsize;
     final int last = diff <= 0 ? pre + nsize - Math.abs(diff) : pre + nsize;
     copy(entries, pre, last);
     final int off = last - pre << IO.NODEPOWER;
@@ -127,9 +128,7 @@ public abstract class TableAccess {
     // handle the remaining entries if the two subtrees are of different size
     if(diff < 0) {
       // case1: new subtree bigger than old one, insert remaining new nodes
-      final byte[] tmp = new byte[entries.length - off];
-      System.arraycopy(entries, off, tmp, 0, tmp.length);
-      insert(last, tmp);
+      insert(last, Arrays.copyOfRange(entries, off, entries.length));
     } else if(diff > 0) {
       // case2: old subtree bigger than new one, delete remaining old nodes
       delete(last, diff);
@@ -162,9 +161,9 @@ public abstract class TableAccess {
   /**
    * Deletes the specified number of entries from the database.
    * @param pre pre value of the first node to delete
-   * @param nr number of entries to be deleted
+   * @param count number of entries to be deleted
    */
-  public abstract void delete(int pre, int nr);
+  public abstract void delete(int pre, int count);
 
   /**
    * Inserts the specified entries into the database.

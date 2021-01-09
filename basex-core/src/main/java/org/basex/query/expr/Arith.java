@@ -3,10 +3,12 @@ package org.basex.query.expr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.func.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -14,12 +16,12 @@ import org.basex.util.hash.*;
 /**
  * Arithmetic expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Arith extends Arr {
   /** Calculation operator. */
-  private final Calc calc;
+  public final Calc calc;
 
   /**
    * Constructor.
@@ -29,34 +31,78 @@ public final class Arith extends Arr {
    * @param calc calculation operator
    */
   public Arith(final InputInfo info, final Expr expr1, final Expr expr2, final Calc calc) {
-    super(info, expr1, expr2);
+    super(info, SeqType.ANY_ATOMIC_TYPE_ZO, expr1, expr2);
     this.calc = calc;
-    seqType = SeqType.ITEM_ZO;
   }
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    final SeqType st1 = exprs[0].seqType();
-    final SeqType st2 = exprs[1].seqType();
-    final Type t1 = st1.type, t2 = st2.type;
-    final boolean o1 = st1.one() && !st1.mayBeArray();
-    final boolean o2 = st2.one() && !st2.mayBeArray();
-    if(t1.isNumberOrUntyped() && t2.isNumberOrUntyped()) {
-      final Occ occ = o1 && o2 ? Occ.ONE : Occ.ZERO_ONE;
-      seqType = SeqType.get(Calc.type(t1, t2), occ);
-    } else if(o1 && o2) {
-      seqType = SeqType.ITEM;
+    simplifyAll(Simplify.NUMBER, cc);
+    if(allAreValues(false)) return cc.preEval(this);
+
+    // move values to second position
+    Expr expr1 = exprs[0], expr2 = exprs[1];
+    if((calc == Calc.PLUS || calc == Calc.MULT) && (
+        expr1 instanceof Value && !(expr2 instanceof Value))) {
+      cc.info(OPTSWAP_X, this);
+      exprs[0] = expr2;
+      exprs[1] = expr1;
+      expr1 = exprs[0];
+      expr2 = exprs[1];
     }
-    return optPre(oneIsEmpty() ? null : allAreValues() ? item(cc.qc, info) : this, cc);
+
+    final SeqType st1 = expr1.seqType(), st2 = expr2.seqType();
+    final Type type1 = st1.type, type2 = st2.type;
+    final boolean nums = type1.isNumberOrUntyped() && type2.isNumberOrUntyped();
+
+    final Type type = calc.type(type1, type2);
+    final boolean noarray = !st1.mayBeArray() && !st2.mayBeArray();
+    final boolean one = noarray && st1.oneOrMore() && st2.oneOrMore();
+    exprType.assign(type, one ? Occ.EXACTLY_ONE : Occ.ZERO_OR_ONE);
+
+    Expr expr = emptyExpr();
+    // 0 - $x  ->  -$x
+    if(expr == this && expr1 == Int.ZERO && calc == Calc.MINUS) {
+      expr = new Unary(info, expr2, true).optimize(cc);
+    }
+    // count($n/@*) + count($n/*)  ->  count(($n/@*, $n/*))
+    if(expr == this && Function.COUNT.is(expr1) && calc == Calc.PLUS && Function.COUNT.is(expr2)) {
+      expr = cc.function(Function.COUNT, info, List.get(cc, info, expr1.arg(0), expr2.arg(0)));
+    }
+    if(expr == this && nums && noarray && st1.one() && st2.one()) {
+      // example: number($a) + 0  ->  number($a)
+      final Expr ex = calc.optimize(expr1, expr2, info, cc);
+      if(ex != null) {
+        expr = ex;
+      } else if(expr1 instanceof Arith) {
+        final Calc acalc = ((Arith) expr1).calc;
+        final Expr arg1 = expr1.arg(0), arg2 = expr1.arg(1);
+        if(arg2 instanceof Value && expr2 instanceof Value &&
+            (acalc == calc || acalc == calc.invert())) {
+          // (E - 3) + 2  ->  E - (3 - 2)
+          // (E * 3 div 2  ->  E * (3 div 2)
+          final Calc ncalc = acalc == Calc.PLUS || acalc == Calc.MULT ? calc :
+            acalc == Calc.MINUS || acalc == Calc.DIV ? calc.invert() : null;
+          if(ncalc != null) {
+            expr = new Arith(info, arg1, new Arith(info, arg2, expr2, ncalc).optimize(cc),
+                acalc).optimize(cc);
+          }
+        } else if(acalc == calc.invert() && arg2.equals(expr2)) {
+          // E + INT - INT  ->  E
+          expr = arg1.seqType().instanceOf(SeqType.NUMERIC_O) ? arg1 :
+            new Cast(cc.sc(), info, arg1, SeqType.NUMERIC_O).optimize(cc);
+        }
+      }
+    }
+    return cc.replaceWith(this, expr);
   }
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item it1 = exprs[0].atomItem(qc, info);
-    if(it1 == null) return null;
-    final Item it2 = exprs[1].atomItem(qc, info);
-    if(it2 == null) return null;
-    return calc.ev(it1, it2, info);
+    final Item item1 = exprs[0].atomItem(qc, info);
+    if(item1 == Empty.VALUE) return Empty.VALUE;
+    final Item item2 = exprs[1].atomItem(qc, info);
+    return item2 == Empty.VALUE ? Empty.VALUE : calc.eval(item1, item2, info);
   }
 
   @Override
@@ -65,17 +111,22 @@ public final class Arith extends Arr {
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(OP, calc.name), exprs);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Arith && calc == ((Arith) obj).calc && super.equals(obj);
   }
 
   @Override
   public String description() {
-    return '\'' + calc.name + "' operator";
+    return '\'' + calc.name + "' expression";
   }
 
   @Override
-  public String toString() {
-    return toString(' ' + calc.name + ' ');
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, OP, calc.name), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.tokens(exprs, ' ' + calc.name + ' ', true);
   }
 }

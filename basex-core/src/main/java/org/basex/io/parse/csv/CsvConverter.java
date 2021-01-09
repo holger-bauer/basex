@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * <p>This class converts CSV input to XML.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class CsvConverter extends Job {
@@ -62,7 +62,7 @@ public abstract class CsvConverter extends Job {
       nli = in;
       CsvParser.parse(in.encoding(copts.get(CsvParserOptions.ENCODING)), copts, this);
     }
-    return finish();
+    return finish(input.url());
   }
 
   /**
@@ -71,10 +71,8 @@ public abstract class CsvConverter extends Job {
    * @return CSV converter
    */
   public static CsvConverter get(final CsvParserOptions copts) {
-    switch(copts.get(CsvOptions.FORMAT)) {
-      case MAP: return new CsvMapConverter(copts);
-      default:  return new CsvDirectConverter(copts);
-    }
+    return copts.get(CsvOptions.FORMAT) == CsvFormat.XQUERY ?
+      new CsvXQueryConverter(copts) : new CsvDirectConverter(copts);
   }
 
   /**
@@ -98,8 +96,9 @@ public abstract class CsvConverter extends Job {
 
   /**
    * Returns the resulting byte array.
-   * @return result
+   * @param uri base URI
+   * @return result (can be {@code null})
    * @throws IOException I/O exception
    */
-  protected abstract Item finish() throws IOException;
+  protected abstract Item finish(String uri) throws IOException;
 }

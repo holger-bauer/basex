@@ -1,5 +1,6 @@
 package org.basex.build.text;
 
+import static org.basex.core.Text.*;
 import static org.basex.util.Token.*;
 
 import java.io.*;
@@ -17,7 +18,7 @@ import org.basex.util.*;
  * <p>The parser provides some options, which can be specified via the
  * {@link MainOptions#TEXTPARSER} option.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TextParser extends SingleParser {
@@ -30,6 +31,8 @@ public final class TextParser extends SingleParser {
   private final boolean lines;
   /** Encoding. */
   private final String encoding;
+  /** Current line. */
+  private int line;
 
   /**
    * Constructor.
@@ -48,12 +51,14 @@ public final class TextParser extends SingleParser {
     builder.openElem(TEXT, atts, nsp);
 
     final TokenBuilder tb = new TokenBuilder();
-    try(NewlineInput nli = new NewlineInput(source).encoding(encoding)) {
+    try(NewlineInput nli = new NewlineInput(source)) {
+      nli.encoding(encoding);
       for(int ch; (ch = nli.read()) != -1;) {
         if(ch == '\n' && lines) {
           builder.openElem(LINE, atts, nsp);
           builder.text(tb.next());
           builder.closeElem();
+          line++;
         } else {
           tb.add(XMLToken.valid(ch) ? ch : REPLACEMENT);
         }
@@ -61,5 +66,10 @@ public final class TextParser extends SingleParser {
     }
     if(!lines) builder.text(tb.finish());
     builder.closeElem();
+  }
+
+  @Override
+  public String detailedInfo() {
+    return Util.info(LINE_X, line);
   }
 }

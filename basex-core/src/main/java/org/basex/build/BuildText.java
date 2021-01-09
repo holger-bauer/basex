@@ -5,7 +5,7 @@ import static org.basex.util.Token.*;
 /**
  * This interface organizes textual information for the builder package.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface BuildText {
@@ -118,7 +118,7 @@ public interface BuildText {
   byte[] SYSTEM = token("SYSTEM");
   /** DTD: Public. */
   byte[] PUBLIC = token("PUBLIC");
-  /** DTD: <!--. */
+  /** DTD: opening comment. */
   byte[] COMS = token("<!--");
   /** DTD: NOTATION. */
   byte[] NOTA = token("<!NOTATION");

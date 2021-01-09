@@ -3,17 +3,16 @@ package org.basex.query.value.node;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
-import org.basex.core.*;
+import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
-import org.basex.util.*;
 import org.basex.util.list.*;
 import org.w3c.dom.*;
 
 /**
  * Attribute node fragment.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FAttr extends FNode {
@@ -46,7 +45,7 @@ public final class FAttr extends FNode {
    * @param value value
    */
   public FAttr(final QNm name, final byte[] value) {
-    super(NodeType.ATT);
+    super(NodeType.ATTRIBUTE);
     this.name = name;
     this.value = value;
   }
@@ -71,13 +70,8 @@ public final class FAttr extends FNode {
   }
 
   @Override
-  public FNode deepCopy(final MainOptions options) {
-    return new FAttr(name, value).parent(parent);
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(NAM, name.string(), VAL, value));
+  public FAttr materialize(final QueryContext qc, final boolean copy) {
+    return copy ? new FAttr(name, value) : this;
   }
 
   @Override
@@ -86,7 +80,17 @@ public final class FAttr extends FNode {
   }
 
   @Override
-  public String toString() {
-    return new TokenBuilder(name.string()).add('=').add(Atm.toString(value)).toString();
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FAttr && name.eq(((FAttr) obj).name) && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, NAME, name.string(), VALUEE, value));
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.concat(name.string(), "=", QueryString.toQuoted(value));
   }
 }

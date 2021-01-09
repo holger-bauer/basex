@@ -1,17 +1,17 @@
 package org.basex.data;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests the stability of the data storage.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class TableTest extends SandboxTest {
@@ -31,17 +31,15 @@ public final class TableTest extends SandboxTest {
   /**
    * Set up method.
    */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     execute(new CreateDB(NAME, DBFILE));
-    tbl = context.data().meta.dbfile(DataText.DATATBL);
+    tbl = context.data().meta.dbFile(DataText.DATATBL);
   }
 
   /**
    * Drops the JUnitTest database.
    */
-  @After
-  public void tearDown() {
+  @AfterEach public void tearDown() {
     execute(new DropDB(NAME));
   }
 
@@ -49,8 +47,7 @@ public final class TableTest extends SandboxTest {
    * Test if the size of the table remains constant after insertion, deletion,
    * and re-insertion of the same record.
    */
-  @Test
-  public void tableSize() {
+  @Test public void tableSize() {
     final long s = tbl.length();
 
     final String n = query(SELECT);
@@ -58,6 +55,6 @@ public final class TableTest extends SandboxTest {
     query(String.format(INSERT, n));
     execute(new Close());
 
-    assertEquals("Database size changed: ", s, tbl.length());
+    assertEquals(s, tbl.length(), "Database size changed: ");
   }
 }

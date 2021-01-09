@@ -1,11 +1,9 @@
 package org.basex.query.expr;
 
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -13,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * Filter expression, caching all results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class CachedFilter extends Filter {
@@ -21,81 +19,68 @@ public class CachedFilter extends Filter {
    * Constructor.
    * @param info input info
    * @param root root expression
-   * @param preds predicates
+   * @param preds predicate expressions
    */
   public CachedFilter(final InputInfo info, final Expr root, final Expr... preds) {
     super(info, root, preds);
   }
 
   @Override
-  public final Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
-    Value val = root.value(qc);
-    final QueryFocus qf = qc.focus, focus = new QueryFocus();
-    qc.focus = focus;
+    final ItemList items = new ItemList();
+    Value value = root.value(qc);
+
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    qc.focus = qf;
     try {
       // evaluate first predicate, based on incoming value
-      final ItemList buffer = new ItemList();
-      Expr pred = preds[0];
-      long vs = val.size();
-      focus.size = vs;
-      focus.pos = 1;
+      Expr expr = exprs[0];
+      long vs = value.size();
+      qf.size = vs;
 
       final boolean scoring = qc.scoring;
-      for(int s = 0; s < vs; s++) {
-        final Item item = val.itemAt(s);
-        focus.value = item;
-        final Item test = pred.test(qc, info);
+      for(int v = 0; v < vs; v++) {
+        qc.checkStop();
+        final Item item = value.itemAt(v);
+        qf.value = item;
+        qf.pos = v + 1;
+        final Item test = expr.test(qc, info);
         if(test != null) {
           if(scoring) item.score(test.score());
-          buffer.add(item);
+          items.add(item);
         }
-        focus.pos++;
       }
       // save memory
-      val = null;
+      value = null;
 
       // evaluate remaining predicates, based on value builder
-      final int pl = preds.length;
-      for(int i = 1; i < pl; i++) {
-        vs = buffer.size();
-        pred = preds[i];
-        focus.size = vs;
-        focus.pos = 1;
+      final int el = exprs.length;
+      for(int e = 1; e < el; e++) {
+        vs = items.size();
+        qf.size = vs;
+        expr = exprs[e];
         int c = 0;
-        for(int s = 0; s < vs; ++s) {
-          final Item item = buffer.get(s);
-          focus.value = item;
-          final Item test = pred.test(qc, info);
+        for(int i = 0; i < vs; ++i) {
+          qc.checkStop();
+          final Item item = items.get(i);
+          qf.value = item;
+          qf.pos = i + 1;
+          final Item test = expr.test(qc, info);
           if(test != null) {
             if(scoring) item.score(test.score());
-            buffer.set(c++, item);
+            items.set(c++, item);
           }
-          focus.pos++;
         }
-        buffer.size(c);
+        items.size(c);
       }
-
-      // return resulting values
-      return buffer.value();
     } finally {
-      qc.focus = qf;
+      qc.focus = focus;
     }
+    return items.value(this);
   }
 
   @Override
   public Filter copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new CachedFilter(info, root.copy(cc, vm), Arr.copyAll(cc, vm, preds)));
-  }
-
-  @Override
-  public final void plan(final FElem plan) {
-    final FElem el = planElem();
-    addPlan(plan, el, root);
-    super.plan(el);
+    return copyType(new CachedFilter(info, root.copy(cc, vm), Arr.copyAll(cc, vm, exprs)));
   }
 }

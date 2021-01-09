@@ -12,7 +12,6 @@ import org.basex.io.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -24,50 +23,45 @@ import org.xml.sax.*;
 /**
  * Functions for validating documents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Michael Seiferle
  * @author Marco Lettere (greedy/verbose validation)
  */
 abstract class ValidateFn extends StandardFunc {
   /** Report element. */
-  public static final String REPORT = "report";
+  private static final String REPORT = "report";
   /** Error element. */
-  public static final String MESSAGE = "message";
+  private static final String MESSAGE = "message";
   /** Status. */
-  public static final String STATUS = "status";
+  private static final String STATUS = "status";
   /** Valid. */
-  public static final String VALID = "valid";
+  private static final String VALID = "valid";
   /** Invalid. */
-  public static final String INVALID = "invalid";
+  private static final String INVALID = "invalid";
   /** Line. */
-  public static final String LINE = "line";
+  private static final String LINE = "line";
   /** Column. */
-  public static final String COLUMN = "column";
+  private static final String COLUMN = "column";
   /** Type. */
-  public static final String LEVEL = "level";
+  private static final String LEVEL = "level";
   /** File. */
-  public static final String URL = "url";
-
-  @Override
-  public final Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
+  private static final String URL = "url";
 
   /**
    * Runs the validation process and returns an empty sequence or an error.
-   * @param qc query context.
+   * @param qc query context
    * @return empty sequence
    * @throws QueryException query exception
    */
   protected final Empty check(final QueryContext qc) throws QueryException {
     final ArrayList<ErrorInfo> errors = errors(qc);
-    if(errors.isEmpty()) return Empty.SEQ;
-    throw BXVA_FAIL_X.get(info, errors.get(0).toString());
+    if(errors.isEmpty()) return Empty.VALUE;
+    throw VALIDATE_ERROR_X.get(info, errors.get(0).toString());
   }
 
   /**
    * Runs the validation process and returns the errors as string sequence.
-   * @param qc query context.
+   * @param qc query context
    * @return string sequence
    * @throws QueryException query exception
    */
@@ -80,7 +74,7 @@ abstract class ValidateFn extends StandardFunc {
 
   /**
    * Runs the validation process and returns the errors as XML.
-   * @param qc query context.
+   * @param qc query context
    * @return XML
    * @throws QueryException query exception
    */
@@ -102,7 +96,7 @@ abstract class ValidateFn extends StandardFunc {
 
   /**
    * Runs the validation process and returns the resulting errors.
-   * @param qc query context.
+   * @param qc query context
    * @return errors
    * @throws QueryException query exception
    */
@@ -123,7 +117,7 @@ abstract class ValidateFn extends StandardFunc {
       Util.rootException(ex);
       handler.add(ex, ValidationHandler.FATAL);
     } catch(final IOException | ParserConfigurationException | Error ex) {
-      throw BXVA_START_X.get(info, ex);
+      throw VALIDATE_START_X.get(info, ex);
     } finally {
       v.finish();
     }
@@ -132,24 +126,24 @@ abstract class ValidateFn extends StandardFunc {
 
   /**
    * Returns an input reference (possibly cached) to the first argument.
-   * @param it item
+   * @param item item
    * @param sopts serializer parameters
    * @return item
    * @throws QueryException query exception
    * @throws IOException exception
    */
-  protected final IO read(final Item it, final SerializerOptions sopts)
+  protected final IO read(final Item item, final SerializerOptions sopts)
       throws QueryException, IOException {
 
-    if(it instanceof ANode) {
+    if(item instanceof ANode) {
       // return node as main-memory string
-      final IOContent io = new IOContent(it.serialize(sopts).finish());
-      io.name(string(((ANode) it).baseURI()));
+      final IOContent io = new IOContent(item.serialize(sopts).finish());
+      io.name(string(((ANode) item).baseURI()));
       return io;
     }
 
-    if(it.type.isStringOrUntyped()) {
-      IO io = checkPath(toToken(it));
+    if(item.type.isStringOrUntyped()) {
+      IO io = checkPath(toToken(item));
       if(sopts != null) {
         // add doctype declaration if specified
         io = new IOContent(new DBNode(io).serialize(sopts).finish());
@@ -158,6 +152,6 @@ abstract class ValidateFn extends StandardFunc {
       return io;
     }
 
-    throw STRNOD_X_X.get(info, it.type, it);
+    throw STRNOD_X_X.get(info, item.type, item);
   }
 }

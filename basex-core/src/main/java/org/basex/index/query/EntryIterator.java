@@ -3,13 +3,13 @@ package org.basex.index.query;
 /**
  * This interface provides methods for returning index entries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface EntryIterator {
   /**
    * Returns the next index entry.
-   * @return entry
+   * @return entry or {@code null}
    */
   byte[] next();
 

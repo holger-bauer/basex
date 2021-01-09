@@ -11,14 +11,14 @@ import org.basex.util.options.*;
 /**
  * Project specific slider implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXSlider extends BaseXPanel {
   /** Default width of slider. */
-  private static final int DWIDTH = (int) (GUIConstants.scale * 120);
+  private static final int DWIDTH = 120;
   /** Width of slider mover. */
-  private static final double SLIDERW = (int) (GUIConstants.scale * 20);
+  private static final double SLIDERW = 20;
   /** Listener. */
   private final BaseXDialog dialog;
   /** Minimum slider value. */
@@ -40,37 +40,38 @@ public final class BaseXSlider extends BaseXPanel {
 
   /**
    * Checkbox.
-   * @param mn min value
-   * @param mx max value
-   * @param opt option
-   * @param opts options
    * @param win parent window
+   * @param min min value
+   * @param max max value
+   * @param option option
+   * @param options options
    */
-  public BaseXSlider(final int mn, final int mx, final NumberOption opt, final Options opts,
-      final Window win) {
-    this(mn, mx, opts.get(opt), win);
-    options = opts;
-    option = opt;
+  public BaseXSlider(final BaseXWindow win, final int min, final int max, final NumberOption option,
+      final Options options) {
+    this(win, min, max, options.get(option));
+    this.options = options;
+    this.option = option;
   }
 
   /**
    * Constructor.
-   * @param mn min value
-   * @param mx max value
-   * @param i initial value
-   * @param w parent window
+   * @param win parent window
+   * @param min min value
+   * @param max max value
+   * @param value initial value
    */
-  public BaseXSlider(final int mn, final int mx, final int i, final Window w) {
-    super(w);
-    min = mn;
-    max = mx;
-    value = i;
-    dialog = w instanceof BaseXDialog ? (BaseXDialog) w : null;
+  public BaseXSlider(final BaseXWindow win, final int min, final int max, final int value) {
+    super(win);
+    this.min = min;
+    this.max = max;
+    this.value = value;
+    dialog = win.dialog();
+
     setOpaque(false);
     setFocusable(true);
 
     setPreferredSize(new Dimension(DWIDTH, (int) (getFont().getSize() * 1.2)));
-    addFocusListener(new FocusAdapter() {
+    addFocusListener(new FocusListener() {
       @Override
       public void focusGained(final FocusEvent e) {
         repaint();
@@ -109,7 +110,7 @@ public final class BaseXSlider extends BaseXPanel {
     final int w = getWidth();
     final int h = getHeight();
     final int hh = h / 2;
-    final int s = (int) (3 * GUIConstants.scale);
+    final int s = 3;
 
     g.setColor(hasFocus() ? GUIConstants.BACK : GUIConstants.lgray);
     g.fillRect(0, hh - s, w, (s << 1) - 1);

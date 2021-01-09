@@ -1,56 +1,71 @@
 package org.basex.query.func;
 
 import static org.basex.query.func.Function.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import org.basex.query.*;
-import org.junit.*;
+import org.basex.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the XSLT Module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class XsltModuleTest extends AdvancedQueryTest {
+public final class XsltModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void processor() {
-    assertFalse(query(_XSLT_PROCESSOR.args()).isEmpty());
+  @Test public void processor() {
+    final Function func = _XSLT_PROCESSOR;
+    assertFalse(query(func.args()).isEmpty());
   }
 
   /** Test method. */
-  @Test
-  public void version() {
-    assertFalse(query(_XSLT_VERSION.args()).isEmpty());
-  }
-
-  /** Test method. */
-  @Test
-  public void transform() {
-    final String doc = "<a/>";
+  @Test public void transform() {
+    final Function func = _XSLT_TRANSFORM;
+    final String doc = " <a/>";
     String style = wrap("<xsl:template match='/'><X/></xsl:template>");
-    query(_XSLT_TRANSFORM.args(doc, style), "<X/>");
-    query(_XSLT_TRANSFORM.args(doc, '"' + style + '"'), "<X/>");
+    query(func.args(doc, ' ' + style), "<X/>");
+    query(func.args(doc, style), "<X/>");
 
     style = wrap("<xsl:param name='t'/><xsl:template match='/'>" +
         "<X><xsl:value-of select='$t'/></X></xsl:template>");
-    query(_XSLT_TRANSFORM.args(doc, style, " map { 't': '1' }"), "<X>1</X>");
-    query(_XSLT_TRANSFORM.args(doc, style, " map { 't' : text { '1' } }"), "<X>1</X>");
+    query(func.args(doc, ' ' + style, " map { 't': '1' }"), "<X>1</X>");
+    query(func.args(doc, ' ' + style, " map { 't' : text { '1' } }"), "<X>1</X>");
+
+    // catalog manager (via option declaration); requires resolver in lib/ directory
+    final String dir = "src/test/resources/catalog/";
+    query("declare option db:catfile '" + dir + "catalog.xml';" +
+        func.args(" <dummy/>", dir + "document.xsl"),
+        "<x>X</x>");
+    query("declare option db:catfile '" + dir + "catalog.xml';" +
+        func.args(" <dummy/>", " doc('" + dir + "document.xsl')"),
+        "<x>X</x>");
+
+    // catalog manager (via pragma); requires resolver in lib/ directory
+    query("(# db:catfile " + dir + "catalog.xml #) { " +
+        func.args(" <dummy/>", dir + "document.xsl") + " }",
+        "<x>X</x>");
+
   }
 
   /** Test method. */
-  @Test
-  public void transformText() {
-    final String doc = "<a/>";
+  @Test public void transformText() {
+    final Function func = _XSLT_TRANSFORM_TEXT;
+    final String doc = " <a/>";
     String style = wrap("<xsl:template match='/'>" +
         "<xsl:output omit-xml-declaration='yes'/>1</xsl:template>");
-    query(_XSLT_TRANSFORM_TEXT.args(doc, style), "1");
-    query(_XSLT_TRANSFORM_TEXT.args(doc, '"' + style + '"'), "1");
+    query(func.args(doc, ' ' + style), 1);
+    query(func.args(doc, style), 1);
 
     style = wrap("<xsl:param name='t'/><xsl:output omit-xml-declaration='yes'/>" +
       "<xsl:template match='/'><xsl:value-of select='$t'/></xsl:template>");
-    query(_XSLT_TRANSFORM_TEXT.args(doc, style, " map { 't': '1' }"), "1");
+    query(func.args(doc, ' ' + style, " map { 't': '1' }"), 1);
+  }
+
+  /** Test method. */
+  @Test public void version() {
+    final Function func = _XSLT_VERSION;
+    assertFalse(query(func.args()).isEmpty());
   }
 
   /**

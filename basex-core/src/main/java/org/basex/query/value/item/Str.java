@@ -4,6 +4,7 @@ import static org.basex.query.QueryError.*;
 
 import org.basex.core.*;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -11,21 +12,21 @@ import org.basex.util.*;
 /**
  * String item ({@code xs:string}, {@code xs:normalizedString}, {@code xs:language}, etc.).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Str extends AStr {
   /** Wildcard string. */
-  public static final Str WC = new Str(new byte[] { '*' });
+  public static final Str WILDCARD = new Str(new byte[] { '*' });
   /** Zero-length string. */
-  public static final Str ZERO = new Str(Token.EMPTY);
+  public static final Str EMPTY = new Str(Token.EMPTY);
 
   /**
    * Constructor.
    * @param value value
    */
   private Str(final byte[] value) {
-    this(value, AtomType.STR);
+    this(value, AtomType.STRING);
   }
 
   /**
@@ -43,7 +44,7 @@ public final class Str extends AStr {
    * @return instance
    */
   public static Str get(final byte[] value) {
-    return value.length == 0 ? ZERO : new Str(value);
+    return value.length == 0 ? EMPTY : new Str(value);
   }
 
   /**
@@ -59,11 +60,11 @@ public final class Str extends AStr {
    * Returns a string representation of the specified value.
    * @param value object (will be converted to token)
    * @param qc query context
-   * @param ii input info
+   * @param inf input info
    * @return instance
    * @throws QueryException query exception
    */
-  public static Str get(final Object value, final QueryContext qc, final InputInfo ii)
+  public static Str get(final Object value, final QueryContext qc, final InputInfo inf)
       throws QueryException {
 
     final boolean validate = qc.context.options.get(MainOptions.CHECKSTRINGS);
@@ -73,7 +74,7 @@ public final class Str extends AStr {
     for(int c = 0; c < bl; c += Token.cl(bytes, c)) {
       int cp = Token.cp(bytes, c);
       if(!XMLToken.valid(cp)) {
-        if(validate) throw INVCODE_X.get(ii, Integer.toHexString(cp));
+        if(validate) throw INVCODE_X.get(inf, Integer.toHexString(cp));
         cp = Token.REPLACEMENT;
         if(tb == null) {
           tb = new TokenBuilder(bl);
@@ -99,10 +100,9 @@ public final class Str extends AStr {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof Str)) return false;
-    final Str i = (Str) cmp;
-    return type == i.type && Token.eq(value, i.value);
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
+    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
+      cc.simplify(this, Bln.get(this != EMPTY)) : this;
   }
 
   @Override

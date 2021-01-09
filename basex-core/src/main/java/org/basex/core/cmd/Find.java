@@ -5,7 +5,6 @@ import static org.basex.util.Token.*;
 
 import org.basex.core.*;
 import org.basex.core.locks.*;
-import org.basex.core.users.*;
 import org.basex.query.expr.path.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
@@ -13,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'find' command and processes a simplified request as XQuery.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Find extends AQuery {
@@ -34,7 +33,7 @@ public final class Find extends AQuery {
    * @param rt start from root node
    */
   public Find(final String query, final boolean rt) {
-    super(Perm.NONE, true, query);
+    super(true, query);
     root = rt;
   }
 
@@ -70,7 +69,7 @@ public final class Find extends AQuery {
    */
   public static String find(final String query, final Context ctx, final boolean root) {
     // treat input as XQuery
-    if(query.startsWith("/")) return query;
+    if(Strings.startsWith(query, '/')) return query;
 
     final boolean r = root || ctx.root();
     if(query.isEmpty()) return r ? "/" : ".";
@@ -79,39 +78,36 @@ public final class Find extends AQuery {
     final String qu = query.replaceAll(" \\+", " ");
     final String[] terms = split(qu);
 
-    String pre = "";
-    String preds = "";
+    final StringBuilder pre = new StringBuilder(), preds = new StringBuilder();
     for(String term : terms) {
       if(term.startsWith("@=")) {
-        preds += "[@* = \"" + term.substring(2) + "\"]";
-      } else if(term.startsWith("=")) {
-        preds += "[text() = \"" + term.substring(1) + "\"]";
-      } else if(term.startsWith("~")) {
-        preds += "[text() contains text \"" + term.substring(1) +
-          "\" using fuzzy]";
-      } else if(term.startsWith("@")) {
+        preds.append("[@* = \"").append(term.substring(2)).append("\"]");
+      } else if(Strings.startsWith(term, '=')) {
+        preds.append("[text() = \"").append(term.substring(1)).append("\"]");
+      } else if(Strings.startsWith(term, '~')) {
+        preds.append("[text() contains text \"").append(term.substring(1));
+        preds.append("\" using fuzzy]");
+      } else if(Strings.startsWith(term, '@')) {
         if(term.length() == 1) continue;
-        preds += "[@* contains text \"" + term.substring(1) + "\"]";
+        preds.append("[@* contains text \"").append(term.substring(1)).append("\"]");
         term = term.substring(1);
         // add valid name tests
         if(XMLToken.isName(token(term))) {
-          pre += (r ? "" : ".") + "//@" + term + " | ";
+          pre.append(r ? "" : ".").append("//@").append(term).append(" | ");
         }
       } else {
-        preds += "[text() contains text \"" + term + "\"]";
+        preds.append("[text() contains text \"").append(term).append("\"]");
         // add valid name tests
         if(XMLToken.isName(token(term))) {
-          pre += (r ? "/" : "") + Axis.DESC + "::*:" + term + " | ";
+          if(r) pre.append('/');
+          pre.append(Axis.DESCENDANT).append("::*:").append(term).append(" | ");
         }
       }
     }
-    if(pre.isEmpty() && preds.isEmpty()) return root ? "/" : ".";
+    if((pre.length() == 0) && (preds.length() == 0)) return root ? "/" : ".";
 
     // create final string
-    final TokenBuilder tb = new TokenBuilder();
-    final String name = "*";
-    tb.add(pre + (r ? "/" : "") + Axis.DESCORSELF + "::" + name + preds);
-    return tb.toString();
+    return pre + (r ? "/" : "") + Axis.DESCENDANT_OR_SELF + "::*" + preds;
   }
 
   /**
@@ -123,8 +119,8 @@ public final class Find extends AQuery {
    * @param root root flag
    * @return query
    */
-  public static String findTable(final StringList filter, final TokenList cols, final BoolList elem,
-      final byte[] name, final boolean root) {
+  public static String findTable(final StringList filter, final TokenList cols,
+      final BoolList elem, final byte[] name, final boolean root) {
 
     final TokenBuilder tb = new TokenBuilder();
     final int is = filter.size();
@@ -133,31 +129,24 @@ public final class Find extends AQuery {
       for(final String s : spl) {
         final byte[] term = trim(replace(token(s), '"', ' '));
         if(term.length == 0) continue;
-        tb.add('[');
-
         final boolean elm = elem.get(i);
-        tb.add(elm ? ".//" : "@");
-        tb.add("*:");
-        tb.add(cols.get(i));
+        tb.add('[').add(elm ? ".//" : "@").add("*:").add(cols.get(i));
 
         if(term[0] == '<' || term[0] == '>') {
-          tb.add(term[0]);
-          tb.addLong(calcNum(substring(term, 1)));
+          tb.add(term[0]).addLong(calcNum(substring(term, 1)));
         } else {
-          tb.add(" contains text \"");
-          tb.add(term);
-          tb.add('"');
+          tb.add(" contains text \"").add(term).add('"');
         }
         tb.add(']');
       }
     }
     return tb.isEmpty() ? "/" : (root ? "/" : "") +
-        Axis.DESCORSELF + "::*:" + string(name) + tb;
+        Axis.DESCENDANT_OR_SELF + "::*:" + string(name) + tb;
   }
 
   /**
-   * Returns an long value for the specified token. The suffixes "kb", "mb"
-   * and "gb" are considered in the calculation.
+   * Returns an long value for the specified token.
+   * The suffixes "kb", "mb" and "gb" are considered in the calculation.
    * @param tok token to be converted
    * @return long
    */

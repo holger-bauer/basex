@@ -2,8 +2,6 @@ package org.basex.query.up.primitives.node;
 
 import static org.basex.query.QueryError.*;
 
-import java.util.*;
-
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.up.*;
@@ -15,7 +13,7 @@ import org.basex.util.options.*;
 /**
  * Replace document primitive.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ReplaceDoc extends NodeUpdate {
@@ -37,12 +35,12 @@ public final class ReplaceDoc extends NodeUpdate {
 
     super(UpdateType.REPLACENODE, pre, data, info);
     final DBOptions options = new DBOptions(opts, DBOptions.PARSING, info);
-    newDocs = new DBNew(qc, Arrays.asList(input), options, info);
+    newDocs = new DBNew(qc, options, info, input);
   }
 
   @Override
-  public void prepare(final MemData tmp) throws QueryException {
-    newDocs.prepare(data.meta.name);
+  public void prepare(final MemData tmp, final QueryContext qc) throws QueryException {
+    newDocs.prepare(data.meta.name, false);
   }
 
   @Override

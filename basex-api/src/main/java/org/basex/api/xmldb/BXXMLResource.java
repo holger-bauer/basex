@@ -27,10 +27,10 @@ import org.xmldb.api.modules.*;
 /**
  * Implementation of the XMLResource Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class BXXMLResource implements XMLResource {
+public final class BXXMLResource implements XMLResource {
   /** Collection reference. */
   private final BXCollection coll;
   /** String id. */
@@ -108,7 +108,7 @@ final class BXXMLResource implements XMLResource {
             return null;
           }
         }
-        content = ao.toArray();
+        content = ao.finish();
       } catch(final IOException ex) {
         throw new XMLDBException(ErrorCodes.VENDOR_ERROR, ex.getMessage());
       }
@@ -204,7 +204,7 @@ final class BXXMLResource implements XMLResource {
     public void endDocument() throws SAXException {
       try {
         resource.content = new DBNode(((MemBuilder) builder).data()).serialize(
-            SerializerMode.NOINDENT.get()).toArray();
+            SerializerMode.NOINDENT.get()).finish();
       } catch(final QueryIOException ex) {
         error(new BaseXException(ex));
       }

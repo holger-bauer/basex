@@ -17,7 +17,7 @@ import org.basex.util.list.*;
  * tolerant alternative to Java's internal SAX parser, which is used by the
  * {@link SAXWrapper} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class XMLParser extends SingleParser {
@@ -122,8 +122,8 @@ public class XMLParser extends SingleParser {
     }
 
     consume(Type.L_BR);
-    atts.clear();
-    nsp.clear();
+    atts.reset();
+    nsp.reset();
 
     // get element name
     byte[] en = consumeToken(Type.ELEMNAME);
@@ -144,7 +144,7 @@ public class XMLParser extends SingleParser {
       }
       consume(Type.QUOTE);
 
-      if(startsWith(an, XMLNSC)) {
+      if(startsWith(an, XMLNS_COLON)) {
         // open namespace...
         if(!stripNS) nsp.add(local(an), av);
       } else if(eq(an, XMLNS)) {
@@ -203,9 +203,9 @@ public class XMLParser extends SingleParser {
    */
   private byte[] consumeToken(final Type type) throws IOException {
     if(scanner.type == type) {
-      final byte[] tok = scanner.token.toArray();
+      final byte[] token = scanner.token.toArray();
       scanner.more();
-      return tok;
+      return token;
     }
     throw new BuildException(PARSEINV, detailedInfo(), type.string, scanner.type.string);
   }

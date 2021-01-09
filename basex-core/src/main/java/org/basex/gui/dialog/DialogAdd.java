@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Panel for adding new resources.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class DialogAdd extends BaseXBack {
@@ -29,33 +29,33 @@ final class DialogAdd extends BaseXBack {
 
   /**
    * Constructor.
-   * @param d dialog reference
+   * @param dialog dialog reference
    */
-  DialogAdd(final DialogProps d) {
-    dialog = d;
+  DialogAdd(final DialogProps dialog) {
+    this.dialog = dialog;
     setLayout(new BorderLayout());
 
     add(new BaseXLabel(ADD_RESOURCES).large().border(0,  0, 16, 0), BorderLayout.NORTH);
 
-    target = new BaseXTextField("/", d);
+    target = new BaseXTextField(dialog, "/");
 
-    final BaseXBack pnl = new BaseXBack(new TableLayout(2, 1));
+    final BaseXBack pnl = new BaseXBack(new RowLayout());
     pnl.add(new BaseXLabel(TARGET_PATH + COLS, true, true).border(8, 0, 6, 0));
     pnl.add(target);
 
     // option panels
-    final BaseXTabs tabs = new BaseXTabs(d);
-    final DialogParsing parsing = new DialogParsing(d, tabs);
-    general = new DialogImport(d, pnl, parsing);
+    final BaseXTabs tabs = new BaseXTabs(dialog);
+    final DialogParsing parsing = new DialogParsing(dialog, tabs);
+    general = new DialogImport(dialog, pnl, parsing);
 
     tabs.addTab(GENERAL, general);
     tabs.addTab(PARSING, parsing);
     add(tabs, BorderLayout.CENTER);
 
     // buttons
-    add = new BaseXButton(ADD + DOTS, d);
+    add = new BaseXButton(dialog, ADD + DOTS);
 
-    add(d.newButtons(add), BorderLayout.SOUTH);
+    add(dialog.newButtons(add), BorderLayout.SOUTH);
     action(general.parsers);
   }
 
@@ -69,12 +69,7 @@ final class DialogAdd extends BaseXBack {
 
     if(comp == add) {
       general.setOptions();
-      final Runnable run = new Runnable() {
-        @Override
-        public void run() {
-          dialog.resources.refreshNewFolder(trg);
-        }
-      };
+      final Runnable run = () -> dialog.resources.refreshNewFolder(trg);
       DialogProgress.execute(dialog, run, new Add(trg, src));
 
     } else {

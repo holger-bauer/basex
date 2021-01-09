@@ -3,19 +3,33 @@ package org.basex.query.func;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 
-import org.basex.query.*;
-import org.junit.*;
+import org.basex.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the CSV Module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class CsvModuleTest extends AdvancedQueryTest {
+public final class CsvModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void parse() {
+  @Test public void doc() {
+    final Function func = _CSV_DOC;
+    query(func.args(" ()"), "");
+    query(func.args(" []"), "");
+    query(func.args(" <_/>/text()"), "");
+
+    final String path = "src/test/resources/input.csv";
+    query(func.args(path) + "//entry[. = 'Picard'] ! string()", "Picard");
+    query(func.args(path, " map { 'header': true() }") + "/descendant::Name[1] ! string()",
+        "Picard");
+  }
+
+  /** Test method. */
+  @Test public void parseXml() {
+    parse(" ()", "", "");
+    parse(" []", "", "");
     parse("", "", "<csv/>");
     parse("X", "", "<csv>\n<record>\n<entry>X</entry>\n</record>\n</csv>");
     parse(" '\"X\"\"Y\"'", "", "...<entry>X\"Y</entry>");
@@ -36,8 +50,14 @@ public final class CsvModuleTest extends AdvancedQueryTest {
   }
 
   /** Test method. */
-  @Test
-  public void serialize() {
+  @Test public void parseXQuery() {
+    parse("X\nY", "'header':false(),'format':'xquery'", "...[\"X\"], [\"Y\"]");
+    parse("X\nY", "'header':false(),'format':'xquery'", "...\"records\": ([\"X\"], [\"Y\"])");
+    parse("X\nY", "'header':true(),'format':'xquery'", "...\"names\": [\"X\"]");
+  }
+
+  /** Test method. */
+  @Test public void serializeXml() {
     serial("<csv><record><A__>1</A__></record></csv>", "'header':true(),'lax':false()", "A_\n1\n");
     serial("<csv><record><_>1</_></record></csv>", "'header':true(),'lax':false()", "\n1\n");
     serial("<csv><record><A_0020B>1</A_0020B></record></csv>",
@@ -84,6 +104,18 @@ public final class CsvModuleTest extends AdvancedQueryTest {
     serialError("<csv><record><A>1</A></record></csv>", "'separator':'XX'");
   }
 
+  /** Test method. */
+  @Test public void serializeXQuery() {
+    serial(" map { 'records': [ 'A', 'B' ] }",
+        "'format': 'xquery'", "A,B\n");
+    serial(" map { 'records': [ 'A', 'B' ] }",
+        "'header': false(), 'format': 'xquery'", "A,B\n");
+    serial(" map { 'names': [ 'A', 'B' ], 'records': () }",
+        "'header': true(), 'format': 'xquery'", "A,B\n");
+    serial(" map { 'names': [ 'A' ], 'records': [ '1' ] }",
+        "'header': true(), 'format': 'xquery'", "A\n1\n");
+  }
+
   /**
    * Runs the specified query.
    * @param input query input
@@ -101,7 +133,7 @@ public final class CsvModuleTest extends AdvancedQueryTest {
    * @param expected expected result
    */
   private static void serial(final String input, final String options, final String expected) {
-    query(input, options, expected, _CSV_SERIALIZE);
+    query(' ' + input, options, expected, _CSV_SERIALIZE);
   }
 
   /**
@@ -115,7 +147,7 @@ public final class CsvModuleTest extends AdvancedQueryTest {
       final Function function) {
 
     final String query = options.isEmpty() ? function.args(input) :
-      function.args(input, " map {" + options + '}');
+      function.args(input, " map { " + options + " }");
     if(expected.startsWith("...")) {
       contains(query, expected.substring(3));
     } else {
@@ -138,7 +170,7 @@ public final class CsvModuleTest extends AdvancedQueryTest {
    * @param options options
    */
   private static void serialError(final String input, final String options) {
-    error(input, options, _CSV_SERIALIZE);
+    error(' ' + input, options, _CSV_SERIALIZE);
   }
 
   /**
@@ -149,7 +181,7 @@ public final class CsvModuleTest extends AdvancedQueryTest {
    */
   private static void error(final String input, final String options, final Function function) {
     final String query = options.isEmpty() ? function.args(input) :
-      function.args(input, " map {" + options + '}');
+      function.args(input, " map { " + options + " }");
     error(query, INVALIDOPT_X);
   }
 }

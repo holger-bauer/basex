@@ -2,13 +2,12 @@ package org.basex.query.func.db;
 
 import static org.basex.util.Token.*;
 
-import java.util.*;
-
 import org.basex.core.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
@@ -17,7 +16,7 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbBackups extends StandardFunc {
@@ -37,25 +36,23 @@ public final class DbBackups extends StandardFunc {
 
     final StringList backups = name == null ? qc.context.databases.backups() :
       qc.context.databases.backups(name);
-    final IOFile dbpath = qc.context.soptions.dbPath();
-    return new Iter() {
-      int up = -1;
+    return new BasicIter<FElem>(backups.size()) {
+      final IOFile dbPath = qc.context.soptions.dbPath();
 
       @Override
-      public Item next() throws QueryException {
-        if(++up >= backups.size()) return null;
-        final String backup = backups.get(up);
-        final long length = new IOFile(dbpath, backup + IO.ZIPSUFFIX).length();
+      public FElem get(final long i) {
+        final String backup = backups.get((int) i);
+        final long length = new IOFile(dbPath, backup + IO.ZIPSUFFIX).length();
         final String db = Databases.name(backup);
-
-        final Date date = Databases.date(backup);
-        final String ymd = DateTime.format(date, DateTime.DATE);
-        final String hms = DateTime.format(date, DateTime.TIME);
-        final Dtm dtm = new Dtm(token(ymd + 'T' + hms), info);
-
+        final Dtm dtm = Dtm.get(DateTime.parse(Databases.date(backup)).getTime());
         return new FElem(BACKUP).add(backup).add(DATABASE, db).add(DATE, dtm.string(info)).
             add(SIZE, token(length));
       }
     };
+  }
+
+  @Override
+  public Value value(final QueryContext qc) throws QueryException {
+    return iter(qc).value(qc, this);
   }
 }

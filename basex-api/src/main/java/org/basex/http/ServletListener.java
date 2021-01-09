@@ -5,7 +5,7 @@ import javax.servlet.*;
 /**
  * This class creates and destroys servlet contexts.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ServletListener implements ServletContextListener {
@@ -15,6 +15,6 @@ public final class ServletListener implements ServletContextListener {
 
   @Override
   public void contextDestroyed(final ServletContextEvent event) {
-    HTTPContext.close();
+    HTTPContext.get().close();
   }
 }

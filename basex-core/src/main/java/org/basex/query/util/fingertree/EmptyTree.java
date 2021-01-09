@@ -1,11 +1,12 @@
 package org.basex.query.util.fingertree;
 
-import java.util.*;
+import org.basex.query.*;
+import org.basex.util.*;
 
 /**
  * An empty finger tree.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -42,27 +43,27 @@ final class EmptyTree<N, E> extends FingerTree<N, E> {
 
   @Override
   public Node<N, E> head() {
-    throw new NoSuchElementException();
+    throw Util.notExpected();
   }
 
   @Override
   public Node<N, E> last() {
-    throw new NoSuchElementException();
+    throw Util.notExpected();
   }
 
   @Override
   public FingerTree<N, E> init() {
-    throw new IllegalStateException("Empty Tree");
+    throw Util.notExpected();
   }
 
   @Override
   public FingerTree<N, E> tail() {
-    throw new IllegalStateException("Empty Tree");
+    throw Util.notExpected();
   }
 
   @Override
   public FingerTree<N, E> set(final long pos, final E val) {
-    throw new IndexOutOfBoundsException("Empty Tree");
+    throw Util.notExpected();
   }
 
   @Override
@@ -71,40 +72,39 @@ final class EmptyTree<N, E> extends FingerTree<N, E> {
   }
 
   @Override
-  public FingerTree<N, E> concat(final Node<N, E>[] nodes, final long sz,
+  public FingerTree<N, E> concat(final Node<N, E>[] nodes, final long size,
       final FingerTree<N, E> other) {
-    return other.addAll(nodes, sz, true);
+    return other.addAll(nodes, size, true);
   }
 
   @Override
   public TreeSlice<N, E> slice(final long pos, final long len) {
-    if(pos == 0 && len == 0) return new TreeSlice<>(this);
-    throw new AssertionError("Empty sub-tree.");
+    return new TreeSlice<>(this);
   }
 
   @Override
-  public FingerTree<N, E> reverse() {
+  public FingerTree<N, E> reverse(final QueryContext qc) {
     return this;
   }
 
   @Override
-  public FingerTree<N, E> insert(final long pos, final E val) {
-    throw new AssertionError("Empty sub-tree.");
+  public FingerTree<N, E> insert(final long pos, final E val, final QueryContext qc) {
+    throw Util.notExpected();
   }
 
   @Override
-  public TreeSlice<N, E> remove(final long pos) {
-    throw new AssertionError("Empty sub-tree.");
+  public TreeSlice<N, E> remove(final long pos, final QueryContext qc) {
+    throw Util.notExpected();
   }
 
   @Override
   public FingerTree<N, E> replaceHead(final Node<N, E> head) {
-    throw new AssertionError("Empty sub-tree.");
+    throw Util.notExpected();
   }
 
   @Override
   public FingerTree<N, E> replaceLast(final Node<N, E> last) {
-    throw new AssertionError("Empty sub-tree.");
+    throw Util.notExpected();
   }
 
   @Override
@@ -119,7 +119,7 @@ final class EmptyTree<N, E> extends FingerTree<N, E> {
   }
 
   @Override
-  FingerTree<N, E> addAll(final Node<N, E>[] nodes, final long sz, final boolean left) {
-    return buildTree(nodes, nodes.length, sz);
+  FingerTree<N, E> addAll(final Node<N, E>[] nodes, final long size, final boolean left) {
+    return buildTree(nodes, nodes.length, size);
   }
 }

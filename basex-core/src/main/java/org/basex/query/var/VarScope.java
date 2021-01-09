@@ -16,13 +16,12 @@ import org.basex.util.hash.*;
 /**
  * The scope of variables, either the query, a user-defined or an inline function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class VarScope {
   /** Static context. */
   public final StaticContext sc;
-
   /** Local variables in this scope. */
   private final ArrayList<Var> vars = new ArrayList<>();
 
@@ -51,12 +50,12 @@ public final class VarScope {
    * @param st type of the variable (can be {@code null})
    * @param param function parameter flag
    * @param qc query context
-   * @param info input info
+   * @param ii input info
    * @return the variable
    */
   public Var addNew(final QNm name, final SeqType st, final boolean param, final QueryContext qc,
-      final InputInfo info) {
-    return add(new Var(name, st, param, qc, sc, info));
+      final InputInfo ii) {
+    return add(new Var(name, st, param, qc, sc, ii));
   }
 
   /**
@@ -79,12 +78,12 @@ public final class VarScope {
 
   /**
    * Deletes all unused variables from this scope and assigns stack slots.
-   * @param expr the scope
+   * @param scope the scope
    */
-  public void cleanUp(final Scope expr) {
+  public void cleanUp(final Scope scope) {
     final BitSet declared = new BitSet();
     final BitSet used = new BitSet();
-    expr.visit(new ASTVisitor() {
+    scope.visit(new ASTVisitor() {
       @Override
       public boolean declared(final Var var) {
         declared.set(var.id);
@@ -101,29 +100,28 @@ public final class VarScope {
     // purge all unused variables
     final Iterator<Var> iter = vars.iterator();
     while(iter.hasNext()) {
-      final Var v = iter.next();
-      if(!declared.get(v.id)) {
-        v.slot = -1;
+      final Var var = iter.next();
+      if(!declared.get(var.id)) {
+        var.slot = -1;
         iter.remove();
       }
     }
 
     // remove unused entries from the closure
-    if(expr instanceof Closure) {
-      final Iterator<Entry<Var, Expr>> cls = ((Closure) expr).globalBindings();
-      while(cls.hasNext()) {
-        final Entry<Var, Expr> e = cls.next();
-        final Var v = e.getKey();
-        if(!used.get(v.id)) {
-          cls.remove();
-          v.slot = -1;
-          vars.remove(v);
+    if(scope instanceof Closure) {
+      final Iterator<Entry<Var, Expr>> bindings = ((Closure) scope).globalBindings();
+      while(bindings.hasNext()) {
+        final Var var = bindings.next().getKey();
+        if(!used.get(var.id)) {
+          bindings.remove();
+          var.slot = -1;
+          vars.remove(var);
         }
       }
     }
 
     // assign new stack slots
-    for(int i = vars.size(); --i >= 0;) vars.get(i).slot = i;
+    for(int v = vars.size(); --v >= 0;) vars.get(v).slot = v;
   }
 
   @Override
@@ -145,6 +143,6 @@ public final class VarScope {
    * @param vm variable mapping
    */
   public void copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    for(final Var v : vars) cc.copy(v, vm);
+    for(final Var var : vars) cc.copy(var, vm);
   }
 }

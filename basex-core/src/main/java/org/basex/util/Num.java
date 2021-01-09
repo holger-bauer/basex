@@ -20,14 +20,14 @@ import java.util.*;
  * the following four bytes</li>
  * </ul>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Num {
   /** Private constructor, preventing instantiation. */
   private Num() { }
 
-  // STATIC METHODS ===========================================================
+  // STATIC METHODS ===============================================================================
 
   /**
    * Creates a new number array, in which the first four bytes contain
@@ -159,7 +159,7 @@ public final class Num {
     return sb.toString();
   }
 
-  // PRIVATE STATIC METHODS ===================================================
+  // PRIVATE STATIC METHODS =======================================================================
 
   /**
    * Resizes the specified array if no space is left.

@@ -13,7 +13,7 @@ import org.basex.util.*;
  * The WordNet stemmer is developed by George A. Miller and is based on
  * the WordNet 3.0 License: {@code http://wordnet.princeton.edu/}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 final class WordnetStemmer extends Stemmer {
@@ -30,12 +30,12 @@ final class WordnetStemmer extends Stemmer {
 
   static {
     // don't try to find the other classes if Dictionary is not found:
-    if(Reflect.available(PATTERN, "Dictionary")) {
-      FIND_STEMS = null;
+    final Class<?> dict = Reflect.find(PATTERN, "Dictionary");
+    if(dict == null) {
       CTR = null;
+      FIND_STEMS = null;
       DICT = null;
     } else {
-      final Class<?> dict = Reflect.find(PATTERN, "Dictionary");
       final Class<?> wn = Reflect.find(PATTERN, "morph.WordnetStemmer");
       CTR = Reflect.find(wn, Reflect.find(PATTERN, "IDictionary"));
       FIND_STEMS = Reflect.method(wn, "findStems", String.class);
@@ -46,7 +46,7 @@ final class WordnetStemmer extends Stemmer {
   /**
    * Create new instance of the WordNet dictionary.
    * @param dct dictionary class
-   * @return new instance of the WordNet dictionary
+   * @return new instance of the WordNet dictionary or {@code null}
    */
   private static Object newDict(final Class<?> dct) {
     try {

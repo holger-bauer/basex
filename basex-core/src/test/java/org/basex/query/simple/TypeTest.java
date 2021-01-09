@@ -5,11 +5,10 @@ import org.basex.query.*;
 /**
  * XQuery type tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TypeTest extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
         { "Simple 1", booleans(true), "1 castable as xs:integer" },

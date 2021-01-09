@@ -1,9 +1,11 @@
 package org.basex.util.options;
 
+import org.basex.util.list.*;
+
 /**
  * Option containing an enumeration value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <V> enumeration value
  */
@@ -42,12 +44,14 @@ public final class EnumOption<V extends Enum<V>> extends Option<V> {
   }
 
   /**
-   * Returns an enumeration value for the specified string or {@code null}.
+   * Returns an enum for the specified string.
    * @param string value
-   * @return enumeration
+   * @return enum or {@code null}
    */
   public V get(final String string) {
-    for(final V v : values()) if(v.toString().equals(string)) return v;
+    for(final V v : values()) {
+      if(v.toString().equals(string)) return v;
+    }
     return null;
   }
 
@@ -57,5 +61,16 @@ public final class EnumOption<V extends Enum<V>> extends Option<V> {
    */
   public V[] values() {
     return clazz.getEnumConstants();
+  }
+
+  /**
+   * Returns all enumeration values as strings.
+   * @return enumeration
+   */
+  public String[] strings() {
+    final V[] values = values();
+    final StringList sl = new StringList(values.length);
+    for(final V v : values) sl.add(v.toString());
+    return sl.finish();
   }
 }

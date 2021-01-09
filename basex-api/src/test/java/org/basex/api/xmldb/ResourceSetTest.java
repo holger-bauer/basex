@@ -1,43 +1,51 @@
 package org.basex.api.xmldb;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 import org.xmldb.api.base.*;
 import org.xmldb.api.modules.*;
 
 /**
  * This class tests the XMLDB/API ResourceSet implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@SuppressWarnings("all")
 public final class ResourceSetTest extends XMLDBBaseTest {
   /** Collection. */
-  private Collection coll;
+  private Collection collection;
   /** Resource. */
-  private XPathQueryService serv;
+  private XPathQueryService service;
 
-  @Before
-  public void setUp() throws Exception {
+  /**
+   * Initializes a test.
+   * @throws Exception any exception
+   */
+  @BeforeEach public void setUp() throws Exception {
     createDB();
     final Class<?> c = Class.forName(DRIVER);
-    final Database database = (Database) c.newInstance();
-    coll = database.getCollection(PATH, LOGIN, PW);
-    serv = (XPathQueryService) coll.getService("XPathQueryService", "1.0");
+    final Database database = (Database) c.getDeclaredConstructor().newInstance();
+    collection = database.getCollection(PATH, LOGIN, PW);
+    service = (XPathQueryService) collection.getService("XPathQueryService", "1.0");
   }
 
-  @After
-  public void tearDown() throws Exception {
-    coll.close();
+  /**
+   * Finalizes a test.
+   * @throws Exception any exception
+   */
+  @AfterEach public void tearDown() throws Exception {
+    collection.close();
     dropDB();
   }
 
-  @Test
-  public void testGetResource() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testGetResource() throws Exception {
     // request resource
-    final ResourceSet set = serv.query("//node()");
+    final ResourceSet set = service.query("//node()");
     assertNotNull(set.getResource(0));
 
     // specify invalid position
@@ -45,64 +53,81 @@ public final class ResourceSetTest extends XMLDBBaseTest {
       set.getResource(-1);
       fail("Invalid index access.");
     } catch(final XMLDBException ex) {
-      assertEquals("Wrong error code.", ErrorCodes.NO_SUCH_RESOURCE,
-          ex.errorCode);
+      assertEquals(ErrorCodes.NO_SUCH_RESOURCE, ex.errorCode, "Wrong error code.");
     }
   }
 
-  @Test
-  public void testAddResource() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testAddResource() throws Exception {
     // perform two queries
-    final ResourceSet set1 = serv.query("1");
-    final ResourceSet set2 = serv.query("2");
+    final ResourceSet set1 = service.query("1");
+    final ResourceSet set2 = service.query("2");
 
     // add second to first result set
     final long size = set1.getSize();
     set1.addResource(set2.getResource(0));
-    assertEquals("Wrong size of result set.", size + 1, set1.getSize());
+    assertEquals(size + 1, set1.getSize(), "Wrong size of result set.");
   }
 
-  @Test
-  public void testRemoveResource() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testRemoveResource() throws Exception {
     // perform query and remove result
-    final ResourceSet set = serv.query("1");
+    final ResourceSet set = service.query("1");
     set.removeResource(0);
-    assertEquals("Wrong size of result set.", 0, set.getSize());
+    assertEquals(0, set.getSize(), "Wrong size of result set.");
   }
 
-  @Test
-  public void testGetIterator() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testGetIterator() throws Exception {
     // test if iterator yields results
-    final ResourceSet set = serv.query("1");
+    final ResourceSet set = service.query("1");
     set.removeResource(0);
     final ResourceIterator iter = set.getIterator();
-    assertFalse("No results expected.", iter.hasMoreResources());
+    assertFalse(iter.hasMoreResources(), "No results expected.");
   }
 
-  @Test
-  public void testGetMembersAsResource() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testGetMembersAsResource() throws Exception {
     // test created resource
-    final ResourceSet set = serv.query("1");
-    final Resource res = set.getMembersAsResource();
-    assertNull("No ID expected.", res.getId());
-    assertEquals("Wrong result.", "<xmldb>1</xmldb>", res.getContent());
-    assertSame("Wrong collection reference.", res.getParentCollection(), coll);
+    final ResourceSet set = service.query("1");
+    final Resource resource = set.getMembersAsResource();
+    assertNull(resource.getId(), "No ID expected.");
+    assertEquals("<xmldb>1</xmldb>", resource.getContent(), "Wrong result.");
+    assertSame(resource.getParentCollection(), collection, "Wrong collection reference.");
   }
 
-  @Test
-  public void testGetSize() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testGetSize() throws Exception {
     // test created resource
-    final ResourceSet set = serv.query("1");
-    assertEquals("Wrong result size.", 1, set.getSize());
+    final ResourceSet set = service.query("1");
+    assertEquals(1, set.getSize(), "Wrong result size.");
     set.removeResource(0);
-    assertEquals("Wrong result size.", 0, set.getSize());
+    assertEquals(0, set.getSize(), "Wrong result size.");
   }
 
-  @Test
-  public void testClear() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testClear() throws Exception {
     // test created resource
-    final ResourceSet set = serv.query("1");
+    final ResourceSet set = service.query("1");
     set.clear();
-    assertEquals("Results were not deleted.", 0, set.getSize());
+    assertEquals(0, set.getSize(), "Results were not deleted.");
   }
 }

@@ -1,6 +1,7 @@
 package org.basex.query.value.type;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
@@ -8,7 +9,7 @@ import org.basex.util.*;
 /**
  * XQuery types.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface Type {
@@ -135,7 +136,9 @@ public interface Type {
      * @return type ID if found, {@code null} otherwise
      */
     public static ID get(final int id) {
-      for(final ID i : VALUES) if(i.id == id) return i;
+      for(final ID value : VALUES) {
+        if(value.id == id) return value;
+      }
       return null;
     }
 
@@ -147,9 +150,9 @@ public interface Type {
     public static Type getType(final int id) {
       final ID i = get(id);
       if(i == null) return null;
-      if(i == FUN) return SeqType.ANY_FUN;
-      final Type t = AtomType.getType(i);
-      return t != null ? t : NodeType.getType(i);
+      if(i == FUN) return SeqType.FUNCTION;
+      final Type type = AtomType.getType(i);
+      return type != null ? type : NodeType.getType(i);
     }
   }
 
@@ -188,12 +191,34 @@ public interface Type {
       throws QueryException;
 
   /**
-   * Returns a sequence type with this type.
+   * Returns a sequence type with a single number of occurrence.
    * @return sequence type
    */
-  SeqType seqType();
+  default SeqType seqType() {
+    return seqType(Occ.EXACTLY_ONE);
+  }
 
-  // PUBLIC AND STATIC METHODS ================================================
+  /**
+   * Internal function for creating a sequence type with the specified occurrence indicator.
+   * @param occ occurrence indicator
+   * @return sequence type
+   * @see SeqType#get(Type, Occ)
+   */
+  SeqType seqType(Occ occ);
+
+  /**
+   * Checks if this is one of the specified types.
+   * @param types types
+   * @return result of check
+   */
+  default boolean oneOf(final Type... types) {
+    for(final Type type : types) {
+      if(this == type) return true;
+    }
+    return false;
+  }
+
+  // PUBLIC AND STATIC METHODS ====================================================================
 
   /**
    * Checks if this type is equal to the given one.
@@ -210,52 +235,57 @@ public interface Type {
   boolean instanceOf(Type type);
 
   /**
-   * Computes the union between this type and the given one, i.e. the least common
-   * ancestor of both types in the type hierarchy.
+   * Computes the union between this type and the given one, i.e. the least common ancestor
+   * of both types in the type hierarchy.
    * @param type other type
    * @return union type
    */
   Type union(Type type);
 
   /**
-   * Computes the intersection between this type and the given one, i.e. the least
-   * specific type that is sub-type of both types. If no such type exists, {@code null} is
-   * returned.
+   * Computes the intersection between this type and the given one, i.e. the least specific type
+   * that is sub-type of both types. If no such type exists, {@code null} is returned.
    * @param type other type
    * @return intersection type or {@code null}
    */
   Type intersect(Type type);
 
   /**
-   * Checks if the type refers to a number.
+   * Checks if items with this type are numbers.
    * @return result of check
    */
   boolean isNumber();
 
   /**
-   * Checks if the type refers to an untyped item.
+   * Checks if items with this type are untyped.
    * @return result of check
    */
   boolean isUntyped();
 
   /**
-   * Checks if the type refers to a number or an untyped item.
+   * Checks if items with this type are numbers or untyped.
    * @return result of check
    */
   boolean isNumberOrUntyped();
 
   /**
-   * Checks if the type refers to a number or a string.
+   * Checks if items of this type are strings or untyped.
    * Returns if this item is untyped or a string.
    * @return result of check
    */
   boolean isStringOrUntyped();
 
   /**
-   * Returns the string representation of this type.
-   * @return name
+   * Checks if items of this type are sortable.
+   * @return result of check
    */
-  byte[] string();
+  boolean isSortable();
+
+  /**
+   * Returns the atomic type.
+   * @return atomic type (can be {@code null}, e.g. for function types)
+   */
+  AtomType atomic();
 
   /**
    * Returns a type id to differentiate all types.
@@ -268,6 +298,19 @@ public interface Type {
    * @return result of check
    */
   boolean nsSensitive();
+
+  /**
+   * Returns the given type, or the type of the specified expression if it is more specific.
+   * @param expr expression
+   * @return node type
+   */
+  default Type refine(final Expr expr) {
+    if(expr != null) {
+      final Type t = expr.seqType().type.intersect(this);
+      if(t != null) return t;
+    }
+    return this;
+  }
 
   @Override
   String toString();

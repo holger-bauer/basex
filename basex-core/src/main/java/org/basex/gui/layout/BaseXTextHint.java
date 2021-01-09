@@ -3,9 +3,7 @@ package org.basex.gui.layout;
 import java.awt.*;
 
 import javax.swing.*;
-import javax.swing.border.*;
 import javax.swing.event.*;
-import javax.swing.text.*;
 
 import org.basex.gui.*;
 
@@ -13,38 +11,35 @@ import org.basex.gui.*;
  * Displays a text hint on empty text fields.
  * Inspired by {@code http://tips4java.wordpress.com/2009/11/29/text-prompt/}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class BaseXTextHint extends JLabel implements DocumentListener {
-  /** Text component. */
-  private final JTextComponent comp;
+  /** Text field. */
+  private final BaseXTextField tf;
 
   /**
    * Constructor.
    * @param text text
-   * @param comp text component
+   * @param tf text component
    */
-  BaseXTextHint(final String text, final JTextComponent comp) {
+  BaseXTextHint(final String text, final BaseXTextField tf) {
     super(text);
-    this.comp = comp;
+    this.tf = tf;
 
     setForeground(GUIConstants.gray);
-    setBorder(new EmptyBorder(comp.getInsets()));
-    setFont(comp.getFont());
-
-    comp.getDocument().addDocumentListener(this);
-    comp.setLayout(new BorderLayout());
-    comp.add(this);
+    tf.setLayout(new BorderLayout());
+    tf.add(this, BorderLayout.CENTER);
     update();
+    SwingUtilities.invokeLater(() -> tf.getDocument().addDocumentListener(this));
   }
 
   /**
    * Check whether the prompt should be visible or not. The visibility will change on updates to the
    * Document and on focus changes.
    */
-  private void update() {
-    setVisible(comp.getText().isEmpty());
+  public void update() {
+    setVisible(tf.getText().isEmpty());
   }
 
   @Override

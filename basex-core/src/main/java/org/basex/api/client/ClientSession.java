@@ -25,7 +25,7 @@ import org.basex.util.*;
  * command to the server.</li>
  * </ul>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ClientSession extends Session {
@@ -85,12 +85,12 @@ public class ClientSession extends Session {
    * @param output client output; if set to {@code null}, results will be returned as strings
    * @throws IOException I/O exception
    */
-  @SuppressWarnings("resource")
   public ClientSession(final String host, final int port, final String username,
       final String password, final OutputStream output) throws IOException {
 
     super(output);
     socket = new Socket();
+    socket.setTcpNoDelay(true);
     try {
       // limit timeout to five seconds
       socket.connect(new InetSocketAddress(host, port), 5000);
@@ -100,7 +100,7 @@ public class ClientSession extends Session {
     sin = socket.getInputStream();
 
     // receive server response
-    final BufferInput bi = new BufferInput(sin);
+    final BufferInput bi = BufferInput.get(sin);
     final String[] response = Strings.split(bi.readString(), ':');
     final String code, nonce;
     if(response.length > 1) {
@@ -120,7 +120,7 @@ public class ClientSession extends Session {
     sout.flush();
 
     // receive success flag
-    if(!ok(bi)) throw new LoginException();
+    if(!ok(bi)) throw new LoginException(username);
   }
 
   @Override
@@ -180,12 +180,11 @@ public class ClientSession extends Session {
 
   /**
    * Receives the info string.
-   * @param output output stream to send result to. If {@code null}, no result will be requested
+   * @param output output stream to send result to (if {@code null}, no result will be requested)
    * @throws IOException I/O exception
    */
-  @SuppressWarnings("resource")
   private void receive(final OutputStream output) throws IOException {
-    final BufferInput bi = new BufferInput(sin);
+    final BufferInput bi = BufferInput.get(sin);
     if(output != null) receive(bi, output);
     info = bi.readString();
     if(!ok(bi)) throw new BaseXException(info);
@@ -245,7 +244,6 @@ public class ClientSession extends Session {
    * @return string
    * @throws IOException I/O exception
    */
-  @SuppressWarnings("resource")
   String exec(final ServerCmd command, final String arg, final OutputStream output)
       throws IOException {
 
@@ -253,7 +251,7 @@ public class ClientSession extends Session {
     sout.write(command.code);
     send(arg);
     sout.flush();
-    final BufferInput bi = new BufferInput(sin);
+    final BufferInput bi = BufferInput.get(sin);
     receive(bi, o);
     if(!ok(bi)) throw new BaseXException(bi.readString());
     return o.toString();
@@ -261,6 +259,6 @@ public class ClientSession extends Session {
 
   @Override
   public String toString() {
-    return Prop.PROJECT_NAME + ":/" + socket.getLocalAddress() + ":" + socket.getPort();
+    return Prop.PROJECT + ":/" + socket.getLocalAddress() + ':' + socket.getPort();
   }
 }

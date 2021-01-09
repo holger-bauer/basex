@@ -1,7 +1,6 @@
 package org.basex.query.value.seq.tree;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.query.QueryText.*;
 
 import java.util.*;
 
@@ -12,13 +11,12 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.util.*;
 
 /**
  * A tree storing {@link Item}s.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public abstract class TreeSeq extends Seq {
@@ -36,40 +34,36 @@ public abstract class TreeSeq extends Seq {
   /**
    * Default constructor.
    * @param size number of elements in this sequence
-   * @param type type of all items in this sequence
+   * @param type type of all items in this sequence, can be {@code null}
    */
   TreeSeq(final long size, final Type type) {
     super(size, type == null ? AtomType.ITEM : type);
   }
 
   @Override
-  public final Value insertBefore(final long pos, final Value val) {
-    final long n = val.size();
-    if(n == 0) return this;
-    if(n == 1) return insert(pos, (Item) val);
-
-    final long r = size - pos;
-    if(val instanceof TreeSeq && (pos == 0 || r == 0)) {
-      final TreeSeq other = (TreeSeq) val;
+  protected final Value copyInsert(final long pos, final Value value, final QueryContext qc) {
+    final long right = size - pos;
+    if(value instanceof TreeSeq && (pos == 0 || right == 0)) {
+      final TreeSeq other = (TreeSeq) value;
       return pos == 0 ? other.concat(this) : concat(other);
     }
 
     final TreeSeqBuilder tsb = new TreeSeqBuilder();
     if(pos < MAX_SMALL) {
-      tsb.add(val);
+      tsb.add(value, qc);
       for(long i = pos; --i >= 0;) tsb.addFront(itemAt(i));
     } else {
-      tsb.add(subSeq(0, pos));
-      tsb.add(val);
+      tsb.add(subsequence(0, pos, qc), qc);
+      tsb.add(value, qc);
     }
 
-    if(r < MAX_SMALL) {
-      for(long i = size - r; i < size; i++) tsb.add(itemAt(i));
+    if(right < MAX_SMALL) {
+      for(long i = size - right; i < size; i++) tsb.add(itemAt(i));
     } else {
-      tsb.add(subSeq(pos, r));
+      tsb.add(subsequence(pos, right, qc), qc);
     }
 
-    return tsb.seq();
+    return tsb.seq(type.union(value.type));
   }
 
   /**
@@ -94,57 +88,25 @@ public abstract class TreeSeq extends Seq {
   }
 
   @Override
-  public final Object[] toJava() throws QueryException {
-    final ArrayList<Object> obj = new ArrayList<>((int) size);
-    for(final Item it : this) obj.add(it.toJava());
-    return obj.toArray();
+  public abstract BasicIter<Item> iter();
+
+  @Override
+  public final void cache(final boolean lazy, final InputInfo ii) throws QueryException {
+    for(final Item item : this) item.cache(lazy, ii);
   }
 
   @Override
-  public final void plan(final FElem plan) {
-    final FElem el = planElem(SIZE, size);
-    addPlan(plan, el);
-    for(int v = 0; v != Math.min(size, 5); ++v) itemAt(v).plan(el);
-  }
-
-  @Override
-  public abstract ValueIter iter();
-
-  @Override
-  public final void materialize(final InputInfo ii) throws QueryException {
-    for(final Item it : this) it.materialize(ii);
-  }
-
-  @Override
-  public final Seq atomValue(final InputInfo ii) throws QueryException {
-    final TreeSeqBuilder tsb = new TreeSeqBuilder();
-    for(final Item it : this) tsb.add(it.atomValue(ii));
-    return tsb.seq();
+  public final Value atomValue(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final Item item : this) vb.add(item.atomValue(qc, ii));
+    return vb.value(AtomType.ANY_ATOMIC_TYPE);
   }
 
   @Override
   public final long atomSize() {
-    long s = 0;
-    for(final Item it : this) s += it.atomSize();
-    return s;
-  }
-
-  @Override
-  public final int writeTo(final Item[] arr, final int off) {
-    final int n = (int) Math.min(arr.length - off, size());
-    final Iterator<Item> iter = iterator();
-    for(int i = 0; i < n; i++) arr[off + i] = iter.next();
-    return n;
-  }
-
-  @Override
-  public final boolean homogeneous() {
-    return type != AtomType.ITEM;
-  }
-
-  @Override
-  public final boolean iterable() {
-    return false;
+    long sz = 0;
+    for(final Item item : this) sz += item.atomSize();
+    return sz;
   }
 
   @Override
@@ -154,17 +116,12 @@ public abstract class TreeSeq extends Seq {
     throw EBV_X.get(ii, this);
   }
 
-  @Override
-  public final SeqType seqType() {
-    return SeqType.get(type, Occ.ONE_MORE);
-  }
-
   /**
    * Prepends the given elements to this sequence.
-   * @param vals values, with length at most {@link TreeSeq#MAX_SMALL}
+   * @param seq small sequence
    * @return resulting sequence
    */
-  abstract TreeSeq consSmall(Item[] vals);
+  abstract TreeSeq prepend(SmallSeq seq);
 
   /**
    * Returns items containing the values at the indices {@code from} to {@code to - 1} in
@@ -174,14 +131,14 @@ public abstract class TreeSeq extends Seq {
    * If {@code from == 0 && to == arr.length}, the original items are returned.
    * @param items input sequence
    * @param from first index, inclusive (may be negative)
-   * @param to last index, exclusive (may be greater than {@code arr.length})
+   * @param to last index, exclusive (may be greater than length of input sequence)
    * @return resulting items
    */
   static Item[] slice(final Item[] items, final int from, final int to) {
     final Item[] out = new Item[to - from];
     final int in0 = Math.max(0, from), in1 = Math.min(to, items.length);
     final int out0 = Math.max(-from, 0);
-    System.arraycopy(items, in0, out, out0, in1 - in0);
+    Array.copy(items, in0, in1 - in0, out, out0);
     return out;
   }
 
@@ -194,8 +151,8 @@ public abstract class TreeSeq extends Seq {
   static Item[] concat(final Item[] as, final Item[] bs) {
     final int l = as.length, r = bs.length, n = l + r;
     final Item[] out = new Item[n];
-    System.arraycopy(as, 0, out, 0, l);
-    System.arraycopy(bs, 0, out, l, r);
+    Array.copy(as, l, out);
+    Array.copyFromStart(bs, r, out, l);
     return out;
   }
 }

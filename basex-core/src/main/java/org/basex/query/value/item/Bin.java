@@ -2,14 +2,13 @@ package org.basex.query.value.item;
 
 import org.basex.io.in.*;
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Abstract class for binary items.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Bin extends Item {
@@ -48,9 +47,10 @@ public abstract class Bin extends Item {
   }
 
   @Override
-  public final boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof Bin)) return false;
-    final Bin b = (Bin) cmp;
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Bin)) return false;
+    final Bin b = (Bin) obj;
     return type == b.type && Token.eq(data, b.data);
   }
 }

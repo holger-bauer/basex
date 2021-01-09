@@ -7,7 +7,6 @@ import java.io.*;
 
 import org.basex.data.*;
 import org.basex.io.*;
-import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.up.primitives.*;
@@ -18,7 +17,7 @@ import org.basex.util.hash.*;
 /**
  * Update primitive for the {@link Function#_DB_STORE} function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DBStore extends DBUpdate {
@@ -29,12 +28,12 @@ public final class DBStore extends DBUpdate {
    * Constructor.
    * @param data data
    * @param path target path
-   * @param it item to be stored
-   * @param inf input info
+   * @param item item to be stored
+   * @param info input info
    */
-  public DBStore(final Data data, final String path, final Item it, final InputInfo inf) {
-    super(UpdateType.DBSTORE, data, inf);
-    map.put(token(path), it);
+  public DBStore(final Data data, final String path, final Item item, final InputInfo info) {
+    super(UpdateType.DBSTORE, data, info);
+    map.put(token(path), item);
   }
 
   @Override
@@ -50,9 +49,7 @@ public final class DBStore extends DBUpdate {
         final IOFile file = data.meta.binary(string(path));
         if(file.isDir()) file.delete();
         file.parent().md();
-        try(BufferInput bi = map.get(path).input(info)) {
-          file.write(bi);
-        }
+        file.write(map.get(path).input(info));
       } catch(final IOException ex) {
         Util.debug(ex);
         throw UPDBPUT_X.get(info, path);

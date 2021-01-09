@@ -13,43 +13,47 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnOneOrMore extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Iter ir = exprs[0].iter(qc);
-    final long len = ir.size();
-    if(len == 0) throw ONEORMORE.get(info);
-    if(len > 0) return ir;
+    final Iter iter = exprs[0].iter(qc);
+    final long size = iter.size();
+    if(size == 0) throw ONEORMORE.get(info);
+    if(size > 0) return iter;
+
     return new Iter() {
       private boolean first = true;
       @Override
       public Item next() throws QueryException {
-        final Item it = ir.next();
+        final Item item = qc.next(iter);
         if(first) {
-          if(it == null) throw ONEORMORE.get(info);
+          if(item == null) throw ONEORMORE.get(info);
           first = false;
         }
-        return it;
+        return item;
       }
     };
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Value val = qc.value(exprs[0]);
-    if(val.isEmpty()) throw ONEORMORE.get(info);
-    return val;
+    final Value value = exprs[0].value(qc);
+    if(value.isEmpty()) throw ONEORMORE.get(info);
+    return value;
   }
 
   @Override
-  protected Expr opt(final CompileContext cc) {
-    final Expr e = exprs[0];
-    final SeqType st = e.seqType();
-    if(!st.mayBeZero()) return e;
-    seqType = SeqType.get(st.type, seqType.occ);
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    final Expr expr = exprs[0];
+    final SeqType st = expr.seqType();
+    if(st.oneOrMore()) return expr;
+    if(st.zero()) throw ONEORMORE.get(info);
+
+    exprType.assign(st.with(Occ.ONE_OR_MORE));
+    data(expr.data());
     return this;
   }
 }

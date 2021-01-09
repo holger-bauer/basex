@@ -5,9 +5,9 @@ import org.basex.query.value.item.*;
 import org.basex.util.*;
 
 /**
- * Functions for performing XSLT transformations.
+ * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XsltTransformText extends XsltTransform {

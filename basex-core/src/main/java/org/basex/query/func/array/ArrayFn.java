@@ -9,7 +9,7 @@ import org.basex.query.value.array.*;
 /**
  * Functions on arrays.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class ArrayFn extends StandardFunc {
@@ -21,7 +21,9 @@ abstract class ArrayFn extends StandardFunc {
    * @return specified position -1
    * @throws QueryException query exception
    */
-  final long checkPos(final Array array, final long pos, final boolean incl) throws QueryException {
+  final long checkPos(final XQArray array, final long pos, final boolean incl)
+      throws QueryException {
+
     final long as = array.arraySize() + (incl ? 1 : 0);
     if(pos < 1 || pos > as) throw (as == 0 ? ARRAYEMPTY : ARRAYBOUNDS_X_X).get(info, pos, as);
     return pos - 1;

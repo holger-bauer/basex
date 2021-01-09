@@ -1,16 +1,18 @@
 package org.basex.query.func.bin;
 
 import java.math.*;
+import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BinShift extends StandardFunc {
@@ -18,21 +20,21 @@ public final class BinShift extends StandardFunc {
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final B64 b64 = toB64(exprs[0], qc, true);
     long by = toLong(exprs[1], qc);
-    if(b64 == null) return null;
+    if(b64 == null) return Empty.VALUE;
     if(by == 0) return b64;
 
-    byte[] bytes = b64.binary(info);
+    final byte[] bytes = b64.binary(info);
     final int bl = bytes.length;
+    if(bl == 1 && by < 8) {
+      if(by > 0)  return B64.get((byte) (bytes[0] << by));
+      if(by > -8) return B64.get((byte) (bytes[0] >>> -by));
+    }
 
     byte[] tmp = new byte[bl];
     int r = 0;
     if(by > 7) {
       tmp = new BigInteger(bytes).shiftLeft((int) by).toByteArray();
-      if(tmp.length != bl) {
-        bytes = tmp;
-        tmp = new byte[bl];
-        System.arraycopy(bytes, bytes.length - bl, tmp, 0, bl);
-      }
+      if(tmp.length != bl) tmp = Arrays.copyOfRange(tmp, tmp.length - bl, tmp.length);
     } else if(by > 0) {
       for(int i = bl - 1; i >= 0; i--) {
         final byte b = bytes[i];
@@ -59,11 +61,11 @@ public final class BinShift extends StandardFunc {
       tmp = bi.toByteArray();
       final int tl = tmp.length;
       if(tl != bl) {
-        bytes = tmp;
-        tmp = new byte[bl];
-        System.arraycopy(bytes, 0, tmp, bl - tl, tl);
+        final byte[] tmp2 = new byte[bl];
+        Array.copyFromStart(tmp, tl, tmp2, bl - tl);
+        tmp = tmp2;
       }
     }
-    return new B64(tmp);
+    return B64.get(tmp);
   }
 }

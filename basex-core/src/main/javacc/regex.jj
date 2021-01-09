@@ -3,7 +3,7 @@ options {
   STATIC = false;
   USER_TOKEN_MANAGER = true;
   GRAMMAR_ENCODING = "UTF-8";
-  JDK_VERSION = "1.7";
+  JDK_VERSION = "1.8";
 }
 
 PARSER_BEGIN(RegExParser)
@@ -16,7 +16,6 @@ import java.util.regex.*;
 
 import org.basex.query.*;
 import org.basex.query.util.regex.*;
-import org.basex.query.util.*;
 import org.basex.util.*;
 import static org.basex.util.Token.*;
 import static java.util.regex.Pattern.*;
@@ -24,7 +23,7 @@ import static java.util.regex.Pattern.*;
 /**
  * A parser for XSD regular expressions.
  *
- * @author BaseX Team 2005-16, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 @SuppressWarnings("all")
@@ -41,58 +40,6 @@ public class RegExParser {
   private boolean multiLine;
 
   /**
-   * Compiles this regular expression to a {@link Pattern}.
-   * @param regex regular expression to parse
-   * @param mod modifiers
-   * @param ext XQuery 3.0 syntax
-   * @param ii input info
-   * @param check check result for empty strings
-   * @return the pattern
-   * @throws QueryException query exception
-   */
-  public static Pattern parse(final byte[] regex, final byte[] mod, final InputInfo ii,
-      final boolean check) throws QueryException {
-
-    // process modifiers
-    int m = 0;
-    boolean strip = false;
-    if(mod != null) {
-      for(final byte b : mod) {
-        if(b == 'i') m |= CASE_INSENSITIVE | UNICODE_CASE;
-        else if(b == 'm') m |= MULTILINE;
-        else if(b == 's') m |= DOTALL;
-        else if(b == 'q') m |= LITERAL;
-        else if(b == 'x') strip = true;
-        else throw REGMOD_X.get(ii, (char) b);
-      }
-    }
-
-    // no need to change anything
-    if((m & LITERAL) != 0) return Pattern.compile(string(regex), m);
-
-    try {
-      final RegExParser parser = new RegExParser(regex, strip, (m & DOTALL) != 0,
-          (m & MULTILINE) != 0);
-      final String string = parser.parse().toString();
-      final Pattern pattern = Pattern.compile(string, m);
-      if(check) {
-        // Circumvent Java RegEx behavior ("If MULTILINE mode is activated"...):
-        // http://docs.oracle.com/javase/8/docs/api/java/util/regex/Pattern.html#lt
-        final Pattern p = (pattern.flags() & Pattern.MULTILINE) == 0 ? pattern :
-          Pattern.compile(pattern.pattern());
-        if(p.matcher("").matches()) throw REGROUP.get(ii);
-      }
-      return pattern;
-    } catch(final ParseException ex) {
-      Util.debug(ex);
-      throw REGPAT_X.get(ii, regex);
-    } catch(final TokenMgrError ex) {
-      Util.debug(ex);
-      throw REGPAT_X.get(ii, regex);
-    }
-  }
-
-  /**
    * Constructor.
    * @param regex regular expression to parse
    * @param strip strip whitespace while lexing
@@ -104,6 +51,14 @@ public class RegExParser {
     this(new RegExLexer(regex, strip));
     dotAll = all;
     multiLine = multi;
+  }
+
+  /**
+   * Returns the number of parsed groups.
+   * @return number of groups
+   */
+  final public int groups() {
+    return groups;
   }
 }
 

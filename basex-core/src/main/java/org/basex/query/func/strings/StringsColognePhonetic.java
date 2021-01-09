@@ -9,15 +9,17 @@ import org.basex.util.similarity.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class StringsColognePhonetic extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final int[] cps = new TokenParser(toToken(exprs[0], qc)).toArray();
-    final TokenBuilder tb = new TokenBuilder();
-    for(final int cp : ColognePhonetic.encode(cps)) tb.add(cp);
+    final int[] encoded = ColognePhonetic.encode(cps);
+
+    final TokenBuilder tb = new TokenBuilder(encoded.length);
+    for(final int cp : encoded) tb.add(cp);
     return Str.get(tb.finish());
   }
 }

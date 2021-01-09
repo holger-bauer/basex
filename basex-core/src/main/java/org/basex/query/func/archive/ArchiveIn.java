@@ -7,37 +7,33 @@ import java.util.zip.*;
 
 import org.basex.io.*;
 import org.basex.io.in.*;
-import org.basex.io.out.*;
 import org.basex.query.*;
 import org.basex.util.*;
 
 /**
  * Archive reader.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class ArchiveIn implements Closeable {
-  /** Buffer. */
-  private final byte[] data = new byte[IO.BLOCKSIZE];
-
   /**
    * Returns a new instance of an archive reader.
    * @param bi buffer input
-   * @param info input info
+   * @param ii input info
    * @return reader
    * @throws QueryException query exception
    */
-  static ArchiveIn get(final BufferInput bi, final InputInfo info) throws QueryException {
+  static ArchiveIn get(final BufferInput bi, final InputInfo ii) throws QueryException {
     try {
       final LookupInput li = new LookupInput(bi);
       if(li.lookup() == 0x50) return new ZIPIn(li);
       if(li.lookup() == 0x1f) return new GZIPIn(li);
     } catch(final IOException ex) {
       try { bi.close(); } catch(final IOException ignore) { }
-      throw ARCH_FAIL_X.get(info, ex);
+      throw ARCHIVE_ERROR_X.get(ii, ex);
     }
-    throw ARCH_UNKNOWN.get(info);
+    throw ARCHIVE_FORMAT.get(ii);
   }
 
   /**
@@ -68,14 +64,13 @@ abstract class ArchiveIn implements Closeable {
   public abstract int read(byte[] d) throws IOException;
 
   /**
-   * Reads the next entry.
-   * @return entry
+   * Writes the next entry to the specified output stream.
+   * @param out output stream
    * @throws IOException I/O exception
    */
-  byte[] read() throws IOException {
-    final ArrayOutput ao = new ArrayOutput();
-    for(int c; (c = read(data)) != -1;) ao.write(data, 0, c);
-    return ao.finish();
+  final void write(final OutputStream out) throws IOException {
+    final byte[] data = new byte[IO.BLOCKSIZE];
+    for(int c; (c = read(data)) != -1;) out.write(data, 0, c);
   }
 
   @Override

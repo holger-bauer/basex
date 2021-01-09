@@ -18,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * This class contains functions for generating a plain XQuery documentation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class PlainDoc extends Inspect {
@@ -48,7 +48,7 @@ final class PlainDoc extends Inspect {
     parseQuery(io);
     final FElem root = elem("module", null);
     if(module instanceof LibraryModule) {
-      final QNm name = ((LibraryModule) module).name;
+      final QNm name = module.sc.module;
       root.add("prefix", name.string());
       root.add("uri", name.uri());
     }
@@ -83,13 +83,13 @@ final class PlainDoc extends Inspect {
    * Creates a description for the specified function.
    * @param fname name of function
    * @param sf function reference (can be {@code null})
-   * @param ftype function type
+   * @param ft function type
    * @param anns annotations
    * @param parent node
    * @return resulting value
    * @throws QueryException query exception
    */
-  FElem function(final QNm fname, final StaticFunc sf, final FuncType ftype, final AnnList anns,
+  FElem function(final QNm fname, final StaticFunc sf, final FuncType ft, final AnnList anns,
       final FElem parent) throws QueryException {
 
     final FElem function = elem("function", parent);
@@ -100,25 +100,23 @@ final class PlainDoc extends Inspect {
     function.add("external", Boolean.toString(sf != null && sf.expr == null));
 
     final TokenObjMap<TokenList> doc = sf != null ? sf.doc() : null;
-    final int al = ftype.argTypes.length;
+    final int al = ft.argTypes.length;
     QNm[] names = null;
     if(sf != null) {
       names = new QNm[al];
-      for(int n = 0; n < al; n++) names[n] = sf.args[n].name;
+      for(int n = 0; n < al; n++) names[n] = sf.params[n].name;
     }
 
     for(int a = 0; a < al; a++) {
       final FElem argument = elem("argument", function);
       if(names != null) {
-        final byte[] name = names[a].string();
-        final byte[] uri = names[a].uri();
+        final byte[] name = names[a].string(), uri = names[a].uri(), pdoc = doc(doc, name);
         argument.add("name", name);
         if(uri.length != 0) argument.add("uri", uri);
 
-        final byte[] pdoc = doc(doc, name);
         if(pdoc != null) add(pdoc, argument);
       }
-      type(ftype.argTypes[a], argument);
+      type(ft.argTypes[a], argument);
     }
 
     annotation(anns, function, true);
@@ -134,11 +132,11 @@ final class PlainDoc extends Inspect {
       }
     }
 
-    final SeqType st = sf != null ? sf.seqType() : ftype.type;
-    final FElem ret = elem("return", function);
-    type(st, ret);
+    final SeqType st = sf != null ? sf.seqType() : ft.declType;
+    final FElem rtrn = elem("return", function);
+    type(st, rtrn);
     final TokenList returns = doc != null ? doc.get(DOC_RETURN) : null;
-    if(returns != null) for(final byte[] val : returns) add(val, ret);
+    if(returns != null) for(final byte[] val : returns) add(val, rtrn);
     return function;
   }
 
@@ -167,8 +165,8 @@ final class PlainDoc extends Inspect {
 
   @Override
   protected FElem elem(final byte[] tag, final FElem parent) {
-    final String t = string(tag);
-    return elem(eq(tag, DOC_TAGS) ? t : t + "_tag", parent);
+    final String string = string(tag);
+    return elem(eq(tag, DOC_TAGS) ? string : string + "_tag", parent);
   }
 
   /**

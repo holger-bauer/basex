@@ -11,7 +11,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'create user' command and creates a new user.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CreateUser extends AUser {
@@ -32,7 +32,7 @@ public final class CreateUser extends AUser {
 
     final Users users = context.users;
     users.add(new User(name, pw));
-    users.write(context);
+    users.write();
     return info(USER_CREATED_X, args[0]);
   }
 

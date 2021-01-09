@@ -1,16 +1,16 @@
 package org.basex.query;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
 import org.basex.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Runs parallel queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ParallelQueryTest extends SandboxTest {
@@ -25,8 +25,7 @@ public final class ParallelQueryTest extends SandboxTest {
    * Test.
    * @throws Throwable throwable
    */
-  @Test
-  public void test() throws Throwable {
+  @Test public void test() throws Throwable {
     // generate reference result
     result = query(QUERY);
     // generate results to be compared

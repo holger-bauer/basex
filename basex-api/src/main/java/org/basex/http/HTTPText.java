@@ -3,12 +3,18 @@ package org.basex.http;
 /**
  * This class assembles texts which are used in the HTTP classes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface HTTPText {
-  /** HTTP String. */
+  /** HTTP string. */
   String HTTP = "HTTP";
+
+  /** HTTP string. */
+  String REQUEST = "REQUEST";
+  /** WebSocket string. */
+  String WEBSOCKET = "WEBSOCKET";
+
   /** WEB-INF directory. */
   String WEB_INF = "WEB-INF/";
   /** Path to jetty configuration file. */
@@ -16,11 +22,13 @@ public interface HTTPText {
   /** Path to web configuration file. */
   String WEBCONF = WEB_INF + "web.xml";
 
-  /** DBA String. */
-  String DBA = "dba";
-
-  /** Error: wrong authorization. */
+  /** Authentication error. */
   String WRONGAUTH_X = "% authentication expected.";
-  /** Error message. */
+  /** Unexpected error. */
   String UNEXPECTED_X = "Unexpected error: %";
+
+  /** DBA client id. */
+  String DBA_CLIENT_ID = "dba";
+  /** Client id. */
+  String CLIENT_ID = "id";
 }

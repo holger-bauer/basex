@@ -8,13 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class FtNormalize extends FtTokenize {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return item(qc, null);
+    return item(qc, info);
   }
 
   @Override

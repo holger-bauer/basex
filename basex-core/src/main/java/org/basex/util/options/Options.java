@@ -15,7 +15,7 @@ import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.map.Map;
+import org.basex.query.value.map.XQMap;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
@@ -28,7 +28,7 @@ import org.basex.util.similarity.*;
  * If an instance of this class contains no pre-defined options, assigned options will
  * be added as free options.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class Options implements Iterable<Option<?>> {
@@ -125,12 +125,12 @@ public class Options implements Iterable<Option<?>> {
         } else if(opt instanceof NumbersOption) {
           final int[] ints = get((NumbersOption) opt);
           final int is = ints == null ? 0 : ints.length;
-          for(int i = 0; i < is; ++i) lines.add(name + i + " = " + ints[i]);
+          for(int i = 0; i < is; i++) lines.add(name + i + " = " + ints[i]);
         } else if(opt instanceof StringsOption) {
           final String[] strings = get((StringsOption) opt);
           final int ss = strings == null ? 0 : strings.length;
           lines.add(name + " = " + ss);
-          for(int i = 0; i < ss; ++i) lines.add(name + (i + 1) + " = " + strings[i]);
+          for(int s = 0; s < ss; s++) lines.add(name + (s + 1) + " = " + strings[s]);
         } else {
           lines.add(name + " = " + get(opt));
         }
@@ -138,12 +138,22 @@ public class Options implements Iterable<Option<?>> {
       lines.add("").add(PROPUSER).add(user);
 
       // only write file if contents have changed
-      if(update(lines)) {
-        final TokenBuilder tb = new TokenBuilder();
-        for(final String line : lines) tb.add(line).add(NL);
-        file.write(tb.finish());
-      }
+      final TokenBuilder tb = new TokenBuilder();
+      for(final String line : lines) tb.add(line).add(NL);
+      final byte[] contents = tb.finish();
 
+      boolean skip = file.exists();
+      if(skip) {
+        final TokenBuilder tmp = new TokenBuilder(contents.length);
+        try(NewlineInput nli = new NewlineInput(file)) {
+          for(String line; (line = nli.readLine()) != null;) tmp.add(line).add(NL);
+        }
+        skip = eq(contents, tmp.finish());
+      }
+      if(!skip) {
+        file.parent().md();
+        file.write(contents);
+      }
     } catch(final Exception ex) {
       Util.errln("% could not be written.", file);
       Util.debug(ex);
@@ -214,15 +224,6 @@ public class Options implements Iterable<Option<?>> {
   }
 
   /**
-   * Returns the requested map.
-   * @param option option to be found
-   * @return value
-   */
-  public final synchronized Map get(final MapOption option) {
-    return (Map) get((Option<?>) option);
-  }
-
-  /**
    * Returns the requested function.
    * @param option option to be found
    * @return value
@@ -232,7 +233,7 @@ public class Options implements Iterable<Option<?>> {
   }
 
   /**
-   * Returns the original instance of the requested string array.
+   * Returns the requested string array.
    * @param option option to be found
    * @return value
    */
@@ -241,7 +242,7 @@ public class Options implements Iterable<Option<?>> {
   }
 
   /**
-   * Returns the original instance of the requested integer array.
+   * Returns the requested integer array.
    * @param option option to be found
    * @return value
    */
@@ -250,12 +251,12 @@ public class Options implements Iterable<Option<?>> {
   }
 
   /**
-   * Returns the original instance of the requested options.
+   * Returns the requested options.
    * @param option option to be found
    * @param <O> options
    * @return value
    */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({ "unchecked", "cast"})
   public final synchronized <O extends Options> O get(final OptionsOption<O> option) {
     return (O) get((Option<?>) option);
   }
@@ -263,12 +264,12 @@ public class Options implements Iterable<Option<?>> {
   /**
    * Returns the requested enum value.
    * @param option option to be found
-   * @param <V> enumeration value
+   * @param <E> enumeration value
    * @return value
    */
-  @SuppressWarnings("unchecked")
-  public final synchronized <V extends Enum<V>> V get(final EnumOption<V> option) {
-    return (V) get((Option<?>) option);
+  @SuppressWarnings({ "unchecked", "cast"})
+  public final synchronized <E extends Enum<E>> E get(final EnumOption<E> option) {
+    return (E) get((Option<?>) option);
   }
 
   /**
@@ -353,14 +354,14 @@ public class Options implements Iterable<Option<?>> {
    * Assigns a value after casting it to the correct type. If the option is unknown,
    * it will be added as free option.
    * @param name name of option
-   * @param val value
+   * @param value value
    * @throws BaseXException database exception
    */
-  public synchronized void assign(final String name, final String val) throws BaseXException {
+  public synchronized void assign(final String name, final String value) throws BaseXException {
     if(options.isEmpty()) {
-      free.put(name, val);
+      free.put(name, value);
     } else {
-      assign(name, val, -1, true);
+      assign(name, value, -1, true);
     }
   }
 
@@ -368,36 +369,75 @@ public class Options implements Iterable<Option<?>> {
    * Assigns a value after casting it to the correct type. If the option is unknown,
    * it will be added as free option.
    * @param name name of option
-   * @param value value
+   * @param value value to be assigned
    * @param error error
    * @param ii input info
    * @throws BaseXException database exception
    * @throws QueryException query exception
    */
-  public synchronized void assign(final Item name, final Item value, final boolean error,
+  public synchronized void assign(final Item name, final Value value, final boolean error,
       final InputInfo ii) throws BaseXException, QueryException {
 
-    final String key = string(name.string(ii));
-    if(options.isEmpty()) {
-      final byte[] val;
-      if(value instanceof Map) {
-        final TokenBuilder tb = new TokenBuilder();
-        final Map map = (Map) value;
-        for(final Item it : map.keys()) {
-          if(!tb.isEmpty()) tb.add(',');
-          tb.add(it.string(ii)).add('=');
-          final Value v = map.get(it, ii);
-          if(v instanceof Item) tb.add(string(((Item) v).string(ii)).replace(",", ",,"));
-          else throw new BaseXException(Text.OPT_EXPECT_X_X_X, AtomType.ITEM, v.seqType(), v);
-        }
-        val = tb.finish();
-      } else {
-        val = value.string(ii);
-      }
-      free.put(key, string(val));
+    final String nm;
+    if(name instanceof QNm) {
+      nm = string(((QNm) name).id());
+    } else if(name.type.isStringOrUntyped()) {
+      nm = string(name.string(ii));
     } else {
-      assign(key, value, error, ii);
+      throw new BaseXException(Text.OPT_EXPECT_X_X_X, AtomType.STRING, name.type, name);
     }
+
+    final Item item;
+    if(value.isItem()) {
+      // single item: convert QName to string
+      item = value instanceof QNm ? Str.get(((QNm) value).id()) : (Item) value;
+    } else if(value.size() > 1) {
+      // multiple items: create string representation
+      final TokenBuilder tb = new TokenBuilder();
+      for(final Item it : value) {
+        if(!tb.isEmpty()) tb.add(' ');
+        tb.add(serialize(it, ii));
+      }
+      item = Str.get(tb.finish());
+    } else {
+      throw new BaseXException(Text.OPT_EXPECT_X_X_X, SeqType.ITEM_O, value.seqType(), value);
+    }
+
+    if(options.isEmpty()) {
+      free.put(nm, serialize(item, ii));
+    } else {
+      assign(nm, item, error, ii);
+    }
+  }
+
+  /**
+   * Creates a string representation of the specified item.
+   * @param item item
+   * @param ii input info
+   * @return string
+   * @throws BaseXException database exception
+   * @throws QueryException query exception
+   */
+  private static String serialize(final Item item, final InputInfo ii)
+      throws BaseXException, QueryException {
+
+    final TokenBuilder tb = new TokenBuilder();
+    if(item instanceof XQMap) {
+      final XQMap map = (XQMap) item;
+      for(final Item key : map.keys()) {
+        if(!tb.isEmpty()) tb.add(',');
+        tb.add(key.string(ii)).add('=');
+        final Value vl = map.get(key, ii);
+        if(!vl.isItem()) throw new BaseXException(
+            Text.OPT_EXPECT_X_X_X, AtomType.STRING, vl.seqType(), vl);
+        tb.add(string(((Item) vl).string(ii)).replace(",", ",,"));
+      }
+    } else if(item instanceof QNm) {
+      tb.add(((QNm) item).id());
+    } else {
+      tb.add(item.string(ii));
+    }
+    return tb.toString();
   }
 
   /**
@@ -413,28 +453,36 @@ public class Options implements Iterable<Option<?>> {
    * @param option option to be found
    * @return map
    */
-  public final HashMap<String, String> toMap(final StringOption option) {
-    final String input = get(option).trim();
+  public final Map<String, String> toMap(final StringOption option) {
+    return toMap(get(option));
+  }
+
+  /**
+   * Returns a map representation of the comma-separated options string.
+   * @param opts options string
+   * @return map
+   */
+  public static Map<String, String> toMap(final String opts) {
     final HashMap<String, String> map = new HashMap<>();
-    final StringBuilder key = new StringBuilder();
-    final StringBuilder value = new StringBuilder();
-    boolean first = true;
-    final int sl = input.length();
+    final StringBuilder key = new StringBuilder(), value = new StringBuilder();
+
+    boolean left = true;
+    final int sl = opts.length();
     for(int s = 0; s < sl; s++) {
-      final char ch = input.charAt(s);
-      if(first) {
+      final char ch = opts.charAt(s);
+      if(left) {
         if(ch == '=') {
-          first = false;
+          left = false;
         } else {
           key.append(ch);
         }
       } else {
         if(ch == ',') {
-          if(s + 1 == sl || input.charAt(s + 1) != ',') {
+          if(s + 1 == sl || opts.charAt(s + 1) != ',') {
             map.put(key.toString().trim(), value.toString());
             key.setLength(0);
             value.setLength(0);
-            first = true;
+            left = true;
             continue;
           }
           // literal commas are escaped by a second comma
@@ -443,7 +491,7 @@ public class Options implements Iterable<Option<?>> {
         value.append(ch);
       }
     }
-    if(!first) map.put(key.toString().trim(), value.toString());
+    if(!left) map.put(key.toString().trim(), value.toString());
     return map;
   }
 
@@ -453,8 +501,11 @@ public class Options implements Iterable<Option<?>> {
    * @return error string
    */
   public final synchronized String error(final String name) {
-    final String sim = similar(name);
-    return Util.info(sim != null ? Text.UNKNOWN_OPT_SIMILAR_X_X : Text.UNKNOWN_OPTION_X, name, sim);
+    final byte[] similar = Levenshtein.similar(token(name), list -> {
+      for(final String opts : options.keySet()) list.add(opts);
+    });
+    return similar != null ? Util.info(Text.UNKNOWN_OPT_SIMILAR_X_X, name, similar) :
+      Util.info(Text.UNKNOWN_OPTION_X, name);
   }
 
   /**
@@ -472,7 +523,7 @@ public class Options implements Iterable<Option<?>> {
    * Overwrites the options with global options and system properties.
    * All properties starting with {@code org.basex.} will be assigned as options.
    */
-  public final void setSystem() {
+  public void setSystem() {
     // assign global options
     for(final Entry<String, String> entry : entries()) {
       String name = entry.getKey();
@@ -510,20 +561,8 @@ public class Options implements Iterable<Option<?>> {
    * @throws BaseXException database exception
    */
   public final synchronized void assign(final String string) throws BaseXException {
-    final int sl = string.length();
-    int i = 0;
-    while(i < sl) {
-      int k = string.indexOf('=', i);
-      if(k == -1) k = sl;
-      final String key = string.substring(i, k).trim();
-      final StringBuilder val = new StringBuilder();
-      i = k;
-      while(++i < sl) {
-        final char ch = string.charAt(i);
-        if(ch == ',' && (++i == sl || string.charAt(i) != ',')) break;
-        val.append(ch);
-      }
-      assign(key, val.toString());
+    for(final Map.Entry<String, String> entry : toMap(string).entrySet()) {
+      assign(entry.getKey(), entry.getValue());
     }
   }
 
@@ -535,19 +574,22 @@ public class Options implements Iterable<Option<?>> {
    * @throws BaseXException database exception
    * @throws QueryException query exception
    */
-  public final synchronized void assign(final Map map, final boolean error, final InputInfo ii)
+  public final synchronized void assign(final XQMap map, final boolean error, final InputInfo ii)
       throws BaseXException, QueryException {
 
     for(final Item name : map.keys()) {
-      if(!name.type.isStringOrUntyped())
-        throw new BaseXException(Text.OPT_EXPECT_X_X_X, AtomType.STR, name.type, name);
-
-      final Value value = map.get(name, ii);
-      if(!(value instanceof Item))
-        throw new BaseXException(Text.OPT_EXPECT_X_X_X, AtomType.ITEM, value.seqType(), value);
-
-      assign(name, (Item) value, error, ii);
+      assign(name, map.get(name, ii), error, ii);
     }
+  }
+
+  /**
+   * Returns the names of all options.
+   * @return names
+   */
+  public final synchronized String[] names() {
+    final StringList sl = new StringList(options.size());
+    for(final Option<?> option : this) sl.add(option.name());
+    return sl.finish();
   }
 
   @Override
@@ -559,32 +601,30 @@ public class Options implements Iterable<Option<?>> {
   public final synchronized String toString() {
     // only those options are listed whose value differs from default value
     final StringBuilder sb = new StringBuilder();
-    for(final Entry<String, Object> e : values.entrySet()) {
-      final String name = e.getKey();
-      final Object value = e.getValue();
-      if(value == null) continue;
-
-      final StringList sl = new StringList();
-      final Object value2 = options.get(name).value();
-      if(value instanceof String[]) {
-        for(final String s : (String[]) value) sl.add(s);
-      } else if(value instanceof int[]) {
-        for(final int s : (int[]) value) sl.add(Integer.toString(s));
-      } else if(value instanceof Options) {
-        final String s = value.toString();
-        if(value2 == null || !s.equals(value2.toString())) sl.add(s);
-      } else if(!value.equals(value2)) {
-        sl.add(value.toString());
+    values.forEach((name, value) -> {
+      if(value != null) {
+        final StringList sl = new StringList();
+        final Object value2 = options.get(name).value();
+        if(value instanceof String[]) {
+          for(final String s : (String[]) value) sl.add(s);
+        } else if(value instanceof int[]) {
+          for(final int s : (int[]) value) sl.add(Integer.toString(s));
+        } else if(value instanceof Options) {
+          final String s = value.toString();
+          if(value2 == null || !s.equals(value2.toString())) sl.add(s);
+        } else if(!value.equals(value2)) {
+          sl.add(value.toString());
+        }
+        for(final String s : sl) {
+          if(sb.length() != 0) sb.append(',');
+          sb.append(name).append('=').append(s.replace(",", ",,"));
+        }
       }
-      for(final String s : sl) {
-        if(sb.length() != 0) sb.append(',');
-        sb.append(name).append('=').append(s.replace(",", ",,"));
-      }
-    }
+    });
     return sb.toString();
   }
 
-  // STATIC METHODS =====================================================================
+  // STATIC METHODS ===============================================================================
 
   /**
    * Returns a message with allowed keys.
@@ -595,11 +635,14 @@ public class Options implements Iterable<Option<?>> {
    */
   public static String allowed(final Option<?> option, final String value, final Object... all) {
     final TokenBuilder vals = new TokenBuilder();
-    for(final Object a : all) vals.add(vals.isEmpty() ? "" : ",").add(a.toString());
+    for(final Object a : all) {
+      if(!vals.isEmpty()) vals.add(',');
+      vals.add(a);
+    }
     return Util.info(Text.OPT_ONEOF_X_X_X, option.name(), value, vals);
   }
 
-  // PRIVATE METHODS ====================================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Returns all options from the specified class.
@@ -616,7 +659,7 @@ public class Options implements Iterable<Option<?>> {
       final Object obj = f.get(null);
       if(obj instanceof Option) opts.add((Option<?>) obj);
     }
-    return opts.toArray(new Option[opts.size()]);
+    return opts.toArray(new Option[0]);
   }
 
   /**
@@ -626,13 +669,12 @@ public class Options implements Iterable<Option<?>> {
    */
   private synchronized void read(final IOFile opts) {
     file = opts;
-    final StringList read = new StringList();
-    final StringList errs = new StringList();
+    final StringList read = new StringList(), errs = new StringList();
     final boolean exists = file.exists();
     if(exists) {
-      try(NewlineInput nli = new NewlineInput(opts)) {
+      try(NewlineInput ni = new NewlineInput(opts)) {
         boolean local = false;
-        for(String line; (line = nli.readLine()) != null;) {
+        for(String line; (line = ni.readLine()) != null;) {
           line = line.trim();
 
           // start of local options
@@ -701,109 +743,86 @@ public class Options implements Iterable<Option<?>> {
   }
 
   /**
-   * Checks if the options file needs to be updated.
-   * @param lines lines of new file
-   * @return result of check
-   * @throws IOException I/O exception
-   */
-  private boolean update(final StringList lines) throws IOException {
-    if(!file.exists()) return true;
-
-    int l = 0;
-    final int ls = lines.size();
-    try(NewlineInput nli = new NewlineInput(file)) {
-      for(String line; (line = nli.readLine()) != null;) {
-        if(l == ls || !lines.get(l++).equals(line)) return true;
-      }
-    }
-    return l != ls;
-  }
-
-  /**
    * Assigns the specified name and value.
    * @param name name of option
-   * @param item value of option
+   * @param item value to be assigned
    * @param error raise error if option is unknown
    * @param ii input info
-   * @return success flag
    * @throws BaseXException database exception
    * @throws QueryException query exception
    */
-  private synchronized boolean assign(final String name, final Item item, final boolean error,
+  private synchronized void assign(final String name, final Item item, final boolean error,
       final InputInfo ii) throws BaseXException, QueryException {
 
     final Option<?> option = options.get(name);
     if(option == null) {
       if(error) throw new BaseXException(error(name));
-      return false;
+      return;
     }
 
+    Object value = null;
+    String expected = null;
     if(option instanceof BooleanOption) {
-      final boolean v;
-      if(item.type.isStringOrUntyped()) {
-        final String string = string(item.string(null));
-        v = Strings.yes(string);
-        if(!v && !Strings.no(string))
-          throw new BaseXException(Text.OPT_BOOLEAN_X_X, option.name(), string);
-      } else if(item instanceof Bln) {
-        v = ((Bln) item).bool(null);
+      if(item.type.eq(AtomType.BOOLEAN)) {
+        value = item.bool(ii);
       } else {
-        throw new BaseXException(Text.OPT_BOOLEAN_X_X, option.name(), item);
+        final String s = string(item.string(ii));
+        value = Strings.toBoolean(s) ? Boolean.TRUE : Strings.no(s) ? Boolean.FALSE : null;
       }
-      put(option, v);
+      if(value == null) expected = Text.OPT_BOOLEAN_X_X;
     } else if(option instanceof NumberOption) {
-      if(item instanceof ANum) {
-        put(option, (int) ((ANum) item).itr(null));
-      } else {
-        throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), item);
-      }
+      value = (int) item.itr(ii);
     } else if(option instanceof StringOption) {
-      if(item.type.isStringOrUntyped()) {
-        put(option, string(item.string(null)));
-      } else {
-        throw new BaseXException(Text.OPT_STRING_X_X, option.name(), item);
-      }
+      value = serialize(item, ii);
     } else if(option instanceof EnumOption) {
-      if(item.type.isStringOrUntyped()) {
-        final EnumOption<?> eo = (EnumOption<?>) option;
-        final String string = string(item.string(null));
-        final Object v = eo.get(string);
-        if(v == null) throw new BaseXException(allowed(option, string, (Object[]) eo.values()));
-        put(option, v);
+      byte[] token;
+      if(item.type.eq(AtomType.BOOLEAN)) {
+        token = item.string(ii);
+      } else if(item.type.isNumber()) {
+        final long l = item.itr(ii);
+        token = l == 1 ? TRUE : l == 0 ? FALSE : null;
       } else {
-        throw new BaseXException(Text.OPT_STRING_X_X, option.name(), item);
+        token = item.string(ii);
+      }
+      if(token == null) {
+        expected = Text.OPT_BOOLEAN_X_X;
+      } else {
+        final EnumOption<?> eo = (EnumOption<?>) option;
+        value = eo.get(eq(token, TRUE) ? Text.YES : eq(token, FALSE) ? Text.NO : string(token));
+        if(value == null) throw new BaseXException(allowed(option, string(token),
+            (Object[]) eo.values()));
       }
     } else if(option instanceof OptionsOption) {
-      final Options o = ((OptionsOption<?>) option).newInstance();
-      if(item instanceof Map) {
-        o.assign((Map) item, error, ii);
+      if(item instanceof XQMap) {
+        value = ((OptionsOption<?>) option).newInstance();
+        ((Options) value).assign((XQMap) item, error, ii);
       } else {
-        throw new BaseXException(Text.OPT_MAP_X_X, option.name(), item);
+        expected = Text.OPT_MAP_X_X;
       }
-      put(option, o);
-    } else if(option instanceof MapOption) {
-      if(!(item instanceof Map)) throw new BaseXException(Text.OPT_FUNC_X_X, option.name(), item);
-      put(option, item);
     } else if(option instanceof FuncOption) {
-      if(!(item instanceof FuncItem))
-        throw new BaseXException(Text.OPT_FUNC_X_X, option.name(), item);
-      put(option, item);
+      if(item instanceof FuncItem) {
+        value = item;
+      } else {
+        expected = Text.OPT_FUNC_X_X;
+      }
     } else {
       throw Util.notExpected("Unsupported option: " + option);
     }
-    return true;
+
+    if(expected != null) throw new BaseXException(expected, option.name(), item);
+    put(option, value);
   }
 
   /**
    * Assigns the specified name and value.
    * @param name name of option
-   * @param val value of option
+   * @param value value of option
    * @param index index (optional, can be {@code -1})
    * @param error raise error if option is unknown
    * @return success flag
    * @throws BaseXException database exception
    */
-  private synchronized boolean assign(final String name, final String val, final int index,
+  private synchronized boolean assign(final String name, final String value, final int index,
       final boolean error) throws BaseXException {
 
     final Option<?> option = options.get(name);
@@ -814,34 +833,34 @@ public class Options implements Iterable<Option<?>> {
 
     if(option instanceof BooleanOption) {
       final boolean v;
-      if(val == null || val.isEmpty()) {
+      if(value == null || value.isEmpty()) {
         final Boolean b = get((BooleanOption) option);
         if(b == null) throw new BaseXException(Text.OPT_BOOLEAN_X_X, option.name(), "");
         v = !b;
       } else {
-        v = Strings.yes(val);
-        if(!v && !Strings.no(val))
-          throw new BaseXException(Text.OPT_BOOLEAN_X_X, option.name(), val);
+        v = Strings.toBoolean(value);
+        if(!v && !Strings.no(value))
+          throw new BaseXException(Text.OPT_BOOLEAN_X_X, option.name(), value);
       }
       put(option, v);
     } else if(option instanceof NumberOption) {
-      final int v = Strings.toInt(val);
-      if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), val);
+      final int v = Strings.toInt(value);
+      if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), value);
       put(option, v);
     } else if(option instanceof StringOption) {
-      put(option, val);
+      put(option, value);
     } else if(option instanceof EnumOption) {
       final EnumOption<?> eo = (EnumOption<?>) option;
-      final Object v = eo.get(val);
-      if(v == null) throw new BaseXException(allowed(option, val, (Object[]) eo.values()));
+      final Object v = eo.get(value);
+      if(v == null) throw new BaseXException(allowed(option, value, (Object[]) eo.values()));
       put(option, v);
     } else if(option instanceof OptionsOption) {
       final Options o = ((OptionsOption<?>) option).newInstance();
-      o.assign(val);
+      o.assign(value);
       put(option, o);
     } else if(option instanceof NumbersOption) {
-      final int v = Strings.toInt(val);
-      if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), val);
+      final int v = Strings.toInt(value);
+      if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), value);
       int[] ii = (int[]) get(option);
       if(index == -1) {
         if(ii == null) ii = new int[0];
@@ -859,33 +878,19 @@ public class Options implements Iterable<Option<?>> {
         if(ss == null) ss = new String[0];
         final StringList sl = new StringList(ss.length + 1);
         for(final String s : ss) sl.add(s);
-        put(option, sl.add(val).finish());
+        put(option, sl.add(value).finish());
       } else if(index == 0) {
-        final int v = Strings.toInt(val);
-        if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), val);
+        final int v = Strings.toInt(value);
+        if(v == MIN_VALUE) throw new BaseXException(Text.OPT_NUMBER_X_X, option.name(), value);
         values.put(name, new String[v]);
       } else {
         if(index <= 0 || index > ss.length)
           throw new BaseXException(Text.OPT_OFFSET_X, option.name());
-        ss[index - 1] = val;
+        ss[index - 1] = value;
       }
     } else {
       throw Util.notExpected("Unsupported option: " + option);
     }
     return true;
-  }
-
-  /**
-   * Returns an option name similar to the specified string or {@code null}.
-   * @param name name to be found
-   * @return similar name
-   */
-  private String similar(final String name) {
-    final byte[] nm = token(name);
-    final Levenshtein ls = new Levenshtein();
-    for(final String opts : options.keySet()) {
-      if(ls.similar(nm, token(opts))) return opts;
-    }
-    return null;
   }
 }

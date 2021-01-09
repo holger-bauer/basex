@@ -1,22 +1,22 @@
 package org.basex.query.func;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
+import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
 
 /**
  * This is a simple XQuery demo module written in Java.
  * It is derived from the abstract {@link QueryModule} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryModuleTest extends QueryModule {
   /** Fruits array. */
   private static final String[] FRUITS = { "Apple", "Banana", "Cherry" };
   /** Lock string. */
-  public static final String LOCK1 = "foo";
-  /** Lock string. */
-  public static final String LOCK2 = "bar";
+  public static final String LOCK = "Fruits";
 
   /**
    * Returns the specified fruit modulo number of fruits.
@@ -60,14 +60,36 @@ public final class QueryModuleTest extends QueryModule {
   /**
    * Read lock.
    */
-  @Lock(read = { LOCK1, LOCK2})
+  @Lock(LOCK)
   public void readLock() { }
 
   /**
-   * Write locks.
+   * Write lock.
    */
-  @Lock(write = { LOCK1, LOCK2})
+  @Updating
+  @Lock(LOCK)
   public void writeLock() { }
+
+  /**
+   * Ignore argument.
+   * @param expr expression
+   */
+  public void ignore(@SuppressWarnings("unused") final Expr expr) { }
+
+  /**
+   * Compute faculty.
+   * @param expr expression
+   * @return resulting value
+   * @throws QueryException query exception
+   */
+  public Int faculty(final Expr expr) throws QueryException {
+    final Iter iter = expr.iter(queryContext);
+    long c = 1;
+    for(Item item; (item = iter.next()) != null;) {
+      c *= item.itr(null);
+    }
+    return Int.get(c);
+  }
 
   /**
    * Throws an exception.

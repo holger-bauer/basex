@@ -13,13 +13,13 @@ import org.basex.core.users.*;
 import org.basex.io.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Runs the XMark tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XMarkTest {
@@ -27,9 +27,11 @@ public final class XMarkTest {
   private static final String USER = "xmark";
   /** Name of database. */
   private static final String DB = "111mb";
+  /** Input data of database. */
+  private static final String DBFILE = "https://files.basex.org/xml/xmark.xml";
 
   /** Test directory. */
-  private static final IOFile DIR = new IOFile(Prop.TMP, "XMark");
+  private static final IOFile DIR = new IOFile(Prop.TEMPDIR, "XMark");
   /** Output file. */
   private static final IOFile FILE = new IOFile(DIR, "master- " + DB + ".graph");
 
@@ -119,13 +121,13 @@ public final class XMarkTest {
    * Initializes the tests.
    * @throws Exception any exception
    */
-  @BeforeClass
-  public static void init() throws Exception {
+  @BeforeAll public static void init() throws Exception {
     // only start server if it is not already running
     if(!BaseXServer.ping(StaticOptions.HOST.value(), StaticOptions.PORT.value()))
       server = new BaseXServer();
 
     try(ClientSession cs = createClient(true)) {
+      cs.execute("create db " + DB + " " + DBFILE);
       cs.execute("create user xmark xmark");
       cs.execute("grant read on " + DB + " to xmark");
     }
@@ -133,21 +135,18 @@ public final class XMarkTest {
 
   /**
    * Initializes the tests.
-   * @throws Exception any exception
+   * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void close() throws Exception {
+  @AfterAll public static void close() throws IOException {
     // only stop server if it has not been running before starting the tests
     if(server != null) server.stop();
   }
-
 
   /**
    * Runs all tests and generates some test output.
    * @throws Exception any exception
    */
-  @Test
-  public void test() throws Exception {
+  @Test public void test() throws Exception {
     final IntList exclude = new IntList(new int[] { 11, 12 });
     final TokenBuilder tb = new TokenBuilder().add(DB).add(Prop.NL);
 

@@ -1,17 +1,17 @@
 package org.basex.http.restxq;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
 import org.basex.core.*;
 import org.basex.util.http.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This test contains RESTXQ methods.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RestXqMethodTest extends RestXqTest {
@@ -19,8 +19,7 @@ public final class RestXqMethodTest extends RestXqTest {
    * Retrieve path with typed variable.
    * @throws Exception exception
    */
-  @Test
-  public void post() throws Exception {
+  @Test public void post() throws Exception {
     // text
     String f = "declare %R:POST('{$x}') %R:path('') function m:f($x) {$x};";
     post(f, "12", "12", MediaType.TEXT_PLAIN);
@@ -40,8 +39,7 @@ public final class RestXqMethodTest extends RestXqTest {
   /**
    * Custom method.
    * @throws Exception exception */
-  @Test
-  public void method() throws Exception {
+  @Test public void method() throws Exception {
     // standard HTTP method without body
     get("declare %R:method('GET') %R:path('') function m:f() {'x'};", "", "x");
     // standard HTTP method specified twice
@@ -83,8 +81,7 @@ public final class RestXqMethodTest extends RestXqTest {
    * {@code %HEAD} method.
    * @throws Exception exception
    */
-  @Test
-  public void head() throws Exception {
+  @Test public void head() throws Exception {
     // correct return type
     headR("declare %R:HEAD %R:path('') function m:f() { <R:response/> };");
     headR("declare %R:HEAD %R:path('') function m:f() as element(R:response) { <R:response/> };");
@@ -92,11 +89,37 @@ public final class RestXqMethodTest extends RestXqTest {
     headE("declare %R:HEAD %R:path('') function m:f() { () };");
     headE("declare %R:HEAD %R:path('') function m:f() { <response/> };");
     headE("declare %R:HEAD %R:path('') function m:f() as element(R:response)* {()};");
+
+    // correct return type
+    headR("declare %R:GET %R:path('') function m:f() { () };");
+    headR("declare %R:GET %R:path('') function m:f() { 1 to 5 };");
   }
 
   /**
-   * Executes the specified POST request and tests the result.
-   *
+   * {@code %OPTIONS} method.
+   * @throws Exception exception
+   */
+  @Test public void options() throws Exception {
+    options("declare %R:OPTIONS %R:path('') function m:f() { };", "");
+    options("declare %R:OPTIONS %R:path('') function m:f() { 1 };", "1");
+
+    options("declare %R:GET %R:path('') function m:f() { <R:response/> };", "");
+    options("declare %R:GET %R:path('sdfdfs') function m:f() { <R:response/> };", "");
+  }
+
+  /**
+   * Executes the specified OPTIONS request and tests the result.
+   * @param function function to test
+   * @param exp expected result
+   * @throws IOException I/O exception
+   */
+  private static void options(final String function, final String exp) throws IOException {
+    install(function);
+    assertEquals(exp, options(""));
+  }
+
+  /**
+   * Executes the specified OPTIONS request and tests the result.
    * @param function function to test
    * @param exp expected result
    * @param request request body
@@ -111,7 +134,6 @@ public final class RestXqMethodTest extends RestXqTest {
 
   /**
    * Executes the specified HEAD request and tests the result.
-   *
    * @param function function to test
    * @throws IOException I/O exception
    */
@@ -122,7 +144,6 @@ public final class RestXqMethodTest extends RestXqTest {
 
   /**
    * Executes the specified HEAD request and tests for an error.
-   *
    * @param function function to test
    * @throws IOException I/O exception
    */

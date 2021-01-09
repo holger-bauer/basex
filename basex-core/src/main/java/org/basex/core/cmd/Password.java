@@ -8,7 +8,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'password' command and alters the user's password.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Password extends AUser {
@@ -26,7 +26,7 @@ public final class Password extends AUser {
     final User user = context.user();
     final String pass = args[0];
     user.password(pass);
-    users.write(context);
+    users.write();
     return info(PW_CHANGED_X, user.name());
   }
 

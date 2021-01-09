@@ -5,6 +5,8 @@ import static org.basex.util.Token.*;
 import java.text.*;
 import java.util.*;
 
+import org.basex.core.*;
+import org.basex.core.jobs.*;
 import org.basex.gui.*;
 import org.basex.gui.text.SearchBar.*;
 import org.basex.util.*;
@@ -13,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Provides methods for editing a text that is visualized by the {@link TextPanel}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TextEditor {
@@ -24,24 +26,28 @@ public final class TextEditor {
     /** Title case. */ TITLE
   }
 
+  /** Completion characters. */
+  private static final char[] ALLOWED = { ':', '-' };
   /** Opening brackets. */
   private static final String OPENING = "{([";
   /** Closing brackets. */
   private static final String CLOSING = "})]";
 
-  /** Start and end positions of search terms (initally empty). */
-  IntList[] searchPos = { new IntList(), new IntList() };
-  /** Start position of a text selection. */
+  /** Start and end positions of search terms (initially empty). */
+  IntList[] searchResults = { new IntList(), new IntList() };
+  /** Start position of a text selection ({@code -1} if no text is selected). */
   int start = -1;
-  /** End position of a text selection (+1). */
+  /** End position of a text selection +1 ({@code -1} if no text is selected)). */
   int end = -1;
-  /** Start position of an error highlighting. */
+  /** Start position of an error highlighting ({@code -1} for no error). */
   int error = -1;
 
-  /** GUI options. */
-  private final GUIOptions gopts;
+  /** GUI reference. */
+  private final GUI gui;
   /** Search context. */
-  private SearchContext search;
+  private SearchContext searchContext;
+  /** Search thread. */
+  private Thread searchThread;
   /** Text array to be written. */
   private byte[] text = EMPTY;
   /** Number of lines. Required for displaying line numbers. */
@@ -54,7 +60,7 @@ public final class TextEditor {
    * @param gui gui reference
    */
   TextEditor(final GUI gui) {
-    gopts = gui.gopts;
+    this.gui = gui;
   }
 
   /**
@@ -68,24 +74,39 @@ public final class TextEditor {
     text = txt;
     lines = -1;
     noSelect();
-    if(search != null) searchPos = search.search(txt);
+    search(searchContext, false);
     if(pos > tl) pos = tl;
     return true;
   }
 
   /**
    * Sets a new search context.
-   * @param sc search context
+   * @param sc search context (can be {@code null})
+   * @param jump jump to next search result
    */
-  void search(final SearchContext sc) {
-    // skip search if criteria have not changed
-    if(sc.sameAs(search)) {
-      sc.nr = search.nr;
-      sc.bar.refresh(sc);
-    } else {
-      searchPos = sc.search(text);
-      search = sc;
-    }
+  void search(final SearchContext sc, final boolean jump) {
+    if(sc == null) return;
+
+    // interrupt old search thread
+    Thread t = searchThread;
+    if(t != null) t.interrupt();
+
+    // start new search
+    t = new Thread(() -> {
+      try {
+        searchResults = sc.search(text, jump);
+        searchContext = sc;
+        searchThread = null;
+      } catch(final JobException ex) {
+        // search was interrupted
+      } catch(final Exception ex) {
+        final String info = Util.message(ex).replaceAll(Text.NL + ".*", "");
+        gui.status.setError(Text.REGULAR_EXPR + Text.COLS + info);
+      }
+    });
+    t.setDaemon(true);
+    t.start();
+    searchThread = t;
   }
 
   /**
@@ -97,7 +118,7 @@ public final class TextEditor {
     // only adopt selection if it extends over more than one line
     final int ts = size();
     int s = Math.min(start, end), e = Math.max(start, end);
-    boolean sel = selected();
+    boolean sel = isSelected();
     if(sel) {
       int p = s - 1;
       while(++p < e && text[p] != '\n');
@@ -107,7 +128,7 @@ public final class TextEditor {
       s = 0;
       e = ts;
     }
-    return rc.replace(search, text, s, e);
+    return rc.replace(searchContext, text, s, e);
   }
 
   /**
@@ -117,7 +138,9 @@ public final class TextEditor {
   int lines() {
     if(lines == -1) {
       int c = 1;
-      for(final byte ch : text) if(ch == '\n') ++c;
+      for(final byte ch : text) {
+        if(ch == '\n') ++c;
+      }
       lines = c;
     }
     return lines;
@@ -128,7 +151,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   private void forward(final boolean select) {
-    if(select || !selected()) {
+    if(select || !isSelected()) {
       next();
     } else {
       pos(Math.max(start, end));
@@ -140,7 +163,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   void next(final boolean select) {
-    if(select && !selected()) startSelect();
+    if(select && !isSelected()) startSelect();
     forward(select);
     if(select) endSelection();
   }
@@ -150,7 +173,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   void previous(final boolean select) {
-    if(select && !selected()) startSelect();
+    if(select && !isSelected()) startSelect();
     back(select);
     if(select) endSelection();
   }
@@ -160,7 +183,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   void nextWord(final boolean select) {
-    if(select && !selected()) startSelect();
+    if(select && !isSelected()) startSelect();
 
     int ch = curr();
     forward(select);
@@ -184,7 +207,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   void prevWord(final boolean select) {
-    if(select && !selected()) startSelect();
+    if(select && !isSelected()) startSelect();
 
     int ch = back(select);
     if(ch != '\n') {
@@ -207,8 +230,21 @@ public final class TextEditor {
    */
   int completionStart() {
     int p = pos;
-    while(p > 0 && !ws(text[p - 1])) --p;
+    while(p > 0 && completeMore(text[p - 1])) --p;
     return p;
+  }
+
+  /**
+   * Checks if the specified character is a completion character.
+   * @param ch character
+   * @return result of check
+   */
+  private static boolean completeMore(final byte ch) {
+    if(letterOrDigit(ch)) return true;
+    for(final char a : ALLOWED) {
+      if(ch == a) return true;
+    }
+    return false;
   }
 
   /**
@@ -239,14 +275,14 @@ public final class TextEditor {
     return text;
   }
 
-  // POSITION ===========================================================================
+  // POSITION =====================================================================================
 
   /**
    * Returns the current indentation.
    * @return indentation
    */
   private int indent() {
-    return Math.max(1, gopts.get(GUIOptions.INDENT));
+    return Math.max(1, gui.gopts.get(GUIOptions.INDENT));
   }
 
   /**
@@ -255,7 +291,7 @@ public final class TextEditor {
    */
   private byte[] spaces() {
     final byte[] spaces;
-    if(gopts.get(GUIOptions.TABSPACES)) {
+    if(gui.gopts.get(GUIOptions.TABSPACES)) {
       spaces = new byte[indent()];
       Arrays.fill(spaces, (byte) ' ');
     } else {
@@ -286,7 +322,7 @@ public final class TextEditor {
    * @param select selection flag
    */
   void lineStart(final boolean select) {
-    if(select && !selected()) startSelect();
+    if(select && !isSelected()) startSelect();
 
     final int p = pos;
     boolean s = true;
@@ -317,7 +353,7 @@ public final class TextEditor {
    * @return previous character
    */
   private int back(final boolean select) {
-    if(select || !selected()) return prev();
+    if(select || !isSelected()) return prev();
     pos(Math.min(start, end));
     return curr();
   }
@@ -399,7 +435,7 @@ public final class TextEditor {
    * Adds a string at the current position.
    * @param str string
    */
-  void add(final String str) {
+  void insert(final String str) {
     final int cl = str.length();
     final TokenBuilder tb = new TokenBuilder(cl);
     for(int c = 0; c < cl; ++c) {
@@ -425,7 +461,7 @@ public final class TextEditor {
     final byte[] ste = concat(st, SPACE), ene = concat(SPACE, en);
     final int sl = st.length, el = en.length, sle = ste.length, ele = ene.length;
 
-    if(!selected()) {
+    if(!isSelected()) {
       // no selection: select line
       start = pos;
       end = pos;
@@ -444,7 +480,7 @@ public final class TextEditor {
 
     final int min = start;
     int max = end;
-    if(selected() && text[max - 1] == '\n') max--;
+    if(isSelected() && text[max - 1] == '\n') max--;
 
     // create new text with or without comment
     final TokenBuilder tb = new TokenBuilder();
@@ -476,12 +512,10 @@ public final class TextEditor {
    * @return {@code true} if text has changed
    */
   private boolean insert(final byte[] string, final int offset, final int rem) {
-    final int ts = size(), al = string.length;
-    final byte[] tmp = new byte[offset + al + ts - rem];
-    System.arraycopy(text, 0, tmp, 0, offset);
-    System.arraycopy(string, 0, tmp, offset, al);
-    System.arraycopy(text, rem, tmp, offset + al, ts - rem);
-    return text(tmp);
+    final int ts = size();
+    final ByteList bl = new ByteList(offset + string.length + ts - rem);
+    bl.add(text, 0, offset).add(string).add(text, rem, ts);
+    return text(bl.finish());
   }
 
   /**
@@ -490,7 +524,7 @@ public final class TextEditor {
    * @return {@code true} if text has changed
    */
   boolean toCase(final Case cs) {
-    if(!selected()) return false;
+    if(!isSelected()) return false;
     final int s = Math.min(start, end), e = Math.max(start, end), d = size() - e;
     final byte[] tmp = substring(text, s, e);
 
@@ -502,6 +536,54 @@ public final class TextEditor {
 
     select(s, size() - d);
     return changed;
+  }
+
+  /**
+   * Jumps to a matching bracket.
+   * @return new caret position
+   */
+  int bracket() {
+    final IntList parentheses = new IntList();
+    int cp = curr(), opening = OPENING.indexOf(cp), closing = CLOSING.indexOf(cp);
+    if(opening != -1) {
+      parentheses.add(opening);
+      while(pos() < size() && !parentheses.isEmpty()) {
+        next();
+        cp = curr();
+        opening = OPENING.indexOf(cp);
+        closing = CLOSING.indexOf(cp);
+        if(opening != -1) {
+          parentheses.add(opening);
+        } else if(closing == parentheses.peek()) {
+          parentheses.pop();
+        }
+      }
+    } else if(closing != -1) {
+      parentheses.add(closing);
+      while(pos() > 0 && !parentheses.isEmpty()) {
+        cp = prev();
+        opening = OPENING.indexOf(cp);
+        closing = CLOSING.indexOf(cp);
+        if(closing != -1) {
+          parentheses.add(closing);
+        } else if(opening == parentheses.peek()) {
+          parentheses.pop();
+        }
+      }
+    } else {
+      while(pos() > 0) {
+        cp = prev();
+        opening = OPENING.indexOf(cp);
+        closing = CLOSING.indexOf(cp);
+        if(opening != -1) {
+          if(parentheses.isEmpty()) break;
+          if(opening == parentheses.peek()) parentheses.pop();
+        } else if(closing != -1) {
+          parentheses.add(closing);
+        }
+      }
+    }
+    return pos;
   }
 
   /**
@@ -551,7 +633,7 @@ public final class TextEditor {
     if(ind != 0) {
       final StringBuilder spaces = new StringBuilder();
       for(int i = 0; i < ind; i++) spaces.append(' ');
-      v = new TokenBuilder().addSep(v.split("\n"), "\n" + spaces).toString();
+      v = new TokenBuilder().addAll(v.split("\n"), "\n" + spaces).toString();
     }
     // delete old string, add new one
     replace(p, pos, v);
@@ -565,7 +647,7 @@ public final class TextEditor {
    * @return {@code true} if text has changed
    */
   boolean format(final Syntax syntax) {
-    final boolean sel = selected();
+    final boolean sel = isSelected();
     final int s = sel ? Math.min(start, end) : 0;
     final int e = sel ? Math.max(start, end) : size();
     final byte[] format = syntax.format(Arrays.copyOfRange(text, s, e), spaces());
@@ -579,14 +661,16 @@ public final class TextEditor {
    * @return {@code true} if text has changed
    */
   boolean sort() {
-    if(!selected()) selectAll();
+    if(!isSelected()) selectAll();
     if(!extend()) return false;
 
     // count lines
     int l = 1;
     final int s = start, e = end, ts = size();
     final byte[] tmp = Arrays.copyOf(text, ts);
-    for(int i = s; i < e; i++) if(tmp[i] == '\n') l++;
+    for(int i = s; i < e; i++) {
+      if(tmp[i] == '\n') l++;
+    }
 
     // collect lines to be sorted
     final TokenList tl = new TokenList(l);
@@ -606,11 +690,11 @@ public final class TextEditor {
     int i = s;
     for(final byte[] line : tl) {
       final int ll = line.length;
-      System.arraycopy(line, 0, tmp, i, ll);
+      Array.copyFromStart(line, ll, tmp, i);
       i += ll;
       if(i < e) tmp[i++] = '\n';
     }
-    if(i < e) System.arraycopy(tmp, e, tmp, i, ts - e);
+    if(i < e) Array.copy(tmp, e, ts - e, tmp, i);
     final boolean changed = text(i == e ? tmp : Arrays.copyOf(tmp, ts - e + i));
     select(s, i);
     return changed;
@@ -621,21 +705,26 @@ public final class TextEditor {
    * @param tokens list of tokens
    */
   private void sort(final TokenList tokens) {
-    final boolean asc = gopts.get(GUIOptions.ASCSORT), cs = gopts.get(GUIOptions.CASESORT);
-    final Collator coll = gopts.get(GUIOptions.UNICODE) ? null : Collator.getInstance();
+    final GUIOptions gopts = gui.gopts;
+    final boolean unicode = gopts.get(GUIOptions.UNICODE);
     final int column = gopts.get(GUIOptions.COLUMN) - 1;
 
-    // stable sort: before custom sort, use default sort
-    if(coll != null || column > 0) tokens.sort(true, true);
-    final Comparator<byte[]> cc = new Comparator<byte[]>() {
-      @Override
-      public int compare(final byte[] token1, final byte[] token2) {
-        final byte[] t1 = sub(token1, column), t2 = sub(token2, column);
-        return coll != null ? coll.compare(string(t1), string(t2)) :
-         diff(cs ? lc(t1) : t1, cs ? lc(t2) : t2);
-      }
-    };
-    tokens.sort(cc, asc);
+    // stable sort: before custom sort, apply default sort
+    if(!unicode || column > 0) tokens.sort(true, true);
+
+    // choose cheapest comparator
+    final Comparator<byte[]> cc;
+    if(!unicode) {
+      final Collator coll = Collator.getInstance();
+      cc = (t1, t2) -> coll.compare(string(sub(t1, column)), string(sub(t2, column)));
+    } else if(gopts.get(GUIOptions.CASESORT)) {
+      cc = (t1, t2) -> diff(sub(t1, column), sub(t2, column));
+    } else {
+      cc = (t1, t2) -> diff(lc(sub(t1, column)), lc(sub(t2, column)));
+    }
+    tokens.sort(cc, gopts.get(GUIOptions.ASCSORT));
+
+    // remove duplicates
     if(gopts.get(GUIOptions.MERGEDUPL)) tokens.unique();
   }
 
@@ -660,13 +749,13 @@ public final class TextEditor {
    */
   boolean indent(final StringBuilder sb, final boolean shift) {
     // no selection, shift pressed: select current character
-    if(!selected() && shift && size() != 0) selectLine();
+    if(!isSelected() && shift && size() != 0) selectLine();
 
     // check if something is selected
-    if(selected()) {
+    if(isSelected()) {
       indent(shift);
       sb.setLength(0);
-      return selected();
+      return isSelected();
     }
 
     if(shift) {
@@ -723,7 +812,7 @@ public final class TextEditor {
     if(sb.length() == 0) return 0;
 
     int move = 0;
-    if(!selected && gopts.get(GUIOptions.AUTO)) {
+    if(!selected && gui.gopts.get(GUIOptions.AUTO)) {
       final char ch = sb.charAt(0);
       final int next = pos + 1 < size() ? text[pos + 1] : 0;
       final int curr = pos < size() ? text[pos] : 0;
@@ -747,7 +836,7 @@ public final class TextEditor {
         // quote: ignore if it equals next character
         if(ch == curr) sb.setLength(0);
         // add second quote
-        else if(!XMLToken.isNCChar(prev)) sb.append(ch);
+        else if(!XMLToken.isNCChar(prev) && !XMLToken.isNCChar(curr)) sb.append(ch);
         move = 1;
       } else if(ch == '>') {
         // closes an opening element
@@ -786,7 +875,7 @@ public final class TextEditor {
         }
       }
     }
-    add(sb.toString());
+    insert(sb.toString());
     return move;
   }
 
@@ -818,7 +907,7 @@ public final class TextEditor {
         if(cp == '<' && pos < p - 1) {
           // add closing element
           next();
-          sb.append("</").append(new TokenBuilder().add(text, pos, p)).append('>');
+          sb.append("</").append(string(text, pos, p - pos)).append('>');
         }
         break;
       }
@@ -830,13 +919,13 @@ public final class TextEditor {
    * Deletes the previous character or the current selection.
    */
   void deletePrev() {
-    if(!selected()) {
+    if(!isSelected()) {
       if(pos == 0) return;
       startSelect();
       final int curr = curr(), prev = prev();
       endSelection();
 
-      if(gopts.get(GUIOptions.AUTO)) {
+      if(gui.gopts.get(GUIOptions.AUTO)) {
         if(curr == prev && (curr == '"' || curr == '\'')) {
           // remove closing quote
           start++;
@@ -855,7 +944,7 @@ public final class TextEditor {
    * Assumes that the current position allows a deletion.
    */
   void delete() {
-    if(!selected()) {
+    if(!isSelected()) {
       if(pos == size()) return;
       start = pos;
       end = pos + cl(text, pos);
@@ -868,19 +957,34 @@ public final class TextEditor {
    */
   private void del() {
     final int s = Math.min(start, end), e = Math.max(start, end), ts = size();
-    final byte[] tmp = new byte[ts - e + s];
-    System.arraycopy(text, 0, tmp, 0, s);
-    System.arraycopy(text, e, tmp, s, ts - e);
-    text(tmp);
+    text(new ByteList(ts - e + s).add(text, 0, s).add(text, e, ts).finish());
     pos = s;
   }
 
   /**
-   * Deletes a line.
+   * Deletes lines.
    */
-  void deleteLine() {
-    selectLine();
+  void deleteLines() {
+    extend();
     delete();
+  }
+
+  /**
+   * Duplicate lines.
+   */
+  void duplLines() {
+    final int p = pos, s = start, e = end;
+    extend();
+    final String selected = selected();
+    if(selected.isEmpty()) return;
+
+    final StringBuilder sb = new StringBuilder();
+    if(end > 0 && text[end - 1] != '\n') sb.append('\n');
+    pos = end;
+    insert(sb.append(selected).toString());
+    pos = p;
+    start = s;
+    end = e;
   }
 
   /**
@@ -888,7 +992,7 @@ public final class TextEditor {
    * @param word word/line flag
    */
   void deleteNext(final boolean word) {
-    if(!selected()) {
+    if(!isSelected()) {
       if(pos() == size()) return;
       startSelect();
       if(word) nextWord(true);
@@ -903,7 +1007,7 @@ public final class TextEditor {
    * @param word word/line flag
    */
   void deletePrev(final boolean word) {
-    if(!selected()) {
+    if(!isSelected()) {
       if(pos() == 0) return;
       startSelect();
       if(word) prevWord(true);
@@ -924,7 +1028,7 @@ public final class TextEditor {
   private void replace(final int s, final int e, final String value) {
     select(s, e);
     delete();
-    add(value);
+    insert(value);
   }
 
   /**
@@ -932,9 +1036,9 @@ public final class TextEditor {
    * @return if text is selected
    */
   private boolean extend() {
-    if(!selected()) {
+    if(!isSelected()) {
       selectLine();
-      if(!selected()) return false;
+      if(!isSelected()) return false;
     }
 
     int s = Math.min(start, end), e = Math.max(start, end);
@@ -1078,7 +1182,7 @@ public final class TextEditor {
    */
   void startSelection(final boolean select) {
     if(select) {
-      if(!selected()) startSelect();
+      if(!isSelected()) startSelect();
     } else {
       noSelect();
     }
@@ -1103,7 +1207,7 @@ public final class TextEditor {
    * Tests if text has been selected.
    * @return result of check
    */
-  boolean selected() {
+  boolean isSelected() {
     return start != end;
   }
 
@@ -1111,13 +1215,14 @@ public final class TextEditor {
    * Returns the selected string.
    * @return string
    */
-  String copy() {
-    final TokenBuilder tb = new TokenBuilder();
-    final int e = start < end ? end : start;
-    for(int s = start < end ? start : end; s < e; s += cl(text, s)) {
+  String selected() {
+    final int e = Math.max(start, end);
+    int s = Math.min(start, end);
+    final TokenBuilder tb = new TokenBuilder(e - s);
+    for(; s < e; s += cl(text, s)) {
       final int cp = cp(text, s);
       if(cp >= ' ' && cp < TokenBuilder.PRIVATE_START || cp == 0x0A || cp == 0x09 ||
-          cp > TokenBuilder.PRIVATE_END) tb.add(cp);
+         cp > TokenBuilder.PRIVATE_END) tb.add(cp);
     }
     return tb.toString();
   }
@@ -1180,7 +1285,7 @@ public final class TextEditor {
     end = pos;
   }
 
-  // ERROR HIGHLIGHTING =================================================================
+  // ERROR HIGHLIGHTING ===========================================================================
 
   /**
    * Sets the error position.
@@ -1190,7 +1295,7 @@ public final class TextEditor {
     error = s;
   }
 
-  // SEARCH HIGHLIGHTING ================================================================
+  // SEARCH HIGHLIGHTING ==========================================================================
 
   /**
    * Selects a search string.
@@ -1199,33 +1304,26 @@ public final class TextEditor {
    * @return new cursor position, or {@code -1}
    */
   int jump(final SearchDir dir, final boolean select) {
-    if(searchPos[0].isEmpty()) {
+    if(searchResults[0].isEmpty()) {
       if(select) noSelect();
       return -1;
     }
 
-    int s = searchPos[0].sortedIndexOf(!select || selected() ? pos : pos - 1);
+    int s = searchResults[0].sortedIndexOf(!select || isSelected() ? pos : pos - 1);
     switch(dir) {
       case CURRENT:  s = s < 0 ? -s - 1 : s;     break;
       case FORWARD:  s = s < 0 ? -s - 1 : s + 1; break;
       case BACKWARD: s = s < 0 ? -s - 2 : s - 1; break;
     }
-    final int sl = searchPos[0].size();
+    final int sl = searchResults[0].size();
     if(s < 0) s = sl - 1;
     else if(s == sl) s = 0;
-    final int p = searchPos[0].get(s);
+    final int p = searchResults[0].get(s);
     if(select) {
-      start = searchPos[1].get(s);
+      start = searchResults[1].get(s);
       end = p;
     }
     pos = p;
     return p;
-  }
-
-  // CURSOR =============================================================================
-
-  @Override
-  public String toString() {
-    return copy();
   }
 }

@@ -19,38 +19,38 @@ import org.basex.util.options.*;
 /**
  * Update primitive for the {@link Function#_DB_CREATE} function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class DBCreate extends NameUpdate {
-  /** Container for new database documents. */
-  private final DBNew newDocs;
   /** Database update options. */
   private final DBOptions options;
+  /** Container for new database documents. */
+  private final DBNew newDocs;
 
   /**
    * Constructor.
    * @param name name for created database
-   * @param input input (ANode and QueryInput references)
+   * @param inputs inputs (ANode and QueryInput references)
    * @param opts database options
    * @param qc query context
    * @param info input info
    * @throws QueryException query exception
    */
-  public DBCreate(final String name, final List<NewInput> input, final Options opts,
+  public DBCreate(final String name, final NewInput[] inputs, final Options opts,
       final QueryContext qc, final InputInfo info) throws QueryException {
 
-    super(UpdateType.DBCREATE, name, info, qc);
+    super(UpdateType.DBCREATE, name, qc, info);
     final List<Option<?>> supported = new ArrayList<>();
     Collections.addAll(supported, DBOptions.INDEXING);
     Collections.addAll(supported, DBOptions.PARSING);
     options = new DBOptions(opts, supported, info);
-    newDocs = new DBNew(qc, input, options, info);
+    newDocs = new DBNew(qc, options, info, inputs);
   }
 
   @Override
   public void prepare() throws QueryException {
-    newDocs.prepare(name);
+    newDocs.prepare(name, true);
   }
 
   @Override
@@ -64,11 +64,10 @@ public final class DBCreate extends NameUpdate {
       final Data data = CreateDB.create(name, Parser.emptyParser(mopts), qc.context, mopts);
 
       // add initial documents and optimize database
-      final Data newData = newDocs.data;
-      if(newData != null) {
+      if(newDocs.data != null) {
         data.startUpdate(mopts);
         try {
-          data.insert(data.meta.size, -1, new DataClip(newData));
+          newDocs.add(data);
           Optimize.optimize(data, null);
         } finally {
           data.finishUpdate(mopts);
@@ -77,10 +76,8 @@ public final class DBCreate extends NameUpdate {
       Close.close(data, qc.context);
 
     } catch(final IOException ex) {
-      throw UPDBOPTERR_X.get(info, ex);
-    } finally {
-      // drop temporary database instance
       newDocs.finish();
+      throw UPDBERROR_X.get(info, ex);
     }
   }
 

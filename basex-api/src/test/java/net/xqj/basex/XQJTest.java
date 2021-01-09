@@ -1,6 +1,6 @@
 package net.xqj.basex;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
@@ -8,12 +8,12 @@ import javax.xml.namespace.*;
 import javax.xml.xquery.*;
 
 import org.basex.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Performs simple tests on Charles Forster's XQJ client implementation for BaseX.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XQJTest extends SandboxTest {
@@ -24,17 +24,15 @@ public final class XQJTest extends SandboxTest {
    * Starts the tests.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void before() throws IOException {
+  @BeforeAll public static void before() throws IOException {
     server = createServer();
   }
 
   /**
    * Finishes the tests.
-   * @throws Exception exception
+   * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void after() throws Exception {
+  @AfterAll public static void after() throws IOException {
     stopServer(server);
   }
 
@@ -42,8 +40,7 @@ public final class XQJTest extends SandboxTest {
    * Simple query.
    * @throws Exception exception
    */
-  @Test
-  public void basicTest() throws Exception {
+  @Test public void basicTest() throws Exception {
     final XQDataSource xqds = new BaseXXQDataSource();
     xqds.setProperty("serverName", "localhost");
     xqds.setProperty("port", String.valueOf(DB_PORT));
@@ -66,8 +63,7 @@ public final class XQJTest extends SandboxTest {
    * Simple query.
    * @throws Exception exception
    */
-  @Test
-  public void entityTest() throws Exception {
+  @Test public void entityTest() throws Exception {
     final XQDataSource xqds = new BaseXXQDataSource();
     xqds.setProperty("serverName", "localhost");
     xqds.setProperty("port", String.valueOf(DB_PORT));

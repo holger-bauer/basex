@@ -10,7 +10,7 @@ import org.basex.core.*;
  * As specified by W3C, the values of the attribute are language identifiers as
  * defined by IETF BCP 47, Tags for the Identification of Languages.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  * @author Jens Erat
  *
@@ -26,6 +26,8 @@ public final class Language implements Comparable<Language> {
   static final HashMap<String, Language> ALL = new HashMap<>();
   /** Available languages, indexed by their display. */
   private static final HashMap<String, Language> DISP = new HashMap<>();
+  /** Locale. */
+  private final Locale locale;
 
   static {
     for(final Locale l : Locale.getAvailableLocales()) {
@@ -33,8 +35,6 @@ public final class Language implements Comparable<Language> {
       DISP.put(l.getDisplayLanguage(Locale.ENGLISH), new Language(l));
     }
   }
-  /** Locale. */
-  private final Locale locale;
 
   /**
    * Private Constructor.
@@ -52,9 +52,8 @@ public final class Language implements Comparable<Language> {
   public static Language get(final String lang) {
     final int i = lang.indexOf('-');
     final String l = i == -1 ? lang : lang.substring(0, i);
-    Language ln = ALL.get(l.toLowerCase(Locale.ENGLISH));
-    if(ln == null) ln = DISP.get(lang);
-    return ln;
+    final Language ln = ALL.get(l.toLowerCase(Locale.ENGLISH));
+    return ln == null ? DISP.get(lang) : ln;
   }
 
   /**
@@ -63,8 +62,8 @@ public final class Language implements Comparable<Language> {
    * @return language code
    */
   public static Language get(final MainOptions opts) {
-    final Language lang = get(opts.get(MainOptions.LANGUAGE));
-    return lang == null ? get("en") : lang;
+    final Language ln = get(opts.get(MainOptions.LANGUAGE));
+    return ln == null ? get("en") : ln;
   }
 
   /**
@@ -72,8 +71,8 @@ public final class Language implements Comparable<Language> {
    * @return default language
    */
   public static Language def() {
-    final Language lang = DISP.get(MainOptions.LANGUAGE.value());
-    return lang == null ? get("en") : lang;
+    final Language ln = DISP.get(MainOptions.LANGUAGE.value());
+    return ln == null ? get("en") : ln;
   }
 
   /**
@@ -85,8 +84,8 @@ public final class Language implements Comparable<Language> {
   }
 
   @Override
-  public boolean equals(final Object o) {
-    return o instanceof Language && code().equals(((Language) o).code());
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Language && code().equals(((Language) obj).code());
   }
 
   @Override

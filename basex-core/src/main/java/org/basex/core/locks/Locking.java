@@ -1,15 +1,16 @@
 package org.basex.core.locks;
 
 import static org.basex.util.Prop.*;
+import static org.basex.util.Token.*;
 
 import java.util.*;
-import java.util.Map.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.*;
 
 import org.basex.core.*;
 import org.basex.core.jobs.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * Read and write locks on arbitrary strings.
@@ -26,32 +27,28 @@ import org.basex.util.*;
  * parallel by the same thread (it is fine to call arbitrary locking methods by different threads at
  * the same time).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Jens Erat
  */
 public final class Locking {
   /** Prefix for internal special locks. */
-  public static final String PREFIX = "%";
-  /** Prefix for user defined locks. */
-  public static final String USER_PREFIX = "+";
-  /** Prefix for locks in Java modules. */
-  public static final String MODULE_PREFIX = "&";
+  public static final String INTERNAL_PREFIX = "internal:";
+  /** Prefix for query locks. */
+  public static final String BASEX_PREFIX = "basex:";
 
   /** Special lock identifier for database opened in current context; will be substituted. */
-  public static final String CONTEXT = PREFIX + "CONTEXT";
+  public static final String CONTEXT = INTERNAL_PREFIX + "context";
   /** Special lock identifier for collection available via current context; will be substituted. */
-  public static final String COLLECTION = PREFIX + "COLLECTION";
+  public static final String COLLECTION = INTERNAL_PREFIX + "collection";
   /** Special lock identifier for user commands. */
-  public static final String USER = PREFIX + "USER";
+  public static final String USER = INTERNAL_PREFIX + "user";
   /** Special lock identifier for backup commands. */
-  public static final String BACKUP = PREFIX + "BACKUP";
+  public static final String BACKUP = INTERNAL_PREFIX + "backup";
   /** Special lock identifier for repository commands. */
-  public static final String REPO = PREFIX + "REPO";
+  public static final String REPO = INTERNAL_PREFIX + "repo";
 
   /** Fair ordering policy; prevents starvation, but reduces parallelism. */
   private final boolean fair;
-  /** Maximum number of parallel jobs. */
-  private final int parallel;
 
   /** Locks assigned to threads. */
   private final ConcurrentMap<Long, Locks> locked = new ConcurrentHashMap<>();
@@ -69,8 +66,6 @@ public final class Locking {
   private int localWriters;
   /** Number of running global readers. */
   private int globalReaders;
-  /** Number of currently running jobs. */
-  private int jobs;
 
   /**
    * Constructor.
@@ -78,9 +73,9 @@ public final class Locking {
    */
   public Locking(final StaticOptions soptions) {
     fair = soptions.get(StaticOptions.FAIRLOCK);
-    parallel = Math.max(soptions.get(StaticOptions.PARALLEL), 1);
     globalLocks = new ReentrantReadWriteLock(fair);
-    queue = fair ? new FairLockQueue() : new NonfairLockQueue();
+    final int parallel = Math.max(soptions.get(StaticOptions.PARALLEL), 1);
+    queue = fair ? new FairLockQueue(parallel) : new NonfairLockQueue(parallel);
   }
 
   /**
@@ -117,10 +112,7 @@ public final class Locking {
     // queue job if the job limit has been reached
     final LockList reads = locks.reads, writes = locks.writes;
     final boolean write = writes.locking(), read = reads.locking(), lock = read || write;
-    synchronized(queue) {
-      if(jobs >= parallel) queue.wait(id, read, write);
-      jobs++;
-    }
+    queue.acquire(id, read, write);
 
     // apply exclusive lock (global write), or shared lock otherwise
     if(lock) (writes.global() ? globalLocks.writeLock() : globalLocks.readLock()).lock();
@@ -160,8 +152,8 @@ public final class Locking {
     final boolean lock = reads.locking() || writes.locking();
 
     // release all local locks
-    for(final String read : reads) unpin(read).readLock().unlock();
-    for(final String write : writes) unpin(write).writeLock().unlock();
+    for(final String string : reads) unpin(string).readLock().unlock();
+    for(final String string : writes) unpin(string).writeLock().unlock();
 
     // allow next global reader to resume
     synchronized(globalLock) {
@@ -183,10 +175,7 @@ public final class Locking {
     if(lock) (writes.global() ? globalLocks.writeLock() : globalLocks.readLock()).unlock();
 
     // allow next queued job to resume
-    synchronized(queue) {
-      jobs--;
-      queue.notifyAll();
-    }
+    queue.release();
   }
 
   /**
@@ -196,11 +185,8 @@ public final class Locking {
    */
   private LocalReadWriteLock pin(final String string) {
     synchronized(localLocks) {
-      LocalReadWriteLock lock = localLocks.get(string);
-      if(lock == null) {
-        lock = new LocalReadWriteLock(fair);
-        localLocks.put(string, lock);
-      }
+      final LocalReadWriteLock lock = localLocks.computeIfAbsent(string,
+          k -> new LocalReadWriteLock(fair));
       lock.pin();
       return lock;
     }
@@ -214,30 +200,38 @@ public final class Locking {
   private LocalReadWriteLock unpin(final String string) {
     synchronized(localLocks) {
       final LocalReadWriteLock lock = localLocks.get(string);
-      if(lock.unpin() == 0) {
-        localLocks.remove(string);
-      }
+      if(lock.unpin()) localLocks.remove(string);
       return lock;
     }
+  }
+
+  /**
+   * Returns query lock keys.
+   * @param string string with lock keys
+   * @return locks
+   */
+  public static String[] queryLocks(final byte[] string) {
+    final StringList list = new StringList();
+    for(final byte[] lock : split(string, ',')) {
+      list.add(BASEX_PREFIX + string(lock).trim());
+    }
+    if(list.isEmpty()) list.add(BASEX_PREFIX);
+    return list.finish();
   }
 
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder(NL).append("Locking").append(NL);
     final String in = "| ";
-    synchronized(queue) {
-      sb.append(in).append("Jobs: ").append(jobs).append(NL).append(in).append(queue).append(NL);
-    }
+    sb.append(in).append(queue).append(NL);
     sb.append(in).append("Held locks by object:").append(NL);
     synchronized(localLocks) {
-      for(final Entry<String, LocalReadWriteLock> e : localLocks.entrySet()) {
-        sb.append(in).append(in).append(e.getKey()).append(" -> ").append(e.getValue()).append(NL);
-      }
+      localLocks.forEach((key, value) ->
+        sb.append(in).append(in).append(key).append(" -> ").append(value).append(NL));
     }
     sb.append(in).append("Held locks by job:").append(NL);
-    for(final Entry<Long, Locks> e : locked.entrySet()) {
-      sb.append(in).append(in).append(e.getKey()).append(" -> ").append(e.getValue()).append(NL);
-    }
+    locked.forEach((key, value) ->
+      sb.append(in).append(in).append(key).append(" -> ").append(value).append(NL));
     return sb.toString();
   }
 }

@@ -13,7 +13,7 @@ import org.basex.util.hash.*;
 /**
  * This class provides statistical data for an indexed node.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Stats {
@@ -38,24 +38,8 @@ public final class Stats {
     values = new TokenIntMap();
     type = NONE;
     min = Double.MAX_VALUE;
-    max = Double.MIN_VALUE;
+    max = -Double.MAX_VALUE;
     leaf = true;
-  }
-
-  /**
-   * Getter for leaf flag.
-   * @return leaf flag
-   */
-  public boolean isLeaf() {
-    return leaf;
-  }
-
-  /**
-   * Setter for leaf flag.
-   * @param l leaf or not
-   */
-  public void setLeaf(final boolean l) {
-    leaf = l;
   }
 
   /**
@@ -64,7 +48,7 @@ public final class Stats {
    * @throws IOException I/O exception
    */
   public Stats(final DataInput in) throws IOException {
-    // 0x10 indicates format introduced with Version 7.1
+    // ignore higher bits of older databases (skipped since version 9.0)
     final int t = in.readNum() & 0xF;
     type = (byte) t;
 
@@ -77,7 +61,6 @@ public final class Stats {
     }
     count = in.readNum();
     leaf = in.readBool();
-    // legacy since version 7.1
     in.readDouble();
   }
 
@@ -97,8 +80,7 @@ public final class Stats {
       }
     }
 
-    // 0x10 indicates format introduced with Version 7.1
-    out.writeNum(type | 0x10);
+    out.writeNum(type);
     if(isNumeric(type)) {
       out.writeDouble(min);
       out.writeDouble(max);
@@ -109,7 +91,7 @@ public final class Stats {
 
     out.writeNum(count);
     out.writeBool(leaf);
-    // legacy since version 7.1
+    // legacy (required before version 7.1)
     out.writeDouble(0);
   }
 
@@ -164,6 +146,22 @@ public final class Stats {
         if(values.size() > meta.maxcats) values = null;
       }
     }
+  }
+
+  /**
+   * Getter for leaf flag.
+   * @return leaf flag
+   */
+  public boolean isLeaf() {
+    return leaf;
+  }
+
+  /**
+   * Setter for leaf flag.
+   * @param l leaf or not
+   */
+  public void setLeaf(final boolean l) {
+    leaf = l;
   }
 
   @Override

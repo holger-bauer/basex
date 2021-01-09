@@ -6,9 +6,6 @@ import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
-import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -16,14 +13,13 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
-import org.basex.util.*;
 import org.basex.util.ft.*;
 import org.basex.util.hash.*;
 
 /**
  * FLWOR {@code let} clause, binding an expression to a variable.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class Let extends ForLet {
@@ -31,10 +27,19 @@ public final class Let extends ForLet {
    * Constructor.
    * @param var variable
    * @param expr expression
-   * @param score score flag
    */
-  public Let(final Var var, final Expr expr, final boolean score) {
-    super(var.info, var, expr, score, var);
+  public Let(final Var var, final Expr expr) {
+    this(var, expr, false);
+  }
+
+  /**
+   * Constructor.
+   * @param var variable
+   * @param expr expression
+   * @param scoring scoring flag
+   */
+  public Let(final Var var, final Expr expr, final boolean scoring) {
+    super(var.info, scoring ? SeqType.DOUBLE_O : SeqType.ITEM_ZM, var, expr, scoring, var);
   }
 
   /**
@@ -43,8 +48,8 @@ public final class Let extends ForLet {
    * @return let binding
    */
   static Let fromFor(final For fr) {
-    final Let lt = new Let(fr.var, fr.expr, false);
-    lt.seqType = fr.expr.seqType();
+    final Let lt = new Let(fr.var, fr.expr);
+    lt.adoptType(fr.expr);
     return lt;
   }
 
@@ -69,48 +74,46 @@ public final class Let extends ForLet {
   /**
    * Calculates the score of the given iterator.
    * @param iter iterator
+   * @param qc query context
    * @return score
    * @throws QueryException evaluation exception
    */
-  private static Dbl score(final Iter iter) throws QueryException {
-    double s = 0;
+  private static Dbl score(final Iter iter, final QueryContext qc) throws QueryException {
+    double score = 0;
     int c = 0;
-    for(Item it; (it = iter.next()) != null; s += it.score(), c++);
-    return Dbl.get(Scoring.avg(s, c));
-  }
-
-  @Override
-  public Clause compile(final CompileContext cc) throws QueryException {
-    final Clause c = super.compile(cc);
-    var.refineType(scoring ? SeqType.DBL : expr.seqType(), cc);
-    return c;
+    for(Item item; (item = qc.next(iter)) != null; score += item.score(), c++);
+    return Dbl.get(Scoring.avg(score, c));
   }
 
   @Override
   public Let optimize(final CompileContext cc) throws QueryException {
+    // skip redundant type check
     if(!scoring && expr instanceof TypeCheck) {
       final TypeCheck tc = (TypeCheck) expr;
       if(tc.isRedundant(var) || var.adoptCheck(tc.seqType(), tc.promote)) {
-        cc.info(OPTTYPE_X, tc.seqType());
+        cc.info(OPTTYPE_X, this);
         expr = tc.expr;
       }
     }
-
-    seqType = scoring ? SeqType.DBL : expr.seqType();
-    var.refineType(seqType, cc);
-    if(var.checksType() && expr.isValue()) {
+    // promote at compile time
+    if(expr instanceof Value) {
       expr = var.checkType((Value) expr, cc.qc, true);
-      var.refineType(expr.seqType(), cc);
     }
-    size = scoring ? 1 : expr.size();
-    var.size = size;
-    var.data = expr.data();
+
+    // assign type to clause and variable
+    if(scoring) {
+      var.expr(Dbl.ZERO);
+    } else {
+      adoptType(expr);
+      var.expr(expr);
+    }
+    var.refineType(seqType(), size(), cc);
     return this;
   }
 
   @Override
   public Let copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Let(cc.copy(var, vm), expr.copy(cc, vm), scoring);
+    return copyType(new Let(cc.copy(var, vm), expr.copy(cc, vm), scoring));
   }
 
   @Override
@@ -119,31 +122,27 @@ public final class Let extends ForLet {
   }
 
   @Override
-  void calcSize(final long[] minMax) {
-  }
-
-  /**
-   * Returns an expression that is appropriate for inlining.
-   * @param cc compilation context
-   * @return inlineable expression
-   * @throws QueryException query exception
-   */
   Expr inlineExpr(final CompileContext cc) throws QueryException {
-    return scoring ? cc.function(Function._FT_SCORE, info, expr) : var.checked(expr, cc);
+    return scoring ? null : var.checked(expr, cc);
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem();
-    if(scoring) e.add(planAttr(Token.token(SCORE), Token.TRUE));
-    var.plan(e);
-    expr.plan(e);
-    plan.add(e);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Let && super.equals(obj);
   }
 
   @Override
-  public String toString() {
-    return LET + ' ' + (scoring ? SCORE + ' ' : "") + var + ' ' + ASSIGN + ' ' + expr;
+  public void plan(final QueryPlan plan) {
+    final FElem elem = plan.attachVariable(plan.create(this), var, false);
+    if(scoring) plan.addAttribute(elem, SCORE, true);
+    plan.add(elem, expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(LET);
+    if(scoring) qs.token(SCORE);
+    qs.token(var).token(ASSIGN).token(expr);
   }
 
   /** Evaluator for a block of {@code let} expressions. */
@@ -156,12 +155,12 @@ public final class Let extends ForLet {
     /**
      * Constructor for the first let binding in the block.
      * @param let first let binding
-     * @param subEval sub-evaluator
+     * @param sub sub-evaluator
      */
-    LetEval(final Let let, final Eval subEval) {
+    LetEval(final Let let, final Eval sub) {
       lets = new ArrayList<>();
       lets.add(let);
-      sub = subEval;
+      this.sub = sub;
     }
 
     @Override
@@ -174,12 +173,12 @@ public final class Let extends ForLet {
           final boolean s = qc.scoring;
           try {
             qc.scoring = true;
-            vl = score(let.expr.iter(qc));
+            vl = score(let.expr.iter(qc), qc);
           } finally {
             qc.scoring = s;
           }
         } else {
-          vl = qc.value(let.expr);
+          vl = let.expr.value(qc);
         }
         qc.set(let.var, vl);
       }

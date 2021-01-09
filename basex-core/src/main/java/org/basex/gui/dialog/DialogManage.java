@@ -18,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * Open database dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogManage extends BaseXDialog {
@@ -42,8 +42,6 @@ public final class DialogManage extends BaseXDialog {
   private final BaseXButton restore;
   /** Copy button. */
   private final BaseXButton copy;
-  /** Refresh list of databases. */
-  private boolean refresh;
   /** Combobox that lists available backups for a database. */
   private final BaseXList backups;
   /** Delete button for backups. */
@@ -51,53 +49,55 @@ public final class DialogManage extends BaseXDialog {
   /** Deletes all backups. */
   private final BaseXButton deleteAll;
 
+  /** Refresh list of databases. */
+  private boolean refresh;
+
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public DialogManage(final GUI main) {
-    super(main, MANAGE_DB);
+  public DialogManage(final GUI gui) {
+    super(gui, MANAGE_DB);
     panel.setLayout(new BorderLayout(4, 0));
 
     // create database chooser
-    final String[] dbs = main.context.databases.list().finish();
-    choice = new BaseXList(dbs, this, false);
-    choice.setSize(200, 500);
-    final Data data = main.context.data();
+    final String[] dbs = gui.context.databases.list().finish();
+    choice = new BaseXList(this, false, dbs);
+    choice.setSize(250, 650);
+    final Data data = gui.context.data();
     if(data != null) {
       data.flush(true);
       choice.setValue(data.meta.name);
     }
 
     doc1 = new BaseXLabel(" ").large();
-    doc1.setSize(420, doc1.getHeight());
 
-    detail = new TextPanel(false, this);
+    detail = new TextPanel(this, false);
     detail.setFont(panel.getFont());
 
     // database buttons
-    rename = new BaseXButton(RENAME + DOTS, this);
-    copy = new BaseXButton(COPY + DOTS, this);
-    open = new BaseXButton(OPEN, this);
-    drop = new BaseXButton(DROP + DOTS, this);
+    rename = new BaseXButton(this, RENAME + DOTS);
+    copy = new BaseXButton(this, COPY + DOTS);
+    open = new BaseXButton(this, OPEN);
+    drop = new BaseXButton(this, DROP + DOTS);
 
     // first tab
     final BaseXBack tab1 = new BaseXBack(new BorderLayout(0, 8)).border(8);
     tab1.add(doc1, BorderLayout.NORTH);
-    tab1.add(new SearchEditor(main, detail), BorderLayout.CENTER);
+    tab1.add(new SearchEditor(gui, detail), BorderLayout.CENTER);
     tab1.add(newButtons(drop, rename, copy, open), BorderLayout.SOUTH);
 
     doc2 = new BaseXLabel(" ").border(0, 0, 6, 0);
     doc2.setFont(doc1.getFont());
 
-    backups = new BaseXList(new String[0], this);
-    backups.setSize(400, 400);
+    backups = new BaseXList(this);
+    backups.setSize(600, 470);
 
     // backup buttons
-    backup = new BaseXButton(BACKUP, this);
-    restore = new BaseXButton(RESTORE, this);
-    delete = new BaseXButton(DELETE, this);
-    deleteAll = new BaseXButton(DELETE_ALL + DOTS, this);
+    backup = new BaseXButton(this, BACKUP);
+    restore = new BaseXButton(this, RESTORE);
+    delete = new BaseXButton(this, DELETE);
+    deleteAll = new BaseXButton(this, DELETE_ALL + DOTS);
 
     // second tab
     final BaseXBack tab2 = new BaseXBack(new BorderLayout(0, 8)).border(8);
@@ -109,9 +109,6 @@ public final class DialogManage extends BaseXDialog {
     tabs.addTab(INFORMATION, tab1);
     tabs.addTab(BACKUPS, tab2);
 
-    BaseXLayout.setWidth(detail, 400);
-    BaseXLayout.setWidth(doc1, 400);
-    BaseXLayout.setWidth(doc2, 400);
     set(choice, BorderLayout.CENTER);
     set(tabs, BorderLayout.EAST);
 
@@ -231,7 +228,7 @@ public final class DialogManage extends BaseXDialog {
 
     // run all commands
     if(!cmds.isEmpty()) {
-      DialogProgress.execute(this, cmds.toArray(new Command[cmds.size()]));
+      DialogProgress.execute(this, cmds.toArray(new Command[0]));
     }
   }
 

@@ -18,37 +18,30 @@ import org.basex.util.list.*;
 /**
  * QName item ({@code xs:QName}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QNm extends Item {
+  /** QName: empty. */
+  public static final QNm EMPTY = new QNm(Token.EMPTY);
   /** QName: xml:base. */
   public static final QNm XML_BASE = new QNm(BASE, XML_URI);
   /** URL pattern (matching Clark and EQName notation). */
-  public static final Pattern EQNAME = Pattern.compile("^Q?\\{(.*?)\\}(.+)$");
+  public static final Pattern EQNAME = Pattern.compile("^Q?\\{(.*?)}(.+)$");
 
-  /** Namespace URI. */
-  private byte[] uri;
   /** Name with optional prefix. */
   private final byte[] name;
   /** Prefix index. */
   private final int pref;
-
-  /**
-   * Empty constructor.
-   */
-  public QNm() {
-    super(AtomType.QNM);
-    name = EMPTY;
-    pref = 0;
-  }
+  /** Namespace URI (can be {@code null}). */
+  private byte[] uri;
 
   /**
    * Constructor.
    * @param name name
    */
   public QNm(final byte[] name) {
-    super(AtomType.QNM);
+    super(AtomType.QNAME);
     this.name = name;
     pref = indexOf(name, ':');
   }
@@ -106,7 +99,7 @@ public final class QNm extends Item {
    */
   public QNm(final QName name) {
     this(token(name.getPrefix().isEmpty() ? name.getLocalPart() :
-      name.getPrefix() + ':' + name.getLocalPart()), token(name.getNamespaceURI()));
+      concat(name.getPrefix(), COLON, name.getLocalPart())), token(name.getNamespaceURI()));
   }
 
   /**
@@ -136,8 +129,7 @@ public final class QNm extends Item {
    * @return name
    */
   private static byte[] name(final byte[] prefix, final byte[] local) {
-    final int pl = prefix.length, ll = local.length;
-    return pl == 0 ? local : new TokenBuilder(pl + ll + 1).add(prefix).add(':').add(local).finish();
+    return prefix.length == 0 ? local : concat(prefix, COLON, local);
   }
 
   /**
@@ -156,12 +148,12 @@ public final class QNm extends Item {
    * @param name name to resolve
    * @param def default namespace (can be {@code null})
    * @param sc static context (can be {@code null})
-   * @param info input info
+   * @param ii input info
    * @return string
    * @throws QueryException query exception
    */
   public static QNm resolve(final byte[] name, final byte[] def, final StaticContext sc,
-      final InputInfo info) throws QueryException {
+      final InputInfo ii) throws QueryException {
 
     // check for namespace declaration
     final Matcher m = EQNAME.matcher(Token.string(name));
@@ -175,10 +167,10 @@ public final class QNm extends Item {
         uri = def;
       } else {
         if(sc != null) uri = sc.ns.uri(substring(nm, 0, i));
-        if(uri == null) throw NOURI_X.get(info, name);
+        if(uri == null) throw NOURI_X.get(ii, name);
       }
     }
-    if(!XMLToken.isQName(nm)) throw BINDNAME_X.get(info, name);
+    if(!XMLToken.isQName(nm)) throw BINDNAME_X.get(ii, name);
     return new QNm(nm, uri);
   }
 
@@ -195,7 +187,7 @@ public final class QNm extends Item {
    * @return uri
    */
   public byte[] uri() {
-    return uri == null ? EMPTY : uri;
+    return uri == null ? Token.EMPTY : uri;
   }
 
   /**
@@ -236,17 +228,17 @@ public final class QNm extends Item {
   }
 
   /**
-   * Compares the specified item.
-   * @param n name to be compared
+   * Compares the specified name.
+   * @param qnm name to be compared
    * @return result of check
    */
-  public boolean eq(final QNm n) {
-    return n == this || Token.eq(uri(), n.uri()) && Token.eq(local(), n.local());
+  public boolean eq(final QNm qnm) {
+    return qnm == this || Token.eq(uri(), qnm.uri()) && Token.eq(local(), qnm.local());
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    throw diffError(it, this, ii);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    throw diffError(item, this, ii);
   }
 
   /**
@@ -262,7 +254,7 @@ public final class QNm extends Item {
    * @return prefix
    */
   public byte[] prefix() {
-    return pref == -1 ? EMPTY : substring(name, 0, pref);
+    return pref == -1 ? Token.EMPTY : substring(name, 0, pref);
   }
 
   /**
@@ -280,15 +272,23 @@ public final class QNm extends Item {
    * <li> Otherwise, if a prefix exists, the prefix and local name is returned.</li>
    * <li> Otherwise, the local name is returned.</li>
    * </ul>
-   * @return unique representation
+   * @return QName as token
    */
   public byte[] id() {
     return uri == null ? name : internal(null, local(), uri);
   }
 
   /**
+   * Returns an EQName representation.
+   * @return QName as token
+   */
+  public byte[] eqName() {
+    return eqName(uri(), local());
+  }
+
+  /**
    * Returns a unique representation of the QName.
-   * @return unique representation
+   * @return QName as token
    */
   public byte[] prefixId() {
     return prefixId(null);
@@ -298,17 +298,25 @@ public final class QNm extends Item {
    * Returns a unique representation of the QName.
    * <ul>
    *   <li> Skips the prefix if the namespace of the QName equals the specified one.</li>
-   *   <li> Uses a prefix if its namespace URI is statically known.</li>
+   *   <li> Returns a prefixed name if the namespace URI is statically known.</li>
    *   <li> Otherwise, {@link #id()} is called.</li>
    * </ul>
    * @param ns default uri (can be {@code null})
-   * @return unique representation
+   * @return QName as token
    */
   public byte[] prefixId(final byte[] ns) {
     final byte[] u = uri();
     if(ns != null && Token.eq(u, ns)) return local();
     final byte[] p = NSGlobal.prefix(u);
-    return p.length == 0 ? id() : concat(p, token(":"), local());
+    return p.length != 0 ? concat(p, token(COL), local()) : id();
+  }
+
+  /**
+   * Returns the QName string if it has a prefix, or {@link #prefixId()} otherwise.
+   * @return QName as token
+   */
+  public byte[] prefixString() {
+    return hasPrefix() ? string() : prefixId();
   }
 
   @Override
@@ -318,7 +326,7 @@ public final class QNm extends Item {
 
   @Override
   public int hash(final InputInfo ii) {
-    return Token.hash(local());
+    return Token.hash(id());
   }
 
   @Override
@@ -328,12 +336,37 @@ public final class QNm extends Item {
 
   @Override
   public boolean equals(final Object obj) {
-    return obj instanceof QNm && eq((QNm) obj);
+    if(this == obj) return true;
+    if(!(obj instanceof QNm)) return false;
+    final QNm qnm = (QNm) obj;
+    return Token.eq(uri(), qnm.uri()) && Token.eq(name, qnm.name);
   }
 
   @Override
-  public int hashCode() {
-    return Token.hash(id());
+  public void plan(final QueryString qs) {
+    qs.token(id());
+  }
+
+  // STATIC METHODS ===============================================================================
+
+  /**
+   * Returns an EQName representation.
+   * @param uri URI
+   * @param local local name
+   * @return QName as token
+   */
+  public static byte[] eqName(final byte[] uri, final byte[] local) {
+    return concat(QueryText.EQNAME, uri, CURLY2, local);
+  }
+
+  /**
+   * Returns an EQName representation.
+   * @param uri URI
+   * @param local local name
+   * @return QName as token
+   */
+  public static String eqName(final String uri, final String local) {
+    return Strings.concat(QueryText.EQNAME, uri, CURLY2, local);
   }
 
   /**
@@ -343,7 +376,7 @@ public final class QNm extends Item {
    * @param uri uri (can be {@code null})
    * @return EQName representation
    */
-  public static byte[] internal(final byte[] prefix, final byte[] local, final byte[] uri) {
+  private static byte[] internal(final byte[] prefix, final byte[] local, final byte[] uri) {
     // optimized for speed, as it is called quite frequently
     final int ul = uri == null ? 0 : uri.length;
     final int pl = prefix == null ? 0 : prefix.length;
@@ -356,21 +389,16 @@ public final class QNm extends Item {
     if(ul != 0) {
       key[i++] = 'Q';
       key[i++] = '{';
-      System.arraycopy(uri, 0, key, i, ul);
+      Array.copyFromStart(uri, ul, key, i);
       key[i + ul] = '}';
       i += ul + 1;
     }
     if(pl != 0) {
-      System.arraycopy(prefix, 0, key, i, pl);
+      Array.copyFromStart(prefix, pl, key, i);
       key[i + pl] = ':';
       i += pl + 1;
     }
-    System.arraycopy(local, 0, key, i, local.length);
+    Array.copyFromStart(local, local.length, key, i);
     return key;
-  }
-
-  @Override
-  public String toString() {
-    return Token.string(id());
   }
 }

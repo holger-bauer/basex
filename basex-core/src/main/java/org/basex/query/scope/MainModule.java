@@ -8,9 +8,8 @@ import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
-import org.basex.query.util.list.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -19,10 +18,10 @@ import org.basex.util.hash.*;
 /**
  * An XQuery main module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-public final class MainModule extends Module {
+public final class MainModule extends AModule {
   /** Declared type, {@code null} if not specified. */
   private final SeqType declType;
 
@@ -30,14 +29,14 @@ public final class MainModule extends Module {
    * Creates a new main module for a context item declared in the prolog.
    * @param vs variable scope
    * @param expr root expression
-   * @param type optional type
-   * @param doc documentation
-   * @param info input info
+   * @param declType declared type (can be {@code null})
+   * @param doc documentation (can be {@code null})
+   * @param ii input info (can be {@code null})
    * @return main module
    */
-  public static MainModule get(final VarScope vs, final Expr expr, final SeqType type,
-      final String doc, final InputInfo info) {
-    return new MainModule(vs, expr, type, doc, info, null, null, null);
+  public static MainModule get(final VarScope vs, final Expr expr, final SeqType declType,
+      final String doc, final InputInfo ii) {
+    return new MainModule(vs, expr, declType, doc, ii, null, null, null);
   }
 
   /**
@@ -64,8 +63,8 @@ public final class MainModule extends Module {
    * @param imports namespace URIs of imported modules (can be {@code null})
    */
   public MainModule(final VarScope vs, final Expr expr, final SeqType declType, final String doc,
-      final InputInfo info, final TokenObjMap<StaticFunc> funcs, final TokenObjMap<StaticVar> vars,
-      final TokenSet imports) {
+      final InputInfo info, final TokenObjMap<StaticFunc> funcs,
+      final TokenObjMap<StaticVar> vars, final TokenSet imports) {
 
     super(vs.sc, vs, doc, info, funcs, vars, imports);
     this.expr = expr;
@@ -86,63 +85,69 @@ public final class MainModule extends Module {
   }
 
   /**
-   * Evaluates this module and returns the result as a cached value iterator.
-   * @param qc query context
-   * @return result
-   * @throws QueryException evaluation exception
-   */
-  public ItemList cache(final QueryContext qc) throws QueryException {
-    final int fp = vs.enter(qc);
-    try {
-      final Iter iter = qc.iter(expr);
-      final ItemList cache = new ItemList(Math.max(1, (int) iter.size()));
-      for(Item it; (it = iter.next()) != null;) cache.add(it);
-      if(declType != null) declType.treat(cache.value(), null, info);
-      return cache;
-    } finally {
-      VarScope.exit(fp, qc);
-    }
-  }
-
-  /**
    * Creates a result iterator which lazily evaluates this module.
    * @param qc query context
    * @return result iterator
    * @throws QueryException query exception
    */
   public Iter iter(final QueryContext qc) throws QueryException {
-    if(declType != null) return cache(qc).iter();
+    if(declType != null) return value(qc).iter();
 
     final int fp = vs.enter(qc);
-    final Iter iter = qc.iter(expr);
+    final Iter iter = expr.iter(qc);
     return new Iter() {
+      boolean more = true;
+
       @Override
       public Item next() throws QueryException {
-        final Item it = iter.next();
-        if(it == null) VarScope.exit(fp, qc);
-        return it;
+        if(more) {
+          final Item item = iter.next();
+          if(item != null) return item;
+          more = false;
+          VarScope.exit(fp, qc);
+        }
+        return null;
       }
-
       @Override
-      public long size() {
+      public long size() throws QueryException {
         return iter.size();
       }
-
       @Override
       public Item get(final long i) throws QueryException {
         return iter.get(i);
       }
+      @Override
+      public Value value(final QueryContext q, final Expr ex) throws QueryException {
+        return iter.value(qc, ex);
+      }
     };
   }
 
-  @Override
-  public String toString() {
-    return expr.toString();
+  /**
+   * Creates the result.
+   * @param qc query context
+   * @return result
+   * @throws QueryException query exception
+   */
+  public Value value(final QueryContext qc) throws QueryException {
+    final int fp = vs.enter(qc);
+    try {
+      final Value value = expr.value(qc);
+      if(declType != null) declType.treat(value, null, qc, info);
+      return value;
+    } finally {
+      VarScope.exit(fp, qc);
+    }
   }
 
-  @Override
-  public void plan(final FElem e) {
-    expr.plan(e);
+  /**
+   * Adds the names of the databases that may be touched by the module.
+   * @param locks lock result
+   * @param qc query context
+   * @return result of check
+   */
+  public boolean databases(final Locks locks, final QueryContext qc) {
+    return expr.accept(new LockVisitor(locks, qc));
   }
 
   @Override
@@ -150,14 +155,14 @@ public final class MainModule extends Module {
     return expr.accept(visitor);
   }
 
-  /**
-   * Adds the names of the databases that may be touched by the module.
-   * @param lr lock result
-   * @param qc query context
-   * @return result of check
-   */
-  public boolean databases(final Locks lr, final QueryContext qc) {
-    return expr.accept(new LockVisitor(lr, qc));
+  @Override
+  public void plan(final QueryPlan plan) {
+    expr.plan(plan);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(expr);
   }
 
   /**
@@ -168,26 +173,31 @@ public final class MainModule extends Module {
     /** Already visited scopes. */
     private final IdentityHashMap<Scope, Object> funcs = new IdentityHashMap<>();
     /** Reference to process list of locked databases. */
-    private final LockList locks;
+    private final Locks locks;
+    /** Updating flag. */
+    private final boolean updating;
     /** Focus level. */
     private int level;
 
     /**
      * Constructor.
-     * @param lr lock result
+     * @param locks lock result
      * @param qc query context
      */
-    private LockVisitor(final Locks lr, final QueryContext qc) {
-      locks = qc.updating ? lr.writes : lr.reads;
+    private LockVisitor(final Locks locks, final QueryContext qc) {
+      this.locks = locks;
+      updating = qc.updating;
       level = qc.ctxItem == null ? 0 : 1;
     }
 
     @Override
-    public boolean lock(final String db) {
+    public boolean lock(final String lock, final boolean update) {
       // name is unknown at compile time: return false
-      if(db == null) return false;
+      if(lock == null) return false;
       // if context item is found on top level, it will refer to currently opened database
-      if(level == 0 || db != Locking.CONTEXT) locks.add(db);
+      if(level == 0 || lock != Locking.CONTEXT) {
+        (updating || update ? locks.writes : locks.reads).add(lock);
+      }
       return true;
     }
 
@@ -214,9 +224,9 @@ public final class MainModule extends Module {
     }
 
     @Override
-    public boolean inlineFunc(final Scope sub) {
+    public boolean inlineFunc(final Scope scope) {
       enterFocus();
-      final boolean ac = sub.visit(this);
+      final boolean ac = scope.visit(this);
       exitFocus();
       return ac;
     }
@@ -228,14 +238,14 @@ public final class MainModule extends Module {
 
     /**
      * Visits a scope.
-     * @param scp scope
+     * @param scope scope
      * @return if more expressions should be visited
      */
-    private boolean func(final Scope scp) {
-      if(funcs.containsKey(scp)) return true;
-      funcs.put(scp, null);
+    private boolean func(final Scope scope) {
+      if(funcs.containsKey(scope)) return true;
+      funcs.put(scope, null);
       enterFocus();
-      final boolean ac = scp.visit(this);
+      final boolean ac = scope.visit(this);
       exitFocus();
       return ac;
     }

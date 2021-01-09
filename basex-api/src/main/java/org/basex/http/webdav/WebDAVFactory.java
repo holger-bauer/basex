@@ -3,7 +3,6 @@ package org.basex.http.webdav;
 import javax.servlet.http.*;
 
 import org.basex.http.*;
-import org.basex.server.*;
 import org.basex.util.*;
 
 import com.bradmcevoy.common.*;
@@ -12,7 +11,7 @@ import com.bradmcevoy.http.*;
 /**
  * WebDAV resource factory. Main class for generating WebDAV resources.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */
@@ -40,22 +39,20 @@ final class WebDAVFactory implements ResourceFactory {
   public Resource getResource(final String host, final String dbpath) {
     try {
       final WebDAVService service = SERVICES.get();
-      final HttpServletRequest r = service.conn.req;
-      Path p = Path.path(dbpath);
-      if(!r.getContextPath().isEmpty()) p = p.getStripFirst();
-      if(!r.getServletPath().isEmpty()) p = p.getStripFirst();
-      if(p.isRoot()) return new WebDAVRoot(service);
+      final HttpServletRequest request = service.conn.request;
+      Path path = Path.path(dbpath);
+      if(!request.getContextPath().isEmpty()) path = path.getStripFirst();
+      if(!request.getServletPath().isEmpty()) path = path.getStripFirst();
+      if(path.isRoot()) return new WebDAVRoot(service);
 
-      final String db = p.getFirst();
-      return p.getLength() > 1 ?
-        service.resource(db, p.getStripFirst().toString()) :
+      final String db = path.getFirst();
+      return path.getLength() > 1 ?
+        service.resource(db, path.getStripFirst().toString()) :
         service.dbExists(db) ?
           new WebDAVDatabase(new WebDAVMetaData(db, service.timestamp(db)), service) :
           null;
-    } catch(final LoginException ex) {
-      return WebDAVNotAuthorized.NOAUTH;
     } catch(final Exception ex) {
-      Util.errln(ex);
+      Util.stack(ex);
     }
     return null;
   }

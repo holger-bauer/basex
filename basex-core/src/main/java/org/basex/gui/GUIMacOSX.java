@@ -9,10 +9,11 @@ import org.basex.util.*;
 /**
  * Sets some Mac OS X specific interface options.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Bastian Lemke
+ * @author Alexander Holupirek
  */
-public final class GUIMacOSX {
+public final class GUIMacOSX extends GUIMacOS {
   /** Native class name. */
   private static final String C_APPLICATION = "com.apple.eawt.Application";
   /** Native class name. */
@@ -22,28 +23,25 @@ public final class GUIMacOSX {
 
   /** System property identifier. */
   private static final String P_ABOUT_NAME = "com.apple.mrj.application.apple.menu.about.name";
-  /** System property identifier. */
-  private static final String P_SCREEN_MENU_BAR = "apple.laf.useScreenMenuBar";
 
   /** Empty class array. */
   private static final Class<?>[] EC = {};
   /** Empty object array. */
   private static final Object[] EO = {};
 
-  /** Reference to the main gui. */
-  GUI main;
   /** Instance of the 'Application' class. */
   private final Object appObj;
 
   /**
    * Constructor.
-   * @throws Exception if any error occurs.
+   * @param main reference to main window
+   * @throws Exception if any error occurs
    */
-  public GUIMacOSX() throws Exception {
+  GUIMacOSX(final GUI main) throws Exception {
+    super(main);
+
     // name for the dock icon and the application menu
     System.setProperty(P_ABOUT_NAME, Prop.NAME);
-    // show menu in the screen menu instead of inside the application window
-    System.setProperty(P_SCREEN_MENU_BAR, "true");
 
     // load native java classes...
     /* Reference to the loaded 'Application' class. */
@@ -62,18 +60,9 @@ public final class GUIMacOSX {
       final Class<?> alc = Class.forName(C_APPLICATION_LISTENER);
       final Object listener = Proxy.newProxyInstance(
           Thread.currentThread().getContextClassLoader(),
-          new Class[] { alc}, new AppInvocationHandler());
+          new Class[] { alc }, new AppInvocationHandler());
       invoke(appObj, "addApplicationListener", alc, listener);
     }
-  }
-
-  /**
-   * Initializes this mac gui with the main gui. Has to be called
-   * immediately after creating the gui.
-   * @param gui main gui reference
-   */
-  public void init(final GUI gui) {
-    main = gui;
   }
 
   /**
@@ -82,15 +71,6 @@ public final class GUIMacOSX {
    */
   private void addDockIcon() throws Exception {
     invoke(appObj, "setDockIconImage", Image.class, BaseXImages.get("logo_256"));
-  }
-
-  /**
-   * Sets a value for the badge in the dock.
-   * @param value string value
-   * @throws Exception if any error occurs
-   */
-  public void setBadge(final String value) throws Exception {
-    invoke(appObj, "setDockIconBadge", String.class, value);
   }
 
   /**
@@ -114,11 +94,11 @@ public final class GUIMacOSX {
       try {
         result = GUIMacOSX.invoke(this, method.getName(), Object.class, obj);
       } catch(final NoSuchMethodException ex) {
+        Util.debug(ex);
         result = GUIMacOSX.invoke(this, method.getName());
       }
       // mark the current event as 'handled' if handler doesn't return a false boolean
-      GUIMacOSX.invoke(obj, "setHandled",
-        result != null && Boolean.class.isInstance(result) ? (Boolean) result : true);
+      GUIMacOSX.invoke(obj, "setHandled", result instanceof Boolean ? (Boolean) result : true);
       return null;
     }
 
@@ -133,6 +113,15 @@ public final class GUIMacOSX {
      * Finder or another application.
      */
     public void handleOpenApplication()  { /* NOT IMPLEMENTED */ }
+
+    /**
+     * Called when the application receives an Open Application event from the
+     * Finder or another application.
+     *
+     * @param obj application event
+     */
+    @SuppressWarnings("unused")
+    public void handleOpenApplication(final Object obj)  { /* NOT IMPLEMENTED */ }
 
     /**
      * Called when the application receives an Open Document event from the
@@ -180,33 +169,6 @@ public final class GUIMacOSX {
   }
 
   /**
-   * Returns true if the System has native Fullscreen support.
-   * @return fullscreen support
-   */
-  public static boolean nativeFullscreen() {
-    try {
-      Class.forName("com.apple.eawt.FullScreenUtilities");
-      return true;
-    } catch(final ClassNotFoundException e) {
-      return false;
-    }
-  }
-
-  /**
-   * Enables OSX Lion native fullscreen where available.
-   * @param window the window
-   */
-  public static void enableOSXFullscreen(final Window window) {
-    if(window == null) return;
-    try {
-      final Class<?> util = Class.forName("com.apple.eawt.FullScreenUtilities");
-      final Class<?>[] params = { Window.class, Boolean.TYPE };
-      final Method method = util.getMethod("setWindowCanFullScreen", params);
-      method.invoke(util, window, true);
-    } catch(final Exception ignore) { }
-  }
-
-  /**
    * Invokes a method without arguments on the given object.
    * @param obj object on which the method should be invoked
    * @param method name of the method to invoke
@@ -250,16 +212,15 @@ public final class GUIMacOSX {
   /**
    * Invokes a method on the given object that expects multiple arguments.
    * @param clazz class object to get the method from
-   * @param obj object on which the method should be invoked. Can be {@code null} for static methods
+   * @param obj object on which the method should be invoked ({@code null} for static methods)
    * @param method name of the method to invoke
    * @param argClasses "types" of the arguments
    * @param argObjects argument values
    * @return return value of the method
    * @throws Exception if any error occurs
    */
-  private static Object invoke(final Class<?> clazz, final Object obj,
-      final String method, final Class<?>[] argClasses, final Object[] argObjects)
-      throws Exception {
+  private static Object invoke(final Class<?> clazz, final Object obj, final String method,
+      final Class<?>[] argClasses, final Object[] argObjects) throws Exception {
     return clazz.getMethod(method, argClasses).invoke(obj, argObjects);
   }
 }

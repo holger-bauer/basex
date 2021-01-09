@@ -7,24 +7,24 @@ import org.basex.util.*;
 /**
  * Case-insensitive collation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class NoCaseCollation extends Collation {
   @Override
   public int compare(final byte[] string, final byte[] compare) {
-    final String str = string(string), cmp = string(compare);
-    final int tl = str.length(), cl = cmp.length(), l = Math.min(tl, cl);
+    final String str = string(string), comp = string(compare);
+    final int tl = str.length(), cl = comp.length(), l = Math.min(tl, cl);
     for(int i = 0; i < l; ++i) {
-      final int c = diff(str.charAt(i), cmp.charAt(i));
-      if(c != 0) return c;
+      final int diff = diff(str.charAt(i), comp.charAt(i));
+      if(diff != 0) return diff;
     }
     return tl - cl;
   }
 
   @Override
   protected int indexOf(final String string, final String sub, final Mode mode,
-      final InputInfo info) {
+      final InputInfo ii) {
 
     final int tl = string.length(), sl = sub.length();
     if(sl == 0) return 0;
@@ -53,5 +53,10 @@ final class NoCaseCollation extends Collation {
       if(c1 != c2) return c1 - c2;
     }
     return 0;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return obj instanceof NoCaseCollation;
   }
 }

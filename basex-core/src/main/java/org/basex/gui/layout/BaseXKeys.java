@@ -9,7 +9,7 @@ import java.awt.event.*;
 /**
  * This class offers system-dependent key mappings.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  * @author Klavs Prieditis
@@ -64,11 +64,14 @@ public enum BaseXKeys {
   /** Delete word.           */ DELNEXTWORD(MAC ? ALT : META, VK_DELETE),
   /** Delete line to begin.  */ DELLINESTART(META | (MAC ? NO_MOD : SHIFT), VK_BACK_SPACE),
   /** Delete line to end.    */ DELLINEEND(META | (MAC ? NO_MOD : SHIFT), VK_DELETE),
-  /** Delete complete line.  */ DELLINE(META | SHIFT, VK_D),
+  /** Delete complete line.  */ DELLINES(META | SHIFT, VK_D),
+  /** Duplicate line(s).     */ DUPLLINES(META, VK_D),
 
   // Navigation
 
-  /** Jump to input bar.     */ INPUTBAR(MAC ? META : NO_MOD, VK_F6),
+  /** Jump to input bar.     */ FOCUSINPUT(MAC ? META : NO_MOD, VK_F6),
+  /** Jump to editor.        */ FOCUSEDITOR(MAC ? META : NO_MOD, VK_F12),
+
   /** Next tab.              */ NEXTTAB(CTRL, VK_TAB),
   /** Previous tab.          */ PREVTAB(CTRL | SHIFT, VK_TAB),
   /** Close tab.             */ CLOSETAB(META, VK_F4),
@@ -87,6 +90,10 @@ public enum BaseXKeys {
   /** Find next hit.         */ FINDNEXT2(META, VK_G),
   /** Find previous hit.     */ FINDPREV1(MAC ? META | SHIFT : SHIFT, VK_F3),
   /** Find previous hit.     */ FINDPREV2(META | SHIFT, VK_G),
+  /** Match case.            */ MATCHCASE(SHIFT, VK_F4),
+  /** Whole word.            */ WHOLEWORD(SHIFT, VK_F5),
+  /** Regular expression.    */ REGEX(SHIFT, VK_F6),
+  /** Multi-line.            */ MULTILINE(SHIFT, VK_F7),
 
   // Font
 
@@ -98,7 +105,6 @@ public enum BaseXKeys {
   // General
 
   /** Execute.               */ EXEC1(META, VK_ENTER),
-  /** Execute.               */ EXEC2(META, VK_F11),
   /** Test.                  */ UNIT(META | SHIFT, VK_ENTER),
 
   /** Escape.                */ ESCAPE(NO_MOD, VK_ESCAPE),
@@ -148,7 +154,7 @@ public enum BaseXKeys {
    */
   public boolean is(final KeyEvent e) {
     final int c = e.getKeyCode();
-    final int m = e.getModifiers() | allowed;
+    final int m = e.getModifiersEx() | allowed;
     return m == (modifiers | allowed) &&
         (c == VK_UNDEFINED ? getExtendedKeyCodeForChar(e.getKeyChar()) : c) == key;
   }
@@ -159,7 +165,7 @@ public enum BaseXKeys {
    * @return result of check
    */
   public static boolean sc(final InputEvent e) {
-    return (META & e.getModifiers()) == META;
+    return (META & e.getModifiersEx()) == META;
   }
 
   /**
@@ -186,7 +192,7 @@ public enum BaseXKeys {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder(getKeyModifiersText(modifiers));
+    final StringBuilder sb = new StringBuilder(InputEvent.getModifiersExText(modifiers));
     if(sb.length() != 0) sb.append('+');
     return sb.append(getKeyText(key)).toString();
   }
@@ -197,10 +203,10 @@ public enum BaseXKeys {
    */
   String shortCut() {
     final StringBuilder sb = new StringBuilder();
-    if((modifiers & InputEvent.META_MASK) != 0) sb.append("meta").append(' ');
-    if((modifiers & InputEvent.CTRL_MASK) != 0) sb.append("ctrl").append(' ');
-    if((modifiers & InputEvent.ALT_MASK) != 0) sb.append("alt").append(' ');
-    if((modifiers & InputEvent.SHIFT_MASK) != 0) sb.append("shift").append(' ');
+    if((modifiers & InputEvent.META_DOWN_MASK) != 0) sb.append("meta").append(' ');
+    if((modifiers & InputEvent.CTRL_DOWN_MASK) != 0) sb.append("ctrl").append(' ');
+    if((modifiers & InputEvent.ALT_DOWN_MASK) != 0) sb.append("alt").append(' ');
+    if((modifiers & InputEvent.SHIFT_DOWN_MASK) != 0) sb.append("shift").append(' ');
 
     if(key == VK_ENTER) sb.append("ENTER");
     else if(key == VK_DELETE) sb.append("DELETE");

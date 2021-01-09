@@ -16,7 +16,7 @@ import org.basex.util.list.*;
 /**
  * Abstract class for formatting data in different languages.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Formatter extends FormatUtil {
@@ -42,19 +42,12 @@ public abstract class Formatter extends FormatUtil {
 
   /**
    * Returns a formatter for the specified language.
-   * @param ln language
+   * @param language language
    * @return formatter instance
    */
-  public static Formatter get(final byte[] ln) {
-    // check if formatter has already been created
-    Formatter form = MAP.get(ln);
-    if(form == null) {
-      final String clz = Util.className(Formatter.class) + string(uc(ln));
-      form = (Formatter) Reflect.get(Reflect.find(clz));
-      // instantiation not successful: return default formatter
-      if(form == null) form = MAP.get(EN);
-    }
-    return form;
+  public static Formatter get(final byte[] language) {
+    final Formatter form = MAP.get(language);
+    return form != null ? form : MAP.get(EN);
   }
 
   /**
@@ -114,46 +107,46 @@ public abstract class Formatter extends FormatUtil {
   /**
    * Formats the specified date.
    * @param date date to be formatted
-   * @param lng language
-   * @param pic picture
-   * @param cal calendar
-   * @param plc place
-   * @param ii input info
+   * @param language language
+   * @param picture picture
+   * @param calendar calendar (can be {@code null})
+   * @param place place
    * @param sc static context
+   * @param ii input info
    * @return formatted string
    * @throws QueryException query exception
    */
-  public final byte[] formatDate(final ADate date, final byte[] lng, final byte[] pic,
-      final byte[] cal, final byte[] plc, final InputInfo ii, final StaticContext sc)
+  public final byte[] formatDate(final ADate date, final byte[] language, final byte[] picture,
+      final byte[] calendar, final byte[] place, final StaticContext sc, final InputInfo ii)
       throws QueryException {
 
     final TokenBuilder tb = new TokenBuilder();
-    if(lng.length != 0 && MAP.get(lng) == null) tb.add("[Language: en]");
-    if(cal.length != 0) {
+    if(language.length != 0 && MAP.get(language) == null) tb.add("[Language: en]");
+    if(calendar != null) {
       final QNm qnm;
       try {
-        qnm = QNm.resolve(cal, sc);
+        qnm = QNm.resolve(trim(calendar), sc);
       } catch(final QueryException ex) {
-        throw CALQNAME_X.get(ii, cal);
+        throw CALWHICH_X.get(ii, calendar);
       }
       if(qnm.uri().length == 0) {
         int c = -1;
         final byte[] ln = qnm.local();
         final int cl = CALENDARS.length;
         while(++c < cl && !eq(CALENDARS[c], ln));
-        if(c == cl) throw CALWHICH_X.get(ii, cal);
+        if(c == cl) throw CALWHICH_X.get(ii, calendar);
         if(c > 1) tb.add("[Calendar: AD]");
       }
     }
-    if(plc.length != 0) tb.add("[Place: ]");
+    if(place.length != 0) tb.add("[Place: ]");
 
-    final DateParser dp = new DateParser(ii, pic);
+    final DateParser dp = new DateParser(ii, picture);
     while(dp.more()) {
       final int ch = dp.literal();
       if(ch == -1) {
         // retrieve variable marker
         final byte[] marker = dp.marker();
-        if(marker.length == 0) throw PICDATE_X.get(ii, pic);
+        if(marker.length == 0) throw PICDATE_X.get(ii, picture);
 
         // parse component specifier
         final int compSpec = ch(marker, 0);
@@ -162,8 +155,7 @@ public abstract class Formatter extends FormatUtil {
         BigDecimal frac = null;
         long num = 0;
 
-        final boolean dat = date.type == AtomType.DAT;
-        final boolean tim = date.type == AtomType.TIM;
+        final boolean dat = date.type == AtomType.DATE, tim = date.type == AtomType.TIME;
         boolean err = false;
         switch(compSpec) {
           case 'Y':
@@ -265,16 +257,12 @@ public abstract class Formatter extends FormatUtil {
         } else if(fp.first == 'n') {
           // output name representation
           byte[] in = null;
-          if(compSpec == 'M') {
-            in = month((int) num - 1, fp.min, fp.max);
-          } else if(compSpec == 'F') {
-            in = day((int) num - 1, fp.min, fp.max);
-          } else if(compSpec == 'P') {
-            in = ampm(num == 0);
-          } else if(compSpec == 'C') {
-            in = calendar();
-          } else if(compSpec == 'E') {
-            in = era((int) num);
+          switch(compSpec) {
+            case 'M': in = month((int) num - 1, fp.min, fp.max); break;
+            case 'F': in = day((int) num - 1, fp.min, fp.max); break;
+            case 'P': in = ampm(num == 0); break;
+            case 'C': in = calendar(); break;
+            case 'E': in = era((int) num); break;
           }
           if(in != null) {
             if(fp.cs == Case.LOWER) in = lc(in);
@@ -390,12 +378,12 @@ public abstract class Formatter extends FormatUtil {
         final int c1 = tp.next(), c2 = tp.next(), c3 = tp.next(), c4 = tp.next();
         final int z1 = zeroes(c1), z2 = zeroes(c2), z3 = zeroes(c3), z4 = zeroes(c4);
         if(z1 == -1) {
-          tb.add(addZone(num, 0, new TokenBuilder("00"))).add(':');
-          tb.add(addZone(num, 1, new TokenBuilder("00")));
+          tb.add(addZone(num, 0, new TokenBuilder().add("00"))).add(':');
+          tb.add(addZone(num, 1, new TokenBuilder().add("00")));
         } else if(z2 == -1) {
           tb.add(addZone(num, 0, new TokenBuilder().add(c1)));
           if(c2 == -1) {
-            if(num % 60 != 0) tb.add(':').add(addZone(num, 1, new TokenBuilder("00")));
+            if(num % 60 != 0) tb.add(':').add(addZone(num, 1, new TokenBuilder().add("00")));
           } else {
             final TokenBuilder t = new TokenBuilder().add(z3 == -1 ? '0' : z3);
             if(z3 != -1 && z4 != -1) t.add(z4);
@@ -404,7 +392,7 @@ public abstract class Formatter extends FormatUtil {
         } else if(z3 == -1) {
           tb.add(addZone(num, 0, new TokenBuilder().add(c1).add(c2)));
           if(c3 == -1) {
-            if(num % 60 != 0) tb.add(':').add(addZone(num, 1, new TokenBuilder("00")));
+            if(num % 60 != 0) tb.add(':').add(addZone(num, 1, new TokenBuilder().add("00")));
           } else {
             final int c5 = tp.next(), z5 = zeroes(c5);
             final TokenBuilder t = new TokenBuilder().add(z4 == -1 ? '0' : z4);
@@ -472,7 +460,7 @@ public abstract class Formatter extends FormatUtil {
    * @param min minimum width
    */
   private static void roman(final TokenBuilder tb, final long n, final int min) {
-    final int s = tb.size();
+    final int sz = tb.size();
     if(n > 0 && n < 4000) {
       final int v = (int) n;
       tb.add(ROMANM[v / 1000]);
@@ -482,7 +470,7 @@ public abstract class Formatter extends FormatUtil {
     } else {
       tb.addLong(n);
     }
-    while(tb.size() - s < min) tb.add(' ');
+    while(tb.size() - sz < min) tb.add(' ');
   }
 
   /**
@@ -560,7 +548,7 @@ public abstract class Formatter extends FormatUtil {
    * @param first first digit
    * @return number character sequence
    */
-  private byte[] number(final byte[] num, final FormatParser fp, final int first) {
+  private static byte[] number(final byte[] num, final FormatParser fp, final int first) {
     final int zero = zeroes(first);
 
     // cache characters of presentation modifier

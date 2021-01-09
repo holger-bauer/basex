@@ -18,14 +18,15 @@ import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.parse.json.*;
 import org.basex.io.serial.*;
-import org.basex.query.expr.*;
-import org.basex.query.expr.Expr.*;
 import org.basex.query.func.*;
+import org.basex.query.func.java.*;
 import org.basex.query.iter.*;
 import org.basex.query.scope.*;
 import org.basex.query.up.*;
+import org.basex.query.util.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.hash.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -37,13 +38,12 @@ import org.basex.util.*;
 import org.basex.util.ft.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
-import org.basex.util.options.*;
 
 /**
  * This class organizes both static and dynamic properties that are specific to a
  * single query.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryContext extends Job implements Closeable {
@@ -54,7 +54,9 @@ public final class QueryContext extends Job implements Closeable {
   /** Functions. */
   public final StaticFuncs funcs = new StaticFuncs();
   /** Externally bound variables. */
-  private final HashMap<QNm, Value> bindings = new HashMap<>();
+  private final QNmMap<Value> bindings = new QNmMap<>();
+  /** External query properties. */
+  private final HashMap<String, Object> props;
 
   /** Parent query context. */
   public final QueryContext parent;
@@ -65,18 +67,18 @@ public final class QueryContext extends Job implements Closeable {
 
   /** Query resources. */
   public QueryResources resources;
-  /** HTTP connection. */
-  public Object http;
-  /** Update container. */
+  /** Update container; will be created if the first update is evaluated. */
   public Updates updates;
 
   /** Global database options (will be reassigned after query execution). */
-  final HashMap<Option<?>, Object> staticOpts = new HashMap<>();
-  /** Temporary query options (key/value pairs), supplied by option declarations. */
-  final StringList tempOpts = new StringList();
+  final QueryOptions options = new QueryOptions(this);
 
+  /** Query threads. */
+  public final QueryThreads threads = new QueryThreads();
   /** Current context value. */
   public QueryFocus focus = new QueryFocus();
+  /** Current date/time values. */
+  public QueryDateTime dateTime;
 
   /** Full-text position data (needed for highlighting full-text results). */
   public FTPosData ftPosData = Prop.gui ? new FTPosData() : null;
@@ -89,24 +91,11 @@ public final class QueryContext extends Job implements Closeable {
   /** Scoring flag. */
   public boolean scoring;
 
-  /** Current Date. */
-  public Dat date;
-  /** Current DateTime. */
-  public Dtm datm;
-  /** Current Time. */
-  public Tim time;
-  /** Current timezone. */
-  public DTDur zone;
-  /** Current nanoseconds. */
-  public long nano;
-
   /** Available collations. */
   public TokenObjMap<Collation> collations;
 
-  /** Strings to lock defined by read-lock option. */
-  public final LockList readLocks = new LockList();
-  /** Strings to lock defined by write-lock option. */
-  public final LockList writeLocks = new LockList();
+  /** User-defined locks. */
+  public final LockList locks = new LockList();
 
   /** Number of successive tail calls. */
   public int tailCalls;
@@ -147,10 +136,9 @@ public final class QueryContext extends Job implements Closeable {
    * @param parent parent context
    */
   public QueryContext(final QueryContext parent) {
-    this(parent.context, parent, parent.info);
+    this(parent.context, parent, parent.info, parent.props);
     parent.pushJob(this);
     resources = parent.resources;
-    http = parent.http;
     updates = parent.updates;
   }
 
@@ -159,7 +147,7 @@ public final class QueryContext extends Job implements Closeable {
    * @param context database context
    */
   public QueryContext(final Context context) {
-    this(context, null, null);
+    this(context, null, null, new HashMap<>());
     resources = new QueryResources(this);
   }
 
@@ -167,25 +155,26 @@ public final class QueryContext extends Job implements Closeable {
    * Constructor.
    * @param context database context
    * @param parent parent context (can be {@code null})
-   * @param info query info
+   * @param info query info (can be {@code null})
+   * @param props external properties
    */
-  private QueryContext(final Context context, final QueryContext parent, final QueryInfo info) {
+  private QueryContext(final Context context, final QueryContext parent, final QueryInfo info,
+      final HashMap<String, Object> props) {
     this.context = context;
     this.parent = parent;
     this.info = info != null ? info : new QueryInfo(this);
+    this.props = props;
   }
 
   /**
    * Parses the specified query.
    * @param query query string
    * @param uri base URI (may be {@code null})
-   * @param sc static context (may be {@code null})
    * @return main module
    * @throws QueryException query exception
    */
-  public Module parse(final String query, final String uri, final StaticContext sc)
-      throws QueryException {
-    return parse(query, QueryProcessor.isLibrary(query), uri, sc);
+  public AModule parse(final String query, final String uri) throws QueryException {
+    return parse(query, QueryProcessor.isLibrary(query), uri);
   }
 
   /**
@@ -193,13 +182,23 @@ public final class QueryContext extends Job implements Closeable {
    * @param query query string
    * @param library library/main module
    * @param uri base URI (may be {@code null})
-   * @param sc static context (may be {@code null})
    * @return main module
    * @throws QueryException query exception
    */
-  public Module parse(final String query, final boolean library, final String uri,
-      final StaticContext sc) throws QueryException {
-    return library ? parseLibrary(query, uri, sc) : parseMain(query, uri, sc);
+  public AModule parse(final String query, final boolean library, final String uri)
+      throws QueryException {
+    return library ? parseLibrary(query, uri) : parseMain(query, uri);
+  }
+
+  /**
+   * Parses the specified query.
+   * @param query query string
+   * @param uri base URI (may be {@code null})
+   * @return main module
+   * @throws QueryException query exception
+   */
+  public MainModule parseMain(final String query, final String uri) throws QueryException {
+    return parseMain(query, uri, null);
   }
 
   /**
@@ -216,7 +215,8 @@ public final class QueryContext extends Job implements Closeable {
     info.query = query;
     final QueryParser qp = new QueryParser(query, uri, this, sc);
     root = qp.parseMain();
-    if(updating) updating = (qp.sc.mixUpdates && qp.sc.dynFuncCall) || root.expr.has(Flag.UPD);
+    // updating expression: check if an updating expression is left in the expression tree
+    if(updating && !qp.sc.mixUpdates) updating = root.expr.has(Flag.UPD);
     return root;
   }
 
@@ -224,16 +224,13 @@ public final class QueryContext extends Job implements Closeable {
    * Parses the specified module.
    * @param query query string
    * @param uri base URI (may be {@code null})
-   * @param sc static context (may be {@code null})
    * @return name of module
    * @throws QueryException query exception
    */
-  public LibraryModule parseLibrary(final String query, final String uri, final StaticContext sc)
-      throws QueryException {
-
+  public LibraryModule parseLibrary(final String query, final String uri) throws QueryException {
     info.query = query;
     try {
-      return new QueryParser(query, uri, this, sc).parseLibrary(true);
+      return new QueryParser(query, uri, this, null).parseLibrary(true);
     } finally {
       // library module itself is not updating
       updating = false;
@@ -256,22 +253,29 @@ public final class QueryContext extends Job implements Closeable {
   public void compile() throws QueryException {
     checkStop();
     if(compiled) return;
+    info.runtime = false;
 
     final CompileContext cc = new CompileContext(this);
     try {
-      // set database options
-      final StringList opts = tempOpts;
-      final int os = opts.size();
-      for(int o = 0; o < os; o += 2) {
-        final String key = opts.get(o), val = opts.get(o + 1);
-        try {
-          context.options.assign(key.toUpperCase(Locale.ENGLISH), val);
-        } catch(final BaseXException ex) {
-          throw BASX_VALUE_X_X.get(null, key, val);
+      // bind external variables of global option (if not assigned yet by other APIs)
+      final MainOptions mopts = context.options;
+      if(root != null && parent == null) {
+        for(final Entry<String, String> entry : mopts.toMap(MainOptions.BINDINGS).entrySet()) {
+          final String key = entry.getKey();
+          final Atm value = new Atm(entry.getValue());
+          if(key.isEmpty()) {
+            if(ctxItem == null) context(value, root.sc);
+          } else {
+            final QNm name = qname(key, root.sc);
+            if(!bindings.contains(name)) bind(name, value);
+          }
         }
       }
-      // set tail call option after assignment database option
-      maxCalls = context.options.get(MainOptions.TAILCALLS);
+
+      // set database options
+      options.compile();
+      // set tail call option after assigning database options
+      maxCalls = mopts.get(MainOptions.TAILCALLS);
 
       // bind external variables
       vars.bindExternal(this, bindings);
@@ -280,7 +284,7 @@ public final class QueryContext extends Job implements Closeable {
         // evaluate initial expression
         try {
           ctxItem.comp(cc);
-          focus.value = ctxItem.cache(this).value();
+          focus.value = ctxItem.value(this);
         } catch(final QueryException ex) {
           // only {@link ParseExpr} instances may lead to a missing context
           throw ex.error() == NOCTX_X ? CIRCCTX.get(ctxItem.info) : ex;
@@ -289,30 +293,30 @@ public final class QueryContext extends Job implements Closeable {
         // cache the initial context nodes
         final DBNodes nodes = context.current();
         if(nodes != null) {
-          if(!context.perm(Perm.READ, nodes.data().meta.name))
-            throw BASX_PERM_X.get(null, Perm.READ);
+          final String name = nodes.data().meta.name;
+          if(!context.perm(Perm.READ, name))
+            throw BASEX_PERMISSION_X_X.get(null, Perm.READ, name);
           focus.value = resources.compile(nodes);
         }
       }
 
       // if specified, convert context value to specified type
       // [LW] should not be necessary
-      if(focus.value != null && root.sc.contextType != null) {
+      if(focus.value != null && root.sc != null && root.sc.contextType != null) {
         focus.value = root.sc.contextType.promote(focus.value, null, this, root.sc, null, true);
       }
 
       try {
         // compile the expression
         if(root != null) QueryCompiler.compile(cc, root);
-        // compile global functions.
+        // compile static functions
         else funcs.compile(cc);
       } catch(final StackOverflowError ex) {
         Util.debug(ex);
-        throw BASX_STACKOVERFLOW.get(null, ex);
+        throw BASEX_OVERFLOW.get(null, ex);
       }
-
-      info.runtime = true;
     } finally {
+      info.runtime = true;
       compiled = true;
     }
   }
@@ -324,85 +328,28 @@ public final class QueryContext extends Job implements Closeable {
    */
   public Iter iter() throws QueryException {
     compile();
-
-    try {
-      // no updates: iterate through results
-      if(!updating) return root.iter(this);
-
-      // cache results
-      ItemList results = root.cache(this);
-
-      // only perform updates if no parent context exists
-      if(updates != null && parent == null) {
-        // create copies of results that will be modified by an update operation
-        final ItemList cache = updates.cache;
-        final HashSet<Data> datas = updates.prepare(this);
-        final StringList dbs = updates.databases();
-        check(results, datas, dbs);
-        check(cache, datas, dbs);
-
-        // invalidate current node set in context, apply updates
-        if(context.data() != null) context.invalidate();
-        updates.apply(this);
-
-        // append cached outputs
-        if(!cache.isEmpty()) {
-          if(results.isEmpty()) results = cache;
-          else results.add(cache.value());
-        }
-      }
-      return results.iter();
-
-    } catch(final StackOverflowError ex) {
-      Util.debug(ex);
-      throw BASX_STACKOVERFLOW.get(null);
-    }
+    return updating ? update().iter() : root.iter(this);
   }
 
   /**
-   * Checks the specified results, and replaces nodes with their copies if they will be
-   * affected by update operations.
-   * @param results node cache
-   * @param datas data references
-   * @param dbs database names
+   * Returns the result.
+   * @return result iterator
    * @throws QueryException query exception
    */
-  private void check(final ItemList results, final HashSet<Data> datas, final StringList dbs)
-      throws QueryException {
-
-    final long cs = results.size();
-    for(int c = 0; c < cs; c++) {
-      final Item it = results.get(c);
-      // all updates are performed on database nodes
-      if(it instanceof FItem) throw BASX_FITEM_X.get(null, it);
-      final Data data = it.data();
-      if(data != null && (datas.contains(data) ||
-          !data.inMemory() && dbs.contains(data.meta.name))) {
-        results.set(c, ((DBNode) it).dbNodeCopy(context.options));
-      }
-    }
+  public Value value() throws QueryException {
+    compile();
+    return updating ? update() : root.value(this);
   }
 
   /**
-   * Evaluates the specified expression and returns an iterator.
-   * @param expr expression to be evaluated
-   * @return iterator
+   * Checks if evaluation has been stopped and returns the next item of an iterator.
+   * @param iter iterator
+   * @return item or {@code null}
    * @throws QueryException query exception
    */
-  public Iter iter(final Expr expr) throws QueryException {
+  public Item next(final Iter iter) throws QueryException {
     checkStop();
-    return expr.iter(this);
-  }
-
-  /**
-   * Evaluates the specified expression and returns a value.
-   * @param expr expression to be evaluated
-   * @return value
-   * @throws QueryException query exception
-   */
-  public Value value(final Expr expr) throws QueryException {
-    checkStop();
-    return expr.value(this);
+    return iter.next();
   }
 
   /**
@@ -414,88 +361,100 @@ public final class QueryContext extends Job implements Closeable {
     return updates;
   }
 
-  /**
-   * Returns the current data reference of the context value or {@code null}.
-   * @return data reference
-   */
-  public Data data() {
-    return focus.value != null ? focus.value.data() : null;
-  }
-
   @Override
   public void addLocks() {
-    final Locks locks = jc().locks;
-    final LockList read = locks.reads, write = locks.writes;
-    read.add(readLocks);
-    write.add(writeLocks);
-    // use global locking if referenced databases cannot be statically determined
-    if(root == null || !root.databases(locks, this) ||
-       ctxItem != null && !ctxItem.databases(locks, this)) {
-      (updating ? write : read).addGlobal();
+    // choose read or write locks
+    final Locks l = jc().locks;
+    final LockList list = updating ? l.writes : l.reads;
+
+    if(root == null || !root.databases(l, this) || ctxItem != null && !ctxItem.databases(l, this)) {
+      // use global locking if referenced databases cannot statically be determined
+      list.addGlobal();
+    } else {
+      // add custom locks
+      list.add(locks);
     }
   }
 
   /**
-   * Binds the HTTP connection.
-   * @param val HTTP connection
+   * Assigns an external property.
+   * @param key key
+   * @param value value
    */
-  public void http(final Object val) {
-    http = val;
+  public void putProperty(final String key, final Object value) {
+    props.put(key, value);
+  }
+
+  /**
+   * Returns an external property.
+   * @param key key
+   * @return value (can be {@code null})
+   */
+  public Object getProperty(final String key) {
+    return props.get(key);
   }
 
   /**
    * Binds the context value, using the same rules as for
    * {@link #bind(String, Object, String, StaticContext) binding variables}.
-   * @param val value to be bound
+   * @param value value to be bound
    * @param type type (may be {@code null})
    * @param sc static context
    * @throws QueryException query exception
    */
-  public void context(final Object val, final String type, final StaticContext sc)
+  public void context(final Object value, final String type, final StaticContext sc)
       throws QueryException {
-    context(cast(val, type), sc);
+    context(cast(value, type), sc);
   }
 
   /**
    * Binds the context value.
-   * @param val value to be bound
+   * @param value value to be bound
    * @param sc static context
    */
-  public void context(final Value val, final StaticContext sc) {
-    ctxItem = MainModule.get(new VarScope(sc), val, null, null, null);
+  public void context(final Value value, final StaticContext sc) {
+    ctxItem = MainModule.get(new VarScope(sc), value, null, null, null);
   }
 
   /**
    * Binds a value to a global variable. The specified type is interpreted as follows:
    * <ul>
    *   <li> If {@code "json"} is specified, the value is converted according to the rules
-   *        specified in {@link JsonMapConverter}.</li>
+   *        specified in {@link JsonXQueryConverter}.</li>
    *   <li> Otherwise, the type is cast to the specified XDM type.</li>
    * </ul>
    * If the value is an XQuery {@link Value}, it is directly assigned.
    * Otherwise, it is cast to the XQuery data model, using a Java/XQuery mapping.
    * @param name name of variable
-   * @param val value to be bound
+   * @param value value to be bound
    * @param type type (may be {@code null})
    * @param sc static context
    * @throws QueryException query exception
    */
-  public void bind(final String name, final Object val, final String type, final StaticContext sc)
+  public void bind(final String name, final Object value, final String type, final StaticContext sc)
       throws QueryException {
-    bind(name, cast(val, type), sc);
+    bind(name, cast(value, type), sc);
   }
 
   /**
    * Binds a value to a global variable.
    * @param name name of variable
-   * @param val value to be bound
+   * @param value value to be bound
    * @param sc static context
    * @throws QueryException query exception
    */
-  public void bind(final String name, final Value val, final StaticContext sc)
+  public void bind(final String name, final Value value, final StaticContext sc)
       throws QueryException {
-    final byte[] n = token(name);
-    bindings.put(QNm.resolve(indexOf(n, '$') == 0 ? substring(n, 1) : n, sc), val);
+    bind(qname(name, sc), value);
+  }
+
+  /**
+   * Binds a value to a global variable.
+   * @param name name of variable
+   * @param value value to be bound
+   */
+  public void bind(final QNm name, final Value value) {
+    bindings.put(name, value);
   }
 
   /**
@@ -547,20 +506,20 @@ public final class QueryContext extends Job implements Closeable {
 
   /**
    * Creates and returns an XML query plan (expression tree) for this query.
+   * @param full include comprehensive information
    * @return query plan
    */
-  public FElem plan() {
+  public FElem plan(final boolean full) {
     // only show root node if functions or variables exist
-    final FElem e = new FElem(QueryText.QUERY_PLAN);
-    e.add(QueryText.COMPILED, token(compiled));
+    final QueryPlan plan = new QueryPlan(compiled, closed, full);
     if(root != null) {
-      for(final StaticScope ss : QueryCompiler.usedDecls(root)) ss.plan(e);
-      root.plan(e);
+      for(final StaticScope ss : QueryCompiler.usedDecls(root)) ss.plan(plan);
+      root.plan(plan);
     } else {
-      funcs.plan(e);
-      vars.plan(e);
+      funcs.plan(plan);
+      vars.plan(plan);
     }
-    return e;
+    return plan.root();
   }
 
   /**
@@ -577,164 +536,18 @@ public final class QueryContext extends Job implements Closeable {
     if(parent == null) {
       // topmost query: close resources (opened by compile step)
       resources.close();
+      threads.close();
     } else {
       // otherwise, adopt update reference (may have been initialized by sub query)
       parent.updates = updates;
       parent.popJob();
     }
-    // reassign original database options (changed by compile step)
-    for(final Entry<Option<?>, Object> e : staticOpts.entrySet()) {
-      context.options.put(e.getKey(), e.getValue());
-    }
+    options.close();
   }
 
   @Override
   public String shortInfo() {
     return SAVE;
-  }
-
-  // CLASS METHODS ======================================================================
-
-  /**
-   * Caches and returns the result of the specified query. If all nodes are of the same database
-   * instance, the returned value will be of type {@link DBNodes}.
-   * @param max maximum number of results to cache (negative: return all values)
-   * @return resulting value
-   * @throws QueryException query exception
-   */
-  Value cache(final int max) throws QueryException {
-    final int mx = max >= 0 ? max : Integer.MAX_VALUE;
-
-    // evaluates the query
-    final Iter ir = iter();
-    final ItemList cache;
-    Item it;
-
-    // check if all results belong to the database of the input context
-    final Data data = resources.globalData();
-    if(defaultOutput && data != null) {
-      final IntList pres = new IntList();
-      while((it = ir.next()) != null && it.data() == data && pres.size() < mx) {
-        checkStop();
-        pres.add(((DBNode) it).pre());
-      }
-
-      // all results processed: return compact node sequence
-      final int ps = pres.size();
-      if(it == null || ps == mx) return new DBNodes(data, pres.finish()).ftpos(ftPosData);
-
-      // otherwise, add nodes to standard iterator
-      cache = new ItemList();
-      for(int p = 0; p < ps; p++) cache.add(new DBNode(data, pres.get(p)));
-      cache.add(it);
-    } else {
-      cache = new ItemList();
-    }
-
-    // use standard iterator
-    while((it = ir.next()) != null && cache.size() < mx) {
-      checkStop();
-      it.materialize(null);
-      cache.add(it);
-    }
-    return cache.value();
-  }
-
-  // PRIVATE METHODS ====================================================================
-
-  /**
-   * Casts a value to the specified type.
-   * See {@link #bind(String, Object, String, StaticContext)} for more infos.
-   * @param val value to be cast
-   * @param type type (may be {@code null})
-   * @return cast value
-   * @throws QueryException query exception
-   */
-  private Value cast(final Object val, final String type) throws QueryException {
-    final StaticContext sc = root != null ? root.sc : new StaticContext(this);
-
-    // String input
-    Object vl = val;
-    if(vl instanceof String) {
-      final String string = (String) vl;
-      final StringList strings = new StringList(1);
-      // strings containing multiple items (value \1 ...)
-      if(string.indexOf('\1') == -1) {
-        strings.add(string);
-      } else {
-        strings.add(string.split("\1"));
-        vl = strings.toArray();
-      }
-
-      // sub types overriding the global value (value \2 type)
-      if(string.indexOf('\2') != -1) {
-        final ValueBuilder vb = new ValueBuilder();
-        for(final String str : strings) {
-          final int i = str.indexOf('\2');
-          final String s = i == -1 ? str : str.substring(0, i);
-          final String t = i == -1 ? type : str.substring(i + 1);
-          vb.add(cast(s, t));
-        }
-        return vb.value();
-      }
-    }
-
-    // no type specified: return original value or convert Java object
-    if(type == null || type.isEmpty()) {
-      return vl instanceof Value ? (Value) vl : JavaFunction.toValue(vl, this, sc);
-    }
-
-    // convert to json
-    if(type.equalsIgnoreCase(MainParser.JSON.name())) {
-      try {
-        final JsonParserOptions jp = new JsonParserOptions();
-        jp.set(JsonOptions.FORMAT, JsonFormat.MAP);
-        return JsonConverter.get(jp).convert(token(vl.toString()), null);
-      } catch(final QueryIOException ex) {
-        throw ex.getCause();
-      }
-    }
-
-    // test for empty sequence
-    if(type.equals(QueryText.EMPTY_SEQUENCE + "()")) return Empty.SEQ;
-
-    // convert to the specified type
-    // [LW] type should be parsed properly
-    final QNm nm = new QNm(token(type.replaceAll("\\(.*?\\)$", "")), sc);
-    if(!nm.hasURI() && nm.hasPrefix()) throw NOURI_X.get(null, nm.string());
-
-    Type tp;
-    if(type.endsWith(")")) {
-      if(nm.eq(AtomType.ITEM.name)) tp = AtomType.ITEM;
-      else tp = NodeType.find(nm);
-      if(tp == null) tp = FuncType.find(nm);
-    } else {
-      tp = ListType.find(nm);
-      if(tp == null) tp = AtomType.find(nm, false);
-    }
-    if(tp == null) throw WHICHTYPE_X.get(null, type);
-
-    // cast XDM values
-    if(vl instanceof Value) {
-      // cast single item
-      if(vl instanceof Item) return tp.cast((Item) vl, this, sc, null);
-      // cast sequence
-      final Value v = (Value) vl;
-      final ValueBuilder seq = new ValueBuilder();
-      for(final Item i : v) seq.add(tp.cast(i, this, sc, null));
-      return seq.value();
-    }
-
-    if(vl instanceof String[]) {
-      // cast string array
-      final String[] strings = (String[]) vl;
-      final ValueBuilder seq = new ValueBuilder();
-      for(final String s : strings) seq.add(tp.cast(s, this, sc, null));
-      return seq.value();
-    }
-
-    // cast any other object to XDM
-    return tp.cast(vl, this, sc, null);
   }
 
   /**
@@ -749,11 +562,11 @@ public final class QueryContext extends Job implements Closeable {
   /**
    * Binds an expression to a local variable.
    * @param var variable
-   * @param val expression to be bound
+   * @param value expression to be bound
    * @throws QueryException exception
    */
-  public void set(final Var var, final Value val) throws QueryException {
-    stack.set(var, val, this);
+  public void set(final Var var, final Value value) throws QueryException {
+    stack.set(var, value, this);
   }
 
   /**
@@ -791,24 +604,212 @@ public final class QueryContext extends Job implements Closeable {
    * @return self reference
    * @throws QueryException query exception
    */
-  public QueryContext initDateTime() throws QueryException {
-    if(time == null) {
-      final Date dt = Calendar.getInstance().getTime();
-      final String ymd = DateTime.format(dt, DateTime.DATE);
-      final String hms = DateTime.format(dt, DateTime.TIME);
-      final String zon = DateTime.format(dt, DateTime.ZONE);
-      final String znm = zon.substring(0, 3), zns = zon.substring(3);
-      time = new Tim(token(hms + znm + ':' + zns), null);
-      date = new Dat(token(ymd + znm + ':' + zns), null);
-      datm = new Dtm(token(ymd + 'T' + hms + znm + ':' + zns), null);
-      zone = new DTDur(Strings.toInt(znm), Strings.toInt(zns));
-      nano = System.nanoTime();
-    }
-    return this;
+  public QueryDateTime dateTime() throws QueryException {
+    if(dateTime == null) dateTime = new QueryDateTime();
+    return dateTime;
   }
 
   @Override
   public String toString() {
-    return root != null ? root.toString() : info.query;
+    return root != null ? QueryInfo.usedDecls(root) : info.query;
+  }
+
+  // CLASS METHODS ================================================================================
+
+  /**
+   * Caches and returns the result of the specified query. If all nodes are of the same database
+   * instance, the returned value will be of type {@link DBNodes}.
+   * @param max maximum number of results to cache (negative: return all values)
+   * @return resulting value
+   * @throws QueryException query exception
+   */
+  Value cache(final int max) throws QueryException {
+    final int mx = max >= 0 ? max : Integer.MAX_VALUE;
+
+    // evaluates the query
+    final Iter iter = iter();
+    final ItemList items;
+    Item item;
+
+    // check if all results belong to the database of the input context
+    final Data data = resources.globalData();
+    if(defaultOutput && data != null) {
+      final IntList pres = new IntList();
+      while((item = next(iter)) != null && item.data() == data && pres.size() < mx) {
+        pres.add(((DBNode) item).pre());
+      }
+
+      // all results processed: return compact node sequence, attach full-text positions
+      final int ps = pres.size();
+      if(item == null || ps == mx) {
+        return ps == 0 ? Empty.VALUE : new DBNodes(data, pres.finish()).ftpos(ftPosData);
+      }
+
+      // otherwise, add nodes to standard iterator
+      items = new ItemList();
+      for(int p = 0; p < ps; p++) items.add(new DBNode(data, pres.get(p)));
+      items.add(item);
+    } else {
+      items = new ItemList();
+    }
+
+    // use standard iterator
+    while((item = next(iter)) != null && items.size() < mx) {
+      item.cache(false, null);
+      items.add(item);
+    }
+    return items.value();
+  }
+
+  // PRIVATE METHODS ==============================================================================
+
+  /**
+   * Returns the result of an updating expression.
+   * @return result iterator
+   * @throws QueryException query exception
+   */
+  private Value update() throws QueryException {
+    try {
+      // retrieve result
+      final Value value = root.value(this);
+      // only perform updates if no parent context exists
+      if(updates == null || parent != null) return value;
+
+      // create copies of results that will be modified by an update operation
+      final HashSet<Data> datas = updates.prepare(this);
+      final StringList dbs = updates.databases();
+      final QueryFunction<Item, Item> materialize = item -> {
+        final Data data = item.data();
+        final boolean copy = data != null &&
+            (datas.contains(data) || !data.inMemory() && dbs.contains(data.meta.name));
+        final Item it = item.materialize(this, copy);
+        if(it == null) throw BASEX_FUNCTION_X.get(null, item);
+        return it;
+      };
+
+      final ValueBuilder vb = new ValueBuilder(this);
+      for(final Item item : value) {
+        checkStop();
+        vb.add(materialize.apply(item));
+      }
+      for(final Item item : updates.output(true)) {
+        checkStop();
+        vb.add(materialize.apply(item));
+      }
+
+      // invalidate current node set in context, apply updates
+      if(context.data() != null) context.invalidate();
+      updates.apply(this);
+
+      return vb.value((Type) null);
+
+    } catch(final StackOverflowError ex) {
+      Util.debug(ex);
+      throw BASEX_OVERFLOW.get(null);
+    }
+  }
+
+  /**
+   * Casts a value to the specified type.
+   * See {@link #bind(String, Object, String, StaticContext)} for more infos.
+   * @param value value to be cast
+   * @param type type (may be {@code null})
+   * @return cast value
+   * @throws QueryException query exception
+   */
+  private Value cast(final Object value, final String type) throws QueryException {
+    final StaticContext sc = root != null ? root.sc : new StaticContext(this);
+
+    // String input
+    Object object = value;
+    if(object instanceof String) {
+      final String string = (String) object;
+      final StringList strings = new StringList(1);
+      // strings containing multiple items (value \1 ...)
+      if(string.indexOf('\1') == -1) {
+        strings.add(string);
+      } else {
+        strings.add(string.split("\1"));
+        object = strings.toArray();
+      }
+
+      // sub types overriding the global value (value \2 type)
+      if(string.indexOf('\2') != -1) {
+        final ValueBuilder vb = new ValueBuilder(this);
+        for(final String str : strings) {
+          final int i = str.indexOf('\2');
+          final String val = i == -1 ? str : str.substring(0, i);
+          final String tp = i == -1 ? type : str.substring(i + 1);
+          vb.add(cast(val, tp));
+        }
+        return vb.value();
+      }
+    }
+
+    // no type specified: return original value or convert Java object
+    if(type == null || type.isEmpty()) {
+      return object instanceof Value ? (Value) object : JavaCall.toValue(object, this, sc);
+    }
+
+    // convert to json
+    if(type.equalsIgnoreCase(MainParser.JSON.name())) {
+      try {
+        final JsonParserOptions jp = new JsonParserOptions();
+        jp.set(JsonOptions.FORMAT, JsonFormat.XQUERY);
+        return JsonConverter.get(jp).convert(token(object.toString()), "");
+      } catch(final QueryIOException ex) {
+        throw ex.getCause();
+      }
+    }
+
+    // test for empty sequence
+    if(type.equals(QueryText.EMPTY_SEQUENCE + "()")) return Empty.VALUE;
+
+    // convert to the specified type
+    // [LW] type should be parsed properly
+    final QNm nm = new QNm(token(type.replaceAll("\\(.*?\\)$", "")), sc);
+    if(!nm.hasURI() && nm.hasPrefix()) throw NOURI_X.get(null, nm.string());
+
+    Type tp;
+    if(Strings.endsWith(type, ')')) {
+      tp = nm.eq(AtomType.ITEM.name) ? AtomType.ITEM : NodeType.find(nm);
+      if(tp == null) tp = FuncType.find(nm);
+    } else {
+      tp = ListType.find(nm);
+      if(tp == null) tp = AtomType.find(nm, false);
+    }
+    if(tp == null) throw WHICHTYPE_X.get(null, type);
+
+    // cast XDM values
+    if(object instanceof Value) {
+      final Value vl = (Value) object;
+      // cast single item
+      if(vl.isItem()) return tp.cast((Item) vl, this, sc, null);
+      // cast sequence
+      final ValueBuilder vb = new ValueBuilder(this);
+      for(final Item item : vl) vb.add(tp.cast(item, this, sc, null));
+      return vb.value(tp);
+    }
+
+    if(object instanceof String[]) {
+      // cast string array
+      final ValueBuilder vb = new ValueBuilder(this);
+      for(final String string : (String[]) object) vb.add(tp.cast(string, this, sc, null));
+      return vb.value(tp);
+    }
+
+    // cast any other object to XDM
+    return tp.cast(object, this, sc, null);
+  }
+
+  /**
+   * Converts the specified variable name to a QName.
+   * @param name name of variable
+   * @param sc static context
+   * @return QName
+   * @throws QueryException query context
+   */
+  private static QNm qname(final String name, final StaticContext sc) throws QueryException {
+    return QNm.resolve(token(Strings.startsWith(name, '$') ? name.substring(1) : name), sc);
   }
 }

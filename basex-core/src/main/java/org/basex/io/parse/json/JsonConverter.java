@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * Interface for converters from JSON to XQuery values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public abstract class JsonConverter {
@@ -41,25 +41,27 @@ public abstract class JsonConverter {
 
   /**
    * Converts the specified input to XML.
-   * @param input input stream
+   * @param input input
    * @throws IOException I/O exception
    * @return result
    */
   public final Item convert(final IO input) throws IOException {
     final String encoding = jopts.get(JsonParserOptions.ENCODING);
-    return convert(new NewlineInput(input).encoding(encoding).content(), input.path());
+    try(NewlineInput ni = new NewlineInput(input)) {
+      return convert(ni.encoding(encoding).content(), input.path());
+    }
   }
 
   /**
    * Converts the specified input to an XQuery item.
    * @param input input
-   * @param path input path (can be {@code null)}
+   * @param path input path (can be empty string}
    * @throws QueryIOException query I/O exception
    * @return result
    */
   public final Item convert(final byte[] input, final String path) throws QueryIOException {
     JsonParser.parse(Token.string(input), path, jopts, this);
-    return finish();
+    return finish(path.isEmpty() ? "" : IO.get(path).url());
   }
 
   /**
@@ -72,7 +74,7 @@ public abstract class JsonConverter {
     switch(jopts.get(JsonOptions.FORMAT)) {
       case JSONML:     return new JsonMLConverter(jopts);
       case ATTRIBUTES: return new JsonAttsConverter(jopts);
-      case MAP:        return new JsonMapConverter(jopts);
+      case XQUERY:     return new JsonXQueryConverter(jopts);
       case BASIC:      return new JsonBasicConverter(jopts);
       default:         return new JsonDirectConverter(jopts);
     }
@@ -155,7 +157,8 @@ public abstract class JsonConverter {
 
   /**
    * Returns the resulting XQuery value.
+   * @param uri base URI
    * @return result
    */
-  abstract Item finish();
+  abstract Item finish(String uri);
 }

@@ -7,28 +7,29 @@ import java.nio.file.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class FileCopy extends FileFn {
   @Override
   public Item item(final QueryContext qc) throws IOException, QueryException {
-    return relocate(true, qc);
+    relocate(true, qc);
+    return Empty.VALUE;
   }
 
   /**
    * Transfers a file path, given a source and a target.
    * @param copy copy flag (no move)
    * @param qc query context
-   * @return result
    * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  final synchronized Item relocate(final boolean copy, final QueryContext qc)
+  final synchronized void relocate(final boolean copy, final QueryContext qc)
       throws QueryException, IOException {
 
     final Path source = toPath(0, qc);
@@ -49,8 +50,7 @@ public class FileCopy extends FileFn {
     }
 
     // ignore operations on identical, canonical source and target path
-    relocate(src, trg, copy);
-    return null;
+    relocate(src, trg, copy, qc);
   }
 
   /**
@@ -58,15 +58,19 @@ public class FileCopy extends FileFn {
    * @param src source path
    * @param trg target path
    * @param copy copy flag
+   * @param qc query context
    * @throws IOException I/O exception
    */
-  private synchronized void relocate(final Path src, final Path trg, final boolean copy)
-      throws IOException {
+  private synchronized void relocate(final Path src, final Path trg, final boolean copy,
+      final QueryContext qc) throws IOException {
 
     if(Files.isDirectory(src)) {
       Files.createDirectory(trg);
-      try(DirectoryStream<Path> paths = Files.newDirectoryStream(src)) {
-        for(final Path p : paths) relocate(p, trg.resolve(p.getFileName()), copy);
+      try(DirectoryStream<Path> children = Files.newDirectoryStream(src)) {
+        qc.checkStop();
+        for(final Path child : children) {
+          relocate(child, trg.resolve(child.getFileName()), copy, qc);
+        }
       }
       if(!copy) Files.delete(src);
     } else if(copy) {

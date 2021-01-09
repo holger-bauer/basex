@@ -14,6 +14,7 @@ import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -22,7 +23,7 @@ import org.basex.util.hash.*;
 /**
  * Replace expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class Replace extends Update {
@@ -49,15 +50,16 @@ public final class Replace extends Update {
     if(c.errAtt != null) throw UPNOATTRPER_X.get(info, c.errAtt);
     if(c.duplAtt != null) throw UPATTDUPL_X.get(info, c.duplAtt);
 
-    final Iter t = qc.iter(exprs[0]);
-    final Item i = t.next();
+    final Iter iter = exprs[0].iter(qc);
+    final Item item = iter.next();
     // check target constraints
-    if(i == null) throw UPSEQEMP_X.get(info, Util.className(this));
-    final Type tp = i.type;
-    if(!(i instanceof ANode) || tp == NodeType.DOC) throw UPTRGNODE_X.get(info, i);
-    final Item i2 = t.next();
-    if(i2 != null) throw UPTRGSINGLE_X.get(info, ValueBuilder.concat(i, i2));
-    final ANode targ = (ANode) i;
+    if(item == null) throw UPSEQEMP_X.get(info, Util.className(this));
+    final Type type = item.type;
+    if(!(item instanceof ANode) || type == NodeType.DOCUMENT_NODE)
+      throw UPTRGNODE_X.get(info, item);
+    final Item item2 = iter.next();
+    if(item2 != null) throw UPTRGSINGLE_X.get(info, ValueBuilder.concat(item, item2, qc));
+    final ANode targ = (ANode) item;
     final Updates updates = qc.updates();
     final DBNode dbn = updates.determineDataRef(targ, qc);
 
@@ -69,17 +71,17 @@ public final class Replace extends Update {
       final byte[] txt = list.size() < 1 ? aList.size() < 1 ? EMPTY :
         aList.get(0).string() : list.get(0).string();
       // check validity of future comments or PIs
-      if(tp == NodeType.COM) FComm.parse(txt, info);
-      if(tp == NodeType.PI) FPI.parse(txt, info);
+      if(type == NodeType.COMMENT) FComm.parse(txt, info);
+      if(type == NodeType.PROCESSING_INSTRUCTION) FPI.parse(txt, info);
 
       updates.add(new ReplaceValue(dbn.pre(), dbn.data(), info, txt), qc);
     } else {
-      final ANode par = targ.parent();
-      if(par == null) throw UPNOPAR_X.get(info, targ);
-      if(tp == NodeType.ATT) {
+      final ANode parent = targ.parent();
+      if(parent == null) throw UPNOPAR_X.get(info, targ);
+      if(type == NodeType.ATTRIBUTE) {
         // replace attribute node
         if(!list.isEmpty()) throw UPWRATTR_X.get(info, list.get(0));
-        list = checkNS(aList, par);
+        list = checkNS(aList, parent);
       } else {
         // replace non-attribute node
         if(!aList.isEmpty()) throw UPWRELM_X.get(info, targ);
@@ -87,17 +89,24 @@ public final class Replace extends Update {
       // conforms to specification: insertion sequence may be empty
       updates.add(new ReplaceNode(dbn.pre(), dbn.data(), info, list), qc);
     }
-    return null;
+    return Empty.VALUE;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Replace(sc, info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), value);
+    return copyType(new Replace(sc, info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), value));
   }
 
   @Override
-  public String toString() {
-    return REPLACE + (value ? ' ' + VALUEE + ' ' + OF : "") +
-      ' ' + NODE + ' ' + exprs[0] + ' ' + WITH + ' ' + exprs[1];
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Replace && value == ((Replace) obj).value &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(REPLACE);
+    if(value) qs.token(VALUEE).token(OF);
+    qs.token(NODE).token(exprs[0]).token(WITH).token(exprs[1]);
   }
 }

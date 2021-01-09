@@ -11,7 +11,7 @@ import org.basex.query.*;
 /**
  * REST-based evaluation of database commands.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class RESTCommand extends RESTCmd {
@@ -30,7 +30,7 @@ final class RESTCommand extends RESTCmd {
     conn.sopts().set(SerializerOptions.METHOD, SerialMethod.TEXT);
     conn.initResponse();
 
-    for(final Command cmd : session) run(cmd, conn.res.getOutputStream());
+    for(final Command cmd : session) run(cmd, conn.response.getOutputStream());
   }
 
   /**

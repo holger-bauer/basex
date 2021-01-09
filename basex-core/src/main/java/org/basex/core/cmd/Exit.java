@@ -7,7 +7,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'exit' command and quits the console.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Exit extends Command {
@@ -18,7 +18,7 @@ public final class Exit extends Command {
 
   @Override
   protected boolean run() {
-    return close(context);
+    return Close.close(context);
   }
 
   @Override

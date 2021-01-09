@@ -6,40 +6,35 @@ import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.func.fn.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ProfType extends StandardFunc {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return type(qc).value(qc);
+    type(qc);
+    return exprs[0].value(qc);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    return type(cc.qc);
+    type(cc.qc);
+    return exprs[0];
   }
 
   /**
-   * Dumps the argument's type and size and returns it unchanged.
+   * Dumps the specified info to standard error or the info view of the GUI.
    * @param qc query context
-   * @return the argument expression
    */
-  private Expr type(final QueryContext qc) {
-    FnTrace.trace(Util.inf("{ type: %, size: %, exprSize: % }", exprs[0].seqType(), exprs[0].size(),
-        exprs[0].exprSize()), token(exprs[0].toString()), qc);
-    return exprs[0];
+  private void type(final QueryContext qc) {
+    final Expr expr = exprs[0];
+    FnTrace.trace(Util.inf("{ type: %, size: %, exprSize: % }", expr.seqType(), expr.size(),
+        expr.exprSize()), token(expr.toString()), qc);
   }
 }

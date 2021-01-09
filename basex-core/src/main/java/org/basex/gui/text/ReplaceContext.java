@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * This class summarizes the result of a replacement.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class ReplaceContext {
@@ -36,29 +36,28 @@ final class ReplaceContext {
    */
   int[] replace(final SearchContext sc, final byte[] txt, final int start, final int end) {
     final int os = txt.length;
-    if(sc.search.isEmpty()) {
+    if(sc.string.isEmpty()) {
       text = txt;
     } else {
-      final TokenBuilder tb = new TokenBuilder(os);
-      tb.add(txt, 0, start);
+      final TokenBuilder tb = new TokenBuilder(os).add(txt, 0, start);
       if(sc.regex) {
         // regular expressions, ignoring position arrays
         int flags = Pattern.DOTALL;
         if(!sc.mcase) flags |= Pattern.CASE_INSENSITIVE;
-        final Pattern p = Pattern.compile(sc.search, flags);
+        final Pattern pattern = Pattern.compile(sc.string, flags);
         if(sc.multi) {
-          tb.add(p.matcher(string(txt, start, end)).replaceAll(replace));
+          tb.add(pattern.matcher(string(txt, start, end)).replaceAll(replace));
         } else {
           for(int e = start, s = start; e <= end; e++) {
             if(e < end ? txt[e] == '\n' : e != s) {
-              tb.add(p.matcher(string(txt, s, e - s)).replaceAll(replace));
+              tb.add(pattern.matcher(string(txt, s, e - s)).replaceAll(replace));
               if(e < end) tb.add('\n');
               s = e + 1;
             }
           }
         }
       } else {
-        final byte[] srch = token(sc.search);
+        final byte[] srch = token(sc.string);
         final byte[] rplc = token(replace);
         final int ss = srch.length;
         boolean s = true;

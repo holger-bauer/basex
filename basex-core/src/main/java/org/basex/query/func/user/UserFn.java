@@ -8,6 +8,7 @@ import org.basex.core.*;
 import org.basex.core.locks.*;
 import org.basex.core.users.*;
 import org.basex.query.*;
+import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
@@ -19,10 +20,15 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class UserFn extends StandardFunc {
+  /** Root node test. */
+  static final QNm Q_INFO = new QNm(UserText.INFO);
+  /** Root node test. */
+  static final NameTest T_INFO = new NameTest(Q_INFO);
+
   /**
    * Checks if the specified expression contains valid database patterns.
    * @param i expression index
@@ -33,10 +39,10 @@ abstract class UserFn extends StandardFunc {
   protected final StringList toPatterns(final int i, final QueryContext qc) throws QueryException {
     final StringList patterns = new StringList();
     if(exprs.length > i) {
-      final Iter iter = qc.iter(exprs[i]);
-      for(Item item; (item = iter.next()) != null;) {
+      final Iter iter = exprs[i].iter(qc);
+      for(Item item; (item = qc.next(iter)) != null;) {
         final String pattern = Token.string(toToken(item));
-        if(!pattern.isEmpty() && !Databases.validName(pattern, true))
+        if(!pattern.isEmpty() && !Databases.validPattern(pattern))
           throw USER_PATTERN_X.get(info, pattern);
         patterns.add(pattern);
       }
@@ -86,8 +92,8 @@ abstract class UserFn extends StandardFunc {
 
     final ArrayList<Perm> perms = new ArrayList<>();
     if(exprs.length > i) {
-      final Iter iter = qc.iter(exprs[i]);
-      for(Item item; (item = iter.next()) != null;) {
+      final Iter iter = exprs[i].iter(qc);
+      for(Item item; (item = qc.next(iter)) != null;) {
         final String perm = Token.string(toToken(item));
         final Perm p = Perm.get(perm);
         if(p == null) throw USER_PERMISSION_X.get(info, perm);
@@ -119,7 +125,7 @@ abstract class UserFn extends StandardFunc {
    */
   protected final String toSafeName(final int i, final QueryContext qc) throws QueryException {
     final String name = toName(i, qc);
-    checkSafe(qc.context.users.get(name), qc);
+    checkInactive(qc.context.users.get(name), qc);
     return name;
   }
 
@@ -130,8 +136,8 @@ abstract class UserFn extends StandardFunc {
    * @return user
    * @throws QueryException query exception
    */
-  protected final User toSafeUser(final int i, final QueryContext qc) throws QueryException {
-    return checkSafe(toUser(i, qc), qc);
+  protected final User toInactiveUser(final int i, final QueryContext qc) throws QueryException {
+    return checkInactive(toUser(i, qc), qc);
   }
 
   /**
@@ -141,11 +147,11 @@ abstract class UserFn extends StandardFunc {
    * @return specified user
    * @throws QueryException query exception
    */
-  private User checkSafe(final User user, final QueryContext qc) throws QueryException {
+  private User checkInactive(final User user, final QueryContext qc) throws QueryException {
     if(user != null) {
       final String name = user.name();
-      for(final ClientListener s : qc.context.sessions) {
-        if(s.context().user().name().equals(name)) throw USER_LOGGEDIN_X.get(info, name);
+      for(final ClientListener cl : qc.context.sessions) {
+        if(cl.context().user().name().equals(name)) throw USER_LOGGEDIN_X.get(info, name);
       }
     }
     return user;
@@ -153,6 +159,7 @@ abstract class UserFn extends StandardFunc {
 
   @Override
   public final boolean accept(final ASTVisitor visitor) {
-    return (!sig.has(Flag.UPD) || visitor.lock(Locking.USER)) && super.accept(visitor);
+    return (!definition.has(Flag.UPD) || visitor.lock(Locking.USER, false)) &&
+        super.accept(visitor);
   }
 }

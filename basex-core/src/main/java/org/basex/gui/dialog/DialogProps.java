@@ -6,7 +6,6 @@ import static org.basex.gui.GUIConstants.*;
 import java.awt.*;
 
 import javax.swing.*;
-import javax.swing.event.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -21,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * Database properties dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogProps extends BaseXDialog {
@@ -51,10 +50,6 @@ public final class DialogProps extends BaseXDialog {
   private final IntList updated = new IntList();
   /** Tabbed pane. */
   private final BaseXTabs tabs;
-  /** Resource panel. */
-  final DialogResources resources;
-  /** Add panel. */
-  final DialogAdd addPanel;
   /** Options dialog. */
   private final DialogOptions optionsPanel;
   /** Index information panel. */
@@ -78,12 +73,17 @@ public final class DialogProps extends BaseXDialog {
   /** Index creation panels. */
   private final DialogIndex[] indexes = new DialogIndex[LABELS.length];
 
+  /** Add panel. */
+  DialogAdd addPanel;
+  /** Resource panel. */
+  DialogResources resources;
+
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public DialogProps(final GUI main) {
-    super(main, DB_PROPS);
+  public DialogProps(final GUI gui) {
+    super(gui, DB_PROPS);
 
     panel.setLayout(new BorderLayout(5, 0));
 
@@ -100,16 +100,16 @@ public final class DialogProps extends BaseXDialog {
       labels[l] = new BaseXLabel(LABELS[l]).large();
       panels[l] = new BaseXBack(new BorderLayout(0, 4));
       BaseXLayout.setWidth(panels[l], 600);
-      infos[l] = new TextPanel(PLEASE_WAIT_D, false, this);
+      infos[l] = new TextPanel(this, PLEASE_WAIT_D, false);
       infos[l].setFont(dmfont);
     }
     // create/drop buttons for values indexes
     for(int l = IndexType.TEXT.ordinal(); l < ll; l++) {
-      buttons[l] = new BaseXButton(" ", this);
+      buttons[l] = new BaseXButton(this, " ");
       BaseXLayout.setHeight(panels[l], 160);
     }
     // no full-text index in main-memory mode
-    final Data data = main.context.data();
+    final Data data = gui.context.data();
     buttons[IndexType.FULLTEXT.ordinal()].setEnabled(!data.inMemory());
 
     // alternative panels
@@ -139,15 +139,15 @@ public final class DialogProps extends BaseXDialog {
     dbPanel.add(new BaseXLabel(DATABASE + COLS + data.meta.name).border(0, 0, 6, 0).large(),
         BorderLayout.NORTH);
 
-    dbInfo = new TextPanel("", false, this);
+    dbInfo = new TextPanel(this, "", false);
     dbInfo.setFont(infoPanel.getFont());
-    dbPanel.add(new SearchEditor(main, dbInfo), BorderLayout.CENTER);
+    dbPanel.add(new SearchEditor(gui, dbInfo), BorderLayout.CENTER);
 
     final BaseXBack nsPanel = new BaseXBack(new BorderLayout());
     nsPanel.add(new BaseXLabel(NAMESPACES).border(0, 0, 6, 0).large(), BorderLayout.NORTH);
 
-    nsInfo = new TextPanel("", false, this);
-    nsPanel.add(new SearchEditor(main, nsInfo), BorderLayout.CENTER);
+    nsInfo = new TextPanel(this, "", false);
+    nsPanel.add(new SearchEditor(gui, nsInfo), BorderLayout.CENTER);
 
     infoPanel.add(dbPanel);
     infoPanel.add(nsPanel);
@@ -165,16 +165,11 @@ public final class DialogProps extends BaseXDialog {
     tabs.addTab(OPTIONS, optionsPanel);
     tabs.addTab(INFORMATION, infoPanel);
 
-    tabs.addChangeListener(new ChangeListener() {
-      @Override
-      public synchronized void stateChanged(final ChangeEvent evt) {
-        updateInfo();
-      }
-    });
+    tabs.addChangeListener(evt -> updateInfo());
     tabsPanel.add(tabs, BorderLayout.CENTER);
 
-    optimize = new BaseXButton(OPTIMIZE, this);
-    optimizeAll = new BaseXButton(OPTIMIZE_ALL, this);
+    optimize = new BaseXButton(this, OPTIMIZE);
+    optimizeAll = new BaseXButton(this, OPTIMIZE_ALL);
     optimizeAll.setEnabled(!gui.context.data().inMemory());
     tabsPanel.add(newButtons(optimize, optimizeAll), BorderLayout.SOUTH);
 
@@ -215,13 +210,10 @@ public final class DialogProps extends BaseXDialog {
       if(updated.contains(idx)) continue;
       updated.add(idx);
 
-      SwingUtilities.invokeLater(new Runnable() {
-        @Override
-        public void run() {
-          infos[idx].setText(val[idx] ? data.info(TYPES[idx], gui.context.options) :
-            Token.token(HELP[idx]));
-          updated.delete(idx);
-        }
+      SwingUtilities.invokeLater(() -> {
+        infos[idx].setText(val[idx] ? data.info(TYPES[idx], gui.context.options) :
+          Token.token(HELP[idx]));
+        updated.removeAll(idx);
       });
     }
   }
@@ -244,6 +236,8 @@ public final class DialogProps extends BaseXDialog {
 
   @Override
   public void action(final Object cmp) {
+    if(resources == null) return;
+
     final Data data = gui.context.data();
     final boolean[] exists = { true, true, true, data.meta.textindex, data.meta.attrindex,
         data.meta.tokenindex, data.meta.ftindex };
@@ -291,8 +285,8 @@ public final class DialogProps extends BaseXDialog {
       updateInfo();
     }
 
-    for(final DialogIndex di : indexes) {
-      if(di != null) di.action(true);
+    for(final DialogIndex index : indexes) {
+      if(index != null) index.action(true);
     }
 
     dbInfo.setText(InfoDB.db(data.meta, true, false));
@@ -304,9 +298,16 @@ public final class DialogProps extends BaseXDialog {
 
   @Override
   public void close() {
-    super.close();
-    for(final DialogIndex di : indexes) {
-      if(di != null) di.setOptions();
+    for(final DialogIndex index : indexes) {
+      if(index != null) index.setOptions();
     }
+    super.close();
+  }
+
+  @Override
+  public void dispose() {
+    resources = null;
+    addPanel = null;
+    super.dispose();
   }
 }

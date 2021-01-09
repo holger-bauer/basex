@@ -1,16 +1,17 @@
 package org.basex.query.value.seq;
 
+import java.util.*;
+
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
-import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * Sequence of items of type {@link Int xs:byte}, containing at least two of them.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BytSeq extends NativeSeq {
@@ -22,7 +23,7 @@ public final class BytSeq extends NativeSeq {
    * @param values bytes
    */
   private BytSeq(final byte[] values) {
-    super(values.length, AtomType.BYT);
+    super(values.length, AtomType.BYTE);
     this.values = values;
   }
 
@@ -32,8 +33,11 @@ public final class BytSeq extends NativeSeq {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    return cmp instanceof BytSeq && Token.eq(values, ((BytSeq) cmp).values);
+  public Value reverse(final QueryContext qc) {
+    final int sz = (int) size;
+    final byte[] tmp = new byte[sz];
+    for(int i = 0; i < sz; i++) tmp[sz - i - 1] = values[i];
+    return get(tmp);
   }
 
   @Override
@@ -41,39 +45,41 @@ public final class BytSeq extends NativeSeq {
     return values;
   }
 
-  // STATIC METHODS =====================================================================
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || (obj instanceof BytSeq ? Arrays.equals(values, ((BytSeq) obj).values) :
+      super.equals(obj));
+  }
+
+  // STATIC METHODS ===============================================================================
 
   /**
    * Creates a sequence with the specified items.
-   * @param items items
+   * @param values values
    * @return value
    */
-  public static Value get(final byte[] items) {
-    return items.length == 0 ? Empty.SEQ : items.length == 1 ? Int.get(items[0], AtomType.BYT) :
-      new BytSeq(items);
+  public static Value get(final byte[] values) {
+    final int vl = values.length;
+    return vl == 0 ? Empty.VALUE : vl == 1 ? Int.get(values[0], AtomType.BYTE) : new BytSeq(values);
   }
 
   /**
-   * Creates a sequence with the items in the specified expressions.
-   * @param values values
+   * Creates a typed sequence with the items of the specified values.
    * @param size size of resulting sequence
+   * @param values values
    * @return value
    * @throws QueryException query exception
    */
-  public static Value get(final Value[] values, final int size) throws QueryException {
-    final byte[] tmp = new byte[size];
-    int t = 0;
-    for(final Value val : values) {
+  static Value get(final int size, final Value... values) throws QueryException {
+    final ByteList tmp = new ByteList(size);
+    for(final Value value : values) {
       // speed up construction, depending on input
-      final int vs = (int) val.size();
-      if(val instanceof BytSeq) {
-        final BytSeq sq = (BytSeq) val;
-        System.arraycopy(sq.values, 0, tmp, t, vs);
-        t += vs;
+      if(value instanceof BytSeq) {
+        tmp.add(((BytSeq) value).values);
       } else {
-        for(int v = 0; v < vs; v++) tmp[t++] = (byte) val.itemAt(v).itr(null);
+        for(final Item item : value) tmp.add((byte) item.itr(null));
       }
     }
-    return get(tmp);
+    return get(tmp.finish());
   }
 }

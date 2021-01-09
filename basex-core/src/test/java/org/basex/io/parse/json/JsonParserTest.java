@@ -1,14 +1,14 @@
 package org.basex.io.parse.json;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.query.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Tests for the {@link JsonParser} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class JsonParserTest {

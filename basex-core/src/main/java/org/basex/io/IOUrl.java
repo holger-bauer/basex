@@ -12,6 +12,7 @@ import javax.net.ssl.*;
 import javax.xml.transform.stream.*;
 
 import org.basex.core.*;
+import org.basex.core.StaticOptions.*;
 import org.basex.io.in.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
@@ -20,7 +21,7 @@ import org.xml.sax.*;
 /**
  * {@link IO} reference, representing a URL.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class IOUrl extends IO {
@@ -37,7 +38,7 @@ public final class IOUrl extends IO {
 
   @Override
   public byte[] read() throws IOException {
-    return new BufferInput(this).content();
+    return BufferInput.get(this).content();
   }
 
   @Override
@@ -57,7 +58,7 @@ public final class IOUrl extends IO {
       conn = connection();
       return conn.getInputStream();
     } catch(final IOException ex) {
-      final TokenBuilder msg = new TokenBuilder(Util.message(ex));
+      final TokenBuilder msg = new TokenBuilder().add(ex);
       // try to retrieve more information on why the request failed
       if(conn instanceof HttpURLConnection) {
         final InputStream es = ((HttpURLConnection) conn).getErrorStream();
@@ -87,29 +88,30 @@ public final class IOUrl extends IO {
     conn.setConnectTimeout(TIMEOUT * 1000);
     // use basic authentication if credentials are contained in the url
     final String ui = url.getUserInfo();
-    if(ui != null) conn.setRequestProperty(HttpText.AUTHORIZATION, HttpText.BASIC + ' ' +
-        org.basex.util.Base64.encode(ui));
+    if(ui != null) conn.setRequestProperty(HttpText.AUTHORIZATION,
+        AuthMethod.BASIC + " " + Base64.encode(ui));
     return conn;
   }
 
   @Override
   public boolean isDir() {
-    return pth.endsWith("/");
+    return Strings.endsWith(pth, '/');
   }
 
   /**
-   * Checks if the specified uri starts with a valid scheme.
-   * @param url url to be converted
+   * Checks if the specified string is a valid URL.
+   * @param url url string
    * @return file path
    */
   static boolean isValid(final String url) {
-    int u = -1;
-    final int us = url.length();
-    while(++u < us) {
+    final int ul = url.length();
+    int u = url.indexOf(':');
+    if(u < 2 || u + 1 == ul || url.charAt(u + 1) != '/') return false;
+    while(--u >= 0) {
       final char c = url.charAt(u);
-      if(!Token.letterOrDigit(c) && c != '+' && c != '-' && c != '.') break;
+      if(!(c >= 'a' && c <= 'z' || c == '+' || c == '-' || c == '.' || c == '_')) return false;
     }
-    return u > 2 && u + 1 < us && url.charAt(u) == ':' && url.charAt(u + 1) == '/';
+    return true;
   }
 
   /**
@@ -120,7 +122,8 @@ public final class IOUrl extends IO {
   static String toFile(final String uri) {
     try {
       final String path = Paths.get(new URI(uri)).toString();
-      return uri.endsWith("/") || uri.endsWith("\\") ? path + File.separator : path;
+      return Strings.endsWith(uri, '/') || Strings.endsWith(uri, '\\') ?
+        path + File.separator : path;
     } catch(final Exception ex) {
       Util.errln(ex);
       return uri;
@@ -137,14 +140,18 @@ public final class IOUrl extends IO {
   }
 
   /**
+   * Ignore Hostname verification.
+   */
+  public static void ignoreHostname() {
+    // http://www.rgagnon.com/javadetails/java-fix-certificate-problem-in-HTTPS.html
+    HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+  }
+
+  /**
    * Ignore certificates.
    */
   public static void ignoreCert() {
-    // http://www.rgagnon.com/javadetails/java-fix-certificate-problem-in-HTTPS.html
-    HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier() {
-      @Override
-      public boolean verify(final String hostname, final SSLSession session) { return true; }
-    });
+    ignoreHostname();
 
     final TrustManager[] tm = { new X509TrustManager() {
       @Override

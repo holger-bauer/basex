@@ -21,7 +21,7 @@ import org.basex.util.hash.*;
  * This class serializes items as JSON. The input must conform to the rules
  * defined in the {@link JsonDirectConverter} and {@link JsonAttsConverter} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JsonBasicSerializer extends JsonSerializer {
@@ -45,10 +45,10 @@ public final class JsonBasicSerializer extends JsonSerializer {
   protected void node(final ANode node) throws IOException {
     if(level > 0) indent();
 
-    final BasicNodeIter iter = node.children();
-    if(node.type == NodeType.DOC || node.type == NodeType.DEL) {
+    final BasicNodeIter iter = node.childIter();
+    if(node.type == NodeType.DOCUMENT_NODE || node.type == NodeType.DOCUMENT_NODE_ELEMENT) {
       for(ANode child; (child = iter.next()) != null;) node(child);
-    } else if(node.type == NodeType.ELM) {
+    } else if(node.type == NodeType.ELEMENT) {
       final QNm name = node.qname();
       final byte[] type = name.local();
       if(!eq(name.uri(), QueryText.FN_URI))
@@ -56,7 +56,7 @@ public final class JsonBasicSerializer extends JsonSerializer {
 
       byte[] key = null;
       boolean escaped = false, escapedKey = false;
-      for(final ANode attr : node.attributes()) {
+      for(final ANode attr : node.attributeIter()) {
         final QNm qnm = attr.qname();
         final byte[] au = qnm.uri(), an = qnm.local(), av = attr.string();
         if(au.length != 0) {
@@ -84,14 +84,12 @@ public final class JsonBasicSerializer extends JsonSerializer {
         out.print('"');
         out.print(norm(key));
         out.print("\":");
-      } else {
-        if(key != null) throw error("Element '%' must have no key.", type);
       }
 
       if(eq(type, NULL)) {
         out.print(NULL);
         for(ANode n; (n = iter.next()) != null;) {
-          if(n.type != NodeType.COM && n.type != NodeType.PI)
+          if(n.type != NodeType.COMMENT && n.type != NodeType.PROCESSING_INSTRUCTION)
             throw error("Element '%' must have no children.", type);
         }
       } else if(eq(type, BOOLEAN)) {
@@ -160,7 +158,7 @@ public final class JsonBasicSerializer extends JsonSerializer {
 
   @Override
   protected void atomic(final Item value) throws IOException {
-    throw BXJS_SERIAL_X.getIO("Atomic values cannot be serialized");
+    throw JSON_SERIALIZE_X.getIO("Atomic values cannot be serialized");
   }
 
   /**
@@ -177,11 +175,11 @@ public final class JsonBasicSerializer extends JsonSerializer {
     level++;
     boolean comma = false;
     for(ANode child; (child = iter.next()) != null;) {
-      if(child.type == NodeType.ELM) {
+      if(child.type == NodeType.ELEMENT) {
         if(comma) out.print(',');
         node(child);
         comma = true;
-      } else if(child.type == NodeType.TXT && !ws(child.string())) {
+      } else if(child.type == NodeType.TEXT && !ws(child.string())) {
         throw error("Element '%' must have no text nodes.", child.name());
       }
     }
@@ -201,10 +199,10 @@ public final class JsonBasicSerializer extends JsonSerializer {
   private static byte[] value(final BasicNodeIter iter, final byte[] type) throws QueryIOException {
     TokenBuilder tb = null;
     for(ANode child; (child = iter.next()) != null;) {
-      if(child.type == NodeType.TXT) {
+      if(child.type == NodeType.TEXT) {
         if(tb == null) tb = new TokenBuilder();
         tb.add(child.string());
-      } else if(child.type == NodeType.ELM) {
+      } else if(child.type == NodeType.ELEMENT) {
         throw error("Element '%' must have no child elements.", type);
       }
     }
@@ -222,49 +220,11 @@ public final class JsonBasicSerializer extends JsonSerializer {
   private byte[] escape(final byte[] value, final boolean escape, final boolean key)
       throws QueryIOException {
 
-    final TokenBuilder raw = new TokenBuilder();
-    if(escape && contains(value, '\\')) {
-      final TokenParser tp = new TokenParser(value);
-      while(tp.more()) {
-        int cp = tp.next();
-        if(cp == '\\') {
-          if(!tp.more()) throw JSON_ESCAPE_X.getIO(value);
-          switch(tp.next()) {
-            case 'u':
-              cp = 0;
-              for(int i = 0; i < 4; i++) {
-                if(!tp.more()) throw JSON_ESCAPE_X.getIO(value);
-                final int c = tp.next();
-                if(c < 0x30 || c > 0x39 && c < 0x41 || c > 0x46 && c < 0x61 || c > 0x66)
-                  throw JSON_ESCAPE_X.getIO(value);
-                cp = (cp << 4) + c - (c >= 0x61 ? 0x57 : c >= 0x41 ? 0x37 : 0x30);
-              }
-              raw.add(cp);
-              break;
-            case '"': case '\\': case '/':
-              raw.add(cp); break;
-            case 'b':
-              raw.add('\b'); break;
-            case 'f':
-              raw.add('\f'); break;
-            case 'n':
-              raw.add('\n'); break;
-            case 'r':
-              raw.add('\r'); break;
-            case 't':
-              raw.add('\t'); break;
-            default:
-              throw JSON_ESCAPE_X.getIO(value);
-          }
-        } else {
-          raw.add(cp);
-        }
-      }
-    } else {
-      raw.add(value);
-    }
-    if(key && !printedKeys.add(raw.finish())) throw error("Duplicate key: %.", value);
+    // parse escaped strings, check for errors
+    final byte[] unescaped = escape && contains(value, '\\') ? unescape(value) : value;
+    if(key && !printedKeys.add(unescaped)) throw error("Duplicate key: %.", value);
 
+    // create result, based on escaped string (contains unicode sequences)
     final TokenBuilder tb = new TokenBuilder();
     boolean bs = false;
     final int vl = value.length;
@@ -272,22 +232,75 @@ public final class JsonBasicSerializer extends JsonSerializer {
       final int cp = cp(value, v);
       if(cp >= 0 && cp < 32 || cp >= 127 && cp < 160) {
         tb.add('\\');
-        if(cp == '\b') tb.add('b');
-        else if(cp == '\f') tb.add('f');
-        else if(cp == '\n') tb.add('n');
-        else if(cp == '\r') tb.add('r');
-        else if(cp == '\t') tb.add('t');
-        else tb.add('u').add('0').add('0').add(HEX[cp >> 4]).add(HEX[cp & 0xF]);
-      } else {
-        if(cp == '"' && !bs || !escape && cp == '\\') {
-          bs = true;
-          tb.add('\\');
+        switch(cp) {
+          case '\b':
+            tb.add('b'); break;
+          case '\f':
+            tb.add('f'); break;
+          case '\n':
+            tb.add('n'); break;
+          case '\r':
+            tb.add('r'); break;
+          case '\t':
+            tb.add('t'); break;
+          default:
+            tb.add('u').add('0').add('0').add(HEX_TABLE[cp >> 4]).add(HEX_TABLE[cp & 0xF]); break;
         }
+      } else {
+        if((cp == '\\' || cp == '"' || cp == '/') && (!escape || !bs && cp != '\\')) tb.add('\\');
         tb.add(cp);
       }
       bs = !bs && cp == '\\';
     }
     return tb.finish();
+  }
+
+  /**
+   * Returns an unescaped representation of the value.
+   * @param value value to escape
+   * @return raw token
+   * @throws QueryIOException I/O exception
+   */
+  private static byte[] unescape(final byte[] value) throws QueryIOException {
+    final TokenBuilder raw = new TokenBuilder();
+    final TokenParser tp = new TokenParser(value);
+    while(tp.more()) {
+      int cp = tp.next();
+      if(cp == '\\') {
+        if(!tp.more()) throw ESCAPE_JSON_X.getIO(value);
+        cp = tp.next();
+        switch(cp) {
+          case 'u':
+            cp = 0;
+            for(int i = 0; i < 4; i++) {
+              if(!tp.more()) throw ESCAPE_JSON_X.getIO(value);
+              final int c = tp.next();
+              if(c < 0x30 || c > 0x39 && c < 0x41 || c > 0x46 && c < 0x61 || c > 0x66)
+                throw ESCAPE_JSON_X.getIO(value);
+              cp = (cp << 4) + c - (c >= 0x61 ? 0x57 : c >= 0x41 ? 0x37 : 0x30);
+            }
+            raw.add(cp);
+            break;
+          case '"': case '\\': case '/':
+            raw.add(cp); break;
+          case 'b':
+            raw.add('\b'); break;
+          case 'f':
+            raw.add('\f'); break;
+          case 'n':
+            raw.add('\n'); break;
+          case 'r':
+            raw.add('\r'); break;
+          case 't':
+            raw.add('\t'); break;
+          default:
+            throw ESCAPE_JSON_X.getIO(value);
+        }
+      } else {
+        raw.add(cp);
+      }
+    }
+    return raw.finish();
   }
 
   /**
@@ -297,6 +310,6 @@ public final class JsonBasicSerializer extends JsonSerializer {
    * @return I/O exception
    */
   private static QueryIOException error(final String msg, final Object... ext) {
-    return JSON_INVALID_X.getIO(Util.inf(msg, ext));
+    return INVALID_JSON_X.getIO(Util.inf(msg, ext));
   }
 }

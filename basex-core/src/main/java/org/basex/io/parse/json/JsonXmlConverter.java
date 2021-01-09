@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * This class provides a parse method to convert JSON data to XML nodes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class JsonXmlConverter extends JsonConverter {
@@ -46,8 +46,8 @@ abstract class JsonXmlConverter extends JsonConverter {
   }
 
   @Override
-  public FDoc finish() {
-    final FElem e = element();
+  public FDoc finish(final String uri) {
+    final FElem elem = element();
     if(merge) {
       final ByteList[] types = new ByteList[ATTRS.length];
       for(final TypeCache arr : names.values()) {
@@ -65,10 +65,10 @@ abstract class JsonXmlConverter extends JsonConverter {
       }
       final int tl = types.length;
       for(int t = 0; t < tl; t++) {
-        if(types[t] != null) e.add(ATTRS[t], types[t].finish());
+        if(types[t] != null) elem.add(ATTRS[t], types[t].finish());
       }
     }
-    return new FDoc().add(e);
+    return new FDoc(uri).add(elem);
   }
 
   /**
@@ -153,7 +153,7 @@ abstract class JsonXmlConverter extends JsonConverter {
      * @param nd element to add
      */
     private void add(final FElem nd) {
-      if(size == vals.length) vals = Array.copy(vals, new FElem[Array.newSize(size)]);
+      if(size == vals.length) vals = Array.copy(vals, new FElem[Array.newCapacity(size)]);
       vals[size++] = nd;
     }
   }

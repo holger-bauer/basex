@@ -5,9 +5,6 @@ import static org.basex.http.rest.RESTText.*;
 import java.io.*;
 import java.util.*;
 
-import javax.xml.parsers.*;
-import javax.xml.transform.dom.*;
-
 import org.basex.core.*;
 import org.basex.http.*;
 import org.basex.io.*;
@@ -22,7 +19,7 @@ import org.basex.util.*;
 /**
  * REST-based evaluation of POST operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class RESTPost {
@@ -37,22 +34,26 @@ final class RESTPost {
    */
   public static RESTCmd get(final RESTSession session) throws IOException {
     final HTTPConnection conn = session.conn;
-    String enc = conn.req.getCharacterEncoding();
-    if(enc == null) enc = Strings.UTF8;
+    String encoding = conn.request.getCharacterEncoding();
+    if(encoding == null) encoding = Strings.UTF8;
 
     // perform queries
-    final byte[] input = new NewlineInput(conn.req.getInputStream()).encoding(enc).content();
-    validate(input);
-
-    final Context ctx = conn.context;
     final DBNode doc;
-    try {
-      doc = new DBNode(new IOContent(input));
+    try(NewlineInput ni = new NewlineInput(conn.request.getInputStream())) {
+      doc = new DBNode(new IOContent(ni.encoding(encoding).content()));
     } catch(final IOException ex) {
       throw HTTPCode.BAD_REQUEST_X.get(ex);
     }
 
     try {
+      final Context ctx = conn.context;
+      // handle request
+      final String cmd = value("local-name(*)", doc, ctx);
+      if(cmd.equals(COMMANDS)) {
+        final String script = DataBuilder.stripNS(doc, REST_URI, ctx).serialize().toString();
+        return RESTScript.get(session, script);
+      }
+
       // handle serialization parameters
       final SerializerOptions sopts = conn.sopts();
       try(QueryProcessor qp = new QueryProcessor("*/*:parameter", ctx).context(doc)) {
@@ -69,9 +70,9 @@ final class RESTPost {
 
       // handle database options
       try(QueryProcessor qp = new QueryProcessor("*/*:option", ctx).context(doc)) {
-        for(final Item it : qp.value()) {
-          final String name = value("@name", it, ctx).toUpperCase(Locale.ENGLISH);
-          final String value = value("@value", it, ctx);
+        for(final Item item : qp.value()) {
+          final String name = value("@name", item, ctx).toUpperCase(Locale.ENGLISH);
+          final String value = value("@value", item, ctx);
           ctx.options.assign(name, value);
         }
       }
@@ -79,10 +80,10 @@ final class RESTPost {
       // handle variables
       final Map<String, String[]> vars = new HashMap<>();
       try(QueryProcessor qp = new QueryProcessor("*/*:variable", ctx).context(doc)) {
-        for(final Item it : qp.value()) {
-          final String name = value("@name", it, ctx);
-          final String value = value("@value", it, ctx);
-          final String type = value("@type", it, ctx);
+        for(final Item item : qp.value()) {
+          final String name = value("@name", item, ctx);
+          final String value = value("@value", item, ctx);
+          final String type = value("@type", item, ctx);
           vars.put(name, new String[] { value, type });
         }
       }
@@ -91,20 +92,21 @@ final class RESTPost {
       String val = null;
       try(QueryProcessor qp = new QueryProcessor("*/*:context/(*, text()[normalize-space()])",
           ctx).context(doc)) {
-        for(final Item it : qp.value()) {
+        for(final Item item : qp.value()) {
           if(val != null) throw HTTPCode.MULTIPLE_CONTEXT_X.get();
           // create main memory instance of the specified node
-          val = DataBuilder.stripNS((ANode) it, REST_URI, ctx).serialize().toString();
+          val = DataBuilder.stripNS((ANode) item, REST_URI, ctx).serialize().toString();
         }
       }
 
-      // handle request
-      final String request = value("local-name(*)", doc, ctx);
+      // command body
       final String text = value("*/*:text/text()", doc, ctx);
 
-      if(request.equals(COMMAND)) return RESTCommand.get(session, text);
-      if(request.equals(RUN)) return RESTRun.get(session, text, vars, val);
-      return RESTQuery.get(session, text, vars, val);
+      // choose evaluation
+      if(cmd.equals(COMMAND)) return RESTCommand.get(session, text);
+      if(cmd.equals(RUN)) return RESTRun.get(session, text, vars, val);
+      if(cmd.equals(QUERY)) return RESTQuery.get(session, text, vars, val);
+      throw HTTPCode.BAD_REQUEST_X.get("Invalid POST command: " + cmd);
 
     } catch(final QueryException ex) {
       throw HTTPCode.BAD_REQUEST_X.get(ex);
@@ -123,26 +125,8 @@ final class RESTPost {
       throws QueryException {
 
     try(QueryProcessor qp = new QueryProcessor(query, ctx).context(value)) {
-      final Item it = qp.iter().next();
-      return it == null ? null : Token.string(it.string(null));
-    }
-  }
-
-  /**
-   * Validates the specified XML input against the POST schema.
-   * @param input input document
-   * @throws HTTPException exception
-   */
-  private static void validate(final byte[] input) throws HTTPException {
-    try {
-      final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-      dbf.setNamespaceAware(true);
-      final DocumentBuilder db = dbf.newDocumentBuilder();
-      RESTSchema.newValidator().validate(new DOMSource(db.parse(new ArrayInput(input))));
-    } catch(final Exception ex) {
-      Util.debug("Error while validating \"" + Token.string(input) + '"');
-      // validation fails
-      throw HTTPCode.BAD_REQUEST_X.get(ex);
+      final Item item = qp.iter().next();
+      return item == null ? "" : Token.string(item.string(null));
     }
   }
 }

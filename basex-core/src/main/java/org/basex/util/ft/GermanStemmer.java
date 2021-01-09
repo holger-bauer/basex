@@ -9,7 +9,7 @@ import org.basex.util.*;
  * report "A Fast and Simple Stemming Algorithm for German Words" by
  * J&ouml;rg Caumanns.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class GermanStemmer extends InternalStemmer {
@@ -37,63 +37,64 @@ final class GermanStemmer extends InternalStemmer {
   @Override
   protected byte[] stem(final byte[] word) {
     subst = 0;
-    return part(resub(opt(strip(subst(new TokenBuilder(word)))))).finish();
+    final int wl = word.length;
+    return wl == 0 ? Token.EMPTY :
+      part(resub(opt(strip(subst(new TokenBuilder(word)))))).finish();
   }
 
   /**
    * Does some substitutions.
-   * @param tb string builder
-   * @return substituted string
+   * @param tb token builder
+   * @return modified token builder
    */
   private TokenBuilder subst(final TokenBuilder tb) {
     subst = 0;
     final int s = tb.size();
     final TokenBuilder tmp = new TokenBuilder(s);
-    int ls = 0;
-    int nx = tb.cp(0);
+    int last = 0, next = s > 0 ? tb.cp(0) : 0;
     for(int c = 0; c < s;) {
-      int ch = nx;
+      int curr = next;
       c += tb.cl(c);
-      nx = c < s ? tb.cp(c) : 0;
+      next = c < s ? tb.cp(c) : 0;
       int sb = 0;
-      if(ch == ls) {
-        ch = '*';
-      } else if(ch == '\u00e4') {
-        ch = 'a';
-      } else if(ch == '\u00f6') {
-        ch = 'o';
-      } else if(ch == '\u00fc') {
-        ch = 'u';
-      } else if(ch == '\u00df') {
+      if(curr == last) {
+        curr = '*';
+      } else if(curr == '\u00e4') {
+        curr = 'a';
+      } else if(curr == '\u00f6') {
+        curr = 'o';
+      } else if(curr == '\u00fc') {
+        curr = 'u';
+      } else if(curr == '\u00df') {
         tmp.add('s');
-        ch = 's';
+        curr = 's';
         subst++;
-      } else if(ch == 's' && nx == 'c' && c + 1 < s && tb.get(c + 1) == 'h') {
-        ch = '\1';
+      } else if(curr == 's' && next == 'c' && c + 1 < s && tb.get(c + 1) == 'h') {
+        curr = '\1';
         sb = 2;
-      } else if(ch == 'c' && nx == 'h') {
-        ch = '\2';
+      } else if(curr == 'c' && next == 'h') {
+        curr = '\2';
         sb = 1;
-      } else if(ch == 'e' && nx == 'i') {
-        ch = '\3';
+      } else if(curr == 'e' && next == 'i') {
+        curr = '\3';
         sb = 1;
-      } else if(ch == 'i' && nx == 'e') {
-        ch = '\4';
+      } else if(curr == 'i' && next == 'e') {
+        curr = '\4';
         sb = 1;
-      } else if(ch == 'i' && nx == 'g') {
-        ch = '\5';
+      } else if(curr == 'i' && next == 'g') {
+        curr = '\5';
         sb = 1;
-      } else if(ch == 's' && nx == 't') {
-        ch = '\6';
+      } else if(curr == 's' && next == 't') {
+        curr = '\6';
         sb = 1;
       }
       if(sb > 0) {
         c += sb;
-        nx = c < s ? tb.cp(c) : 0;
+        next = c < s ? tb.cp(c) : 0;
         subst += sb;
       }
-      ls = ch;
-      tmp.add(ch);
+      last = curr;
+      tmp.add(curr);
     }
     return tmp;
   }
@@ -145,22 +146,15 @@ final class GermanStemmer extends InternalStemmer {
     final int s = tb.size();
     for(int c = 0; c < s; c++) {
       final int ch = tb.get(c);
-      if(ch == '*') {
-        tmp.add(tmp.get(c - 1));
-      } else if(ch == '\1') {
-        tmp.add('s').add('c').add('h');
-      } else if(ch == '\2') {
-        tmp.add('c').add('h');
-      } else if(ch == '\3') {
-        tmp.add('e').add('i');
-      } else if(ch == '\4') {
-        tmp.add('i').add('e');
-      } else if(ch == '\5') {
-        tmp.add('i').add('g');
-      } else if(ch == '\6') {
-        tmp.add('s').add('t');
-      } else {
-        tmp.add(ch);
+      switch(ch) {
+        case '*':  tmp.add(tmp.get(c - 1)); break;
+        case '\1': tmp.add('s').add('c').add('h'); break;
+        case '\2': tmp.add('c').add('h'); break;
+        case '\3': tmp.add('e').add('i'); break;
+        case '\4': tmp.add('i').add('e'); break;
+        case '\5': tmp.add('i').add('g'); break;
+        case '\6': tmp.add('s').add('t'); break;
+        default: tmp.add(ch); break;
       }
     }
     return tmp;
@@ -174,7 +168,7 @@ final class GermanStemmer extends InternalStemmer {
   private static TokenBuilder part(final TokenBuilder tb) {
     for(int c = 0; c < tb.size() - 3; c++) {
       if(tb.get(c) == 'g' && tb.get(c + 1) == 'e' && tb.get(c + 2) == 'g' && tb.get(c + 3) == 'e') {
-        tb.delete(c, 2);
+        tb.delete(c, c + 2);
         break;
       }
     }

@@ -26,7 +26,7 @@ import org.basex.util.*;
 /**
  * XQUnit tests: Testing single modules.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class Unit {
@@ -81,7 +81,7 @@ final class Unit {
 
     try(QueryContext qc = new QueryContext(ctx)) {
       input = string(file.read());
-      qc.parse(input, file.path(), null);
+      qc.parse(input, file.path());
 
       // loop through all functions
       for(final StaticFunc sf : qc.funcs.funcs()) {
@@ -93,7 +93,7 @@ final class Unit {
 
         // Unit function:
         if(anns.contains(PRIVATE)) throw UNIT_PRIVATE_X.get(null, sf.name.local());
-        if(sf.args.length > 0) throw UNIT_ARGS_X.get(null, sf.name.local());
+        if(sf.params.length > 0) throw UNIT_NOARGS_X.get(null, sf.name.local());
 
         if(anns.contains(_UNIT_BEFORE_MODULE)) beforeModule.add(sf);
         if(anns.contains(_UNIT_AFTER_MODULE)) afterModule.add(sf);
@@ -125,7 +125,7 @@ final class Unit {
         if(vs == 2 && eq(EXPECTED, args[0].string(null))) {
           code = QNm.resolve(args[1].string(null), QueryText.ERROR_URI, sf.sc, sf.info);
         } else if(vs != 0) {
-          throw BASX_ANNNUM_X_X.get(ann.info, ann, arguments(vs));
+          throw BASEX_ANNOTATION2_X_X.get(ann.info, ann, arguments(vs));
         }
 
         final FElem testcase = new FElem(TESTCASE).add(NAME, sf.name.local());
@@ -196,7 +196,7 @@ final class Unit {
    * Returns an annotation argument as QName.
    * @param sf static function
    * @param ann annotation
-   * @return QName
+   * @return QName or {@code null}
    * @throws QueryException query exception
    */
   private static QNm name(final StaticFunc sf, final Ann ann) throws QueryException {
@@ -218,7 +218,7 @@ final class Unit {
     final QNm name = ex.qname();
     if(code == null || !code.eq(name)) {
       final FElem error;
-      final boolean fail = UNIT_ASSERT.eq(name);
+      final boolean fail = UNIT_FAIL.eq(name);
       if(fail) {
         failures++;
         error = new FElem(FAILURE);
@@ -242,9 +242,9 @@ final class Unit {
       }
 
       // add info
-      final Value v = ex.value();
-      if(v instanceof Item) {
-        error.add(element((Item) v, INFO, -1));
+      final Value value = ex.value();
+      if(value != null && value.isItem()) {
+        error.add(element((Item) value, INFO, -1));
       } else {
         // otherwise, add error message
         error.add(new FElem(INFO).add(ex.getLocalizedMessage()));
@@ -255,24 +255,24 @@ final class Unit {
 
   /**
    * Creates a new element.
-   * @param it item
+   * @param item item
    * @param name name (expected/returned)
-   * @param c item count (ignore it {@code -1})
+   * @param count item count (ignore it {@code -1})
    * @return new element
    */
-  private static FElem element(final Item it, final byte[] name, final int c) {
+  private static FElem element(final Item item, final byte[] name, final int count) {
     final FElem exp = new FElem(name);
-    if(it != null) {
-      if(it instanceof ANode) {
-        exp.add((ANode) it);
+    if(item != null) {
+      if(item instanceof ANode) {
+        exp.add((ANode) item);
       } else {
         try {
-          exp.add(it.string(null));
+          exp.add(item.string(null));
         } catch(final QueryException ignored) {
-          exp.add(chop(it.toString(), null));
+          exp.add(normalize(item.toString(), null));
         }
       }
-      if(c != -1) exp.add(ITEM, token(c)).add(TYPE, it.type.toString());
+      if(count != -1) exp.add(ITEM, token(count)).add(TYPE, item.type.toString());
     }
     return exp;
   }
@@ -286,11 +286,11 @@ final class Unit {
     current = func;
 
     try(QueryContext qctx = job.pushJob(new QueryContext(ctx))) {
-      qctx.parse(input, file.path(), null);
+      qctx.parse(input, file.path());
       qctx.mainModule(MainModule.get(find(qctx, func), new Expr[0]));
       // ignore results
       final Iter iter = qctx.iter();
-      while(iter.next() != null);
+      while(qctx.next(iter) != null);
     } finally {
       job.popJob();
     }
@@ -298,9 +298,9 @@ final class Unit {
 
   /**
    * Returns the specified function from the given query context.
-   * @param qctx query context.
+   * @param qctx query context
    * @param func function to be found
-   * @return function
+   * @return function or {@code null}
    */
   private static StaticFunc find(final QueryContext qctx, final StaticFunc func) {
     for(final StaticFunc sf : qctx.funcs.funcs()) {
@@ -315,6 +315,6 @@ final class Unit {
    * @return time
    */
   static byte[] time(final Performance p) {
-    return DTDur.get(p.time() / 1000000).string(null);
+    return DTDur.get(p.ns() / 1000000).string(null);
   }
 }

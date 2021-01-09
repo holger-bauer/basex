@@ -6,7 +6,6 @@ import org.basex.core.*;
 import org.basex.core.locks.*;
 import org.basex.core.parse.*;
 import org.basex.core.parse.Commands.*;
-import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.util.list.*;
@@ -14,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'drop database' command and deletes a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DropDB extends ACreate {
@@ -28,11 +27,12 @@ public final class DropDB extends ACreate {
 
   @Override
   protected boolean run() {
-    if(!Databases.validName(args[0], true)) return error(NAME_INVALID_X, args[0]);
+    final String pattern = args[0];
+    if(!Databases.validPattern(pattern)) return error(NAME_INVALID_X, pattern);
 
     // retrieve all databases; return true if no database is found (no error)
-    final StringList dbs = context.filter(Perm.READ, context.databases.listDBs(args[0]));
-    if(dbs.isEmpty()) return info(NO_DB_DROPPED, args[0]);
+    final StringList dbs = context.listDBs(pattern);
+    if(dbs.isEmpty()) return info(NO_DB_DROPPED);
 
     // loop through all databases
     boolean ok = true;
@@ -55,7 +55,7 @@ public final class DropDB extends ACreate {
   }
 
   /**
-   * Deletes the specified database.
+   * Deletes the specified database. Calls for main-memory database instances are ignored.
    * @param data data reference
    * @param sopts static options
    * @return success flag

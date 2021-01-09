@@ -2,21 +2,17 @@ package org.basex.query.expr.gflwor;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
-import static org.basex.util.Token.*;
 
 import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -24,7 +20,7 @@ import org.basex.util.hash.*;
 /**
  * The GFLWOR {@code window} clause.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class Window extends Clause {
@@ -45,7 +41,7 @@ public final class Window extends Clause {
    * Constructor.
    * @param sliding {@code sliding window} flag
    * @param var window variable
-   * @param expr sequence
+   * @param expr input sequence
    * @param start start condition
    * @param only {@code only} flag
    * @param end end condition (can be {@code null})
@@ -53,7 +49,7 @@ public final class Window extends Clause {
    */
   public Window(final boolean sliding, final Var var, final Expr expr, final Condition start,
       final boolean only, final Condition end) throws QueryException {
-    super(var.info, vars(var, start, end));
+    super(var.info, SeqType.ITEM_ZM, vars(var, start, end));
     this.sliding = sliding;
     this.var = var;
     this.expr = expr;
@@ -109,6 +105,7 @@ public final class Window extends Clause {
       private Item[] vals;
       /** Position of the start item. */
       private long spos;
+
       @Override
       public boolean next(final QueryContext qc) throws QueryException {
         while(true) {
@@ -117,22 +114,22 @@ public final class Window extends Clause {
 
           // find end item
           if(fst != null) {
-            final ValueBuilder window = new ValueBuilder().add(fst);
+            final ValueBuilder vb = new ValueBuilder(qc).add(fst);
             final Item[] st = vals == null ? new Item[] { curr, prev, next } : vals;
-            final long ps = vals == null ? p : spos;
+            final long ps = vals == null ? pos : spos;
             vals = null;
 
             while(readNext()) {
-              if(start.matches(qc, curr, p, prev, next)) {
-                vals = new Item[]{ curr, prev, next };
-                spos = p;
+              if(start.matches(qc, curr, pos, prev, next)) {
+                vals = new Item[] { curr, prev, next };
+                spos = pos;
                 break;
               }
-              window.add(curr);
+              vb.add(curr);
             }
 
             start.bind(qc, st[0], ps, st[1], st[2]);
-            qc.set(var, window.value());
+            qc.set(var, vb.value());
             return true;
           }
 
@@ -156,11 +153,11 @@ public final class Window extends Clause {
         while(true) {
           if(findStart(qc)) {
             // find end item
-            final ValueBuilder window = new ValueBuilder();
+            final ValueBuilder vb = new ValueBuilder(qc);
             boolean found = false;
             do {
-              window.add(curr);
-              if(end.matches(qc, curr, p, prev, next)) {
+              vb.add(curr);
+              if(end.matches(qc, curr, pos, prev, next)) {
                 found = true;
                 break;
               }
@@ -168,7 +165,7 @@ public final class Window extends Clause {
 
             // don't return dangling items if the {@code only} flag was specified
             if(found || !only) {
-              qc.set(var, window.value());
+              qc.set(var, vb.value());
               return true;
             }
           }
@@ -189,6 +186,7 @@ public final class Window extends Clause {
     return new WindowEval() {
       /** Queue holding the items of the current window. */
       private final ArrayDeque<Item> queue = new ArrayDeque<>();
+
       @Override
       public boolean next(final QueryContext qc) throws QueryException {
         while(true) {
@@ -196,24 +194,24 @@ public final class Window extends Clause {
           while((curr = advance()) != null) {
             next = queue.peekFirst();
             if(next == null && (next = next()) != null) queue.addLast(next);
-            if(start.matches(qc, curr, p, prev, next)) break;
+            if(start.matches(qc, curr, pos, prev, next)) break;
             prev = curr;
           }
 
           if(curr != null) {
-            final ValueBuilder cache = new ValueBuilder();
-            final Iterator<Item> qiter = queue.iterator();
+            final ValueBuilder vb = new ValueBuilder(qc);
+            final Iterator<Item> iter = queue.iterator();
             // the first element is already the {@code next} one
-            if(qiter.hasNext()) qiter.next();
+            if(iter.hasNext()) iter.next();
             Item pr = prev, it = curr, nx = next;
-            long ps = p;
+            long ps = pos;
             do {
-              cache.add(it);
+              vb.add(it);
               if(end.matches(qc, it, ps++, pr, nx)) break;
               pr = it;
               it = nx;
-              if(qiter.hasNext()) {
-                nx = qiter.next();
+              if(iter.hasNext()) {
+                nx = iter.next();
               } else {
                 nx = next();
                 if(nx != null) queue.addLast(nx);
@@ -222,9 +220,9 @@ public final class Window extends Clause {
 
             // return window if end was found or {@code only} isn't set
             if(!(it == null && only)) {
-              start.bind(qc, curr, p, prev, next);
+              start.bind(qc, curr, pos, prev, next);
               prev = curr;
-              qc.set(var, cache.value());
+              qc.set(var, vb.value());
               return true;
             }
           }
@@ -236,16 +234,16 @@ public final class Window extends Clause {
       }
 
       /**
-       * tries to advance the start of the queue by one element and returns the removed
+       * Tries to advance the start of the queue by one element and returns the removed
        * element in case of success, {@code null} otherwise.
        * @return removed element or {@code null}
        * @throws QueryException evaluation exception
        */
       private Item advance() throws QueryException {
-        Item it = queue.pollFirst();
-        if(it == null) it = next();
-        if(it != null) p++;
-        return it;
+        Item item = queue.pollFirst();
+        if(item == null) item = next();
+        if(item != null) pos++;
+        return item;
       }
     };
   }
@@ -253,26 +251,26 @@ public final class Window extends Clause {
   @Override
   public Clause compile(final CompileContext cc) throws QueryException {
     expr = expr.compile(cc);
-    start.compile(cc);
-    if(end != null) end.compile(cc);
+    start.compile(expr, cc);
+    if(end != null) end.compile(expr, cc);
     return optimize(cc);
   }
 
   @Override
   public Clause optimize(final CompileContext cc) throws QueryException {
-    final SeqType st = expr.seqType();
-    var.refineType(st.withOcc(Occ.ZERO_MORE), cc);
+    exprType.assign(expr.seqType().union(Occ.ZERO));
+    var.refineType(seqType(), cc);
     return this;
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return expr.has(flag) || start.has(flag) || end != null && end.has(flag);
+  public boolean has(final Flag... flags) {
+    return expr.has(flags) || start.has(flags) || end != null && end.has(flags);
   }
 
   @Override
-  public boolean removable(final Var v) {
-    return expr.removable(v) && start.removable(v) && (end == null || end.removable(v));
+  public boolean inlineable(final InlineContext v) {
+    return expr.inlineable(v) && start.inlineable(v) && (end == null || end.inlineable(v));
   }
 
   @Override
@@ -282,25 +280,24 @@ public final class Window extends Clause {
   }
 
   @Override
-  public Clause inline(final Var v, final Expr ex, final CompileContext cc)
-      throws QueryException {
-    final Expr e = expr.inline(v, ex, cc);
-    final Condition st = start.inline(v, ex, cc);
-    final Condition en = end == null ? null : end.inline(v, ex, cc);
-    if(e != null) expr = e;
+  public Clause inline(final InlineContext ic) throws QueryException {
+    final Expr inlined = expr.inline(ic);
+    final Condition st = start.inline(ic);
+    final Condition en = end == null ? null : end.inline(ic);
+    if(inlined != null) expr = inlined;
     if(st != null) start = st;
     if(en != null) end = en;
-    return e != null || st != null || en != null ? optimize(cc) : null;
+    return inlined != null || st != null || en != null ? optimize(ic.cc) : null;
   }
 
   @Override
   public Window copy(final CompileContext cc, final IntObjMap<Var> vm) {
     try {
-      return new Window(sliding, cc.copy(var, vm), expr.copy(cc, vm), start.copy(cc, vm), only,
-          end != null ? end.copy(cc, vm) : null);
-    } catch(final QueryException e) {
+      return copyType(new Window(sliding, cc.copy(var, vm), expr.copy(cc, vm), start.copy(cc, vm),
+          only, end != null ? end.copy(cc, vm) : null));
+    } catch(final QueryException ex) {
       // checks have already been done
-      throw Util.notExpected(e);
+      throw Util.notExpected(ex);
     }
   }
 
@@ -311,28 +308,6 @@ public final class Window extends Clause {
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem(token(SLIDING), token(sliding));
-    var.plan(e);
-    expr.plan(e);
-    start.plan(e);
-    if(end != null) end.plan(e);
-    plan.add(e);
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder(FOR).append(' ').append(
-        sliding ? SLIDING : TUMBLING).append(' ').append(WINDOW).append(' ').append(var
-            ).append(' ').append(IN).append(' ').append(expr).append(' ').append(start);
-    if(end != null) {
-      if(only) sb.append(' ').append(ONLY);
-      sb.append(' ').append(end);
-    }
-    return sb.toString();
-  }
-
-  @Override
   public void checkUp() throws QueryException {
     checkNoUp(expr);
     checkNoUp(start);
@@ -340,10 +315,10 @@ public final class Window extends Clause {
   }
 
   @Override
-  void calcSize(final long[] minMax) {
+  public void calcSize(final long[] minMax) {
     // number of results cannot be anticipated
     minMax[0] = 0;
-    minMax[1] = expr.isEmpty() ? 0 : -1;
+    minMax[1] = expr.seqType().zero() ? 0 : -1;
   }
 
   @Override
@@ -351,10 +326,35 @@ public final class Window extends Clause {
     return expr.exprSize() + start.exprSize() + (end == null ? 0 : end.exprSize());
   }
 
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Window)) return false;
+    final Window w = (Window) obj;
+    return sliding == w.sliding && var.equals(w.var) && expr.equals(w.expr) &&
+        start.equals(w.start) && only == w.only && Objects.equals(end, w.end);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    final FElem elem = plan.attachVariable(plan.create(this, SLIDING, sliding), var, false);
+    plan.add(elem, start, end, expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(FOR).token(sliding ? SLIDING : TUMBLING).token(WINDOW).token(var).token(IN).
+      token(expr).token(start);
+    if(end != null) {
+      if(only) qs.token(ONLY);
+      qs.token(end);
+    }
+  }
+
   /**
    * Evaluator for the Window clause.
    *
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Leo Woerteler
    */
   private abstract class WindowEval extends Eval {
@@ -363,19 +363,19 @@ public final class Window extends Clause {
     /** Previous item. */
     Item prev;
     /** Current position. */
-    long p;
+    long pos;
 
     /**
-     * Reads the next item from {@code iter} if it isn't {@code null} and sets it to
-     * {@code null} if it's drained.
-     * @return success flag
+     * Reads the next item from {@code iter} if it is not {@code null} and sets it to
+     * {@code null} if it is drained.
+     * @return next item or {@code null}
      * @throws QueryException evaluation exception
      */
     final Item next() throws QueryException {
       if(iter == null) return null;
-      final Item it = iter.next();
-      if(it == null) iter = null;
-      return it;
+      final Item item = iter.next();
+      if(item == null) iter = null;
+      return item;
     }
 
     /**
@@ -389,7 +389,7 @@ public final class Window extends Clause {
       if(!sub.next(qc)) return false;
       iter = expr.iter(qc);
       prev = null;
-      p = 0;
+      pos = 0;
       return true;
     }
   }
@@ -397,7 +397,7 @@ public final class Window extends Clause {
   /**
    * Evaluator for the Tumbling Window clause.
    *
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Leo Woerteler
    */
   private abstract class TumblingEval extends WindowEval {
@@ -409,24 +409,24 @@ public final class Window extends Clause {
     Item next;
 
     /**
-     * Reads a new current item and populates the {@code nxt} variable if it's used.
+     * Reads a new current item and populates the {@code next} variable if it's used.
      * @return next item
      * @throws QueryException evaluation exception
      */
     final boolean readNext() throws QueryException {
       prev = curr;
-      p++;
-      final Item n = next();
+      pos++;
+      final Item item = next();
       // serve the stored item if available
       if(next != null) {
         curr = next;
-        next = n;
-      } else if(n != null && popNext) {
+        next = item;
+      } else if(item != null && popNext) {
         // only assign if necessary
         next = next();
-        curr = n;
+        curr = item;
       } else {
-        curr = n;
+        curr = item;
       }
       return curr != null;
     }
@@ -440,7 +440,7 @@ public final class Window extends Clause {
      */
     final boolean findStart(final QueryContext qc) throws QueryException {
       while(readNext()) {
-        if(start.matches(qc, curr, p, prev, next)) return true;
+        if(start.matches(qc, curr, pos, prev, next)) return true;
       }
       return false;
     }

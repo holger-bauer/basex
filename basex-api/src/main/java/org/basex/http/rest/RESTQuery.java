@@ -2,7 +2,6 @@ package org.basex.http.rest;
 
 import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -12,7 +11,7 @@ import org.basex.query.value.type.*;
 /**
  * Evaluate queries via REST.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 class RESTQuery extends RESTCmd {
@@ -43,7 +42,7 @@ class RESTQuery extends RESTCmd {
    * @throws HTTPException REST exception
    * @throws IOException I/O exception
    */
-  final void query() throws IOException {
+  private void query() throws IOException {
     // set base path and serialization parameters
     final HTTPConnection conn = session.conn;
     context.options.set(MainOptions.SERIALIZER, conn.sopts());
@@ -53,23 +52,21 @@ class RESTQuery extends RESTCmd {
       if(cmd instanceof XQuery) {
         final XQuery xq = (XQuery) cmd;
         // create query instance
-        if(value != null) xq.bind(null, value, NodeType.DOC.toString());
+        if(value != null) xq.bind(null, value, NodeType.DOCUMENT_NODE.toString());
 
         // bind HTTP context and external variables
-        xq.http(conn);
-        for(final Entry<String, String[]> e : vars.entrySet()) {
-          final String key = e.getKey();
-          final String[] val = e.getValue();
+        xq.putExternal(HTTPText.REQUEST, conn.requestCtx);
+        vars.forEach((key, val) -> {
           if(val.length == 2) xq.bind(key, val[0], val[1]);
           if(val.length == 1) xq.bind(key, val[0]);
-        }
+        });
 
         // initializes the response with query serialization options
         conn.sopts().assign(xq.parameters(context));
         conn.initResponse();
       }
       // run command
-      run(cmd, conn.res.getOutputStream());
+      run(cmd, conn.response.getOutputStream());
     }
   }
 
@@ -77,17 +74,17 @@ class RESTQuery extends RESTCmd {
    * Creates a new instance of this command.
    * @param session REST session
    * @param query query
-   * @param vars external variables
-   * @param val context value
+   * @param variables external variables
+   * @param value context value
    * @return command
    * @throws IOException I/O exception
    */
   @SuppressWarnings("unused")
   static RESTQuery get(final RESTSession session, final String query,
-      final Map<String, String[]> vars, final String val) throws IOException {
+      final Map<String, String[]> variables, final String value) throws IOException {
 
     final String uri = session.conn.context.soptions.get(StaticOptions.WEBPATH);
     session.add(new XQuery(query).baseURI(uri));
-    return new RESTQuery(session, vars, val);
+    return new RESTQuery(session, variables, value);
   }
 }

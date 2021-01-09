@@ -1,60 +1,32 @@
 package org.basex.query.index;
 
 import java.util.*;
-import java.util.List;
-import java.util.Map.Entry;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.query.ast.*;
 import org.basex.query.expr.ft.*;
-import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
+import org.basex.query.expr.index.*;
+import org.basex.query.value.node.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * This class tests if value indexes will be used.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@RunWith(Parameterized.class)
 public final class ValueIndexTest extends QueryPlanTest {
   /** Test file. */
   private static final String FILE = "src/test/resources/selective.xml";
 
-  /** Main memory flag. */
-  @Parameter
-  public Object mainmem;
-
-  /**
-   * Mainmem parameters.
-   * @return parameters
-   */
-  @Parameters
-  public static Collection<Object[]> params() {
-    final List<Object[]> params = new ArrayList<>();
-    params.add(new Object[] { false });
-    params.add(new Object[] { true });
-    return params;
-  }
-
-  /**
-   * Initializes a test.
-   */
-  @Before
-  public void before() {
-    set(MainOptions.MAINMEM, mainmem);
-  }
-
   /**
    * Finalizes a test.
    */
-  @After
-  public void after() {
+  @AfterEach public void after() {
     set(MainOptions.MAINMEM, false);
     set(MainOptions.UPDINDEX, false);
     set(MainOptions.FTINDEX, false);
@@ -67,92 +39,101 @@ public final class ValueIndexTest extends QueryPlanTest {
   /**
    * Initializes the tests.
    */
-  @BeforeClass
-  public static void start() {
+  @BeforeAll public static void start() {
     execute(new CreateDB(NAME, FILE));
   }
 
   /**
    * Tests the text index.
+   * @param mainmem main-memory flag
    */
-  @Test
-  public void textIndex() {
-    for(final Entry<String, String> entry : map().entrySet()) {
-      final String key = entry.getKey(), value = entry.getValue();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void textIndex(final boolean mainmem) {
+    mainmem(mainmem);
+    map().forEach((key, value) -> {
       set(MainOptions.TEXTINCLUDE, key);
       execute(new CreateDB(NAME, FILE));
       check("count(//" + key + "[text() = " + value + "])",
-          Integer.toString(value.split(",").length), "exists(//ValueAccess)");
-      if(!key.equals("*")) check("//X[text() = 'unknown']", "", "exists(//DBNode)");
-    }
+          value.split(",").length, exists(ValueAccess.class));
+      if(!key.equals("*")) check("//X[text() = 'unknown']", "", exists(DBNode.class));
+    });
   }
 
   /**
    * Tests the attribute index.
+   * @param mainmem main-memory flag
    */
-  @Test
-  public void attrIndex() {
-    for(final Entry<String, String> entry : map().entrySet()) {
-      final String key = entry.getKey(), value = entry.getValue();
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void attrIndex(final boolean mainmem) {
+    mainmem(mainmem);
+    map().forEach((key, value) -> {
       set(MainOptions.ATTRINCLUDE, key);
       execute(new CreateDB(NAME, FILE));
       check("count(//*[@" + key + " = " + value + "])",
-          Integer.toString(value.split(",").length), "exists(//ValueAccess)");
-      if(!key.equals("*")) check("//*[@x = 'unknown']", "", "exists(//DBNode)");
-    }
+          value.split(",").length, exists(ValueAccess.class));
+      if(!key.equals("*")) check("//*[@x = 'unknown']", "", exists(DBNode.class));
+    });
   }
 
   /**
    * Tests the full-text index.
    */
-  @Test
-  public void fulltextIndex() {
-    // not applicable in main-memory mode
-    if((Boolean) mainmem) return;
-
+  @Test public void fulltextIndex() {
     set(MainOptions.FTINDEX, true);
-    for(final Entry<String, String> entry : map().entrySet()) {
-      final String key = entry.getKey(), value = entry.getValue();
+    map().forEach((key, value) -> {
       set(MainOptions.FTINCLUDE, key);
       execute(new CreateDB(NAME, FILE));
       check("count(//" + key + "[text() contains text { " + value + " }])",
-          Integer.toString(value.split(",").length),
-          "exists(//" + Util.className(FTIndexAccess.class) + ')');
-      if(!key.equals("*")) check("//X[text() contains text 'unknown']", "", "exists(//DBNode)");
-    }
+          value.split(",").length,
+          exists(FTIndexAccess.class));
+      if(!key.equals("*")) check("//X[text() contains text 'unknown']", "", exists(DBNode.class));
+    });
   }
 
   /**
    * Tests the text index and update operations.
+   * @param mainmem main-memory flag
    */
-  @Test
-  public void textUpdates() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void textUpdates(final boolean mainmem) {
+    mainmem(mainmem);
     set(MainOptions.UPDINDEX, true);
 
     set(MainOptions.TEXTINCLUDE, "a");
     execute(new CreateDB(NAME, "<x><a>text</a><b>TEXT</b></x>"));
-    check("count(//a[text() = 'text'])", "1", "exists(//ValueAccess)");
-    check("count(//b[text() = 'TEXT'])", "1", "empty(//ValueAccess)");
+    check("count(//a[text() = 'text'])", 1, exists(ValueAccess.class));
+    check("count(//b[text() = 'TEXT'])", 1, empty(ValueAccess.class));
 
     query("replace value of node x/a with 'TEXT'");
-    check("count(//a[text() = 'TEXT'])", "1", "exists(//ValueAccess)");
+    check("count(//a[text() = 'TEXT'])", 1, exists(ValueAccess.class));
 
     query("rename node x/a as 'b'");
-    check("//a[text() = 'TEXT']", "", "exists(//Empty)");
-    check("count(//b[text() = 'TEXT'])", "2", "empty(ValueAccess)");
+    check("//a[text() = 'TEXT']", "", empty());
+    check("count(//b[text() = 'TEXT'])", 2, empty(ValueAccess.class));
 
     query("x/b/(rename node . as 'a')");
-    check("count(//a[text() = 'TEXT'])", "2", "exists(//ValueAccess)");
-    check("count(//b[text() = 'TEXT'])", "0", "empty(//ValueAccess)");
+    check("count(//a[text() = 'TEXT'])", 2, exists(ValueAccess.class));
+    check("count(//b[text() = 'TEXT'])", 0, empty(ValueAccess.class));
 
     query("x/a/(replace value of node . with 'text')");
-    check("count(//a[text() = 'text'])", "2", "exists(//ValueAccess)");
+    check("count(//a[text() = 'text'])", 2, exists(ValueAccess.class));
 
     query("delete node x/a[1]");
-    check("count(//a[text() = 'text'])", "1", "exists(//ValueAccess)");
+    check("count(//a[text() = 'text'])", 1, exists(ValueAccess.class));
 
     query("delete node x/a[1]");
-    check("//a[text() = 'text']", "", "exists(//Empty)");
+    check("//a[text() = 'text']", "", empty());
+  }
+
+  /**
+   * Sets the main memory flag.
+   * @param mainmem main-memory flag
+   */
+  private static void mainmem(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
   }
 
   /**

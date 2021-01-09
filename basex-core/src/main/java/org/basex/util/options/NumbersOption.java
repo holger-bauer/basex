@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * Option containing an integer array value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NumbersOption extends Option<int[]> {
@@ -34,6 +34,6 @@ public final class NumbersOption extends Option<int[]> {
 
   @Override
   public String toString() {
-    return name() + Arrays.asList(value);
+    return name() + Collections.singletonList(value);
   }
 }

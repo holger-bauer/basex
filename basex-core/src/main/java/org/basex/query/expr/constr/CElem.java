@@ -4,9 +4,14 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
+import java.util.*;
+
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
+import org.basex.query.expr.path.*;
 import org.basex.query.util.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -17,29 +22,26 @@ import org.basex.util.hash.*;
 /**
  * Element constructor.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CElem extends CName {
   /** Namespaces. */
   private final Atts nspaces;
-  /** Computed constructor flag. */
-  private final boolean comp;
 
   /**
    * Constructor.
    * @param sc static context
    * @param info input info
+   * @param computed computed constructor
    * @param name name
-   * @param nspaces namespaces or {@code null} if this is a computed constructor.
+   * @param nspaces namespaces or {@code null} if this is a computed constructor
    * @param cont element contents
    */
-  public CElem(final StaticContext sc, final InputInfo info, final Expr name, final Atts nspaces,
-      final Expr... cont) {
-    super(ELEMENT, sc, info, name, cont);
-    this.nspaces = nspaces == null ? new Atts() : nspaces;
-    comp = nspaces == null;
-    seqType = SeqType.ELM;
+  public CElem(final StaticContext sc, final InputInfo info, final boolean computed,
+      final Expr name, final Atts nspaces, final Expr... cont) {
+    super(sc, info, SeqType.ELEMENT_O, computed, name, cont);
+    this.nspaces = nspaces;
   }
 
   @Override
@@ -53,42 +55,39 @@ public final class CElem extends CName {
   }
 
   @Override
+  public Expr optimize(final CompileContext cc) throws QueryException {
+    name = name.simplifyFor(Simplify.STRING, cc);
+    if(name instanceof Value) {
+      final QNm nm = qname(true, cc.qc, null);
+      if(nm != null) {
+        name = nm;
+        exprType.assign(SeqType.get(NodeType.ELEMENT, Occ.EXACTLY_ONE,
+            Test.get(NodeType.ELEMENT, nm)));
+      }
+    }
+    return this;
+  }
+
+  @Override
   public FElem item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final int s = addNS();
     try {
       // adds in-scope namespaces
-      final Atts ns = new Atts();
+      final Atts inscopeNS = new Atts();
       final int nl = nspaces.size();
-      for(int i = 0; i < nl; i++) ns.add(nspaces.name(i), nspaces.value(i));
+      for(int i = 0; i < nl; i++) inscopeNS.add(nspaces.name(i), nspaces.value(i));
 
       // create and check QName
-      final QNm nm = qname(qc, true);
+      final QNm nm = qname(true, qc, sc);
       final byte[] cp = nm.prefix(), cu = nm.uri();
       if(eq(cp, XML) ^ eq(cu, XML_URI)) throw CEXML.get(info, cu, cp);
       if(eq(cu, XMLNS_URI)) throw CEINV_X.get(info, cu);
       if(eq(cp, XMLNS)) throw CEINV_X.get(info, cp);
       if(!nm.hasURI() && nm.hasPrefix()) throw INVPREF_X.get(info, nm);
 
-      // analyze element namespace unless it is "xml"
-      if(!eq(cp, XML)) {
-        // request namespace for the specified uri
-        final byte[] uri = sc.ns.uri(cp);
-
-        // check if element has a namespace
-        if(nm.hasURI()) {
-          // add to statically known namespaces
-          if(!comp && (uri == null || !eq(uri, cu))) sc.ns.add(cp, cu);
-          // add to in-scope namespaces
-          if(!ns.contains(cp)) ns.add(cp, cu);
-        } else {
-          // element has no namespace: assign default uri
-          nm.uri(uri);
-        }
-      }
-
       // create node
       final Constr constr = new Constr(info, sc);
-      final FElem node = new FElem(nm, ns, constr.children, constr.atts);
+      final FElem node = new FElem(nm, inscopeNS, constr.children, constr.atts);
 
       // add child and attribute nodes
       constr.add(qc, exprs);
@@ -96,16 +95,31 @@ public final class CElem extends CName {
       if(constr.errNS != null) throw NONSALL_X.get(info, constr.errNS);
       if(constr.duplAtt != null) throw CATTDUPL_X.get(info, constr.duplAtt);
       if(constr.duplNS != null) throw DUPLNSCONS_X.get(info, constr.duplNS);
+      if(constr.nspaces.contains(EMPTY) && !nm.hasPrefix()) throw DUPLNSCONS_X.get(info, EMPTY);
 
-      // check namespaces
-      if(constr.nspaces.contains(EMPTY) && !nm.hasURI()) throw DUPLNSCONS_X.get(info, EMPTY);
+      // add namespace for element name (unless its prefix is "xml")
+      if(!eq(cp, XML)) {
+        // get URI for the specified prefix
+        final byte[] uri = sc.ns.uri(cp);
 
-      // add namespaces from constructor
+        // check if element has a namespace
+        if(nm.hasURI()) {
+          // add to statically known namespaces
+          if(!computed && (uri == null || !eq(uri, cu))) sc.ns.add(cp, cu);
+          // add to in-scope namespaces
+          if(!inscopeNS.contains(cp)) inscopeNS.add(cp, cu);
+        } else {
+          // element has no namespace: assign default uri
+          nm.uri(uri);
+        }
+      }
+
+      // add constructed namespaces
       final Atts cns = constr.nspaces;
       final int cl = cns.size();
-      for(int c = 0; c < cl; c++) addNS(cns.name(c), cns.value(c), ns);
+      for(int c = 0; c < cl; c++) addNS(cns.name(c), cns.value(c), inscopeNS);
 
-      // add namespaces
+      // add namespaces for attributes
       final int al = constr.atts.size();
       for(int a = 0; a < al; a++) {
         final ANode att = constr.atts.get(a);
@@ -118,7 +132,7 @@ public final class CElem extends CName {
         if(eq(apref, XML)) continue;
 
         final byte[] auri = qnm.uri();
-        final byte[] npref = addNS(apref, auri, ns);
+        final byte[] npref = addNS(apref, auri, inscopeNS);
         if(npref != null) {
           final QNm aname = new QNm(concat(npref, COLON, qnm.local()), auri);
           constr.atts.set(a, new FAttr(aname, att.string()));
@@ -137,8 +151,8 @@ public final class CElem extends CName {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new CElem(sc, info, name.copy(cc, vm), comp ? null : nspaces.copy(),
-        copyAll(cc, vm, exprs));
+    return copyType(new CElem(sc, info, computed, name.copy(cc, vm), nspaces.copy(),
+        copyAll(cc, vm, exprs)));
   }
 
   /**
@@ -166,7 +180,7 @@ public final class CElem extends CName {
       if(apref == null) {
         int i = 1;
         do {
-          apref = concat(pref, new byte[] { '_' }, token(i++));
+          apref = concat(pref, "_", i++);
         } while(ns.contains(apref));
         ns.add(apref, uri);
       }
@@ -181,8 +195,52 @@ public final class CElem extends CName {
    */
   private int addNS() {
     final NSContext ns = sc.ns;
-    final int s = ns.size(), nl = nspaces.size();
+    final int size = ns.size(), nl = nspaces.size();
     for(int n = 0; n < nl; n++) ns.add(nspaces.name(n), nspaces.value(n));
-    return s;
+    return size;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof CElem &&
+        nspaces.equals(((CElem) obj).nspaces) && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    if(computed) {
+      plan(qs, ELEMENT);
+    } else {
+      final byte[] nm = ((QNm) name).string();
+      qs.token('<').token(nm);
+      final int el = exprs.length;
+      for(int e = 0; e < el; e++) {
+        final Expr expr = exprs[e];
+        if(expr instanceof CAttr && !((CAttr) expr).computed) {
+          qs.token(expr);
+        } else {
+          qs.token('>');
+          boolean constr = false;
+          for(int f = e; f < el && !constr; f++) {
+            constr = exprs[f] instanceof CNode ? ((CNode) exprs[f]).computed :
+              !(exprs[f] instanceof Str);
+          }
+          if(constr) {
+            qs.token('{').tokens(Arrays.copyOfRange(exprs, e, el), SEP).token("}");
+          } else {
+            for(int f = e; f < el; f++) {
+              if(exprs[f] instanceof Str) {
+                qs.value(((Str) exprs[f]).string());
+              } else {
+                qs.token(exprs[f]);
+              }
+            }
+          }
+          qs.token('<').token('/').token(nm).token('>');
+          return;
+        }
+      }
+      qs.token('/').token('>');
+    }
   }
 }

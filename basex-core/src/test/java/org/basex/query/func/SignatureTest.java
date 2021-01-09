@@ -1,50 +1,48 @@
 package org.basex.query.func;
 
 import static org.basex.query.QueryError.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
+import org.basex.*;
 import org.basex.build.*;
 import org.basex.io.*;
-import org.basex.query.*;
 import org.basex.query.value.type.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Tests all function signatures.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class SignatureTest extends AdvancedQueryTest {
+public final class SignatureTest extends SandboxTest {
   /**
    * Tests the validity of all function signatures.
    * @throws Exception exception
    */
-  @Test
-  public void signatures() throws Exception {
+  @Test public void signatures() throws Exception {
     context.openDB(MemBuilder.build(new IOContent("<a/>")));
-    for(final Function f : Function.values()) check(f);
+    for(final FuncDefinition fd : Functions.DEFINITIONS) check(fd);
   }
 
   /**
    * Checks if the specified function correctly handles its argument types,
    * and returns the function name.
-   * @param def function definition
+   * @param fd function signature
    * types are supported.
    */
-  private static void check(final Function def) {
-    final String desc = def.toString(), name = desc.replaceAll("\\(.*", "");
+  private static void check(final FuncDefinition fd) {
+    final String desc = fd.toString(), name = desc.replaceAll("\\(.*", "");
 
     // check that there are enough argument names
-    final String[] names = def.names();
-    final int min = def.minMax[0], max = def.minMax[1];
-    assertTrue(def + Arrays.toString(names),
-        names.length == (max == Integer.MAX_VALUE ? min : max));
+    final String[] names = fd.names();
+    final int min = fd.minMax[0], max = fd.minMax[1];
+    assertEquals(names.length, max == Integer.MAX_VALUE ? min : max, fd + Arrays.toString(names));
     // all variable names must be distinct
     final Set<String> set = new HashSet<>(Arrays.asList(names));
-    assertEquals("Duplicate argument names: " + def, names.length, set.size());
+    assertEquals(names.length, set.size(), "Duplicate argument names: " + fd);
     // var-arg functions must have a number at the end
     if(max == Integer.MAX_VALUE) assertTrue(names[names.length - 1].matches(".*\\d+$"));
 
@@ -53,15 +51,15 @@ public final class SignatureTest extends AdvancedQueryTest {
       final boolean in = al >= min && al <= max;
       final StringBuilder qu = new StringBuilder(name + '(');
       int any = 0;
-      for(int a = 0; a < al; a++) {
-        if(a != 0) qu.append(", ");
+      for(int p = 0; p < al; p++) {
+        if(p != 0) qu.append(", ");
         if(in) {
           // test arguments
-          if(def.args[a].type == AtomType.STR) {
-            qu.append('1');
+          if(fd.params[p].type == AtomType.STRING) {
+            qu.append((char) (48 + p));
           } else { // any type (skip test)
-            qu.append("'X'");
-            if(SeqType.STR.instanceOf(def.args[a])) any++;
+            qu.append("'").append((char) (65 + p)).append("'");
+            if(SeqType.STRING_O.instanceOf(fd.params[p])) any++;
           }
         } else {
           // test wrong number of arguments
@@ -71,11 +69,11 @@ public final class SignatureTest extends AdvancedQueryTest {
       // skip test if all types are arbitrary
       if((min > 0 || al != 0) && (any == 0 || any != al)) {
         final String query = qu.append(')').toString();
-        // wrong types: XPTY0004, FORG0006, FODC0002, BXDB0001, BXDB0004
-        if(in) error(query, INVCAST_X_X_X, NONUMBER_X_X, INVFUNCITEM_X_X, ZEROFUNCS_X_X,
-            BINARY_X, STRBIN_X_X, WHICHRES_X, BXDB_NODB_X_X, MAP_X_X, FUNCARGNUM_X_X);
+        // wrong types: XPTY0004, FORG0006, FODC0002, BXDB0001, BXDB0004, FORG0001
+        if(in) error(query, INVTYPE_X_X_X, NONUMBER_X_X, INVFUNCITEM_X_X, ZEROFUNCS_X_X, NODOC_X,
+            BINARY_X, STRBIN_X_X, WHICHRES_X, DB_NODE_X, MAP_X_X, FUNCARITY_X_X, FUNCCAST_X_X);
         // wrong number of arguments: XPST0017
-        else error(query, FUNCTYPES_X_X_X);
+        else error(query, FUNCARITY_X_X_X);
       }
     }
   }

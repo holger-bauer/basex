@@ -11,7 +11,7 @@ import org.basex.util.list.*;
 /**
  * <p>This class provides convenience operations for strings.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Strings {
@@ -59,37 +59,46 @@ public final class Strings {
   }
 
   /**
+   * Checks if the specified string is "yes", "true", "on" or "1".
+   * @param string string to be checked
+   * @return result of check
+   */
+  public static boolean toBoolean(final String string) {
+    return eqic(string, "1", Text.TRUE, Text.YES, Text.ON);
+  }
+
+  /**
    * Compares two strings for equality. The arguments may be {@code null}.
-   * @param str1 first string
-   * @param str2 strings to be compared
+   * @param string1 first string
+   * @param string2 strings to be compared
    * @return true if one test is successful
    */
-  public static boolean eq(final String str1, final String str2) {
-    return str1 == null ? str2 == null : str1.equals(str2);
+  public static boolean eq(final String string1, final String string2) {
+    return Objects.equals(string1, string2);
   }
 
   /**
    * Compares several strings for equality. The arguments may be {@code null}.
-   * @param str first string
+   * @param string first string
    * @param strings strings to be compared
    * @return true if one test is successful
    */
-  public static boolean eq(final String str, final String... strings) {
-    for(final String s : strings) {
-      if(str == null ? s == null : str.equals(s)) return true;
+  public static boolean eq(final String string, final String... strings) {
+    for(final String str : strings) {
+      if(Objects.equals(string, str)) return true;
     }
     return false;
   }
 
   /**
    * Compares several strings for equality, ignoring the case.
-   * @param str first string
+   * @param string first string
    * @param strings strings to be compared
    * @return true if one test is successful
    */
-  public static boolean eqic(final String str, final String... strings) {
-    for(final String s : strings) {
-      if(str == null ? s == null : str.equalsIgnoreCase(s)) return true;
+  public static boolean eqic(final String string, final String... strings) {
+    for(final String str : strings) {
+      if(string == null ? str == null : string.equalsIgnoreCase(str)) return true;
     }
     return false;
   }
@@ -97,26 +106,27 @@ public final class Strings {
   /**
    * Splits a string around matches of the given separator.
    * @param string string to be split
-   * @param sep separation character
+   * @param separator separation character
    * @return resulting strings
    */
-  public static String[] split(final String string, final char sep) {
-    return split(string, sep, Integer.MAX_VALUE);
+  public static String[] split(final String string, final char separator) {
+    return split(string, separator, -1);
   }
 
   /**
    * Splits a string around matches of the given separator.
    * @param string string to be split
-   * @param sep separation character
-   * @param limit maximum number of strings (must be 1 or larger)
+   * @param separator separation character
+   * @param limit maximum number of strings (ignored if {@code -1})
    * @return resulting strings
    */
-  public static String[] split(final String string, final char sep, final int limit) {
-    final StringList sl = new StringList(limit == Integer.MAX_VALUE ? Array.CAPACITY : limit);
+  public static String[] split(final String string, final char separator, final int limit) {
+    final StringList sl = new StringList(Array.initialCapacity(limit));
     final int tl = string.length();
     int s = 0, c = 1;
-    for(int p = 0; p < tl && c < limit; p++) {
-      if(string.charAt(p) == sep) {
+    final int l = limit >= 0 ? limit : Integer.MAX_VALUE;
+    for(int p = 0; p < tl && c < l; p++) {
+      if(string.charAt(p) == separator) {
         sl.add(string.substring(s, p));
         s = p + 1;
         c++;
@@ -126,22 +136,7 @@ public final class Strings {
   }
 
   /**
-   * Joins strings.
-   * @param strings string to be joined
-   * @param sep separation string
-   * @return resulting string
-   */
-  public static String join(final String[] strings, final String sep) {
-    final StringBuilder sb = new StringBuilder();
-    for(final String string : strings) {
-      if(sb.length() != 0) sb.append(sep);
-      sb.append(string);
-    }
-    return sb.toString();
-  }
-
-  /**
-   * Deletes a character from the strings.
+   * Deletes a character from a string.
    * @param string string
    * @param ch character to be removed
    * @return resulting token
@@ -159,9 +154,9 @@ public final class Strings {
   }
 
   /**
-   * Checks if a character occurs in a strings.
+   * Checks if a string contains a character.
    * @param string string
-   * @param ch character to be found
+   * @param ch character to search for
    * @return result of check
    */
   public static boolean contains(final String string, final char ch) {
@@ -241,16 +236,7 @@ public final class Strings {
   }
 
   /**
-   * Checks if the specified string is "yes", "true", "on" or "1".
-   * @param string string to be checked
-   * @return result of check
-   */
-  public static boolean yes(final String string) {
-    return eqic(string, Text.TRUE, Text.YES, Text.ON, "1");
-  }
-
-  /**
-   * Capitalizes a string.
+   * Capitalizes the first letter of a string.
    * @param string input string
    * @return capitalized string
    */
@@ -307,7 +293,7 @@ public final class Strings {
 
   /**
    * Converts a URI to a directory path.
-   * See http://docs.basex.org/wiki/Repository#URI_Rewriting for details.
+   * See https://docs.basex.org/wiki/Repository#URI_Rewriting for details.
    * @param uri namespace uri
    * @return converted path
    */
@@ -321,7 +307,7 @@ public final class Strings {
       } else {
         final String auth = u.getAuthority();
         if(auth != null) {
-          // reverse authority, replace dots by slashes. example: basex.org -> org/basex
+          // reverse authority, replace dots by slashes. example: basex.org  ->  org/basex
           final String[] comp = split(auth, '.');
           for(int c = comp.length - 1; c >= 0; c--) tb.add('/').add(comp[c]);
         }
@@ -335,9 +321,39 @@ public final class Strings {
     // replace special characters with dashes; remove multiple slashes
     path = path.replaceAll("[^\\w.-/]+", "-").replaceAll("//+", "/");
     // add "index" string
-    if(path.endsWith("/")) path += "index";
+    if(Strings.endsWith(path, '/')) path += "index";
     // remove heading slash
-    if(path.startsWith("/")) path = path.substring(1);
+    if(Strings.startsWith(path, '/')) path = path.substring(1);
     return path;
+  }
+
+  /**
+   * Checks if a string starts with the specified character.
+   * @param string string
+   * @param ch character to be found
+   * @return result of check
+   */
+  public static boolean startsWith(final String string, final char ch) {
+    return string.indexOf(ch) == 0;
+  }
+
+  /**
+   * Checks if a string ends with the specified character.
+   * @param string string
+   * @param ch character to be found
+   * @return result of check
+   */
+  public static boolean endsWith(final String string, final char ch) {
+    final int sl = string.length();
+    return sl > 0 && string.charAt(sl - 1) == ch;
+  }
+
+  /**
+   * Concatenates multiple objects.
+   * @param objects objects
+   * @return resulting string
+   */
+  public static String concat(final Object... objects) {
+    return Token.string(Token.concat(objects));
   }
 }

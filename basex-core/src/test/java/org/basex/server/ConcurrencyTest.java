@@ -1,6 +1,6 @@
 package org.basex.server;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.util.*;
@@ -10,13 +10,13 @@ import org.basex.api.client.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests the execution of parallel commands.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Andreas Weiler
  */
 public final class ConcurrencyTest extends SandboxTest {
@@ -37,8 +37,7 @@ public final class ConcurrencyTest extends SandboxTest {
    * Starts the server.
    * @throws IOException exception
    */
-  @Before
-  public void start() throws IOException {
+  @BeforeEach public void start() throws IOException {
     server = createServer();
     sess = createClient();
     sess.execute(new CreateDB(NAME, FILE));
@@ -48,8 +47,7 @@ public final class ConcurrencyTest extends SandboxTest {
    * Stops the server.
    * @throws Exception exception
    */
-  @After
-  public void stop() throws Exception {
+  @AfterEach public void stop() throws Exception {
     sess.execute(new DropDB(NAME));
     sess.close();
     stopServer(server);
@@ -59,8 +57,7 @@ public final class ConcurrencyTest extends SandboxTest {
    * Efficiency test.
    * @throws Exception exception
    */
-  @Test
-  public void runQueries() throws Exception {
+  @Test public void runQueries() throws Exception {
     final int cl = 50;
     final QueryClient[] clients = new QueryClient[cl];
     for(int c = 0; c < cl; ++c) clients[c] = new QueryClient(c);
@@ -103,8 +100,7 @@ public final class ConcurrencyTest extends SandboxTest {
    * Efficiency test.
    * @throws Exception exception
    */
-  @Test
-  public void runCommands() throws Exception {
+  @Test public void runCommands() throws Exception {
     final int tl = 100;
     final Thread[] th = new Thread[tl];
     for(int t = 0; t < tl; t++) th[t] = new CommandClient();
@@ -121,9 +117,7 @@ public final class ConcurrencyTest extends SandboxTest {
     public void run() {
       try {
         final int i = RANDOM.nextInt(2);
-        final Command cmd;
-        if(i == 0) cmd = new CreateDB(NAME);
-        else cmd = new DropDB(NAME);
+        final Command cmd = i == 0 ? new CreateDB(NAME) : new DropDB(NAME);
         cmd.execute(context);
       } catch(final IOException ex) {
         fail(Util.message(ex));

@@ -6,12 +6,13 @@ import java.sql.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Functions on relational databases.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 public final class SqlCommit extends SqlFn {
@@ -20,9 +21,9 @@ public final class SqlCommit extends SqlFn {
     checkCreate(qc);
     try {
       connection(qc).commit();
-      return null;
+      return Empty.VALUE;
     } catch(final SQLException ex) {
-      throw BXSQ_ERROR_X.get(info, ex);
+      throw SQL_ERROR_X.get(info, ex);
     }
   }
 }

@@ -9,7 +9,6 @@ import java.util.zip.*;
 
 import org.basex.core.*;
 import org.basex.core.MainOptions.MainParser;
-import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.util.*;
@@ -19,7 +18,7 @@ import org.basex.util.list.*;
  * This class recursively scans files and directories and parses all
  * relevant files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DirParser extends Parser {
@@ -29,8 +28,10 @@ public final class DirParser extends Parser {
   private final StringList skipped = new StringList();
   /** File pattern. */
   private final Pattern filter;
-  /** Initial file path. */
-  private final String root;
+  /** Root directory. */
+  private final String dir;
+  /** Original path. */
+  private final String original;
 
   /** Parse archives in directories. */
   private final boolean archives;
@@ -44,15 +45,13 @@ public final class DirParser extends Parser {
   private final boolean rawParser;
   /** Archive name. */
   private final boolean archiveName;
-  /** Database path for storing binary files. */
-  private IOFile rawPath;
 
   /** Last source. */
   private IO lastSrc;
   /** Parser reference. */
   private Parser parser;
-  /** Element counter. */
-  private int c;
+  /** Resource counter. */
+  private int resources;
 
   /**
    * Constructor.
@@ -63,8 +62,13 @@ public final class DirParser extends Parser {
     super(source, options);
 
     final boolean isDir = source.isDir();
-    final String dir = isDir ? source.path() : source.dir();
-    root = dir.endsWith("/") ? dir : dir + '/';
+    if(isDir) {
+      dir = source.path().replaceAll("/$", "") + '/';
+      original = dir;
+    } else {
+      dir = source.dir();
+      original = source.path();
+    }
     skipCorrupt = options.get(MainOptions.SKIPCORRUPT);
     archives = options.get(MainOptions.ADDARCHIVES);
     archiveName = options.get(MainOptions.ARCHIVENAME);
@@ -75,21 +79,10 @@ public final class DirParser extends Parser {
       Pattern.compile(IOFile.regex(options.get(MainOptions.CREATEFILTER)));
   }
 
-  /**
-   * Constructor.
-   * @param source source path
-   * @param options main options
-   * @param dbpath future database path (required for binary resources)
-   */
-  public DirParser(final IO source, final MainOptions options, final IOFile dbpath) {
-    this(source, options);
-    if(dbpath != null && (addRaw || rawParser)) rawPath = new IOFile(dbpath, IO.RAW);
-  }
-
   @Override
   public void parse(final Builder build) throws IOException {
-    build.meta.filesize = 0;
-    build.meta.original = source.path();
+    build.meta.inputsize = 0;
+    build.meta.original = original;
     parse(build, source);
   }
 
@@ -103,24 +96,28 @@ public final class DirParser extends Parser {
     if(input instanceof IOFile && input.isDir()) {
       for(final IO f : ((IOFile) input).children()) parse(builder, f);
     } else if(archives && input.isArchive()) {
-      final String name = input.name().toLowerCase(Locale.ENGLISH);
+      String name = input.name().toLowerCase(Locale.ENGLISH);
       InputStream in = input.inputStream();
       if(name.endsWith(IO.TARSUFFIX) || name.endsWith(IO.TGZSUFFIX) ||
           name.endsWith(IO.TARGZSUFFIX)) {
         // process TAR files
         if(!name.endsWith(IO.TARSUFFIX)) in = new GZIPInputStream(in);
         try(TarInputStream is = new TarInputStream(in)) {
-          for(TarEntry ze; (ze = is.getNextEntry()) != null;) {
-            if(ze.isDirectory()) continue;
-            source = newStream(is, ze.getName(), input);
-            source.length(ze.getSize());
+          for(TarEntry te; (te = is.getNextEntry()) != null;) {
+            if(te.isDirectory()) continue;
+            source = newStream(is, te.getName(), input);
+            source.length(te.getSize());
             parseResource(builder);
           }
         }
       } else if(name.endsWith(IO.GZSUFFIX)) {
         // process GZIP archive
         try(GZIPInputStream is = new GZIPInputStream(in)) {
-          source = newStream(is, input.name().replaceAll("\\..*", IO.XMLSUFFIX), input);
+          // generate filename (the optional filename cannot be retrieve from the input stream):
+          // drop archive suffix, add .xml if no suffix remains
+          name = input.name().replaceAll("\\.[^.]+$", "");
+          if(!Strings.contains(name, '.')) name += IO.XMLSUFFIX;
+          source = newStream(is, name, input);
           parseResource(builder);
         }
       } else {
@@ -163,10 +160,6 @@ public final class DirParser extends Parser {
   private void parseResource(final Builder builder) throws IOException {
     builder.checkStop();
 
-    // add file size for database meta information
-    final long l = source.length();
-    if(l != -1) builder.meta.filesize += l;
-
     // use global target as path prefix
     final String name = source.name();
     String targ = target;
@@ -175,59 +168,52 @@ public final class DirParser extends Parser {
     String path = source.path();
     if(path.endsWith('/' + name)) {
       path = path.substring(0, path.length() - name.length());
-      if(path.startsWith(root)) path = path.substring(root.length());
+      if(path.startsWith(dir)) path = path.substring(dir.length());
       targ = (targ + path).replace("//", "/");
     }
 
     // check if file passes the name filter pattern
-    boolean exclude = false;
-    if(filter != null) {
-      final String nm = Prop.CASE ? name : name.toLowerCase(Locale.ENGLISH);
-      exclude = !filter.matcher(nm).matches();
-    }
+    final boolean include = filter == null ||
+        filter.matcher(Prop.CASE ? name : name.toLowerCase(Locale.ENGLISH)).matches();
 
-    if(exclude) {
-      // exclude file: check if will be added as raw file
-      if(addRaw && rawPath != null) {
-        Store.store(source.inputSource(), new IOFile(rawPath, targ + name));
-      }
-    } else {
-      if(rawParser) {
-        // store input in raw format if database path is known
-        if(rawPath != null) {
-          Store.store(source.inputSource(), new IOFile(rawPath, targ + name));
-        }
-      } else {
-        // store input as XML
-        boolean ok = true;
-        IO in = source;
-        if(skipCorrupt) {
-          // parse file twice to ensure that it is well-formed
-          try {
-            // cache file contents to allow or speed up a second run
-            if(!(source instanceof IOContent || dtd)) {
-              in = new IOContent(source.read());
-              in.name(name);
-            }
-            parser = Parser.singleParser(in, options, targ);
-            MemBuilder.build("", parser);
-          } catch(final IOException ex) {
-            Util.debug(ex);
-            skipped.add(source.path());
-            ok = false;
+    if(include ? rawParser : addRaw) {
+      // store input in raw format if raw parser was chosen, or if file was included otherwise
+      builder.binary(targ + name, source);
+    } else if(include) {
+      // store input as XML
+      boolean ok = true;
+      IO in = source;
+      if(skipCorrupt) {
+        // parse file twice to ensure that it is well-formed
+        try {
+          // cache file contents to allow or speed up a second run
+          if(!(source instanceof IOContent || dtd)) {
+            in = new IOContent(source.read());
+            in.name(name);
           }
-        }
-
-        // parse file
-        if(ok) {
           parser = Parser.singleParser(in, options, targ);
-          parser.parse(builder);
+          MemBuilder.build("", parser);
+        } catch(final IOException ex) {
+          Util.debug(ex);
+          skipped.add(source.path());
+          ok = false;
         }
-        parser = null;
-        // dump debug data
-        if(Prop.debug && (++c & 0x3FF) == 0) Util.err(";");
       }
+
+      // parse file
+      if(ok) {
+        parser = Parser.singleParser(in, options, targ);
+        parser.parse(builder);
+      }
+      parser = null;
     }
+
+    // sum meta data file size
+    final long l = source.length();
+    if(l != -1) builder.meta.inputsize += l;
+
+    // debugging: increment number of processed resources
+    if(Prop.debug && (++resources & 0x3FF) == 0) Util.err(";");
   }
 
   @Override

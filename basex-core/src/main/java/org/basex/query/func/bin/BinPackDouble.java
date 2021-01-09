@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BinPackDouble extends BinFn {
@@ -17,6 +17,6 @@ public final class BinPackDouble extends BinFn {
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final double d = toDouble(exprs[0], qc);
     final ByteOrder bo = order(1, qc);
-    return new B64(ByteBuffer.wrap(new byte[8]).order(bo).putDouble(d).array());
+    return B64.get(ByteBuffer.wrap(new byte[8]).order(bo).putDouble(d).array());
   }
 }

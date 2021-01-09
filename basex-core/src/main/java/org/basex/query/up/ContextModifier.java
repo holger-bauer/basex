@@ -17,17 +17,17 @@ import org.basex.util.list.*;
  * Base class for the different context modifiers. A context modifier aggregates
  * all updates for a specific context.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
-public abstract class ContextModifier {
-  /** Update primitives, aggregated separately for each database [SINGLE]. */
+abstract class ContextModifier {
+  /** Update primitives, aggregated separately for each database. */
   private final Map<Data, DataUpdates> dbUpdates = new HashMap<>();
-  /** Update primitives, aggregated separately for each database name [SINGLE]. */
+  /** Update primitives, aggregated separately for each database name. */
   private final Map<String, NameUpdates> nameUpdates = new HashMap<>();
-  /** Update primitives, aggregated separately for each user name [SINGLE]. */
+  /** Update primitives, aggregated separately for each user name. */
   private final Map<String, UserUpdates> userUpdates = new HashMap<>();
-  /** Temporary data reference, containing all XML fragments to be inserted [SINGLE]. */
+  /** Temporary data reference, containing all XML fragments to be inserted. */
   private MemData memData;
 
   /**
@@ -45,34 +45,16 @@ public abstract class ContextModifier {
    */
   synchronized void add(final Update update, final QueryContext qc) throws QueryException {
     if(update instanceof DataUpdate) {
-      final DataUpdate dataUp = (DataUpdate) update;
-      final Data data = dataUp.data();
-      DataUpdates ups = dbUpdates.get(data);
-      if(ups == null) {
-        ups = new DataUpdates(data, qc);
-        dbUpdates.put(data, ups);
-      }
       // create temporary mem data instance if not available yet
       if(memData == null) memData = new MemData(qc.context.options);
-      ups.add(dataUp, memData);
+      final DataUpdate dataUp = (DataUpdate) update;
+      dbUpdates.computeIfAbsent(dataUp.data(), d -> new DataUpdates(d, qc)).add(dataUp, memData);
     } else if(update instanceof NameUpdate) {
       final NameUpdate nameUp = (NameUpdate) update;
-      final String name = nameUp.name();
-      NameUpdates ups = nameUpdates.get(name);
-      if(ups == null) {
-        ups = new NameUpdates();
-        nameUpdates.put(name, ups);
-      }
-      ups.add(nameUp);
+      nameUpdates.computeIfAbsent(nameUp.name(), n -> new NameUpdates()).add(nameUp);
     } else if(update instanceof UserUpdate) {
       final UserUpdate userUp = (UserUpdate) update;
-      final String name = userUp.name();
-      UserUpdates ups = userUpdates.get(name);
-      if(ups == null) {
-        ups = new UserUpdates();
-        userUpdates.put(name, ups);
-      }
-      ups.add(userUp);
+      userUpdates.computeIfAbsent(userUp.name(), n -> new UserUpdates()).add(userUp);
     } else {
       throw Util.notExpected("Unknown update type: " + update);
     }
@@ -105,7 +87,7 @@ public abstract class ContextModifier {
     for(final DataUpdates up : dbUpdates.values()) {
       // create temporary mem data instance if not available yet
       if(memData == null) memData = new MemData(qc.context.options);
-      up.prepare(memData);
+      up.prepare(memData, qc);
       datas.add(up.data());
     }
     for(final NameUpdates up : nameUpdates.values()) up.prepare();
@@ -119,7 +101,7 @@ public abstract class ContextModifier {
   final synchronized void apply(final QueryContext qc) throws QueryException {
     final Context ctx = qc.context;
     for(final UserUpdates up : userUpdates.values()) up.apply();
-    if(!userUpdates.isEmpty()) ctx.users.write(ctx);
+    if(!userUpdates.isEmpty()) ctx.users.write();
 
     // apply initial updates based on database names
     for(final NameUpdates up : nameUpdates.values()) up.apply(true);
@@ -138,7 +120,7 @@ public abstract class ContextModifier {
         up.apply(qc);
       }
     } catch(final IOException ex) {
-      throw BXDB_LOCK_X.get(null, ex);
+      throw DB_LOCK2_X.get(null, ex);
     } finally {
       // remove locks: in case of a crash, remove only already acquired write locks
       for(final Data data : datas) {
@@ -147,7 +129,9 @@ public abstract class ContextModifier {
     }
 
     // apply remaining updates based on database names
-    for(final NameUpdates up : nameUpdates.values()) up.apply(false);
+    for(final NameUpdates up : nameUpdates.values()) {
+      up.apply(false);
+    }
   }
 
   /**
@@ -155,10 +139,10 @@ public abstract class ContextModifier {
    * @return number of updates
    */
   final synchronized int size() {
-    int s = 0;
-    for(final DataUpdates up : dbUpdates.values()) s += up.size();
-    for(final NameUpdates up : nameUpdates.values()) s += up.size();
-    for(final UserUpdates up : userUpdates.values()) s += up.size();
-    return s;
+    int size = 0;
+    for(final DataUpdates up : dbUpdates.values()) size += up.size();
+    for(final NameUpdates up : nameUpdates.values()) size += up.size();
+    for(final UserUpdates up : userUpdates.values()) size += up.size();
+    return size;
   }
 }

@@ -7,7 +7,7 @@ import org.basex.query.value.type.*;
  * This class contains information on the original query, which will be evaluated for
  * error feedback and debugging purposes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class InputInfo {
@@ -20,11 +20,9 @@ public final class InputInfo {
   private final String path;
   /** Input string (can be {@code null}). */
   private String input;
-  /** Parse position. */
-  private int pos = -1;
   /** Line number ({@code 0} if not initialized). */
   private int line;
-  /** Column number ({@code 0} if not initialized). */
+  /** Column number of (if not initialized) string position. */
   private int col;
 
   /**
@@ -34,7 +32,7 @@ public final class InputInfo {
   public InputInfo(final InputParser parser) {
     input = parser.input;
     path = parser.file;
-    pos = parser.pos;
+    col = parser.pos;
   }
 
   /**
@@ -62,7 +60,7 @@ public final class InputInfo {
    * @return line position
    */
   public int line() {
-    if(line == 0) lineCol();
+    init();
     return line;
   }
 
@@ -71,20 +69,24 @@ public final class InputInfo {
    * @return column position
    */
   public int column() {
-    if(col == 0) lineCol();
+    init();
     return col;
   }
 
   /**
    * Calculates the column and line number in a string.
    */
-  private void lineCol() {
-    final int cl = Math.min(pos, input.length());
+  private void init() {
+    // positions have already been calculated
+    if(line != 0) return;
+
+    final int cl = Math.min(col, input.length());
     final String q = input;
     int l = 1, c = 1;
     for(int i = 0, ch; i < cl; i += Character.charCount(ch)) {
       ch = q.codePointAt(i);
-      if(ch == '\n') { l++; c = 1; } else if(ch != '\r') { c++; }
+      if(ch == '\n') { l++; c = 1; }
+      else if(ch != '\r') { c++; }
     }
     line = l;
     col = c;
@@ -100,7 +102,7 @@ public final class InputInfo {
 
   /**
    * Activates light-weight error handling (invoked e.g. by {@link SeqType#cast(
-   * org.basex.query.value.item.Item, QueryContext, StaticContext, InputInfo, boolean)}).
+   * org.basex.query.value.Value, boolean, QueryContext, StaticContext, InputInfo)}).
    * @param value value to set
    */
   public void internal(final boolean value) {
@@ -111,18 +113,17 @@ public final class InputInfo {
   public boolean equals(final Object object) {
     if(!(object instanceof InputInfo)) return false;
     final InputInfo ii = (InputInfo) object;
-    return (path != null ? path.equals(ii.path) : input.equals(ii.input)) && pos == ii.pos;
+    return (path != null ? path.equals(ii.path) : input.equals(ii.input)) &&
+        column() == ii.column() && line() == ii.line();
   }
 
   @Override
   public int hashCode() {
-    return (path != null ? path.hashCode() : input.hashCode()) + pos;
+    return (path != null ? path.hashCode() : input.hashCode()) + column() + (line() << 16);
   }
 
   @Override
   public String toString() {
-    final TokenBuilder tb = new TokenBuilder();
-    tb.add(path == null ? "." : path).add(", ").addExt(line()).add('/').addExt(column());
-    return tb.toString();
+    return Strings.concat(path == null ? "." : path, ", ", line(), '/', column());
   }
 }

@@ -1,7 +1,6 @@
 package org.basex.query.value.type;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
 import java.util.*;
@@ -16,38 +15,41 @@ import org.basex.util.*;
 /**
  * XQuery 3.0 function types.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public class FuncType implements Type {
+  /** Any function placeholder string. */
+  static final String[] WILDCARD = { "*" };
+
   /** Annotations. */
   public final AnnList anns;
-  /** Declared type, {@code null} if not specified. */
-  public final SeqType type;
-  /** Argument types (can be {@code null}). */
+  /** Return type of the function. */
+  public final SeqType declType;
+  /** Argument types (can be {@code null}, indicated that no types were specified). */
   public final SeqType[] argTypes;
 
-  /** This function type's sequence type (lazy instantiation). */
-  private SeqType seqType;
+  /** Sequence types (lazy instantiation). */
+  private EnumMap<Occ, SeqType> seqTypes;
 
   /**
    * Constructor.
-   * @param type return type (can be {@code null})
+   * @param declType declared return type (can be {@code null})
    * @param argTypes argument types (can be {@code null})
    */
-  FuncType(final SeqType type, final SeqType... argTypes) {
-    this(null, type, argTypes);
+  FuncType(final SeqType declType, final SeqType... argTypes) {
+    this(new AnnList(), declType, argTypes);
   }
 
   /**
    * Constructor.
-   * @param anns annotations (can be {@code null})
-   * @param type return type (can be {@code null})
+   * @param anns annotations
+   * @param declType declared return type (can be {@code null})
    * @param argTypes argument types (can be {@code null})
    */
-  FuncType(final AnnList anns, final SeqType type, final SeqType... argTypes) {
-    this.anns = anns == null ? new AnnList() : anns;
-    this.type = type == null ? SeqType.ITEM_ZM : type;
+  private FuncType(final AnnList anns, final SeqType declType, final SeqType... argTypes) {
+    this.anns = anns;
+    this.declType = declType == null ? SeqType.ITEM_ZM : declType;
     this.argTypes = argTypes;
   }
 
@@ -72,23 +74,24 @@ public class FuncType implements Type {
   }
 
   @Override
-  public final SeqType seqType() {
-    if(seqType == null) seqType = new SeqType(this);
-    return seqType;
+  public final boolean isSortable() {
+    return false;
   }
 
   @Override
-  public byte[] string() {
-    return token(FUNCTION);
+  public SeqType seqType(final Occ occ) {
+    // cannot statically be instantiated due to circular dependencies
+    if(seqTypes == null) seqTypes = new EnumMap<>(Occ.class);
+    return seqTypes.computeIfAbsent(occ, o -> new SeqType(this, o));
   }
 
   @Override
   public FItem cast(final Item item, final QueryContext qc, final StaticContext sc,
       final InputInfo ii) throws QueryException {
 
-    if(!(item instanceof FItem)) throw castError(item, this, ii);
-    final FItem f = (FItem) item;
-    return this == SeqType.ANY_FUN ? f : f.coerceTo(this, qc, ii, false);
+    if(!(item instanceof FItem)) throw typeError(item, this, ii);
+    final FItem func = (FItem) item;
+    return this == SeqType.FUNCTION ? func : func.coerceTo(this, qc, ii, false);
   }
 
   @Override
@@ -104,143 +107,138 @@ public class FuncType implements Type {
   }
 
   @Override
-  public boolean eq(final Type t) {
-    if(this == t) return true;
-    if(t.getClass() != FuncType.class) return false;
-    final FuncType ft = (FuncType) t;
+  public boolean eq(final Type type) {
+    if(this == type) return true;
+    if(type.getClass() != FuncType.class) return false;
+    final FuncType ft = (FuncType) type;
 
-    if(this == SeqType.ANY_FUN || ft == SeqType.ANY_FUN || argTypes.length != ft.argTypes.length)
+    if(this == SeqType.FUNCTION || ft == SeqType.FUNCTION || argTypes.length != ft.argTypes.length)
       return false;
 
     final int al = argTypes.length;
-    for(int i = 0; i < al; i++) {
-      if(!argTypes[i].eq(ft.argTypes[i])) return false;
+    for(int a = 0; a < al; a++) {
+      if(!argTypes[a].eq(ft.argTypes[a])) return false;
     }
-    return type.eq(ft.type);
+    return declType.eq(ft.declType);
   }
 
   @Override
-  public boolean instanceOf(final Type t) {
-    // the only non-function super-type of function is item()
-    if(t == AtomType.ITEM || t == SeqType.ANY_FUN) return true;
-    if(!(t instanceof FuncType) || t instanceof MapType || t instanceof ArrayType) return false;
+  public boolean instanceOf(final Type type) {
+    if(type.oneOf(this, SeqType.FUNCTION, AtomType.ITEM)) return true;
+    if(this == SeqType.FUNCTION || !(type instanceof FuncType) || type instanceof MapType ||
+        type instanceof ArrayType) return false;
 
-    // check annotations
-    final FuncType ft = (FuncType) t;
-    for(final Ann ann : ft.anns) if(!anns.contains(ann)) return false;
-
-    // takes care of FunType.ANY
-    if(this == SeqType.ANY_FUN || argTypes.length != ft.argTypes.length ||
-        !type.instanceOf(ft.type)) return false;
-
+    final FuncType ft = (FuncType) type;
     final int al = argTypes.length;
+    if(al != ft.argTypes.length) return false;
     for(int a = 0; a < al; a++) {
       if(!ft.argTypes[a].instanceOf(argTypes[a])) return false;
     }
-    return true;
+    for(final Ann ann : ft.anns) {
+      if(!anns.contains(ann)) return false;
+    }
+    return declType.instanceOf(ft.declType);
   }
 
   @Override
-  public Type union(final Type t) {
-    if(!(t instanceof FuncType)) return AtomType.ITEM;
+  public Type union(final Type type) {
+    if(instanceOf(type)) return type;
+    if(type.instanceOf(this)) return this;
 
-    final FuncType ft = (FuncType) t;
-    if(this == SeqType.ANY_FUN || ft == SeqType.ANY_FUN) return SeqType.ANY_FUN;
+    if(!(type instanceof FuncType)) return AtomType.ITEM;
 
+    final FuncType ft = (FuncType) type;
     final int al = argTypes.length;
-    if(al != ft.argTypes.length) return SeqType.ANY_FUN;
+    if(al != ft.argTypes.length) return SeqType.FUNCTION;
 
     final SeqType[] arg = new SeqType[al];
     for(int a = 0; a < al; a++) {
       arg[a] = argTypes[a].intersect(ft.argTypes[a]);
-      if(arg[a] == null) return SeqType.ANY_FUN;
+      if(arg[a] == null) return SeqType.FUNCTION;
     }
-    return get(anns.intersect(ft.anns), type.union(ft.type), arg);
+
+    final AnnList an = anns.union(ft.anns);
+    final SeqType dt = declType.union(ft.declType);
+    return get(an, dt, arg);
   }
 
   @Override
-  public Type intersect(final Type t) {
-    // ensure commutativity
-    if(t instanceof MapType || t instanceof ArrayType) return t.intersect(this);
+  public Type intersect(final Type type) {
+    if(instanceOf(type)) return this;
+    if(type.instanceOf(this)) return type;
 
-    // the easy cases
-    if(instanceOf(t)) return this;
-    if(t.instanceOf(this)) return t;
+    if(!(type instanceof FuncType)) return null;
+    if(type instanceof MapType || type instanceof ArrayType) return type.intersect(this);
 
-    if(t instanceof FuncType) {
-      final FuncType ft = (FuncType) t;
-      // ANY_FUN is excluded by the easy cases
-      final SeqType rt = type.intersect(ft.type);
-      final int al = argTypes.length;
-      if(rt != null && al == ft.argTypes.length) {
-        final SeqType[] arg = new SeqType[al];
-        for(int a = 0; a < al; a++) arg[a] = argTypes[a].union(ft.argTypes[a]);
-        final AnnList a = anns.union(ft.anns);
-        return a == null ? null : get(a, rt, arg);
-      }
-    }
-    return null;
+    final FuncType ft = (FuncType) type;
+    final int al = argTypes.length;
+    if(al != ft.argTypes.length) return null;
+
+    final AnnList an = anns.intersect(ft.anns);
+    if(an == null) return null;
+    final SeqType dt = declType.intersect(ft.declType);
+    if(dt == null) return null;
+
+    final SeqType[] arg = new SeqType[al];
+    for(int a = 0; a < al; a++) arg[a] = argTypes[a].union(ft.argTypes[a]);
+    return get(an, dt, arg);
   }
 
   /**
    * Getter for function types.
    * @param anns annotations
-   * @param type return type ({@code null}: any return type)
-   * @param args argument types ({@code null}: any function)
+   * @param declType declared return type
+   * @param args argument types
    * @return function type
    */
-  public static FuncType get(final AnnList anns, final SeqType type, final SeqType... args) {
-    return args == null ? SeqType.ANY_FUN : new FuncType(anns, type, args);
+  public static FuncType get(final AnnList anns, final SeqType declType, final SeqType... args) {
+    return new FuncType(anns, declType, args);
   }
 
   /**
    * Getter for function types without annotations.
-   * @param type return type
+   * @param declType declared return type
    * @param args argument types
    * @return function type
    */
-  public static FuncType get(final SeqType type, final SeqType... args) {
-    return get(null, type, args);
+  public static FuncType get(final SeqType declType, final SeqType... args) {
+    return get(new AnnList(), declType, args);
   }
 
   /**
    * Finds and returns the specified function type.
-   * @param type type
+   * @param name name of type
    * @return type or {@code null}
    */
-  public static Type find(final QNm type) {
-    if(type.uri().length == 0) {
-      final byte[] ln = type.local();
-      if(Token.eq(ln, token(FUNCTION))) return SeqType.ANY_FUN;
-      if(Token.eq(ln, token(MAP))) return SeqType.ANY_MAP;
-      if(Token.eq(ln, token(ARRAY))) return SeqType.ANY_ARRAY;
+  public static Type find(final QNm name) {
+    if(name.uri().length == 0) {
+      final byte[] ln = name.local();
+      if(Token.eq(ln, token(QueryText.FUNCTION))) return SeqType.FUNCTION;
+      if(Token.eq(ln, token(QueryText.MAP))) return SeqType.MAP;
+      if(Token.eq(ln, token(QueryText.ARRAY))) return SeqType.ARRAY;
     }
     return null;
   }
 
   /**
-   * Getter for function types with a given arity.
-   * @param a number of arguments
+   * Getter for a function's type.
+   * @param anns annotations
+   * @param declType declared return type (can be {@code null})
+   * @param params formal parameters
    * @return function type
    */
-  public static FuncType arity(final int a) {
-    final SeqType[] args = new SeqType[a];
-    Arrays.fill(args, SeqType.ITEM_ZM);
-    return get(new AnnList(), SeqType.ITEM_ZM, args);
+  public static FuncType get(final AnnList anns, final SeqType declType, final Var[] params) {
+    final int pl = params.length;
+    final SeqType[] argTypes = new SeqType[pl];
+    for(int p = 0; p < pl; p++) {
+      argTypes[p] = params[p] == null ? SeqType.ITEM_ZM : params[p].declaredType();
+    }
+    return new FuncType(anns, declType, argTypes);
   }
 
-  /**
-   * Getter for a function's type.
-   * @param anns annotations (can be {@code null})
-   * @param type return type (can be {@code null})
-   * @param args formal parameters
-   * @return function type
-   */
-  public static FuncType get(final AnnList anns, final SeqType type, final Var[] args) {
-    final int al = args.length;
-    final SeqType[] at = new SeqType[al];
-    for(int a = 0; a < al; a++) at[a] = args[a] == null ? SeqType.ITEM_ZM : args[a].declaredType();
-    return new FuncType(anns, type, at);
+  @Override
+  public final AtomType atomic() {
+    return null;
   }
 
   @Override
@@ -249,18 +247,15 @@ public class FuncType implements Type {
   }
 
   @Override
-  public String toString() {
-    final TokenBuilder tb = new TokenBuilder(anns.toString()).add(FUNCTION).add('(');
-    if(this == SeqType.ANY_FUN) {
-      tb.add('*').add(')');
-    } else {
-      tb.addSep(argTypes, ", ").add(") as ").add(type.toString());
-    }
-    return tb.toString();
+  public boolean nsSensitive() {
+    return false;
   }
 
   @Override
-  public boolean nsSensitive() {
-    return false;
+  public String toString() {
+    final QueryString qs = new QueryString().token(anns).token(QueryText.FUNCTION);
+    if(this == SeqType.FUNCTION) qs.params(WILDCARD);
+    else qs.params(argTypes).token(QueryText.AS).token(declType);
+    return qs.toString();
   }
 }

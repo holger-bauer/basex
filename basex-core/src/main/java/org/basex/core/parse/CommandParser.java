@@ -5,12 +5,13 @@ import java.util.*;
 import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.util.*;
 
 /**
  * This is a parser for command strings, creating {@link Command} instances.
  * Several commands can be formulated in one string and separated by semicolons.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class CommandParser {
@@ -45,7 +46,8 @@ public abstract class CommandParser {
    * @return command parser
    */
   public static CommandParser get(final String input, final Context ctx) {
-    return input.startsWith("<") ? new XMLParser(input, ctx) : new StringParser(input, ctx);
+    return Strings.startsWith(input, '<') ? new XMLParser(input, ctx) :
+      new StringParser(input, ctx);
   }
 
   /**
@@ -95,8 +97,8 @@ public abstract class CommandParser {
   public final Command[] parse() throws QueryException {
     final ArrayList<Command> cmds = new ArrayList<>();
     parse(cmds);
-    if(!single || cmds.size() == 1) return cmds.toArray(new Command[cmds.size()]);
-    throw new QueryException(null, new QNm(), Text.SINGLE_CMD);
+    if(!single || cmds.size() == 1) return cmds.toArray(new Command[0]);
+    throw new QueryException(null, QNm.EMPTY, Text.SINGLE_CMD);
   }
 
   /**

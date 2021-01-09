@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * This class serializes items as HTML.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class HTMLSerializer extends MarkupSerializer {
@@ -92,22 +92,22 @@ final class HTMLSerializer extends MarkupSerializer {
   }
 
   @Override
-  protected void printChar(final int cp) throws IOException {
+  protected void print(final int cp) throws IOException {
     if(script) out.print(cp);
     else if(cp > 0x7F && cp < 0xA0 && !html5) throw SERILL_X.getIO(Integer.toHexString(cp));
     else if(cp == 0xA0) out.print(E_NBSP);
-    else super.printChar(cp);
+    else super.print(cp);
   }
 
   @Override
   protected void startOpen(final QNm name) throws IOException {
-    doctype(null);
+    if(elems.isEmpty()) checkRoot(HTML);
     if(sep) indent();
     out.print(ELEM_O);
     out.print(name.string());
     sep = indent;
     script = SCRIPTS.contains(lc(name.local()));
-    if(content && eq(lc(elem.local()), HEAD)) ct++;
+    if(content && eq(lc(elem.local()), HEAD)) skip++;
   }
 
   @Override
@@ -140,7 +140,7 @@ final class HTMLSerializer extends MarkupSerializer {
   }
 
   @Override
-  protected void doctype(final QNm type) throws IOException {
+  protected void doctype(final byte[] type) throws IOException {
     final boolean doc = docpub != null || docsys != null;
     if(doc) {
       printDoctype(type, docpub, docsys);

@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dirk Kirsten
  */
 public final class RandomInteger extends StandardFunc {
@@ -24,6 +24,6 @@ public final class RandomInteger extends StandardFunc {
     if(exprs.length == 0) return Int.get(RND.nextInt());
     final long max = toLong(exprs[0], qc);
     if(max > 0 && max <= Integer.MAX_VALUE) return Int.get(RND.nextInt((int) max));
-    throw BXRA_BOUNDS_X.get(info, max);
+    throw RANDOM_BOUNDS_X.get(info, max);
   }
 }

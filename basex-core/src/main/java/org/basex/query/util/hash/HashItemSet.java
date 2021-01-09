@@ -9,84 +9,80 @@ import org.basex.util.hash.*;
 
 /**
  * This is an efficient and memory-saving hash map for storing items.
- * It is related to the {@link TokenSet} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public class HashItemSet extends ASet implements ItemSet {
+public final class HashItemSet extends ASet implements ItemSet {
+  /** Equality vs. equivalence check. */
+  private final boolean eq;
+  /** Hashed keys. */
+  private Item[] keys;
   /** Hash values. */
   private int[] hash;
-  /** Hashed items. */
-  private Item[] keys;
 
   /**
    * Default constructor.
+   * @param eq equality check
    */
-  public HashItemSet() {
-    super(Array.CAPACITY);
-    hash = new int[Array.CAPACITY];
-    keys = new Item[Array.CAPACITY];
+  public HashItemSet(final boolean eq) {
+    super(Array.INITIAL_CAPACITY);
+    this.eq = eq;
+    keys = new Item[capacity()];
+    hash = new int[capacity()];
   }
 
   @Override
-  public final boolean add(final Item key, final InputInfo ii) throws QueryException {
-    return index(key, ii) > 0;
+  public boolean add(final Item item, final InputInfo ii) throws QueryException {
+    return index(item, ii) >= 0;
   }
 
   /**
-   * Stores the specified key and returns its id.
-   * @param key key to be added
-   * @param ii input info
-   * @return unique id of stored key (larger than zero)
+   * Checks if the specified item exists.
+   * @param item item to look up
+   * @param ii input info (can be {@code null})
+   * @return result of check
    * @throws QueryException query exception
    */
-  public int put(final Item key, final InputInfo ii) throws QueryException {
-    final int i = index(key, ii);
-    return Math.abs(i);
+  public boolean contains(final Item item, final InputInfo ii) throws QueryException {
+    return id(item, ii) > 0;
   }
 
   /**
-   * Returns the id of the specified key, or {@code 0} if the key does not exist.
-   * @param key key to be looked up
-   * @param ii input info
-   * @return id, or {@code 0} if key does not exist
+   * Returns the id of the specified QName, or {@code 0} if the QName does not exist.
+   * @param item item to look up
+   * @param ii input info (can be {@code null})
+   * @return id, or {@code 0} if QName does not exist
    * @throws QueryException query exception
    */
-  public final int id(final Item key, final InputInfo ii) throws QueryException {
-    final int h = key.hash(ii);
-    final int p = h & buckets.length - 1;
-    for(int id = buckets[p]; id != 0; id = next[id]) {
-      if(keys[id].equiv(key, null, ii)) return -id;
+  public int id(final Item item, final InputInfo ii) throws QueryException {
+    final int b = item.hash(ii) & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(eq ? keys[id].eq(item, null, null, ii) : keys[id].equiv(item, null, ii)) return id;
     }
     return 0;
   }
 
   /**
-   * Stores the specified key and returns its id, or returns the negative id if the
-   * key has already been stored.
-   * @param key key to be found
-   * @param ii input info
-   * @return id, or negative id if key has already been stored
+   * Stores the specified QName and returns its id, or returns the negative id if the
+   * QName has already been stored.
+   * @param item item to look up
+   * @param ii input info (can be {@code null})
+   * @return id, or negative id if QName has already been stored
    * @throws QueryException query exception
    */
-  private int index(final Item key, final InputInfo ii) throws QueryException {
+  private int index(final Item item, final InputInfo ii) throws QueryException {
     checkSize();
-    final int h = key.hash(ii);
-    final int b = h & buckets.length - 1;
-    for(int r = buckets[b]; r != 0; r = next[r]) {
-      if(keys[r].equiv(key, null, ii)) return -r;
+    final int h = item.hash(ii), b = h & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(eq ? keys[id].eq(item, null, null, ii) : keys[id].equiv(item, null, ii)) return -id;
     }
-    next[size] = buckets[b];
-    keys[size] = key;
-    hash[size] = h;
-    buckets[b] = size;
-    return size++;
-  }
-
-  @Override
-  public Iterator<Item> iterator() {
-    return new ArrayIterator<>(keys, 1, size);
+    final int s = size++;
+    next[s] = buckets[b];
+    keys[s] = item;
+    hash[s] = h;
+    buckets[b] = s;
+    return s;
   }
 
   @Override
@@ -98,5 +94,15 @@ public class HashItemSet extends ASet implements ItemSet {
   protected void rehash(final int newSize) {
     keys = Array.copy(keys, new Item[newSize]);
     hash = Arrays.copyOf(hash, newSize);
+  }
+
+  @Override
+  public Iterator<Item> iterator() {
+    return new ArrayIterator<>(keys, 1, size);
+  }
+
+  @Override
+  public String toString() {
+    return toString(keys);
   }
 }

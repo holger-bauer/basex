@@ -3,12 +3,13 @@ package org.basex.query.func.prof;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ProfSleep extends StandardFunc {
@@ -17,10 +18,10 @@ public final class ProfSleep extends StandardFunc {
     final long ms = toLong(exprs[0], qc);
     final Performance perf = new Performance();
     for(int m = 0; m < ms; m++) {
-      if((System.nanoTime() - perf.start()) / 1000000 >= ms) break;
+      if(perf.ns(false) / 1000000 >= ms) break;
       Performance.sleep(1);
       qc.checkStop();
     }
-    return null;
+    return Empty.VALUE;
   }
 }

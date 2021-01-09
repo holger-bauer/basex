@@ -20,7 +20,7 @@ import org.basex.util.*;
 /**
  * Evaluates the 'create db' command and creates a new database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CreateDB extends ACreate {
@@ -59,12 +59,12 @@ public final class CreateDB extends ACreate {
     if(!Databases.validName(name)) return error(NAME_INVALID_X, name);
 
     // choose parser and input
-    IO io;
+    IO source;
     try {
-      io = sourceToIO(name);
+      source = sourceToIO(name);
       if(in != null) {
-        final LookupInput li = new LookupInput(io.inputStream());
-        io = li.lookup() == -1 ? null : new IOStream(li, io.name());
+        final LookupInput li = new LookupInput(source.inputStream());
+        source = li.lookup() == -1 ? null : new IOStream(li, source.name());
       }
     } catch(final IOException ex) {
       return error(Util.message(ex));
@@ -72,15 +72,15 @@ public final class CreateDB extends ACreate {
 
     try {
       // create parser instance
-      if(io != null) {
-        if(!io.exists()) return error(RES_NOT_FOUND_X, io);
-        parser = new DirParser(io, options, soptions.dbPath(name));
+      if(source != null) {
+        if(!source.exists()) return error(RES_NOT_FOUND_X, source);
+        parser = new DirParser(source, options);
       } else if(parser == null) {
         parser = Parser.emptyParser(options);
       }
 
       // close open database
-      close(context);
+      Close.close(context);
 
       final Data data;
       if(options.get(MainOptions.MAINMEM)) {
@@ -96,9 +96,10 @@ public final class CreateDB extends ACreate {
         if(context.pinned(name)) return error(DB_PINNED_X, name);
 
         // create disk-based instance
-        final DiskBuilder builder = pushJob(new DiskBuilder(name, parser, soptions, options));
+        final DiskBuilder builder = new DiskBuilder(name, parser, soptions, options);
+        pushJob(builder);
         try {
-          builder.build().close();
+          builder.binaryDir(soptions.dbPath(name)).build().close();
         } finally {
           popJob();
         }
@@ -118,7 +119,7 @@ public final class CreateDB extends ACreate {
         }
       })) return false;
 
-      if(options.get(MainOptions.CREATEONLY)) close(context);
+      if(options.get(MainOptions.CREATEONLY)) Close.close(context);
       return true;
 
     } catch(final JobException ex) {
@@ -187,6 +188,6 @@ public final class CreateDB extends ACreate {
 
   @Override
   public void build(final CmdBuilder cb) {
-    cb.init(Cmd.CREATE + " " + CmdCreate.DB).args();
+    cb.init(Cmd.CREATE + " " + CmdCreate.DB).arg(0).add(1);
   }
 }

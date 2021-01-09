@@ -5,14 +5,14 @@ import static org.basex.util.Token.*;
 /**
  * This class assembles texts which are used in the data classes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface DataText {
   // META DATA ====================================================================================
 
   /** Database version; older version cannot open these instances. */
-  String STORAGE = "8.6";
+  String STORAGE = "9.0.1";
   /** Index version; older version cannot open indexes of these instances. */
   String ISTORAGE = "8.6";
 
@@ -30,8 +30,6 @@ public interface DataText {
   String DBFSIZE = "FSIZE";
   /** Number of documents. */
   String DBNDOCS = "NDOCS";
-  /** Path indexing. */
-  String DBPTHIDX = "PTHINDEX";
   /** Automatic index update. */
   String DBUPDIDX = "UPDINDEX";
   /** Automatic optimization. */
@@ -72,8 +70,6 @@ public interface DataText {
   String DBUPTODATE = "UPTODATE";
   /** Last (highest) id. */
   String DBLASTID = "LASTID";
-  /** Permissions. */
-  String DBPERM = "PERM";
   /** Documents. */
   String DBDOCS = "DOCS";
   /** Recreate text index. */
@@ -84,11 +80,6 @@ public interface DataText {
   String DBCRTTOK = "CRTTOK";
   /** Recreate full-text index. */
   String DBCRTFTX = "CRTFTX";
-
-  /** Full-text wildcards indexing (legacy, obsolete). */
-  String DBWCIDX = "WCINDEX";
-  /** Scoring type (legacy, obsolete). */
-  String DBSCTYPE = "FTSCTYPE";
 
   /** Tags. */
   String DBTAGS = "TAGS";
@@ -121,7 +112,7 @@ public interface DataText {
   String DATAUPD = "upd";
   /** Database - Document path index. */
   String DATAPTH = "pth";
-  /** Database - ID->PRE mapping. */
+  /** Database - ID-PRE mapping. */
   String DATAIDP = "idp";
 
   // XML SERIALIZATION ============================================================================
@@ -236,7 +227,7 @@ public interface DataText {
   /** HTML: meta element. */
   byte[] META = token("meta");
   /** HTML: http-equiv attribute. */
-  byte[] HTTPEQUIV = token("http-equiv");
+  byte[] HTTP_EQUIV = token("http-equiv");
   /** HTML: content attribute. */
   byte[] CONTENT = token("content");
   /** HTML: charset. */

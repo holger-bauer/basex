@@ -10,10 +10,10 @@ import org.xmldb.api.base.*;
 /**
  * Implementation of the ResourceSet Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class BXResourceSet implements ResourceSet {
+public final class BXResourceSet implements ResourceSet {
   /** Resources. */
   private final ArrayList<Resource> list;
   /** Collection reference. */

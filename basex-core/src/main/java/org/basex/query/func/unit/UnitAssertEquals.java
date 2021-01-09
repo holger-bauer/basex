@@ -6,30 +6,31 @@ import org.basex.query.*;
 import org.basex.query.func.fn.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UnitAssertEquals extends UnitFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item it = exprs.length < 3 ? null : toNodeOrAtomItem(exprs[2], qc);
-    final Iter iter1 = qc.iter(exprs[0]), iter2 = qc.iter(exprs[1]);
+    final Iter iter1 = exprs[0].iter(qc), iter2 = exprs[1].iter(qc);
     final DeepEqual comp = new DeepEqual(info);
-    Item it1, it2;
+    Item item1, item2;
     int c = 1;
     while(true) {
-      it1 = iter1.next();
-      it2 = iter2.next();
-      final boolean empty1 = it1 == null, empty2 = it2 == null;
-      if(empty1 && empty2) return null;
-      if(empty1 || empty2 || !comp.equal(it1.iter(), it2.iter())) break;
+      item1 = qc.next(iter1);
+      item2 = iter2.next();
+      final boolean empty1 = item1 == null, empty2 = item2 == null;
+      if(empty1 && empty2) return Empty.VALUE;
+      if(empty1 || empty2 || !comp.equal(item1.iter(), item2.iter())) break;
       c++;
     }
-    throw new UnitException(info, UNIT_ASSERT_EQUALS_X_X_X, it1, it2, c).value(it);
+    final Item item = exprs.length > 2 ? toNodeOrAtomItem(2, qc) : null;
+    throw new UnitException(info, UNIT_FAIL_X_X_X, item1, item2, c).value(item);
   }
 }

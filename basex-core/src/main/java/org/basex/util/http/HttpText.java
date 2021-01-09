@@ -10,30 +10,35 @@ import org.basex.query.value.item.*;
 /**
  * HTTP strings.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 public interface HttpText {
-  /** HTTP header: WWW-Authentication string. */
+  /** HTTP header string. */
   String WWW_AUTHENTICATE = "WWW-Authenticate";
-  /** HTTP header: Authorization. */
+  /** HTTP header string. */
   String AUTHORIZATION = "Authorization";
-  /** HTTP header: Content-Type. */
+  /** HTTP header string. */
+  String CONTENT_ENCODING = "Content-Encoding";
+  /** HTTP header string. */
   String CONTENT_TYPE = "Content-Type";
-  /** HTTP header: Content-Transfer-Encoding. */
+  /** HTTP header string. */
   String CONTENT_TRANSFER_ENCODING = "Content-Transfer-Encoding";
-  /** HTTP header: Location. */
+  /** HTTP header string. */
+  String CACHE_CONTROL = "Cache-Control";
+  /** HTTP header string. */
+  String PRAGMA = "Pragma";
+  /** HTTP header string. */
+  String EXPIRES = "Expires";
+  /** HTTP header string. */
   String LOCATION = "Location";
-  /** HTTP header: Accept. */
+  /** HTTP header string. */
   String ACCEPT = "Accept";
+  /** HTTP header string. */
+  String ALLOW = "Allow";
 
-  /** HTTP basic authentication. */
-  String BASIC = "Basic";
-  /** HTTP digest authentication. */
-  String DIGEST = "Digest";
-
-  /** Content-Disposition. */
-  byte[] CONTENT_DISPOSITION = token("Content-Disposition");
+  /** Content-Disposition (lower case). */
+  byte[] CONTENT_DISPOSITION = token("content-disposition");
   /** Dashes. */
   byte[] DASHES = token("--");
 
@@ -61,6 +66,9 @@ public interface HttpText {
   String AUTH = "auth";
   /** Auth-int. */
   String AUTH_INT = "auth-int";
+
+  /** Content encoding: gzip. */
+  String GZIP = "gzip";
 
   /** QName. */
   QNm Q_BODY = new QNm(HTTP_PREFIX, "body", HTTP_URI);
@@ -117,7 +125,7 @@ public interface HttpText {
     /**
      * Returns an enum for the specified string.
      * @param key key
-     * @return enum
+     * @return enum or {@code null}
      */
     public static Request get(final String key) {
       for(final Request r : VALUES) {

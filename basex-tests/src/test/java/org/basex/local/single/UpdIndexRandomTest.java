@@ -1,29 +1,24 @@
 package org.basex.local.single;
 
 import static org.basex.query.func.Function.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import java.util.List;
 
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
-import org.junit.*;
-import org.junit.Test;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * This test class performs random incremental updates with random documents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@RunWith(Parameterized.class)
 public final class UpdIndexRandomTest extends SandboxTest {
   /** Number of different documents. */
   private static final int DOCS = 20;
@@ -31,30 +26,10 @@ public final class UpdIndexRandomTest extends SandboxTest {
   private static final int RUNS = 500;
 
   /**
-   * Test parameters.
-   * @return parameters
-   */
-  @Parameters
-  public static List<Object[]> params() {
-    return Arrays.asList(new Object[][] { { false }, { true } });
-  }
-
-  /** Main memory flag. */
-  private final boolean mainmem;
-
-  /**
-   * Constructor.
+   * Initializes the test.
    * @param mainmem main memory flag
    */
-  public UpdIndexRandomTest(final boolean mainmem) {
-    this.mainmem = mainmem;
-  }
-
-  /**
-   * Initializes the test.
-   */
-  @Before
-  public void init() {
+  public void init(final boolean mainmem) {
     set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     set(MainOptions.ATTRINDEX, false);
@@ -63,9 +38,13 @@ public final class UpdIndexRandomTest extends SandboxTest {
 
   /**
    * Incremental test.
+   * @param mainmem main memory flag
    */
-  @Test
-  public void insertInto() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void insertInto(final boolean mainmem) {
+    init(mainmem);
+
     final Random rnd = new Random(0);
 
     // create random words
@@ -81,7 +60,7 @@ public final class UpdIndexRandomTest extends SandboxTest {
     for(int r = 0; r < RUNS; r++) {
       final String path = "doc" + rnd.nextInt(DOCS);
       // create random document
-      final TokenBuilder doc = new TokenBuilder("<xml>");
+      final TokenBuilder doc = new TokenBuilder().add("<xml>");
 
       final int offset = rnd.nextInt(cap - DOCS);
       for(int i = 0; i < DOCS; i++) doc.add("<a>").add(words.get(offset + i)).add("</a>");
@@ -94,9 +73,12 @@ public final class UpdIndexRandomTest extends SandboxTest {
         final String expected = "<a>" + word + "</a>";
         final String result = query(query);
         if(!result.startsWith(expected)) {
-          fail(new TokenBuilder("\nExpected: " + expected +
-              "\nResult: " + result + "\nRun: " + r + "\nDoc: " + d +
-              "\nQuery: " + query + "\nDocument: " + doc).toString());
+          fail("\nExpected: " + expected +
+               "\nResult: " + result +
+               "\nRun: " + r +
+               "\nDoc: " + d +
+               "\nQuery: " + query +
+               "\nDocument: " + doc);
         }
       }
     }

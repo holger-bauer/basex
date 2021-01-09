@@ -5,7 +5,7 @@ import java.util.concurrent.locks.*;
 /**
  * Local read/write locks.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class LocalReadWriteLock extends ReentrantReadWriteLock {
@@ -22,17 +22,16 @@ final class LocalReadWriteLock extends ReentrantReadWriteLock {
 
   /**
    * Pins a lock.
-   * @return pin count
    */
-  int pin() {
-    return ++pins;
+  void pin() {
+    ++pins;
   }
 
   /**
    * Unpins a lock.
-   * @return pin count
+   * @return if no pins are left
    */
-  int unpin() {
-    return --pins;
+  boolean unpin() {
+    return --pins == 0;
   }
 }

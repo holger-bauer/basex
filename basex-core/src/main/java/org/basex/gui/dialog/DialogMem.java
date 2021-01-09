@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Dialog with a single text field.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogMem extends BaseXDialog {
@@ -30,17 +30,17 @@ public final class DialogMem extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  private DialogMem(final GUI main) {
-    super(main, USED_MEM, false);
+  private DialogMem(final GUI gui) {
+    super(gui, USED_MEM, false);
     panel.setLayout(new BorderLayout());
 
-    text = new TextPanel(info(), false, this);
+    text = new TextPanel(this, info(), false);
     text.setFont(panel.getFont());
     set(text, BorderLayout.CENTER);
 
-    gc = new BaseXButton("GC", this);
+    gc = new BaseXButton(this, "GC");
     final BaseXBack buttons = newButtons(gc);
     set(buttons, BorderLayout.SOUTH);
     addTimer();
@@ -49,23 +49,18 @@ public final class DialogMem extends BaseXDialog {
 
   /**
    * Activates the dialog window.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public static void show(final GUI main) {
-    if(dialog == null) dialog = new DialogMem(main);
+  public static void show(final GUI gui) {
+    if(dialog == null) dialog = new DialogMem(gui);
     dialog.setVisible(true);
   }
 
   @Override
   public void setVisible(final boolean v) {
     super.setVisible(v);
-    SwingUtilities.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        // focus GC button
-        gc.requestFocusInWindow();
-      }
-    });
+    // focus GC button
+    SwingUtilities.invokeLater(gc::requestFocusInWindow);
   }
 
   @Override
@@ -83,11 +78,10 @@ public final class DialogMem extends BaseXDialog {
     final long max = rt.maxMemory();
     final long total = rt.totalMemory();
     final long used = total - rt.freeMemory();
-    return TOTAL_MEM_C + Performance.format(max, true) + NL
-        + RESERVED_MEM_C + Performance.format(total, true) + NL + MEMUSED_C
-        + Performance.format(used, true) + NL + NL + H_USED_MEM;
+    return TOTAL_MEM_C + Performance.format(max) + NL
+        + RESERVED_MEM_C + Performance.format(total) + NL + MEMUSED_C
+        + Performance.format(used) + NL + NL + H_USED_MEM;
   }
-
 
   /**
    * Add timer for updating display of memory consumption.

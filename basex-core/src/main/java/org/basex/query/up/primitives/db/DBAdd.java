@@ -2,8 +2,6 @@ package org.basex.query.up.primitives.db;
 
 import static org.basex.query.QueryError.*;
 
-import java.util.*;
-
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.up.primitives.*;
@@ -13,7 +11,7 @@ import org.basex.util.options.*;
 /**
  * Add primitive.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class DBAdd extends DBUpdate {
@@ -41,9 +39,7 @@ public final class DBAdd extends DBUpdate {
     this.replace = replace;
 
     final DBOptions options = new DBOptions(opts, DBOptions.PARSING, info);
-    final List<NewInput> docs = new ArrayList<>();
-    docs.add(input);
-    newDocs = new DBNew(qc, docs, options, info);
+    newDocs = new DBNew(qc, options, info, input);
   }
 
   @Override
@@ -62,16 +58,12 @@ public final class DBAdd extends DBUpdate {
   @Override
   public void prepare() throws QueryException {
     size = newDocs.inputs.size();
-    newDocs.prepare(data.meta.name);
+    newDocs.prepare(data.meta.name, false);
   }
 
   @Override
-  public void apply() {
-    try {
-      data.insert(data.meta.size, -1, new DataClip(newDocs.data));
-    } finally {
-      newDocs.finish();
-    }
+  public void apply() throws QueryException {
+    newDocs.add(data);
   }
 
   @Override

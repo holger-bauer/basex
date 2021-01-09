@@ -12,7 +12,7 @@ import org.basex.util.list.*;
  * <p>The implementation has been inspired by the Apache Commons Codec algorithms
  * (http://commons.apache.org/proper/commons-codec/).</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ColognePhonetic {
@@ -99,8 +99,7 @@ public final class ColognePhonetic {
         code = cp;
       }
 
-      if(code != '-' && (lastCode != code && (code != '0' || lastCode == '/') ||
-         code < '0' || code > '8')) {
+      if(code != '-' && (lastCode != code && (code != '0' || lastCode == '/') || code > '8')) {
         out.add(code);
       }
 

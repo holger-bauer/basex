@@ -1,6 +1,6 @@
 package org.basex.core;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
@@ -9,13 +9,13 @@ import org.basex.api.client.*;
 import org.basex.core.cmd.*;
 import org.basex.core.users.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class tests the database commands with the client/server architecture.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ServerCommandTest extends CommandTest {
@@ -26,8 +26,7 @@ public final class ServerCommandTest extends CommandTest {
    * Starts the server.
    * @throws IOException I/O exception
    */
-  @BeforeClass
-  public static void start() throws IOException {
+  @BeforeAll public static void start() throws IOException {
     server = createServer();
     session = createClient();
     cleanUp();
@@ -37,8 +36,7 @@ public final class ServerCommandTest extends CommandTest {
    * Stops the server.
    * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void stop() throws IOException {
+  @AfterAll public static void stop() throws IOException {
     try {
       if(session != null) session.close();
     } catch(final Exception ex) {
@@ -51,8 +49,7 @@ public final class ServerCommandTest extends CommandTest {
    * Kill test.
    * @throws IOException on server error
    */
-  @Test
-  public void kill() throws IOException {
+  @Test public void kill() throws IOException {
     ok(new Kill(UserText.ADMIN));
     ok(new Kill(UserText.ADMIN + '2'));
     ok(new Kill(Prop.NAME + '*'));

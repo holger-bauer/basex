@@ -5,7 +5,6 @@ import java.util.*;
 import org.basex.core.Context;
 import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.util.ft.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -17,7 +16,7 @@ import org.basex.util.list.*;
  * They are used in the GUI and in the {@link Context} class to reference currently opened,
  * marked, and copied database nodes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DBNodes extends DBNodeSeq {
@@ -42,7 +41,7 @@ public final class DBNodes extends DBNodeSeq {
    * @param pres pre values
    */
   public DBNodes(final Data data, final boolean all, final int... pres) {
-    super(pres, data, all ? NodeType.DOC : NodeType.NOD, all);
+    super(pres, data, all ? NodeType.DOCUMENT_NODE : NodeType.NODE, all);
   }
 
   /**
@@ -61,22 +60,6 @@ public final class DBNodes extends DBNodeSeq {
    */
   public FTPosData ftpos() {
     return ftpos;
-  }
-
-  @Override
-  public boolean sameAs(final Expr cmp) {
-    if(!(cmp instanceof DBNodes)) return false;
-    final DBNodes n = (DBNodes) cmp;
-    final int[] ps = pres, ps2 = n.pres;
-    final int pl = ps.length;
-    if(pl != ps2.length || data != n.data) return false;
-    for(int p = 0; p < pl; ++p) if(ps2[p] != ps[p]) return false;
-    return ftpos == null ? n.ftpos == null : ftpos.sameAs(n.ftpos);
-  }
-
-  @Override
-  public boolean isEmpty() {
-    return size == 0;
   }
 
   /**
@@ -210,5 +193,13 @@ public final class DBNodes extends DBNodeSeq {
   public DBNode itemAt(final long pos) {
     final int pre = pres[(int) pos];
     return ftpos == null ? new DBNode(data, pre) : new FTPosNode(data, pre, ftpos);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof DBNodes)) return false;
+    final DBNodes n = (DBNodes) obj;
+    return data == n.data && Arrays.equals(pres, n.pres) && Objects.equals(ftpos, n.ftpos);
   }
 }

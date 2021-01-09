@@ -12,7 +12,7 @@ import org.basex.util.options.*;
 /**
  * This class contains database options which are used all around the project.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MainOptions extends Options {
@@ -124,9 +124,11 @@ public final class MainOptions extends Options {
   /** External variables, separated by commas. */
   public static final StringOption BINDINGS = new StringOption("BINDINGS", "");
   /** Flag for the size limit on inlineable functions. */
-  public static final NumberOption INLINELIMIT = new NumberOption("INLINELIMIT", 100);
+  public static final NumberOption INLINELIMIT = new NumberOption("INLINELIMIT", 50);
   /** Flag for tail-call optimization. */
   public static final NumberOption TAILCALLS = new NumberOption("TAILCALLS", 256);
+  /** Look up documents in databases. */
+  public static final BooleanOption WITHDB = new BooleanOption("WITHDB", true);
   /** Favor global database when opening resources. */
   public static final BooleanOption DEFAULTDB = new BooleanOption("DEFAULTDB", false);
   /** Forces database creation for unknown documents. */
@@ -139,6 +141,10 @@ public final class MainOptions extends Options {
   public static final BooleanOption RUNQUERY = new BooleanOption("RUNQUERY", true);
   /** Number of query executions. */
   public static final NumberOption RUNS = new NumberOption("RUNS", 1);
+  /** Flag for enforcing index rewritings. */
+  public static final BooleanOption ENFORCEINDEX = new BooleanOption("ENFORCEINDEX", false);
+  /** Deep node copies. */
+  public static final BooleanOption COPYNODE = new BooleanOption("COPYNODE", true);
 
   // Serialize
 
@@ -153,12 +159,10 @@ public final class MainOptions extends Options {
 
   /** Prints an XML plan. */
   public static final BooleanOption XMLPLAN = new BooleanOption("XMLPLAN", false);
+  /** Creates comprehensive query plan information. */
+  public static final BooleanOption FULLPLAN = new BooleanOption("FULLPLAN", false);
   /** Creates the query plan before or after compilation. */
   public static final BooleanOption COMPPLAN = new BooleanOption("COMPPLAN", true);
-  /** Dots the query plan. */
-  public static final BooleanOption DOTPLAN = new BooleanOption("DOTPLAN", false);
-  /** Compact dot representation. */
-  public static final BooleanOption DOTCOMPACT = new BooleanOption("DOTCOMPACT", false);
 
   /** Flushes the database after each update. */
   public static final BooleanOption AUTOFLUSH = new BooleanOption("AUTOFLUSH", true);
@@ -227,8 +231,8 @@ public final class MainOptions extends Options {
    * @return main options
    */
   public static MainOptions get() {
-    final MainOptions mo = new MainOptions(false);
-    mo.set(CHOP, false);
-    return mo;
+    final MainOptions mopts = new MainOptions(false);
+    mopts.set(CHOP, false);
+    return mopts;
   }
 }

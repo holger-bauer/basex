@@ -8,13 +8,16 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class CryptoEncrypt extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return new Encryption(info).encryption(toToken(exprs[0], qc),
-        toToken(exprs[1], qc), toToken(exprs[2], qc), toToken(exprs[3], qc), true);
+    final byte[] data = toBytes(exprs[0], qc);
+    final String type = Token.string(toToken(exprs[1], qc));
+    final byte[] key = toBytes(exprs[2], qc);
+    final String algorithm = Token.string(toToken(exprs[3], qc));
+    return new Encryption(info).encryption(data, type, key, algorithm, true);
   }
 }

@@ -16,28 +16,26 @@ import org.basex.util.*;
 /**
  * This class stores the table on disk and reads it page-wise.
  *
- * NOTE: this class is not thread-safe.
- *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Tim Petrowsky
  */
 public final class TableDiskAccess extends TableAccess {
   /** Buffer manager. */
-  private final Buffers bm = new Buffers();
+  private final Buffers buffers = new Buffers();
   /** File storing all pages. */
   private final RandomAccessFile file;
   /** Bitmap storing free (=0) and used (=1) pages. */
   private BitArray usedPages;
   /** File lock. */
-  private FileLock fl;
+  private FileLock lock;
 
   /** First pre values (ascending order); will be initialized with the first update. */
-  private int[] fpres;
+  private int[] fPreIndex;
   /** Page index; will be initialized with the first update. */
-  private int[] pages;
+  private int[] pageIndex;
   /** Total number of pages. */
-  private int size;
+  private int pages;
   /** Number of used pages. */
   private int used;
 
@@ -50,40 +48,35 @@ public final class TableDiskAccess extends TableAccess {
 
   /**
    * Constructor.
-   * @param md meta data
+   * @param meta meta data
    * @param write write lock
    * @throws IOException I/O exception
    */
-  public TableDiskAccess(final MetaData md, final boolean write) throws IOException {
-    super(md);
+  public TableDiskAccess(final MetaData meta, final boolean write) throws IOException {
+    super(meta);
 
     // read meta and index data
-    try(DataInput in = new DataInput(meta.dbfile(DATATBL + 'i'))) {
-      final int s = in.readNum();
-      size = s;
-
-      // check if page index is regular and can be calculated (0: no pages)
-      final int u = in.readNum();
-      final boolean regular = u == 0 || u == Integer.MAX_VALUE;
-      if(regular) {
-        used = u == 0 ? 0 : s;
-      } else {
+    try(DataInput in = new DataInput(meta.dbFile(DATATBL + 'i'))) {
+      // total number of pages
+      pages = in.readNum();
+      // number of used pages (0: empty table; MAX: no mapping)
+      used = in.readNum();
+      if(used == Integer.MAX_VALUE) {
+        // no mapping: total and used number of pages is identical
+        used = pages;
+      } else if(used != 0) {
         // read page index and first pre values from disk
-        used = u;
-        fpres = in.readNums();
-        pages = in.readNums();
-      }
-
-      // read block bitmap
-      if(!regular) {
-        final int psize = in.readNum();
-        usedPages = new BitArray(in.readLongs(psize), used);
+        fPreIndex = in.readNums();
+        pageIndex = in.readNums();
+        // read block bitmap
+        final int s = in.readNum();
+        usedPages = new BitArray(in.readLongs(s), used);
       }
     }
 
     // initialize data file
-    file = new RandomAccessFile(meta.dbfile(DATATBL).file(), "rw");
-    if(!lock(write)) throw new BaseXException(Text.DB_PINNED_X, md.name);
+    file = new RandomAccessFile(meta.dbFile(DATATBL).file(), "rw");
+    if(!lock(write)) throw new BaseXException(Text.DB_PINNED_X, meta.name);
   }
 
   /**
@@ -99,26 +92,43 @@ public final class TableDiskAccess extends TableAccess {
     try(FileChannel fc = new RandomAccessFile(table.file(), "rw").getChannel()) {
       return fc.tryLock() == null;
     } catch(final IOException ex) {
+      Util.debug(ex);
       return true;
     }
   }
 
   @Override
   public synchronized void flush(final boolean all) throws IOException {
-    for(final Buffer b : bm.all()) if(b.dirty) write(b);
+    for(final Buffer buffer : buffers.all()) {
+      write(buffer);
+    }
     if(!dirty || !all) return;
 
-    try(DataOutput out = new DataOutput(meta.dbfile(DATATBL + 'i'))) {
-      final int sz = size;
-      out.writeNum(sz);
-      out.writeNum(used);
-      // due to legacy issues, number of pages is written several times
-      out.writeNum(sz);
-      for(int s = 0; s < sz; s++) out.writeNum(fpres[s]);
-      out.writeNum(sz);
-      for(int s = 0; s < sz; s++) out.writeNum(pages[s]);
+    try(DataOutput out = new DataOutput(meta.dbFile(DATATBL + 'i'))) {
+      final int p = pages;
+      boolean regular = true;
 
-      out.writeLongs(usedPages.toArray());
+      // check if page mapping is regular (are all pages used and in ascending order?)
+      if(fPreIndex != null) {
+        regular = p == used;
+        for(int i = 0; i < p && regular; i++) regular = fPreIndex[i] == i * IO.ENTRIES;
+        for(int i = 0; i < p && regular; i++) regular = pageIndex[i] == i;
+        if(regular) removeMapping();
+      }
+
+      if(regular) {
+        // no mapping available or required (0: empty table; MAX: no mapping, see TableOutput#close)
+        out.writeNum(p);
+        out.writeNum(used == 0 ? 0 : Integer.MAX_VALUE);
+      } else {
+        out.writeNum(p);
+        out.writeNum(used);
+        out.writeNum(p);
+        for(int s = 0; s < p; s++) out.writeNum(fPreIndex[s]);
+        out.writeNum(p);
+        for(int s = 0; s < p; s++) out.writeNum(pageIndex[s]);
+        out.writeLongs(usedPages.toArray());
+      }
     }
     dirty = false;
   }
@@ -132,104 +142,103 @@ public final class TableDiskAccess extends TableAccess {
   @Override
   public boolean lock(final boolean write) {
     try {
-      if(fl != null) {
-        if(write != fl.isShared()) return true;
-        fl.release();
+      if(lock != null) {
+        if(write != lock.isShared()) return true;
+        lock.release();
       }
-      fl = file.getChannel().tryLock(0, Long.MAX_VALUE, !write);
-      return fl != null;
+      lock = file.getChannel().tryLock(0, Long.MAX_VALUE, !write);
+      return lock != null;
     } catch(final IOException ex) {
       throw Util.notExpected(ex);
     }
   }
 
   @Override
-  public synchronized int read1(final int pre, final int off) {
-    final int o = off + cursor(pre);
-    final byte[] b = bm.current().data;
-    return b[o] & 0xFF;
+  public synchronized int read1(final int pre, final int offset) {
+    final int o = offset + cursor(pre);
+    final byte[] data = buffers.current().data;
+    return data[o] & 0xFF;
   }
 
   @Override
-  public synchronized int read2(final int pre, final int off) {
-    final int o = off + cursor(pre);
-    final byte[] b = bm.current().data;
-    return ((b[o] & 0xFF) << 8) + (b[o + 1] & 0xFF);
+  public synchronized int read2(final int pre, final int offset) {
+    final int o = offset + cursor(pre);
+    final byte[] data = buffers.current().data;
+    return ((data[o] & 0xFF) << 8) + (data[o + 1] & 0xFF);
   }
 
   @Override
-  public synchronized int read4(final int pre, final int off) {
-    final int o = off + cursor(pre);
-    final byte[] b = bm.current().data;
-    return ((b[o] & 0xFF) << 24) + ((b[o + 1] & 0xFF) << 16) +
-      ((b[o + 2] & 0xFF) << 8) + (b[o + 3] & 0xFF);
+  public synchronized int read4(final int pre, final int offset) {
+    final int o = offset + cursor(pre);
+    final byte[] data = buffers.current().data;
+    return ((data[o] & 0xFF) << 24) + ((data[o + 1] & 0xFF) << 16) +
+      ((data[o + 2] & 0xFF) << 8) + (data[o + 3] & 0xFF);
   }
 
   @Override
-  public synchronized long read5(final int pre, final int off) {
-    final int o = off + cursor(pre);
-    final byte[] b = bm.current().data;
-    return ((long) (b[o] & 0xFF) << 32) + ((long) (b[o + 1] & 0xFF) << 24) +
-      ((b[o + 2] & 0xFF) << 16) + ((b[o + 3] & 0xFF) << 8) + (b[o + 4] & 0xFF);
+  public synchronized long read5(final int pre, final int offset) {
+    final int o = offset + cursor(pre);
+    final byte[] data = buffers.current().data;
+    return ((long) (data[o] & 0xFF) << 32) + ((long) (data[o + 1] & 0xFF) << 24) +
+      ((data[o + 2] & 0xFF) << 16) + ((data[o + 3] & 0xFF) << 8) + (data[o + 4] & 0xFF);
   }
 
   @Override
-  public void write1(final int pre, final int off, final int v) {
-    final int o = off + cursor(pre);
-    final Buffer bf = bm.current();
-    final byte[] b = bf.data;
-    b[o] = (byte) v;
-    bf.dirty = true;
+  public void write1(final int pre, final int offset, final int value) {
+    final int o = offset + cursor(pre);
+    final Buffer buffer = buffers.current();
+    buffer.data[o] = (byte) value;
+    buffer.dirty = true;
   }
 
   @Override
-  public void write2(final int pre, final int off, final int v) {
-    final int o = off + cursor(pre);
-    final Buffer bf = bm.current();
-    final byte[] b = bf.data;
-    b[o] = (byte) (v >>> 8);
-    b[o + 1] = (byte) v;
-    bf.dirty = true;
+  public void write2(final int pre, final int offset, final int value) {
+    final int o = offset + cursor(pre);
+    final Buffer buffer = buffers.current();
+    final byte[] data = buffer.data;
+    data[o] = (byte) (value >>> 8);
+    data[o + 1] = (byte) value;
+    buffer.dirty = true;
   }
 
   @Override
-  public void write4(final int pre, final int off, final int v) {
-    final int o = off + cursor(pre);
-    final Buffer bf = bm.current();
-    final byte[] b = bf.data;
-    b[o]     = (byte) (v >>> 24);
-    b[o + 1] = (byte) (v >>> 16);
-    b[o + 2] = (byte) (v >>> 8);
-    b[o + 3] = (byte) v;
-    bf.dirty = true;
+  public void write4(final int pre, final int offset, final int value) {
+    final int o = offset + cursor(pre);
+    final Buffer buffer = buffers.current();
+    final byte[] data = buffer.data;
+    data[o]     = (byte) (value >>> 24);
+    data[o + 1] = (byte) (value >>> 16);
+    data[o + 2] = (byte) (value >>> 8);
+    data[o + 3] = (byte) value;
+    buffer.dirty = true;
   }
 
   @Override
-  public void write5(final int pre, final int off, final long v) {
-    final int o = off + cursor(pre);
-    final Buffer bf = bm.current();
-    final byte[] b = bf.data;
-    b[o]     = (byte) (v >>> 32);
-    b[o + 1] = (byte) (v >>> 24);
-    b[o + 2] = (byte) (v >>> 16);
-    b[o + 3] = (byte) (v >>> 8);
-    b[o + 4] = (byte) v;
-    bf.dirty = true;
+  public void write5(final int pre, final int offset, final long value) {
+    final int o = offset + cursor(pre);
+    final Buffer buffer = buffers.current();
+    final byte[] data = buffer.data;
+    data[o]     = (byte) (value >>> 32);
+    data[o + 1] = (byte) (value >>> 24);
+    data[o + 2] = (byte) (value >>> 16);
+    data[o + 3] = (byte) (value >>> 8);
+    data[o + 4] = (byte) value;
+    buffer.dirty = true;
   }
 
   @Override
   protected void copy(final byte[] entries, final int pre, final int last) {
     for(int o = 0, i = pre; i < last; ++i, o += IO.NODESIZE) {
       final int off = cursor(i);
-      final Buffer bf = bm.current();
-      System.arraycopy(entries, o, bf.data, off, IO.NODESIZE);
-      bf.dirty = true;
+      final Buffer buffer = buffers.current();
+      Array.copy(entries, o, IO.NODESIZE, buffer.data, off);
+      buffer.dirty = true;
     }
   }
 
   @Override
-  public void delete(final int pre, final int nr) {
-    if(nr == 0) return;
+  public void delete(final int pre, final int count) {
+    if(count == 0) return;
 
     // get first page
     dirty();
@@ -237,68 +246,66 @@ public final class TableDiskAccess extends TableAccess {
 
     // some useful variables to make code more readable
     int from = pre - firstPre;
-    final int last = pre + nr;
+    final int last = pre + count;
 
-    // check if all entries are in current page: handle and return
-    if(last - 1 < nextPre) {
-      final Buffer bf = bm.current();
-      copy(bf.data, from + nr, bf.data, from, nextPre - last);
-      updatePre(nr);
+    // check if all entries are in current page
+    if(last <= nextPre) {
+      // move entries in current page and decreases pointers to pre values
+      if(last < nextPre) delete(buffers.current(), from, from + count, nextPre - last);
+      decreasePre(count);
 
       // if whole page was deleted, remove it from the index
-      if(nextPre == firstPre) {
+      if(firstPre == nextPre) {
         // mark the page as empty
-        usedPages.clear(pages[page]);
-
-        Array.move(fpres, page + 1, -1, used - page - 1);
-        Array.move(pages, page + 1, -1, used - page - 1);
-
-        --used;
+        usedPages.clear(pageIndex[page]);
+        deletePages(1);
         readPage(page);
       }
-      return;
-    }
-
-    // handle pages whose entries are to be deleted entirely
-
-    // first count them
-    int unused = 0;
-    while(nextPre < last) {
-      if(from == 0) {
-        ++unused;
-        // mark the pages as empty; range clear cannot be used because the
-        // pages may not be consecutive
-        usedPages.clear(pages[page]);
-      }
-      setPage(page + 1);
-      from = 0;
-    }
-
-    // if the last page is empty, clear the corresponding bit
-    read(pages[page]);
-    final Buffer bf = bm.current();
-    if(nextPre == last) {
-      usedPages.clear((int) bf.pos);
-      ++unused;
-      if(page < used - 1) readPage(page + 1);
-      else ++page;
     } else {
-      // delete entries at beginning of current (last) page
-      copy(bf.data, last - firstPre, bf.data, 0, nextPre - last);
-    }
+      // handle pages whose entries are to be deleted entirely
 
-    // now remove them from the index
-    if(unused > 0) {
-      Array.move(fpres, page, -unused, used - page);
-      Array.move(pages, page, -unused, used - page);
-      used -= unused;
-      page -= unused;
-    }
+      // first count them
+      int unused = 0;
+      while(last > nextPre) {
+        if(from == 0) {
+          ++unused;
+          // mark the pages as empty; range clear cannot be used because the
+          // pages may not be consecutive
+          usedPages.clear(pageIndex[page]);
+        }
+        setPage(page + 1);
+        from = 0;
+      }
 
-    // update index entry for this page
-    fpres[page] = pre;
-    firstPre = pre;
-    updatePre(nr);
+      // if the last page is empty, clear the corresponding bit
+      read(pageIndex[page]);
+      final Buffer buffer = buffers.current();
+      if(last == nextPre) {
+        usedPages.clear((int) buffer.pos);
+        ++unused;
+        if(page + 1 < used) readPage(page + 1);
+        else ++page;
+      } else {
+        // delete entries at beginning of current (last) page
+        delete(buffer, 0, last - firstPre, nextPre - last);
+      }
+
+      // now remove them from the index
+      if(unused > 0) {
+        page -= unused;
+        deletePages(unused);
+      }
+
+      // update index entry for this page
+      fPreIndex[page] = pre;
+      firstPre = pre;
+      decreasePre(count);
+    }
+    if(used == 0) {
+      buffers.init();
+      removeMapping();
+      pages = 1;
+    }
   }
 
   @Override
@@ -307,7 +314,7 @@ public final class TableDiskAccess extends TableAccess {
     if(nnew == 0) return;
     dirty();
 
-    // number of records to be inserted
+    // number of entries to be inserted
     final int nr = nnew >>> IO.NODEPOWER;
 
     int split = 0;
@@ -327,14 +334,13 @@ public final class TableDiskAccess extends TableAccess {
     final int moved = nold - split;
 
     // special case: all entries fit in the current page
-    Buffer bf = bm.current();
+    Buffer buffer = buffers.current();
     if(nold + nnew <= IO.BLOCKSIZE) {
-      Array.move(bf.data, split, nnew, moved);
-      System.arraycopy(entries, 0, bf.data, split, nnew);
-      bf.dirty = true;
+      Array.insert(buffer.data, split, nnew, nold, entries);
+      buffer.dirty = true;
 
       // increment first pre-values of pages after the last modified page
-      for(int i = page + 1; i < used; ++i) fpres[i] += nr;
+      for(int i = page + 1; i < used; ++i) fPreIndex[i] += nr;
       // update cached variables (fpre is not changed)
       nextPre += nr;
       meta.size += nr;
@@ -343,15 +349,15 @@ public final class TableDiskAccess extends TableAccess {
 
     // append old entries at the end of the new entries
     final byte[] all = new byte[nnew + moved];
-    System.arraycopy(entries, 0, all, 0, nnew);
-    System.arraycopy(bf.data, split, all, nnew, moved);
+    Array.copy(entries, nnew, all);
+    Array.copy(buffer.data, split, moved, all, nnew);
 
     // fill in the current page with new entries
     // number of bytes which fit in the first page
     int nrem = IO.BLOCKSIZE - split;
     if(nrem > 0) {
-      System.arraycopy(all, 0, bf.data, split, nrem);
-      bf.dirty = true;
+      Array.copyFromStart(all, nrem, buffer.data, split);
+      buffer.dirty = true;
     }
 
     // number of new required pages and remaining bytes
@@ -366,12 +372,12 @@ public final class TableDiskAccess extends TableAccess {
         if(remain <= IO.BLOCKSIZE - o) {
           // copy the last records
           readPage(page + 1);
-          bf = bm.current();
-          System.arraycopy(bf.data, 0, bf.data, remain, o);
-          System.arraycopy(all, all.length - remain, bf.data, 0, remain);
-          bf.dirty = true;
+          buffer = buffers.current();
+          Array.copyFromStart(buffer.data, o, buffer.data, remain);
+          Array.copyToStart(all, all.length - remain, remain, buffer.data);
+          buffer.dirty = true;
           // reduce the pre value, since it will be later incremented with nr
-          fpres[page] -= remain >>> IO.NODEPOWER;
+          fPreIndex[page] -= remain >>> IO.NODEPOWER;
           // go back to the previous page
           readPage(page - 1);
         } else {
@@ -385,53 +391,66 @@ public final class TableDiskAccess extends TableAccess {
     }
 
     // number of expected pages: existing pages + needed page - empty pages
-    final int exp = size + needed - (size - used);
-    if(exp > fpres.length) {
+    final int exp = pages + needed - (pages - used);
+    if(exp > fPreIndex.length) {
       // resize directory arrays if existing ones are too small
-      final int ns = Math.max(fpres.length << 1, exp);
-      fpres = Arrays.copyOf(fpres, ns);
-      pages = Arrays.copyOf(pages, ns);
+      final int ns = Math.max(fPreIndex.length << 1, exp);
+      fPreIndex = Arrays.copyOf(fPreIndex, ns);
+      pageIndex = Arrays.copyOf(pageIndex, ns);
     }
 
     // make place for the pages where the new entries will be written
-    Array.move(fpres, page + 1, needed, used - page - 1);
-    Array.move(pages, page + 1, needed, used - page - 1);
+    Array.insert(fPreIndex, page + 1, needed, used, null);
+    Array.insert(pageIndex, page + 1, needed, used, null);
 
     // write the all remaining entries
     while(needed-- > 0) {
-      freePage();
+      final int p = usedPages.nextFree();
+      usedPages.set(p);
+      read(p);
+      ++used;
+      ++page;
       nrem += write(all, nrem);
-      fpres[page] = fpres[page - 1] + IO.ENTRIES;
-      pages[page] = (int) bm.current().pos;
+      fPreIndex[page] = fPreIndex[page - 1] + IO.ENTRIES;
+      pageIndex[page] = (int) buffers.current().pos;
     }
 
     // increment all fpre values after the last modified page
-    for(int i = page + 1; i < used; ++i) fpres[i] += nr;
+    for(int i = page + 1; i < used; ++i) fPreIndex[i] += nr;
 
     meta.size += nr;
 
     // update cached variables
-    firstPre = fpres[page];
-    nextPre = page + 1 < used && fpres[page + 1] < meta.size ? fpres[page + 1] : meta.size;
+    firstPre = fPreIndex[page];
+    nextPre = page + 1 < used && fPreIndex[page + 1] < meta.size ? fPreIndex[page + 1] : meta.size;
   }
 
   @Override
-  protected synchronized void dirty() {
+  protected void dirty() {
     // initialize data structures required for performing updates
-    if(fpres == null) {
-      final int b = size;
-      fpres = new int[b];
-      pages = new int[b];
-      for(int i = 0; i < b; i++) {
-        fpres[i] = i * IO.ENTRIES;
-        pages[i] = i;
-      }
+    if(fPreIndex == null) {
+      fPreIndex = new int[pages];
+      for(int i = 0; i < pages; i++) fPreIndex[i] = i * IO.ENTRIES;
+      pageIndex = new int[pages];
+      for(int i = 0; i < pages; i++) pageIndex[i] = i;
       usedPages = new BitArray(used, true);
     }
     dirty = true;
   }
 
-  // PRIVATE METHODS ==========================================================
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder();
+    sb.append(Util.className(this)).append(" (").append("pages: ").append(pages);
+    sb.append(", used: ").append(used).append(", page: ").append(page);
+    sb.append(", firstPre: ").append(firstPre).append(", nextPre: ").append(nextPre).append(")");
+    if(fPreIndex != null) sb.append("\n- FPres: ").append(Arrays.toString(fPreIndex));
+    if(pageIndex != null) sb.append("\n- Pages: ").append(Arrays.toString(pageIndex));
+    if(usedPages != null) sb.append("\n- Used Pages: ").append(usedPages);
+    return sb.toString();
+  }
+
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Searches for the page containing the entry for the specified pre value.
@@ -439,7 +458,7 @@ public final class TableDiskAccess extends TableAccess {
    * @param pre pre of the entry to search for
    * @return offset of the entry in the page
    */
-  private synchronized int cursor(final int pre) {
+  private int cursor(final int pre) {
     int fp = firstPre, np = nextPre;
     if(pre < fp || pre >= np) {
       final int last = used - 1;
@@ -457,7 +476,7 @@ public final class TableDiskAccess extends TableAccess {
           "\n- pre value: " + pre +
           "\n- table size: " + meta.size +
           "\n- first/next pre value: " + fp + '/' + np +
-          "\n- #total/used pages: " + size + '/' + used +
+          "\n- #total/used pages: " + pages + '/' + used +
           "\n- accessed page: " + m + " (" + l + " > " + h + ']');
       readPage(m);
     }
@@ -466,57 +485,48 @@ public final class TableDiskAccess extends TableAccess {
 
   /**
    * Updates the page pointers.
-   * @param p page index
+   * @param pre page index
    */
-  private synchronized void setPage(final int p) {
-    page = p;
-    firstPre = fpre(p);
-    nextPre = p + 1 >= used ? meta.size : fpre(p + 1);
+  private void setPage(final int pre) {
+    page = pre;
+    firstPre = fpre(pre);
+    nextPre = pre + 1 >= used ? meta.size : fpre(pre + 1);
   }
 
   /**
    * Updates the index pointers and fetches the requested page.
-   * @param p page index
+   * @param pre page index
    */
-  private synchronized void readPage(final int p) {
-    setPage(p);
-    read(page(p));
-  }
-
-  /**
-   * Return the specified page index.
-   * @param p index of the page to fetch
-   * @return pre value
-   */
-  private synchronized int page(final int p) {
-    return pages == null ? p : pages[p];
+  private void readPage(final int pre) {
+    setPage(pre);
+    read(pageIndex == null ? pre : pageIndex[pre]);
   }
 
   /**
    * Return the specified pre value.
-   * @param p index of the page to fetch
+   * @param pre index of the page to fetch
    * @return pre value
    */
-  private synchronized int fpre(final int p) {
-    return fpres == null ? p * IO.ENTRIES : fpres[p];
+  private int fpre(final int pre) {
+    return fPreIndex == null ? pre * IO.ENTRIES : fPreIndex[pre];
   }
 
   /**
    * Reads a page from disk.
-   * @param p page to fetch
+   * @param pre page to fetch
    */
-  private synchronized void read(final int p) {
-    if(!bm.cursor(p)) return;
+  private void read(final int pre) {
+    if(!buffers.cursor(pre)) return;
 
-    final Buffer bf = bm.current();
+    final Buffer buffer = buffers.current();
     try {
-      if(bf.dirty) write(bf);
-      bf.pos = p;
-      if(p >= size) {
-        size = p + 1;
+      write(buffer);
+      buffer.pos = pre;
+      if(pre >= pages) {
+        pages = pre + 1;
       } else {
-        file.seek(bf.pos * IO.BLOCKSIZE);
-        file.readFully(bf.data);
+        file.seek(buffer.pos * IO.BLOCKSIZE);
+        file.readFully(buffer.data);
       }
     } catch(final IOException ex) {
       Util.stack(ex);
@@ -524,72 +534,81 @@ public final class TableDiskAccess extends TableAccess {
   }
 
   /**
-   * Moves the cursor to a free page (either new or existing empty one).
-   */
-  private void freePage() {
-    final int p = usedPages.nextFree(0);
-    usedPages.set(p);
-    read(p);
-    ++used;
-    ++page;
-  }
-
-  /**
-   * Writes the specified buffer disk and resets the dirty flag.
-   * @param bf buffer to write
+   * Writes the specified buffer to disk and resets the dirty flag.
+   * @param buffer buffer to write
    * @throws IOException I/O exception
    */
-  private void write(final Buffer bf) throws IOException {
-    file.seek(bf.pos * IO.BLOCKSIZE);
-    file.write(bf.data);
-    bf.dirty = false;
+  private void write(final Buffer buffer) throws IOException {
+    if(!buffer.dirty) return;
+
+    file.seek(buffer.pos * IO.BLOCKSIZE);
+    file.write(buffer.data);
+    buffer.dirty = false;
   }
 
   /**
-   * Updates the firstPre index entries.
-   * @param nr number of entries to move
+   * Deletes pages in the page mapping.
+   * @param count number of pages to delete
    */
-  private void updatePre(final int nr) {
-    // update index entries for all following pages and reduce counter
-    for(int i = page + 1; i < used; ++i) fpres[i] -= nr;
-    meta.size -= nr;
-    nextPre = page + 1 < used && fpres[page + 1] < meta.size ? fpres[page + 1] : meta.size;
+  private void deletePages(final int count) {
+    Array.remove(fPreIndex, page, count, used);
+    Array.remove(pageIndex, page, count, used);
+    used -= count;
   }
 
   /**
-   * Convenience method for copying pages.
-   * @param s source array
-   * @param sp source position
-   * @param d destination array
-   * @param dp destination position
-   * @param l source length
+   * Decreases pointers to pre value.
+   * @param count number of entries to move
    */
-  private void copy(final byte[] s, final int sp, final byte[] d, final int dp, final int l) {
-    System.arraycopy(s, sp << IO.NODEPOWER, d, dp << IO.NODEPOWER, l << IO.NODEPOWER);
-    bm.current().dirty = true;
+  private void decreasePre(final int count) {
+    final int nextPage = page + 1;
+    for(int i = nextPage; i < used; ++i) fPreIndex[i] -= count;
+    meta.size -= count;
+    nextPre = nextPage < used && fPreIndex[nextPage] < meta.size ? fPreIndex[nextPage] : meta.size;
   }
 
   /**
-   * Fill the current buffer with bytes from the specified array from the
-   * specified offset.
-   * @param s source array
-   * @param o offset from the beginning of the array
+   * Convenience method for deleting buffer entries.
+   * @param buffer buffer
+   * @param from first entry to delete
+   * @param to last entry to delete
+   * @param length source length
+   */
+  private static void delete(final Buffer buffer, final int from, final int to, final int length) {
+    final byte[] array = buffer.data;
+    Array.copy(array, to << IO.NODEPOWER, length << IO.NODEPOWER, array, from << IO.NODEPOWER);
+    buffer.dirty = true;
+  }
+
+  /**
+   * Fills the current buffer with bytes from the specified array and offset.
+   * @param array source array
+   * @param offset array offset
    * @return number of written bytes
    */
-  private int write(final byte[] s, final int o) {
-    final Buffer bf = bm.current();
-    final int len = Math.min(IO.BLOCKSIZE, s.length - o);
-    System.arraycopy(s, o, bf.data, 0, len);
-    bf.dirty = true;
+  private int write(final byte[] array, final int offset) {
+    final Buffer buffer = buffers.current();
+    final int len = Math.min(IO.BLOCKSIZE, array.length - offset);
+    Array.copyToStart(array, offset, len, buffer.data);
+    buffer.dirty = true;
     return len;
   }
 
   /**
-   * Calculate the occupied space in a page.
-   * @param i page index
+   * Calculates the occupied space in a page.
+   * @param index page index
    * @return occupied space in number of records
    */
-  private int occSpace(final int i) {
-    return (i + 1 < used ? fpres[i + 1] : meta.size) - fpres[i];
+  private int occSpace(final int index) {
+    return (index + 1 < used ? fPreIndex[index + 1] : meta.size) - fPreIndex[index];
+  }
+
+  /**
+   * Removes the page index.
+   */
+  private void removeMapping() {
+    fPreIndex = null;
+    pageIndex = null;
+    usedPages = null;
   }
 }

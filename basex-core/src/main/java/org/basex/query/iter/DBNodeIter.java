@@ -2,6 +2,7 @@ package org.basex.query.iter;
 
 import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
@@ -10,7 +11,7 @@ import org.basex.util.list.*;
 /**
  * Database node iterator.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class DBNodeIter extends BasicNodeIter {
@@ -29,9 +30,12 @@ public abstract class DBNodeIter extends BasicNodeIter {
   public abstract DBNode next();
 
   @Override
-  public Value value() throws QueryException {
+  public Value value(final QueryContext qc, final Expr expr) {
     final IntList il = new IntList();
-    for(DBNode n; (n = next()) != null;) il.add(n.pre());
-    return DBNodeSeq.get(il, data, false, false);
+    for(DBNode node; (node = next()) != null;) {
+      qc.checkStop();
+      il.add(node.pre());
+    }
+    return DBNodeSeq.get(il.finish(), data, expr);
   }
 }

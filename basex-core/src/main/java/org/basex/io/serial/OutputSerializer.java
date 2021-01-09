@@ -8,13 +8,12 @@ import java.io.*;
 import java.nio.charset.*;
 
 import org.basex.io.out.*;
-import org.basex.query.*;
 import org.basex.util.*;
 
 /**
  * This class serializes items to an output stream.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class OutputSerializer extends Serializer {
@@ -36,10 +35,10 @@ public abstract class OutputSerializer extends Serializer {
    * Constructor.
    * @param os output stream
    * @param sopts serializer options
-   * @throws QueryIOException query I/O exception
+   * @throws IOException I/O exception
    */
   protected OutputSerializer(final OutputStream os, final SerializerOptions sopts)
-      throws QueryIOException {
+      throws IOException {
 
     this.sopts = sopts;
     indent = sopts.yes(INDENT);
@@ -56,15 +55,27 @@ public abstract class OutputSerializer extends Serializer {
       try {
         po = new EncoderOutput(os, Charset.forName(encoding));
       } catch(final Exception ex) {
+        Util.debug(ex);
         throw SERENCODING_X.getIO(encoding);
       }
     }
     final int limit = sopts.get(LIMIT);
     if(limit != -1) po.setLimit(limit);
 
-    final byte[] nl = token(sopts.get(NEWLINE).newline());
-    if(nl.length != 1 || nl[0] != '\n') po = new NewlineOutput(po, nl);
+    final Newline nl = sopts.get(NEWLINE);
+    if(nl != Newline.NL) po = new NewlineOutput(po, token(nl.newline()));
     out = po;
+
+    final String is = sopts.get(ITEM_SEPARATOR);
+    if(is != null) itemsep = token(is);
+
+    if(sopts.yes(BYTE_ORDER_MARK)) {
+      switch (encoding) {
+        case Strings.UTF8:    out.write(0xEF); out.write(0xBB); out.write(0xBF); break;
+        case Strings.UTF16LE: out.write(0xFF); out.write(0xFE); break;
+        case Strings.UTF16BE: out.write(0xFE); out.write(0xFF); break;
+      }
+    }
   }
 
   @Override
@@ -83,7 +94,7 @@ public abstract class OutputSerializer extends Serializer {
   }
 
   /**
-   * Indents the next text.
+   * Prints indentation whitespaces.
    * @throws IOException I/O exception
    */
   protected void indent() throws IOException {
@@ -95,8 +106,19 @@ public abstract class OutputSerializer extends Serializer {
   }
 
   /**
-   * Encodes the specified characters before printing.
-   * @param text characters to be encoded and printed
+   * Prints an item separator.
+   * @throws IOException I/O exception
+   * @return boolean indicating if separator was printed
+   */
+  protected boolean separate() throws IOException {
+    if(!more || itemsep == null) return false;
+    out.print(itemsep);
+    return true;
+  }
+
+  /**
+   * Encodes and prints characters.
+   * @param text characters to be printed
    * @throws IOException I/O exception
    */
   protected final void printChars(final byte[] text) throws IOException {
@@ -105,22 +127,11 @@ public abstract class OutputSerializer extends Serializer {
   }
 
   /**
-   * Encodes the specified codepoint before printing.
-   * @param cp codepoint to be encoded and printed
+   * Encodes and prints a character.
+   * @param cp codepoint to be printed
    * @throws IOException I/O exception
    */
-  protected void printChar(final int cp) throws IOException {
-    out.print(cp);
-  }
-
-  /**
-   * Sets the item separator.
-   * @param def default separator
-   */
-  protected final void itemsep(final String def) {
-    final String is = sopts.get(ITEM_SEPARATOR);
-    itemsep = sopts.contains(ITEM_SEPARATOR) ? token(is) : def == null ? null : token(def);
-  }
+  protected abstract void printChar(int cp) throws IOException;
 
   /**
    * Returns a hex entity for the specified codepoint.
@@ -133,10 +144,10 @@ public abstract class OutputSerializer extends Serializer {
     for(int i = 3; i >= 0; i--) {
       final int b = (cp >> (i << 3)) & 0xFF;
       if(o || b > 0x0F) {
-        out.print(HEX[b >> 4]);
+        out.print(HEX_TABLE[b >> 4]);
       }
       if(o || b != 0) {
-        out.print(HEX[b & 0xF]);
+        out.print(HEX_TABLE[b & 0xF]);
         o = true;
       }
     }

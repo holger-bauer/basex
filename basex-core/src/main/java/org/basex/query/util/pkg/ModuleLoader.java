@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Module loader.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ModuleLoader {
@@ -58,12 +58,12 @@ public final class ModuleLoader {
   /**
    * Adds a package from the repository or a Java class.
    * @param uri module uri
-   * @param ii input info
    * @param qp query parser
+   * @param ii input info
    * @return if the package has been found
    * @throws QueryException query exception
    */
-  public boolean addImport(final String uri, final InputInfo ii, final QueryParser qp)
+  public boolean addImport(final String uri, final QueryParser qp, final InputInfo ii)
       throws QueryException {
 
     // add Java repository package
@@ -86,7 +86,7 @@ public final class ModuleLoader {
           }
         }
         if(id != null) {
-          addRepo(id, new HashSet<String>(), new HashSet<String>(), ii, qp);
+          addRepo(id, new HashSet<>(), new HashSet<>(), qp, ii);
           return true;
         }
       }
@@ -112,7 +112,8 @@ public final class ModuleLoader {
     try {
       clz = findClass(className);
     } catch(final ClassNotFoundException ex) {
-      if(java) throw WHICHCLASS_X.get(ii, ex.getMessage());
+      Util.debug(ex);
+      if(java) throw WHICHMODCLASS_X.get(ii, className);
       return false;
     } catch(final Throwable th) {
       final Throwable t = Util.rootException(th);
@@ -121,7 +122,7 @@ public final class ModuleLoader {
 
     // instantiate class
     try {
-      javaModules.add(clz.newInstance());
+      javaModules.add(clz.getDeclaredConstructor().newInstance());
       return true;
     } catch(final Throwable ex) {
       throw MODINST_X_X.get(ii, className, ex);
@@ -131,11 +132,10 @@ public final class ModuleLoader {
   /**
    * Returns a reference to the specified class.
    * @param name fully classified class name
-   * @return found class or {@code null}
-   * @throws Throwable any exception or error: {@link ClassNotFoundException},
-   *   {@link NoClassDefFoundError}, {@link LinkageError} or {@link ExceptionInInitializerError}.
+   * @return found class
+   * @throws ClassNotFoundException class not found exception
    */
-  public Class<?> findClass(final String name) throws Throwable {
+  public Class<?> findClass(final String name) throws ClassNotFoundException {
     // add cached URLs to class loader
     final int us = urls.size();
     if(us != 0) {
@@ -158,38 +158,38 @@ public final class ModuleLoader {
     return null;
   }
 
-  // PRIVATE METHODS ====================================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Adds a package from the package repository.
    * @param id package id
    * @param toLoad list with packages to be loaded
    * @param loaded already loaded packages
-   * @param ii input info
    * @param qp query parser
+   * @param ii input info
    * @throws QueryException query exception
    */
   private void addRepo(final String id, final HashSet<String> toLoad, final HashSet<String> loaded,
-      final InputInfo ii, final QueryParser qp) throws QueryException {
+      final QueryParser qp, final InputInfo ii) throws QueryException {
 
     // return if package is already loaded
     if(loaded.contains(id)) return;
 
     // find package in package dictionary
     Pkg pkg = context.repo.pkgDict().get(id);
-    if(pkg == null) throw BXRE_NOTINST_X.get(ii, id);
-    final IOFile pkgDir = context.repo.path(pkg.dir());
+    if(pkg == null) throw REPO_NOTFOUND_X.get(ii, id);
+    final IOFile pkgPath = context.repo.path(pkg.path());
 
     // parse package descriptor
-    final IO pkgDesc = new IOFile(pkgDir, PkgText.DESCRIPTOR);
+    final IO pkgDesc = new IOFile(pkgPath, PkgText.DESCRIPTOR);
     if(!pkgDesc.exists()) Util.debug(PkgText.MISSDESC, id);
 
     pkg = new PkgParser(ii).parse(pkgDesc);
     // check if package contains a jar descriptor
-    final IOFile jarDesc = new IOFile(pkgDir, PkgText.JARDESC);
+    final IOFile jarDesc = new IOFile(pkgPath, PkgText.JARDESC);
     // choose module directory (support for both 2010 and 2012 specs)
-    IOFile modDir = new IOFile(pkgDir, PkgText.CONTENT);
-    if(!modDir.exists()) modDir = new IOFile(pkgDir, pkg.abbrev());
+    IOFile modDir = new IOFile(pkgPath, PkgText.CONTENT);
+    if(!modDir.exists()) modDir = new IOFile(pkgPath, pkg.abbrev());
 
     // add jars to classpath
     if(jarDesc.exists()) {
@@ -197,22 +197,22 @@ public final class ModuleLoader {
       for(final byte[] u : desc.jars) addURL(new IOFile(modDir, string(u)));
     }
 
-    // package has dependencies -> they have to be loaded first => put package
-    // in list with packages to be loaded
+    // package has dependencies. they have to be loaded first
+    // (put package in list with packages to be loaded)
     if(!pkg.dep.isEmpty()) toLoad.add(id);
-    for(final PkgDep d : pkg.dep) {
-      if(d.name != null) {
+    for(final PkgDep dep : pkg.dep) {
+      if(dep.name != null) {
         // we consider only package dependencies here
-        final String depId = new PkgValidator(context.repo, ii).depPkg(d);
-        if(depId == null) throw BXRE_NOTINST_X.get(ii, d.name);
+        final String depId = new PkgValidator(context.repo, ii).depPkg(dep);
+        if(depId == null) throw REPO_NOTFOUND_X.get(ii, dep.name);
         if(toLoad.contains(depId)) throw CIRCMODULE.get(ii);
-        addRepo(depId, toLoad, loaded, ii, qp);
+        addRepo(depId, toLoad, loaded, qp, ii);
       }
     }
     for(final PkgComponent comp : pkg.comps) {
       qp.module(new IOFile(modDir, comp.file).path(), comp.uri, ii);
     }
-    if(toLoad.contains(id)) toLoad.remove(id);
+    toLoad.remove(id);
     loaded.add(id);
   }
 

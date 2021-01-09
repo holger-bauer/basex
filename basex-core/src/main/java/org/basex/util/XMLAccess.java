@@ -10,7 +10,7 @@ import org.basex.query.value.type.*;
 /**
  * Contains helper functions for retrieving XML contents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XMLAccess {
@@ -33,12 +33,12 @@ public final class XMLAccess {
    * @return iterator
    */
   public static BasicNodeIter children(final ANode node, final byte[] name) {
-    final BasicNodeIter children = node.children();
+    final BasicNodeIter children = node.childIter();
     return new BasicNodeIter() {
       @Override
       public ANode next() {
         for(ANode child; (child = children.next()) != null;) {
-          if(child.type == NodeType.ELM && (name == null || eq(child.qname().id(), name)))
+          if(child.type == NodeType.ELEMENT && (name == null || eq(child.qname().id(), name)))
             return child;
         }
         return null;
@@ -90,7 +90,9 @@ public final class XMLAccess {
       throws BaseXException {
 
     final String n = string(name);
-    for(final E nm : names) if(n.equals(nm.toString())) return nm;
+    for(final E nm : names) {
+      if(n.equals(nm.toString())) return nm;
+    }
     throw new BaseXException("%: Unexpected element: \"%\".", pref, name);
   }
 }

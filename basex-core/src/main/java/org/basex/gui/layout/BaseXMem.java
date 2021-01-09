@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This component visualizes the current memory consumption.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXMem extends BaseXPanel {
@@ -21,10 +21,10 @@ public final class BaseXMem extends BaseXPanel {
 
   /**
    * Constructor.
-   * @param win parent reference
+   * @param win window
    * @param mouse mouse interaction
    */
-  public BaseXMem(final Window win, final boolean mouse) {
+  public BaseXMem(final BaseXWindow win, final boolean mouse) {
     super(win);
     BaseXLayout.setWidth(this, DWIDTH);
     setPreferredSize(new Dimension(getPreferredSize().width, getFont().getSize() + 6));
@@ -72,15 +72,15 @@ public final class BaseXMem extends BaseXPanel {
 
     // print current memory usage
     final FontMetrics fm = g.getFontMetrics();
-    final String sz = Performance.format(used, true);
-    final int fw = (ww - fm.stringWidth(sz)) / 2;
+    final String mem = Performance.format(used);
+    final int fw = (ww - fm.stringWidth(mem)) / 2;
     final int h = fm.getHeight() - 3;
     g.setColor(full ? colormark3 : dgray);
-    g.drawString(sz, fw, h);
+    g.drawString(mem, fw, h);
   }
 
   @Override
-  public void mousePressed(final MouseEvent e) {
+  public void mouseClicked(final MouseEvent e) {
     DialogMem.show(gui);
     repaint();
   }

@@ -5,7 +5,6 @@ import static org.basex.query.QueryError.*;
 import java.math.*;
 
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -13,7 +12,7 @@ import org.basex.util.*;
 /**
  * Double item ({@code xs:double}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Dbl extends ANum {
@@ -31,7 +30,7 @@ public final class Dbl extends ANum {
    * @param value value
    */
   private Dbl(final double value) {
-    super(AtomType.DBL);
+    super(AtomType.DOUBLE);
     this.value = value;
   }
 
@@ -57,7 +56,7 @@ public final class Dbl extends ANum {
   }
 
   @Override
-  protected byte[] string() {
+  public byte[] string() {
     return Token.token(value);
   }
 
@@ -84,7 +83,7 @@ public final class Dbl extends ANum {
   @Override
   public BigDecimal dec(final InputInfo ii) throws QueryException {
     if(Double.isNaN(value) || Double.isInfinite(value))
-     throw valueError(AtomType.DEC, string(), ii);
+     throw valueError(AtomType.DECIMAL, string(), ii);
     return new BigDecimal(value);
   }
 
@@ -142,14 +141,15 @@ public final class Dbl extends ANum {
   }
 
   @Override
-  public boolean eq(final Item it, final Collation coll, final StaticContext sc,
+  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
       final InputInfo ii) throws QueryException {
-    return value == it.dbl(ii);
+    return value == item.dbl(ii);
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    final double n = it.dbl(ii);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    // cannot be replaced by Double.compare (different semantics)
+    final double n = item.dbl(ii);
     return Double.isNaN(n) || Double.isNaN(value) ? UNDEF : value < n ? -1 : value > n ? 1 : 0;
   }
 
@@ -159,9 +159,11 @@ public final class Dbl extends ANum {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    return cmp instanceof Dbl && value == ((Dbl) cmp).value || this == NAN && cmp == NAN;
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Dbl && value == ((Dbl) obj).value;
   }
+
+  // STATIC METHODS ===============================================================================
 
   /**
    * Converts the given token into a double value.
@@ -173,10 +175,12 @@ public final class Dbl extends ANum {
   public static double parse(final byte[] value, final InputInfo ii) throws QueryException {
     final double d = Token.toDouble(value);
     if(!Double.isNaN(d)) return d;
+
     final byte[] v = Token.trim(value);
     if(Token.eq(v, Token.NAN)) return Double.NaN;
     if(Token.eq(v, Token.INF)) return Double.POSITIVE_INFINITY;
-    if(Token.eq(v, Token.NINF)) return Double.NEGATIVE_INFINITY;
-    throw castError(AtomType.DBL, value, ii);
+    if(Token.eq(v, Token.NEGATVE_INF)) return Double.NEGATIVE_INFINITY;
+
+    throw AtomType.DOUBLE.castError(value, ii);
   }
 }

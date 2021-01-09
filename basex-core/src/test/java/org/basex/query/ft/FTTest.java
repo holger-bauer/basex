@@ -3,12 +3,12 @@ package org.basex.query.ft;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.util.options.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Full-text test queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTTest extends FTData {
@@ -18,8 +18,7 @@ public final class FTTest extends FTData {
   static { create(DOC); }
   static { queries = QUERIES; }
 
-  @Test
-  @Override
+  @Test @Override
   public void test() {
     if(ALL) {
       // test with and without index

@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This collations is based on a standard Java collator.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class BaseXCollation extends Collation {
@@ -34,9 +34,9 @@ final class BaseXCollation extends Collation {
 
   @Override
   protected int indexOf(final String string, final String contains, final Mode mode,
-      final InputInfo info) throws QueryException {
+      final InputInfo ii) throws QueryException {
 
-    if(!(collator instanceof RuleBasedCollator)) throw CHARCOLL.get(info);
+    if(!(collator instanceof RuleBasedCollator)) throw CHARCOLL.get(ii);
     final RuleBasedCollator rbc = (RuleBasedCollator) collator;
     final CollationElementIterator iterS = rbc.getCollationElementIterator(string);
     final CollationElementIterator iterC = rbc.getCollationElementIterator(contains);
@@ -90,5 +90,11 @@ final class BaseXCollation extends Collation {
       final int c = it.next();
       if(c != 0) return c;
     } while(true);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof BaseXCollation &&
+        collator.equals(((BaseXCollation) obj).collator);
   }
 }

@@ -19,7 +19,7 @@ import org.basex.util.list.*;
 /**
  * This class organizes all users.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Users {
@@ -27,7 +27,7 @@ public final class Users {
   private final LinkedHashMap<String, User> users = new LinkedHashMap<>();
   /** Filename. */
   private final IOFile file;
-  /** Info node. */
+  /** Info node (can be {@code null}). */
   private ANode info;
 
   /**
@@ -47,14 +47,13 @@ public final class Users {
   private void read() {
     if(!file.exists()) return;
     try {
-      final byte[] io = file.read();
-      final IOContent content = new IOContent(io, file.path());
+      final IOContent content = new IOContent(file.read(), file.path());
       final MainOptions options = new MainOptions(false);
       options.set(MainOptions.INTPARSE, true);
       final ANode doc = new DBNode(Parser.singleParser(content, options, ""));
       final ANode root = children(doc, USERS).next();
       if(root == null) {
-        Util.errln(file.name() + ": No '%' root element.", USERS);
+        Util.errln(file + ": No '%' root element.", USERS);
       } else {
         for(final ANode child : children(root)) {
           final byte[] qname = child.qname().id();
@@ -63,19 +62,19 @@ public final class Users {
               final User user = new User(child);
               final String name = user.name();
               if(users.get(name) != null) {
-                Util.errln(file.name() + ": User '%' supplied more than once.", name);
+                Util.errln(file + ": User '%' supplied more than once.", name);
               } else {
                 users.put(name, user);
               }
             } catch(final BaseXException ex) {
               // reject users with faulty data
-              Util.errln(file.name() + ": " + ex.getLocalizedMessage());
+              Util.errln(file + ": " + ex.getLocalizedMessage());
             }
           } else if(eq(qname, INFO)) {
-            if(info != null) Util.errln(file.name() + ": occurs more than once: %.", qname);
+            if(info != null) Util.errln(file + ": occurs more than once: %.", qname);
             else info = child.finish();
           } else {
-            Util.errln(file.name() + ": invalid element: %.", qname);
+            Util.errln(file + ": invalid element: %.", qname);
           }
         }
       }
@@ -86,33 +85,24 @@ public final class Users {
 
   /**
    * Writes permissions to disk.
-   * @param ctx database context
    */
-  public void write(final Context ctx) {
+  public void write() {
     synchronized(users) {
-      if(store()) {
-        try {
-          file.write(toXML(ctx).serialize().finish());
-        } catch(final IOException ex) {
-          Util.errln(ex);
-        }
-      } else if(file.exists()) {
-        file.delete();
+      file.parent().md();
+      final FElem root = new FElem(USERS);
+      for(final User user : users.values()) {
+        root.add(user.toXML(null));
+      }
+      if(info != null) {
+        root.add(info);
+        info.parent(null);
+      }
+      try {
+        file.write(root.serialize().finish());
+      } catch(final IOException ex) {
+        Util.errln(ex);
       }
     }
-  }
-
-  /**
-   * Writes permissions to the specified XML builder.
-   * @param ctx database context
-   * @return root element
-   */
-  private FElem toXML(final Context ctx) {
-    final FElem root = new FElem(USERS);
-    synchronized(users) {
-      for(final User user : users.values()) user.toXML(root);
-    }
-    return root.add(info().deepCopy(ctx.options));
   }
 
   /**
@@ -152,7 +142,7 @@ public final class Users {
   /**
    * Returns user with the specified name.
    * @param name user name
-   * @return user name, or {@code null}
+   * @return user name or {@code null}
    */
   public User get(final String name) {
     synchronized(users) {
@@ -221,10 +211,10 @@ public final class Users {
 
   /**
    * Returns the info element.
-   * @return info element
+   * @return info element (can be {@code null})
    */
   public ANode info() {
-    return info == null ? new FElem(INFO) : info;
+    return info;
   }
 
   /**
@@ -232,18 +222,6 @@ public final class Users {
    * @param elem info element
    */
   public void info(final ANode elem) {
-    info = elem.hasChildren() || elem.attributes().size() != 0 ? elem : null;
-  }
-
-  /**
-   * Checks if permissions need to be stored.
-   * @return result of check
-   */
-  private boolean store() {
-    if(info != null) return true;
-    if(users.size() != 1) return !users.isEmpty();
-    final User user = users.values().iterator().next();
-    return !user.name().equals(ADMIN) ||
-           !user.code(Algorithm.DIGEST, Code.HASH).equals(User.digest(ADMIN, ADMIN));
+    info = elem.hasChildren() || elem.attributeIter().size() != 0 ? elem : null;
   }
 }

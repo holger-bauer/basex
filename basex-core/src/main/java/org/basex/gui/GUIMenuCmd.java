@@ -14,7 +14,6 @@ import org.basex.gui.view.*;
 import org.basex.gui.view.editor.*;
 import org.basex.io.*;
 import org.basex.query.func.*;
-import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
@@ -24,7 +23,7 @@ import org.basex.util.list.*;
 /**
  * This enumeration encapsulates all commands that are triggered by GUI operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum GUIMenuCmd implements GUICommand {
@@ -54,7 +53,7 @@ public enum GUIMenuCmd implements GUICommand {
   },
 
   /** Shows database info. */
-  C_INFO(PROPERTIES + DOTS, "% D", true, false) {
+  C_INFO(PROPERTIES + DOTS, "% shift M", true, false) {
     @Override
     public void execute(final GUI gui) {
       new DialogProps(gui);
@@ -100,7 +99,7 @@ public enum GUIMenuCmd implements GUICommand {
   },
 
   /** Closes the database. */
-  C_CLOSE(CLOSE, "% shift W", true, false) {
+  C_CLOSE(CLOSE, "% Q", true, false) {
     @Override
     public void execute(final GUI gui) {
       gui.execute(new Close());
@@ -168,6 +167,32 @@ public enum GUIMenuCmd implements GUICommand {
     @Override
     public void execute(final GUI gui) {
       gui.editor.close(null);
+    }
+
+    @Override
+    public boolean enabled(final GUI gui) {
+      return gui.gopts.get(GUIOptions.SHOWEDITOR);
+    }
+  },
+
+  /** Closes all editor files. */
+  C_EDITCLOSEALL(CLOSE_ALL, "% shift W", false, false) {
+    @Override
+    public void execute(final GUI gui) {
+      gui.editor.closeAll();
+    }
+
+    @Override
+    public boolean enabled(final GUI gui) {
+      return gui.gopts.get(GUIOptions.SHOWEDITOR);
+    }
+  },
+
+  /** Edits external variables. */
+  C_VARS(EXTERNAL_VARIABLES, "% shift E", false, false) {
+    @Override
+    public void execute(final GUI gui) {
+      new DialogBindings(gui);
     }
 
     @Override
@@ -267,8 +292,21 @@ public enum GUIMenuCmd implements GUICommand {
     }
   },
 
+  /** Jump to matching bracket. */
+  C_BRACKET(JUMP_TO_BRACKET, "% shift B", false, false) {
+    @Override
+    public void execute(final GUI gui) {
+      gui.editor.getEditor().bracket();
+    }
+
+    @Override
+    public boolean enabled(final GUI gui) {
+      return gui.gopts.get(GUIOptions.SHOWEDITOR);
+    }
+  },
+
   /** Exits the application. */
-  C_EXIT(EXIT, "% Q", false, false) {
+  C_EXIT(EXIT, null, false, false) {
     @Override
     public void execute(final GUI gui) {
       gui.dispose();
@@ -277,7 +315,7 @@ public enum GUIMenuCmd implements GUICommand {
 
   /* EDIT COMMANDS */
 
-  /** Copies the current path to the clipboard. */
+  /** Copies the current database path to the clipboard. */
   C_COPYPATH(COPY_PATH, "% shift C", true, false) {
     @Override
     public void execute(final GUI gui) {
@@ -367,12 +405,11 @@ public enum GUIMenuCmd implements GUICommand {
 
       final StringList sl = insert.result;
       final NodeType type = ANode.type(insert.kind);
-      String item = Token.string(type.string()) +
-          " { " + quote(sl.get(0)) + " }";
+      String item = Strings.concat(type.name, " { ", quote(sl.get(0)), " }");
 
-      if(type == NodeType.ATT || type == NodeType.PI) {
+      if(type == NodeType.ATTRIBUTE || type == NodeType.PROCESSING_INSTRUCTION) {
         item += " { " + quote(sl.get(1)) + " }";
-      } else if(type == NodeType.ELM) {
+      } else if(type == NodeType.ELEMENT) {
         item += " { () }";
       }
 
@@ -484,7 +521,7 @@ public enum GUIMenuCmd implements GUICommand {
     @Override
     public void execute(final GUI gui) {
       gui.gopts.invert(GUIOptions.SHOWPROJECT);
-      gui.editor.project();
+      gui.editor.toggleProject();
     }
 
     @Override
@@ -499,7 +536,7 @@ public enum GUIMenuCmd implements GUICommand {
   },
 
   /** Shows info. */
-  C_SHOWINFO(QUERY_INFO, "% I", false, true) {
+  C_SHOWINFO(INFO, "% I", false, true) {
     @Override
     public void execute(final GUI gui) {
       gui.gopts.invert(GUIOptions.SHOWINFO);
@@ -660,6 +697,14 @@ public enum GUIMenuCmd implements GUICommand {
     }
   },
 
+  /** Shows used memory. */
+  C_SHOWMEM(USED_MEM + DOTS, null, false, false) {
+    @Override
+    public void execute(final GUI gui) {
+      DialogMem.show(gui);
+    }
+  },
+
   /** Fullscreen mode. */
   C_FULL(FULLSCREEN, Prop.MAC ? "% shift F" : "F11", false, true) {
     @Override
@@ -681,10 +726,6 @@ public enum GUIMenuCmd implements GUICommand {
     public void execute(final GUI gui) {
       gui.gopts.invert(GUIOptions.EXECRT);
       gui.stop();
-      // refresh buttons in input bar
-      gui.refreshControls();
-      // refresh editor buttons
-      gui.editor.refreshMark();
     }
 
     @Override
@@ -699,10 +740,6 @@ public enum GUIMenuCmd implements GUICommand {
     public void execute(final GUI gui) {
       final boolean rt = gui.gopts.invert(GUIOptions.FILTERRT);
       gui.stop();
-      // refresh buttons in input bar
-      gui.refreshControls();
-      // refresh editor buttons
-      gui.editor.refreshMark();
 
       final Context ctx = gui.context;
       final boolean root = ctx.root();
@@ -759,7 +796,7 @@ public enum GUIMenuCmd implements GUICommand {
   C_HELP(HELP, "F1", false, false) {
     @Override
     public void execute(final GUI gui) {
-      BaseXDialog.browse(gui, Prop.DOC_URL);
+      BaseXDialog.browse(gui, DOCS_URL);
     }
   },
 
@@ -767,7 +804,7 @@ public enum GUIMenuCmd implements GUICommand {
   C_COMMUNITY(COMMUNITY, null, false, false) {
     @Override
     public void execute(final GUI gui) {
-      BaseXDialog.browse(gui, Prop.COMMUNITY_URL);
+      BaseXDialog.browse(gui, COMMUNITY_URL);
     }
   },
 
@@ -775,7 +812,7 @@ public enum GUIMenuCmd implements GUICommand {
   C_UPDATES(CHECK_FOR_UPDATES, null, false, false) {
     @Override
     public void execute(final GUI gui) {
-      BaseXDialog.browse(gui, Prop.UPDATE_URL);
+      BaseXDialog.browse(gui, UPDATE_URL);
     }
   },
 
@@ -783,7 +820,7 @@ public enum GUIMenuCmd implements GUICommand {
   C_ABOUT(ABOUT + DOTS, null, false, false) {
     @Override
     public void execute(final GUI gui) {
-      new DialogAbout(gui);
+      DialogAbout.show(gui);
     }
   },
 
@@ -838,7 +875,7 @@ public enum GUIMenuCmd implements GUICommand {
           final int k = data.kind(pre);
           pres.add(k == Data.DOC ? pre : data.parent(pre, k));
         }
-        nodes = new DBNodes(data, pres.sort().distinct().finish());
+        nodes = new DBNodes(data, pres.ddo().finish());
         ctx.current(nodes);
       }
       gui.notify.context(nodes, false, null);
@@ -846,8 +883,7 @@ public enum GUIMenuCmd implements GUICommand {
 
     @Override
     public boolean enabled(final GUI gui) {
-      return !gui.gopts.get(GUIOptions.FILTERRT) &&
-          gui.context.data() != null && !gui.context.root();
+      return super.enabled(gui) && !gui.context.root();
     }
   },
 
@@ -862,11 +898,6 @@ public enum GUIMenuCmd implements GUICommand {
       ctx.invalidate();
       gui.notify.context(ctx.current(), false, null);
     }
-
-    @Override
-    public boolean enabled(final GUI gui) {
-      return gui.context.data() != null && !gui.context.root();
-    }
   },
 
    /** Displays the root node in the text view. */
@@ -877,12 +908,12 @@ public enum GUIMenuCmd implements GUICommand {
     }
   };
 
-  /** States if the command needs a data reference. */
-  private final boolean data;
   /** Menu label. */
   private final String label;
   /** Key shortcut. */
   private final Object key;
+  /** States if the command needs a data reference. */
+  private final boolean data;
   /** Indicates if this command has two states. */
   private final boolean toggle;
   /** Shortcut. */
@@ -925,37 +956,39 @@ public enum GUIMenuCmd implements GUICommand {
   @Override
   public Object shortcuts() { return key; }
 
-  // STATIC METHODS ===========================================================
+  // STATIC METHODS ===============================================================================
 
   /**
    * Checks if data can be updated.
-   * @param n node instance
-   * @param no disallowed node types
+   * @param node node instance
+   * @param kinds disallowed node kinds
    * @return result of check
    */
-  private static boolean updatable(final DBNodes n, final int... no) {
-    if(n == null || (no.length == 0 ? n.size() < 1 : n.size() != 1)) return false;
-    final int k = n.data().kind(n.pre(0));
-    for(final int i : no) if(k == i) return false;
+  private static boolean updatable(final DBNodes node, final int... kinds) {
+    if(node == null || (kinds.length == 0 ? node.size() < 1 : node.size() != 1)) return false;
+    final int k = node.data().kind(node.pre(0));
+    for(final int kind : kinds) {
+      if(k == kind) return false;
+    }
     return true;
   }
 
   /**
    * Returns a quoted string.
-   * @param s string to encode
+   * @param string string to encode
    * @return quoted string
    */
-  private static String quote(final String s) {
-    return '"' + s.replaceAll("\"", "&quot;") + '"';
+  private static String quote(final String string) {
+    return '"' + string.replaceAll("\"", "&quot;") + '"';
   }
 
   /**
    * Returns a database function for the first node in a node set.
-   * @param n node set
-   * @param i offset
+   * @param nodes node set
+   * @param index node index
    * @return function string
    */
-  private static String openPre(final DBNodes n, final int i) {
-    return Function._DB_OPEN_PRE.toString(Str.get(n.data().meta.name), Int.get(n.pre(i)));
+  private static String openPre(final DBNodes nodes, final int index) {
+    return Function._DB_OPEN_PRE.args(nodes.data().meta.name, nodes.pre(index)).trim();
   }
 }

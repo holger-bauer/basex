@@ -8,16 +8,17 @@ import java.awt.event.*;
 import javax.swing.*;
 
 import org.basex.gui.*;
+import org.basex.gui.listener.*;
 
 /**
- * Project specific Popup menu implementation.
+ * Project-specific Popup menu implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Lukas Kircher
  */
 public final class BaseXPopup extends JPopupMenu {
-  /** Reference to main window. */
+  /** Reference to the main window. */
   private final GUI gui;
   /** Popup commands. */
   private final GUICommand[] commands;
@@ -38,8 +39,8 @@ public final class BaseXPopup extends JPopupMenu {
    * @param commands associated commands
    */
   public BaseXPopup(final JComponent comp, final GUI gui, final GUICommand... commands) {
-    this.commands = commands;
     this.gui = gui;
+    this.commands = commands;
 
     // both listeners must be implemented to support different platforms
     comp.addMouseListener(new MouseAdapter() {
@@ -53,20 +54,17 @@ public final class BaseXPopup extends JPopupMenu {
         mousePressed(e);
       }
     });
-    comp.addKeyListener(new KeyAdapter() {
-      @Override
-      public void keyPressed(final KeyEvent e) {
-        if(!gui.updating && CONTEXT.is(e)) {
-          show(e.getComponent(), 10, 10);
-        } else {
-          for(final GUICommand cmd : commands) {
-            if(cmd instanceof GUIPopupCmd) {
-              for(final BaseXKeys sc : ((GUIPopupCmd) cmd).shortcuts()) {
-                if(sc.is(e)) {
-                  cmd.execute(gui);
-                  e.consume();
-                  return;
-                }
+    comp.addKeyListener((KeyPressedListener) e -> {
+      if(!gui.updating && CONTEXT.is(e)) {
+        show(e.getComponent(), 10, 10);
+      } else {
+        for(final GUICommand cmd : commands) {
+          if(cmd instanceof GUIPopupCmd) {
+            for(final BaseXKeys sc : ((GUIPopupCmd) cmd).shortcuts()) {
+              if(sc.is(e)) {
+                cmd.execute(gui);
+                e.consume();
+                return;
               }
             }
           }
@@ -79,16 +77,9 @@ public final class BaseXPopup extends JPopupMenu {
       if(cmd == null) {
         addSeparator();
       } else {
-        final String desc = cmd.label();
-        final JMenuItem jmi = add(cmd.toggle() ? new JCheckBoxMenuItem(desc) : new JMenuItem(desc));
-        jmi.addActionListener(new ActionListener() {
-          @Override
-          public void actionPerformed(final ActionEvent e) {
-            if(!gui.updating) cmd.execute(gui);
-          }
-        });
-        BaseXLayout.setMnemonic(jmi, mnemCache);
-        jmi.setAccelerator(BaseXLayout.keyStroke(cmd));
+        final JMenuItem item = GUIMenu.newItem(cmd, gui, mnemCache);
+        item.setAccelerator(BaseXLayout.keyStroke(cmd));
+        add(item);
       }
     }
   }

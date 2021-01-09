@@ -42,7 +42,7 @@ import org.basex.util.hash.*;
  * remembered. This avoids additional traversals of the AUC during consistency checks and
  * further optimizations.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class AtomicUpdateCache {
@@ -127,7 +127,7 @@ public final class AtomicUpdateCache {
   /**
    * Adds an update to the corresponding list.
    * @param candidate atomic update
-   * @param slack skip consistency checks etc. if true (used during text node merging)
+   * @param slack skip consistency checks etc. if {@code true} (used during text node merging)
    */
   private void considerAtomic(final BasicUpdate candidate, final boolean slack) {
     // fill the one-atomic-update buffer
@@ -262,11 +262,8 @@ public final class AtomicUpdateCache {
       /* CASE 1: candidate operates on the subtree of T and appends a node to the end of
        * the subtree (target PRE may be equal)...
        * CASE 2: operates within subtree of T */
-      if(bu2.location <= fol && (bu2 instanceof Insert || bu2 instanceof InsertAttr) &&
-          bu2.parent >= pre && bu2.parent < fol ||
-        bu2.location < fol) {
-        return true;
-      }
+      return bu2.location <= fol && (bu2 instanceof Insert || bu2 instanceof InsertAttr) &&
+             bu2.parent >= pre && bu2.parent < fol || bu2.location < fol;
     }
     return false;
   }
@@ -497,7 +494,7 @@ public final class AtomicUpdateCache {
    * Returns atomic text node merging operations if necessary for the given node PRE and
    * its right neighbor PRE+1.
    * @param pre node PRE value
-   * @return list of text merging operations
+   * @return list of text merging operations or {@code null}
    */
   private Delete mergeTextNodes(final int pre) {
     final int s = data.meta.size;

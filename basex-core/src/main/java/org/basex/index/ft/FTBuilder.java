@@ -17,7 +17,7 @@ import org.basex.util.list.*;
 /**
  * This class contains common methods for full-text index builders.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTBuilder extends IndexBuilder {
@@ -67,16 +67,16 @@ public final class FTBuilder extends IndexBuilder {
         lexer.init(data.text(pre, true));
         int pos = -1;
         while(lexer.hasNext()) {
-          final byte[] tok = lexer.nextToken();
+          final byte[] token = lexer.nextToken();
           ++pos;
           // skip too long and stopword tokens
-          if(tok.length <= data.meta.maxlen && (sw.isEmpty() || !sw.contains(tok))) {
+          if(token.length <= data.meta.maxlen && !sw.contains(token)) {
             // check if main memory is exhausted
             if((ntok++ & 0xFFFF) == 0 && splitRequired()) {
               writeIndex(true);
               clean();
             }
-            tree.index(tok, pre, pos, splits);
+            tree.index(token, pre, pos, splits);
             count++;
           }
         }
@@ -105,9 +105,9 @@ public final class FTBuilder extends IndexBuilder {
     if(!partial) return;
 
     // merges temporary index files
-    try(DataOutput outX = new DataOutput(data.meta.dbfile(DATAFTX + 'x'));
-        DataOutput outY = new DataOutput(data.meta.dbfile(DATAFTX + 'y'));
-        DataOutput outZ = new DataOutput(data.meta.dbfile(DATAFTX + 'z'))) {
+    try(DataOutput outX = new DataOutput(data.meta.dbFile(DATAFTX + 'x'));
+        DataOutput outY = new DataOutput(data.meta.dbFile(DATAFTX + 'y'));
+        DataOutput outZ = new DataOutput(data.meta.dbFile(DATAFTX + 'z'))) {
 
       final IntList ind = new IntList();
 
@@ -122,25 +122,25 @@ public final class FTBuilder extends IndexBuilder {
         il.add(m);
         // find next token to write on disk
         for(int i = 0; i < splits; ++i) {
-          if(m == i || v[i].tok.length == 0) continue;
-          final int l = v[i].tok.length - v[m].tok.length;
-          final int d = diff(v[m].tok, v[i].tok);
-          if(l < 0 || l == 0 && d > 0 || v[m].tok.length == 0) {
+          if(m == i || v[i].token.length == 0) continue;
+          final int l = v[i].token.length - v[m].token.length;
+          final int d = diff(v[m].token, v[i].token);
+          if(l < 0 || l == 0 && d > 0 || v[m].token.length == 0) {
             m = i;
             il.reset();
             il.add(m);
-          } else if(d == 0 && v[i].tok.length > 0) {
+          } else if(d == 0 && v[i].token.length > 0) {
             il.add(i);
           }
         }
 
-        if(ind.isEmpty() || ind.get(ind.size() - 2) < v[m].tok.length) {
-          ind.add(v[m].tok.length);
+        if(ind.isEmpty() || ind.get(ind.size() - 2) < v[m].token.length) {
+          ind.add(v[m].token.length);
           ind.add((int) outY.size());
         }
 
         // write token
-        outY.writeBytes(v[m].tok);
+        outY.writeBytes(v[m].token);
         // pointer on full-text data
         outY.write5(outZ.size());
         // merge and write data size
@@ -158,8 +158,8 @@ public final class FTBuilder extends IndexBuilder {
    * @param lp last offset
    * @throws IOException I/O exception
    */
-  private static void writeInd(final DataOutput outX, final IntList il,
-      final int ls, final int lp) throws IOException {
+  private static void writeInd(final DataOutput outX, final IntList il, final int ls, final int lp)
+      throws IOException {
 
     final int is = il.size();
     outX.writeNum(is >> 1);
@@ -178,9 +178,9 @@ public final class FTBuilder extends IndexBuilder {
    */
   private void writeIndex(final boolean partial) throws IOException {
     final String name = DATAFTX + (partial ? splits : "");
-    try(DataOutput outX = new DataOutput(data.meta.dbfile(name + 'x'));
-        DataOutput outY = new DataOutput(data.meta.dbfile(name + 'y'));
-        DataOutput outZ = new DataOutput(data.meta.dbfile(name + 'z'))) {
+    try(DataOutput outX = new DataOutput(data.meta.dbFile(name + 'x'));
+        DataOutput outY = new DataOutput(data.meta.dbFile(name + 'y'));
+        DataOutput outZ = new DataOutput(data.meta.dbFile(name + 'z'))) {
 
       final IntList ind = new IntList();
       tree.init();
@@ -220,26 +220,23 @@ public final class FTBuilder extends IndexBuilder {
    * Merges temporary indexes for the current token.
    * @param out full-text data
    * @param il array mapping
-   * @param v full-text list
+   * @param list full-text list
    * @return written size
    * @throws IOException I/O exception
    */
-  private static int merge(final DataOutput out, final IntList il, final FTList[] v)
+  private static int merge(final DataOutput out, final IntList il, final FTList[] list)
       throws IOException {
 
-    final TokenBuilder tbp = new TokenBuilder();
-    final TokenBuilder tbo = new TokenBuilder();
-    tbp.add(new byte[4]);
-    tbo.add(new byte[4]);
+    final ByteList tbp = new ByteList().add(new byte[4]), tbo = new ByteList().add(new byte[4]);
     // merge full-text data of all sorted lists with the same token
     int s = 0;
     final int is = il.size();
     for(int j = 0; j < is; ++j) {
       final int m = il.get(j);
-      for(final int p : v[m].prv) tbp.add(Num.num(p));
-      for(final int p : v[m].pov) tbo.add(Num.num(p));
-      s += v[m].size;
-      v[m].next();
+      for(final int p : list[m].prv) tbp.add(Num.num(p));
+      for(final int p : list[m].pov) tbo.add(Num.num(p));
+      s += list[m].size;
+      list[m].next();
     }
     // write compressed pre and pos arrays
     final byte[] pr = tbp.finish();
@@ -253,7 +250,7 @@ public final class FTBuilder extends IndexBuilder {
   }
 
   /**
-   * Writes full-text data for a single token to disk.<br/>
+   * Writes full-text data for a single token to disk.
    * Format: {@code score? pre1 pos1 pre2 pos2 ... (0 score)? pre...}
    * @param out DataOutput for disk access
    * @param vpre compressed pre values
@@ -279,7 +276,9 @@ public final class FTBuilder extends IndexBuilder {
    * @return boolean
    */
   private static boolean check(final FTList[] lists) {
-    for(final FTList l : lists) if(l.tok.length > 0) return true;
+    for(final FTList list : lists) {
+      if(list.token.length > 0) return true;
+    }
     return false;
   }
 }

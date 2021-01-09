@@ -1,6 +1,7 @@
 package org.basex.query.func.inspect;
 
 import static org.basex.query.QueryText.*;
+import static org.basex.query.QueryText.DOLLAR;
 import static org.basex.util.Token.*;
 
 import org.basex.io.*;
@@ -21,7 +22,7 @@ import org.basex.util.list.*;
 /**
  * This class contains functions for generating a xqDoc documentation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class XQDoc extends Inspect {
@@ -47,13 +48,13 @@ final class XQDoc extends Inspect {
     final QueryParser qp = parseQuery(io);
     final FElem xqdoc = new FElem(PREFIX, PREFIX, URI).declareNS();
     final FElem control = elem("control", xqdoc);
-    elem("date", control).add(qc.initDateTime().datm.string(info));
+    elem("date", control).add(qc.dateTime().datm.string(info));
     elem("version", control).add("1.1");
 
     final String type = module instanceof LibraryModule ? "library" : "main";
     final FElem mod = elem("module", xqdoc).add("type", type);
     if(module instanceof LibraryModule) {
-      final QNm name = ((LibraryModule) module).name;
+      final QNm name = module.sc.module;
       elem("uri", mod).add(name.uri());
       elem("name", mod).add(io.name());
     } else {
@@ -61,15 +62,15 @@ final class XQDoc extends Inspect {
     }
     comment(module, mod);
 
-    // namespaces
-    final FElem namespaces = elem("namespaces", xqdoc);
-    for(final byte[] pref : qp.namespaces) nsCache.put(pref, qp.namespaces.get(pref));
-
     // imports
     final FElem imports = elem("imports", xqdoc);
     for(final byte[] imp : qp.modules) {
       elem("uri", elem("import", imports).add("type", "library")).add(imp);
     }
+
+    // namespaces
+    final FElem namespaces = elem("namespaces", xqdoc);
+    for(final byte[] pref : qp.namespaces) nsCache.put(pref, qp.namespaces.get(pref));
 
     // variables
     final FElem variables = elem("variables", xqdoc);
@@ -87,31 +88,31 @@ final class XQDoc extends Inspect {
     for(final StaticFunc sf : module.funcs().values()) {
       final int al = sf.arity();
       final QNm name = sf.funcName();
-      final FuncType t = sf.funcType();
+      final FuncType tp = sf.funcType();
       final FElem function = elem("function", functions).add("arity", token(al));
       comment(sf, function);
       elem("name", function).add(name.string());
       if(name.hasPrefix()) nsCache.put(name.prefix(), name.uri());
       annotations(sf.anns, function);
 
-      final TokenBuilder tb = new TokenBuilder(DECLARE).add(' ').addExt(sf.anns);
-      tb.add(FUNCTION).add(' ').add(name.string()).add(PAREN1);
+      final QueryString qs = new QueryString();
+      qs.token(DECLARE).token(sf.anns).token(FUNCTION).token(name.string()).token('(');
       for(int i = 0; i < al; i++) {
-        final Var v = sf.args[i];
-        if(i > 0) tb.add(SEP);
-        tb.add(DOLLAR).add(v.name.string()).add(' ').add(AS).add(' ').addExt(t.argTypes[i]);
+        final Var var = sf.params[i];
+        if(i > 0) qs.token(SEP);
+        qs.concat(DOLLAR, var.name.string()).token(AS).token(tp.argTypes[i]);
       }
-      tb.add(PAREN2).add(' ' + AS + ' ' + t.type);
-      if(sf.expr == null) tb.add(" external");
+      qs.token(')').token(AS).token(tp.declType);
+      if(sf.expr == null) qs.token("external");
 
-      elem("signature", function).add(tb.toString());
+      elem("signature", function).add(qs.toString());
       if(al != 0) {
         final FElem fparameters = elem("parameters", function);
         for(int a = 0; a < al; a++) {
           final FElem fparameter = elem("parameter", fparameters);
-          final Var v = sf.args[a];
-          elem("name", fparameter).add(v.name.string());
-          type(t.argTypes[a], fparameter);
+          final Var var = sf.params[a];
+          elem("name", fparameter).add(var.name.string());
+          type(tp.argTypes[a], fparameter);
         }
       }
       type(sf.seqType(), elem("return", function));

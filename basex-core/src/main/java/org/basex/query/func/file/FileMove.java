@@ -4,16 +4,18 @@ import java.io.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FileMove extends FileCopy {
   @Override
   public Item item(final QueryContext qc) throws IOException, QueryException {
-    return relocate(false, qc);
+    relocate(false, qc);
+    return Empty.VALUE;
   }
 }

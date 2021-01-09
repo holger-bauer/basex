@@ -7,6 +7,7 @@ import java.util.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
+import org.basex.core.cmd.Check;
 import org.basex.core.cmd.Set;
 import org.basex.core.parse.*;
 import org.basex.io.*;
@@ -19,7 +20,7 @@ import org.basex.util.list.*;
  * This is the starter class for the stand-alone console mode.
  * It executes all commands locally.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class BaseX extends CLI {
@@ -52,7 +53,7 @@ public class BaseX extends CLI {
    * @throws IOException I/O exception
    */
   public BaseX(final String... args) throws IOException {
-    super(args);
+    super(new Context(), args);
 
     // create session to show optional login request
     session();
@@ -68,84 +69,83 @@ public class BaseX extends CLI {
         final int c = ops.get(o);
         String value = vals.get(o);
 
-        if(c == 'b') {
-          // set/add variable binding
-          if(bind.length() != 0) bind.append(',');
-          // commas are escaped by a second comma
-          value = bind.append(value.replaceAll(",", ",,")).toString();
-          execute(new Set(MainOptions.BINDINGS, value), false);
-        } else if(c == 'c') {
-          // evaluate commands
-          final Pair<String, String> input = input(value);
-          execute(input.value(), input.name());
-          console = false;
-        } else if(c == 'D') {
-          // hidden option: show/hide dot query graph
-          execute(new Set(MainOptions.DOTPLAN, null), false);
-        } else if(c == 'i') {
-          // open database or create main memory representation
-          execute(new Set(MainOptions.MAINMEM, true), false);
-          execute(new Check(value), verbose);
-          execute(new Set(MainOptions.MAINMEM, false), false);
-        } else if(c == 'I') {
-          // set/add variable binding
-          if(bind.length() != 0) bind.append(',');
-          // commas are escaped by a second comma
-          value = bind.append('=').append(value.replaceAll(",", ",,")).toString();
-          execute(new Set(MainOptions.BINDINGS, value), false);
-        } else if(c == 'o') {
-          // change output stream
-          if(out != System.out) out.close();
-          out = new PrintOutput(value);
-          session().setOutputStream(out);
-        } else if(c == 'q') {
-          // evaluate query
-          execute(new XQuery(value), verbose);
-          console = false;
-        } else if(c == 'Q') {
-          // evaluate file contents or string as query
-          final Pair<String, String> input = input(value);
-          execute(new XQuery(input.value()).baseURI(input.name()), verbose);
-          console = false;
-        } else if(c == 'r') {
-          // parse number of runs
-          execute(new Set(MainOptions.RUNS, Strings.toInt(value)), false);
-        } else if(c == 'R') {
-          // toggle query evaluation
-          execute(new Set(MainOptions.RUNQUERY, null), false);
-        } else if(c == 's') {
-          // set/add serialization parameter
-          if(sopts == null) sopts = new SerializerOptions();
-          final String[] kv = value.split("=", 2);
-          sopts.assign(kv[0], kv.length > 1  ? kv[1] : "");
-          execute(new Set(MainOptions.SERIALIZER, sopts), false);
-        } else if(c == 't') {
-          // evaluate query
-          execute(new Test(value), verbose);
-          console = false;
-        } else if(c == 'u') {
-          // (de)activate write-back for updates
-          execute(new Set(MainOptions.WRITEBACK, null), false);
-        } else if(c == 'v') {
-          // show/hide verbose mode
-          v ^= true;
-        } else if(c == 'V') {
-          // show/hide query info
-          qi ^= true;
-          execute(new Set(MainOptions.QUERYINFO, null), false);
-        } else if(c == 'w') {
-          // toggle chopping of whitespaces
-          execute(new Set(MainOptions.CHOP, null), false);
-        } else if(c == 'x') {
-          // show/hide xml query plan
-          execute(new Set(MainOptions.XMLPLAN, null), false);
-          qp ^= true;
-        } else if(c == 'X') {
-          // show query plan before/after query compilation
-          execute(new Set(MainOptions.COMPPLAN, null), false);
-        } else if(c == 'z') {
-          // toggle result serialization
-          execute(new Set(MainOptions.SERIALIZE, null), false);
+        switch(c) {
+          case 'b':
+            if(bind.length() != 0) bind.append(',');
+            // commas are escaped by a second comma
+            value = bind.append(value.replaceAll(",", ",,")).toString();
+            execute(new Set(MainOptions.BINDINGS, value), false);
+            break;
+          case 'c':
+            console = false;
+            if(!execute(input(value))) return;
+            break;
+          case 'i':
+            execute(new Set(MainOptions.MAINMEM, true), false);
+            execute(new Check(value), verbose);
+            execute(new Set(MainOptions.MAINMEM, false), false);
+            break;
+          case 'I':
+            if(bind.length() != 0) bind.append(',');
+            // commas are escaped by a second comma
+            value = bind.append('=').append(value.replaceAll(",", ",,")).toString();
+            execute(new Set(MainOptions.BINDINGS, value), false);
+            break;
+          case 'o':
+            if(out != System.out) out.close();
+            out = new PrintOutput(new IOFile(value));
+            session().setOutputStream(out);
+            break;
+          case 'q':
+            console = false;
+            execute(new XQuery(value), verbose);
+            break;
+          case 'Q':
+            // hidden: run query with base uri
+            console = false;
+            final Pair<String, String> input = input(value);
+            execute(new XQuery(input.value()).baseURI(input.name()), verbose);
+            break;
+          case 'r':
+            execute(new Set(MainOptions.RUNS, Strings.toInt(value)), false);
+            break;
+          case 'R':
+            execute(new Set(MainOptions.RUNQUERY, null), false);
+            break;
+          case 's':
+            if(sopts == null) sopts = new SerializerOptions();
+            final String[] kv = value.split("=", 2);
+            sopts.assign(kv[0], kv.length > 1 ? kv[1] : "");
+            execute(new Set(MainOptions.SERIALIZER, sopts), false);
+            break;
+          case 't':
+            console = false;
+            execute(new Test(value), verbose);
+            break;
+          case 'u':
+            execute(new Set(MainOptions.WRITEBACK, null), false);
+            break;
+          case 'v':
+            v ^= true;
+            break;
+          case 'V':
+            qi ^= true;
+            execute(new Set(MainOptions.QUERYINFO, null), false);
+            break;
+          case 'w':
+            execute(new Set(MainOptions.CHOP, null), false);
+            break;
+          case 'x':
+            execute(new Set(MainOptions.XMLPLAN, null), false);
+            qp ^= true;
+            break;
+          case 'X':
+            // hidden: toggle query plan creation before/after query compilation
+            execute(new Set(MainOptions.COMPPLAN, null), false);
+            break;
+          case 'z':
+            execute(new Set(MainOptions.SERIALIZE, null), false);
+            break;
         }
         verbose = qi || qp || v;
       }
@@ -174,7 +174,7 @@ public class BaseX extends CLI {
         if(in.isEmpty()) continue;
 
         try {
-          if(!execute(CommandParser.get(in, context).pwReader(cr.pwReader()))) {
+          if(!execute(CommandParser.get(in, context).pwReader(cr))) {
             // show goodbye message if method returns false
             Util.outln(BYE[new Random().nextInt(4)]);
             break;
@@ -194,28 +194,6 @@ public class BaseX extends CLI {
   private void quit() throws IOException {
     if(out == System.out || out == System.err) out.flush();
     else out.close();
-  }
-
-  /**
-   * Returns the base URI and the query string for the specified input.
-   * @param input input
-   * @return return base URI and query string
-   * @throws IOException I/O exception
-   */
-  private Pair<String, String> input(final String input) throws IOException {
-    final IO io = IO.get(input);
-    return new Pair<>(
-      io instanceof IOContent ? "." : io.path(),
-      io.exists() && !io.isDir() ? io.string() : input
-    );
-  }
-
-  /**
-   * Tests if this is a local client.
-   * @return local mode
-   */
-  protected boolean local() {
-    return true;
   }
 
   @Override
@@ -242,20 +220,16 @@ public class BaseX extends CLI {
           v = "";
         } else if(!local()) {
           // client options: need to be set before other options
-          if(c == 'n') {
+          switch(c) {
             // set server name
-            context.soptions.set(StaticOptions.HOST, arg.string());
-          } else if(c == 'p') {
+            case 'n': context.soptions.set(StaticOptions.HOST, arg.string()); break;
             // set server port
-            context.soptions.set(StaticOptions.PORT, arg.number());
-          } else if(c == 'P') {
+            case 'p': context.soptions.set(StaticOptions.PORT, arg.number()); break;
             // specify password
-            context.soptions.set(StaticOptions.PASSWORD, arg.string());
-          } else if(c == 'U') {
+            case 'P': context.soptions.set(StaticOptions.PASSWORD, arg.string()); break;
             // specify user name
-            context.soptions.set(StaticOptions.USER, arg.string());
-          } else {
-            throw arg.usage();
+            case 'U': context.soptions.set(StaticOptions.USER, arg.string()); break;
+            default: throw arg.usage();
           }
         } else {
           throw arg.usage();

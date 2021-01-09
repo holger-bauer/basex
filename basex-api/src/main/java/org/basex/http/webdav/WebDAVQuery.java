@@ -1,17 +1,23 @@
 package org.basex.http.webdav;
 
+import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
+import java.util.Map.*;
+
+import org.basex.api.client.*;
+import org.basex.core.cmd.*;
 
 /**
- * Query builder.
+ * WebDAV query.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class WebDAVQuery {
-  /** String query. */
+  /** Query string. */
   private final String query;
+  /** Query prolog string. */
+  private final String prolog;
   /** Bindings. */
   private final HashMap<String, String> bindings = new HashMap<>();
 
@@ -20,12 +26,22 @@ final class WebDAVQuery {
    * @param query query string
    */
   WebDAVQuery(final String query) {
+    this(query, "");
+  }
+
+  /**
+   * Constructor.
+   * @param query query string
+   * @param prolog query prolog string
+   */
+  WebDAVQuery(final String query, final String prolog) {
     this.query = query;
+    this.prolog = prolog;
   }
 
   /**
    * Binds a variable.
-   * @param name name of variable (without '$' sign).
+   * @param name name of variable (without '$' sign)
    * @param value value of variable
    * @return self reference
    */
@@ -35,19 +51,27 @@ final class WebDAVQuery {
   }
 
   /**
-   * Returns the hash map entries.
-   * @return self reference
+   * Executes the query and returns the result as string.
+   * @param session user session
+   * @return result
+   * @throws IOException I/O execution
    */
-  Set<Entry<String, String>> entries() {
-    return bindings.entrySet();
+  String execute(final Session session) throws IOException {
+    final StringBuilder sb = new StringBuilder();
+    for(final String name : bindings.keySet()) {
+      sb.append("declare variable $").append(name).append(" external;");
+    }
+    sb.append(prolog).append(query);
+
+    final XQuery xquery = new XQuery(sb.toString());
+    for(final Entry<String, String> entry : bindings.entrySet()) {
+      xquery.bind(entry.getKey(), entry.getValue());
+    }
+    return session.execute(xquery);
   }
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder();
-    for(final String v : bindings.keySet()) {
-      sb.append("declare variable $").append(v).append(" external;");
-    }
-    return sb.append(query).toString();
+    return query;
   }
 }

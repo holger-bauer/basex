@@ -2,7 +2,6 @@ package org.basex.http.webdav;
 
 import java.io.*;
 
-import org.basex.server.*;
 import org.basex.util.*;
 
 import com.bradmcevoy.http.exceptions.*;
@@ -10,7 +9,7 @@ import com.bradmcevoy.http.exceptions.*;
 /**
  * Code container.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <E> return type
  */
@@ -28,32 +27,16 @@ abstract class WebDAVCode<E> {
 
   /**
    * Runs the contained code.
-   * @return result
+   * @return result (can be {@code null})
    * @throws BadRequestException bad request exception
-   * @throws NotAuthorizedException not authorized exception
    */
-  final E eval() throws BadRequestException, NotAuthorizedException {
+  final E eval() throws BadRequestException {
     try {
       final E ret = get();
       if(ret == null) run();
       return ret;
-    } catch(final LoginException ex) {
-      throw new NotAuthorizedException(Util.message(ex), resource);
     } catch(final IOException ex) {
       throw new BadRequestException(resource, Util.message(ex));
-    }
-  }
-
-  /**
-   * Runs the contained code, throwing no exception.
-   * @return result
-   */
-  final E evalNoEx() {
-    try {
-      return eval();
-    } catch(final Exception ex) {
-      Util.errln(ex);
-      return null;
     }
   }
 

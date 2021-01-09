@@ -3,10 +3,10 @@ package org.basex.query.expr.ft;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.util.ft.*;
-import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.ft.*;
@@ -15,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * FTDistance expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTDistance extends FTFilter {
@@ -49,7 +49,14 @@ public final class FTDistance extends FTFilter {
   public FTExpr compile(final CompileContext cc) throws QueryException {
     min = min.compile(cc);
     max = max.compile(cc);
-    return super.compile(cc);
+    return super.compile(cc).optimize(cc);
+  }
+
+  @Override
+  public FTExpr optimize(final CompileContext cc) throws QueryException {
+    min = min.simplifyFor(Simplify.NUMBER, cc);
+    max = max.simplifyFor(Simplify.NUMBER, cc);
+    return this;
   }
 
   @Override
@@ -60,7 +67,7 @@ public final class FTDistance extends FTFilter {
     match.sort();
 
     final FTMatch ftm = new FTMatch();
-    FTStringMatch last = null, first = null;
+    FTStringMatch first = null, last = null;
     for(final FTStringMatch sm : match) {
       if(sm.exclude) {
         ftm.add(sm);
@@ -74,6 +81,8 @@ public final class FTDistance extends FTFilter {
         last = sm;
       }
     }
+    if(first == null) return false;
+
     first.end = last.end;
     match.reset();
     match.add(first);
@@ -82,13 +91,13 @@ public final class FTDistance extends FTFilter {
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return min.has(flag) || max.has(flag) || super.has(flag);
+  public boolean has(final Flag... flags) {
+    return min.has(flags) || max.has(flags) || super.has(flags);
   }
 
   @Override
-  public boolean removable(final Var var) {
-    return min.removable(var) || max.removable(var) && super.removable(var);
+  public boolean inlineable(final InlineContext ic) {
+    return min.inlineable(ic) || max.inlineable(ic) && super.inlineable(ic);
   }
 
   @Override
@@ -97,28 +106,17 @@ public final class FTDistance extends FTFilter {
   }
 
   @Override
-  public FTExpr inline(final Var var, final Expr ex, final CompileContext cc)
-      throws QueryException {
-    final Expr mn = min.inline(var, ex, cc), mx = max.inline(var, ex, cc);
+  public FTExpr inline(final InlineContext ic) throws QueryException {
+    final Expr mn = min.inline(ic), mx = max.inline(ic);
     if(mn != null) min = mn;
     if(mx != null) max = mx;
-    return inlineAll(exprs, var, ex, cc) || mn != null || mx != null ? optimize(cc) : null;
+    return ic.inline(exprs) || mn != null || mx != null ? optimize(ic.cc) : null;
   }
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTDistance(info, exprs[0].copy(cc, vm),
-        min.copy(cc, vm), max.copy(cc, vm), unit);
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(DISTANCE, min + "-" + max + ' ' + unit), exprs);
-  }
-
-  @Override
-  public String toString() {
-    return super.toString() + DISTANCE + PAREN1 + min + '-' + max + ' ' + unit + PAREN2;
+    return copyType(new FTDistance(info, exprs[0].copy(cc, vm), min.copy(cc, vm), max.copy(cc, vm),
+        unit));
   }
 
   @Override
@@ -128,8 +126,18 @@ public final class FTDistance extends FTFilter {
 
   @Override
   public int exprSize() {
-    int sz = 1;
-    for(final FTExpr expr : exprs) sz += expr.exprSize();
-    return min.exprSize() + max.exprSize() + sz;
+    int size = 1;
+    for(final FTExpr expr : exprs) size += expr.exprSize();
+    return min.exprSize() + max.exprSize() + size;
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, DISTANCE, min + "-" + max + ' ' + unit), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(exprs[0]).token(DISTANCE).paren(min + "-" + max + ' ' + unit);
   }
 }

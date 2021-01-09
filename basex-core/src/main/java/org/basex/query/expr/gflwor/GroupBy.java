@@ -6,16 +6,12 @@ import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
 import org.basex.query.util.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -23,12 +19,12 @@ import org.basex.util.hash.*;
 /**
  * The GFLWOR {@code group by} expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class GroupBy extends Clause {
   /** Grouping specs. */
-  private final Spec[] specs;
+  private final GroupSpec[] specs;
   /** Non-grouping variable expressions. */
   private Expr[] preExpr;
   /** Non-grouping variables. */
@@ -43,14 +39,17 @@ public final class GroupBy extends Clause {
    * @param post post-grouping variables
    * @param info input info
    */
-  public GroupBy(final Spec[] specs, final VarRef[] pre, final Var[] post, final InputInfo info) {
-    super(info, vars(specs, post));
+  public GroupBy(final GroupSpec[] specs, final VarRef[] pre, final Var[] post,
+      final InputInfo info) {
+
+    super(info, SeqType.ITEM_ZM, vars(specs, post));
     this.specs = specs;
     this.post = post;
-    preExpr = new Expr[pre.length];
-    System.arraycopy(pre, 0, preExpr, 0, pre.length);
+    preExpr = Array.copy(pre, new Expr[pre.length]);
     int n = 0;
-    for(final Spec spec : specs) if(!spec.occluded) n++;
+    for(final GroupSpec spec : specs) {
+      if(!spec.occluded) n++;
+    }
     nonOcc = n;
   }
 
@@ -62,9 +61,9 @@ public final class GroupBy extends Clause {
    * @param nonOcc number of non-occluded grouping variables
    * @param info input info
    */
-  private GroupBy(final Spec[] specs, final Expr[] pre, final Var[] post, final int nonOcc,
+  private GroupBy(final GroupSpec[] specs, final Expr[] pre, final Var[] post, final int nonOcc,
       final InputInfo info) {
-    super(info, vars(specs, post));
+    super(info, SeqType.ITEM_ZM, vars(specs, post));
     this.specs = specs;
     preExpr = pre;
     this.post = post;
@@ -77,12 +76,12 @@ public final class GroupBy extends Clause {
    * @param vs non-grouping variables
    * @return declared variables
    */
-  private static Var[] vars(final Spec[] gs, final Var[] vs) {
+  private static Var[] vars(final GroupSpec[] gs, final Var[] vs) {
     final int gl = gs.length, vl = vs.length;
-    final Var[] res = new Var[gl + vl];
-    for(int g = 0; g < gl; g++) res[g] = gs[g].var;
-    System.arraycopy(vs, 0, res, gl, vl);
-    return res;
+    final Var[] vars = new Var[gl + vl];
+    for(int g = 0; g < gl; g++) vars[g] = gs[g].var;
+    Array.copyFromStart(vs, vl, vars, gl);
+    return vars;
   }
 
   @Override
@@ -103,10 +102,10 @@ public final class GroupBy extends Clause {
         groups[pos++] = null;
 
         int p = 0;
-        for(final Spec spec : specs) {
+        for(final GroupSpec spec : specs) {
           if(!spec.occluded) {
             final Item key = curr.key[p++];
-            qc.set(spec.var, key == null ? Empty.SEQ : key);
+            qc.set(spec.var, key == null ? Empty.VALUE : key);
           }
         }
         final int pl = post.length;
@@ -124,23 +123,23 @@ public final class GroupBy extends Clause {
         final IntObjMap<Group> map = new IntObjMap<>();
         final Collation[] colls = new Collation[nonOcc];
         int c = 0;
-        for(final Spec spec : specs) {
+        for(final GroupSpec spec : specs) {
           if(!spec.occluded) colls[c++] = spec.coll;
         }
 
         while(sub.next(qc)) {
           final Item[] key = new Item[nonOcc];
           int p = 0, hash = 1;
-          for(final Spec spec : specs) {
+          for(final GroupSpec spec : specs) {
             final Item atom = spec.atomItem(qc, info);
             if(!spec.occluded) {
               key[p++] = atom;
               // If the values are compared using a special collation, we let them collide
               // here and let the comparison do all the work later.
               // This enables other non-collation specs to avoid the collision.
-              hash = 31 * hash + (atom == null || spec.coll != null ? 0 : atom.hash(info));
+              hash = 31 * hash + (atom == Empty.VALUE || spec.coll != null ? 0 : atom.hash(info));
             }
-            qc.set(spec.var, atom == null ? Empty.SEQ : atom);
+            qc.set(spec.var, atom);
           }
 
           // find the group for this key
@@ -159,7 +158,7 @@ public final class GroupBy extends Clause {
             // new group, add it to the list
             final ValueBuilder[] ngs = new ValueBuilder[pl];
             final int nl = ngs.length;
-            for(int n = 0; n < nl; n++) ngs[n] = new ValueBuilder();
+            for(int n = 0; n < nl; n++) ngs[n] = new ValueBuilder(qc);
             grp = new Group(key, ngs);
             grps.add(grp);
 
@@ -174,44 +173,49 @@ public final class GroupBy extends Clause {
           }
 
           // add values of non-grouping variables to the group
-          for(int g = 0; g < pl; g++) grp.ngv[g].add(preExpr[g].value(qc));
+          for(int g = 0; g < pl; g++) {
+            grp.ngv[g].add(preExpr[g].value(qc));
+          }
         }
 
         // we're finished, copy the array so the list can be garbage-collected
-        return grps.toArray(new Group[grps.size()]);
+        return grps.toArray(new Group[0]);
       }
     };
   }
 
   /**
    * Checks two keys for equality.
-   * @param its1 first keys
-   * @param its2 second keys
+   * @param items1 first keys
+   * @param items2 second keys
    * @param coll collations
    * @return {@code true} if the compare as equal, {@code false} otherwise
    * @throws QueryException query exception
    */
-  private boolean eq(final Item[] its1, final Item[] its2, final Collation[] coll)
+  private boolean eq(final Item[] items1, final Item[] items2, final Collation[] coll)
       throws QueryException {
 
-    final int il = its1.length;
+    final int il = items1.length;
     for(int i = 0; i < il; i++) {
-      final Item it1 = its1[i], it2 = its2[i];
-      if(it1 == null ^ it2 == null || it1 != null && !it1.equiv(it2, coll[i], info)) return false;
+      final Item item1 = items1[i], item2 = items2[i];
+      if(item1 == Empty.VALUE ^ item2 == Empty.VALUE ||
+         item1 != Empty.VALUE && !item1.equiv(item2, coll[i], info)) return false;
     }
     return true;
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    for(final Spec sp : specs) if(sp.has(flag)) return true;
+  public boolean has(final Flag... flags) {
+    for(final GroupSpec spec : specs) {
+      if(spec.has(flags)) return true;
+    }
     return false;
   }
 
   @Override
   public GroupBy compile(final CompileContext cc) throws QueryException {
-    for(final Expr e : preExpr) e.compile(cc);
-    for(final Spec b : specs) b.compile(cc);
+    for(final Expr expr : preExpr) expr.compile(cc);
+    for(final GroupSpec spec : specs) spec.compile(cc);
     return optimize(cc);
   }
 
@@ -219,15 +223,21 @@ public final class GroupBy extends Clause {
   public GroupBy optimize(final CompileContext cc) throws QueryException {
     final int pl = preExpr.length;
     for(int p = 0; p < pl; p++) {
-      final SeqType it = preExpr[p].seqType();
-      post[p].refineType(it.withOcc(it.mayBeZero() ? Occ.ZERO_MORE : Occ.ONE_MORE), cc);
+      post[p].refineType(preExpr[p].seqType().union(Occ.ONE_OR_MORE), cc);
     }
+    SeqType st = null;
+    for(final GroupSpec spec : specs) {
+      st = st == null ? spec.seqType() : st.union(spec.seqType());
+    }
+    exprType.assign(st);
     return this;
   }
 
   @Override
-  public boolean removable(final Var var) {
-    for(final Spec b : specs) if(!b.removable(var)) return false;
+  public boolean inlineable(final InlineContext ic) {
+    for(final GroupSpec spec : specs) {
+      if(!spec.inlineable(ic)) return false;
+    }
     return true;
   }
 
@@ -237,10 +247,10 @@ public final class GroupBy extends Clause {
   }
 
   @Override
-  public Clause inline(final Var var, final Expr ex,
-      final CompileContext cc) throws QueryException {
-    final boolean b = inlineAll(specs, var, ex, cc), p = inlineAll(preExpr, var, ex, cc);
-    return b || p ? optimize(cc) : null;
+  public Clause inline(final InlineContext ic) throws QueryException {
+    // inline both grouping specs and non-grouping variable expressions
+    final boolean a = ic.inline(specs), b = ic.inline(preExpr);
+    return a || b ? optimize(ic.cc) : null;
   }
 
   @Override
@@ -254,14 +264,18 @@ public final class GroupBy extends Clause {
     for(int p = 0; p < pl; p++) ps[p] = cc.copy(post[p], vm);
 
     // done
-    return new GroupBy(Arr.copyAll(cc, vm, specs), pEx, ps, nonOcc, info);
+    return copyType(new GroupBy(Arr.copyAll(cc, vm, specs), pEx, ps, nonOcc, info));
   }
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
     if(!visitAll(visitor, specs)) return false;
-    for(final Expr ng : preExpr) if(!ng.accept(visitor)) return false;
-    for(final Var ng : post) if(!visitor.declared(ng)) return false;
+    for(final Expr ng : preExpr) {
+      if(!ng.accept(visitor)) return false;
+    }
+    for(final Var ng : post) {
+      if(!visitor.declared(ng)) return false;
+    }
     return true;
   }
 
@@ -271,8 +285,8 @@ public final class GroupBy extends Clause {
     final int len = preExpr.length;
     for(int p = 0; p < post.length; p++) {
       if(!used.get(post[p].id)) {
-        preExpr = Array.delete(preExpr, p);
-        post = Array.delete(post, p--);
+        preExpr = Array.remove(preExpr, p);
+        post = Array.remove(post, p--);
       }
     }
     return preExpr.length < len;
@@ -283,6 +297,18 @@ public final class GroupBy extends Clause {
     return false;
   }
 
+  /**
+   * Returns a group specification that can be rewritten to a distinct-values argument.
+   * @return group specification
+   */
+  GroupSpec group() {
+    if(specs.length == 1 && post.length == 0) {
+      final GroupSpec spec = specs[0];
+      if(spec.coll == null && spec.var.declType == null) return spec;
+    }
+    return null;
+  }
+
   @Override
   public void checkUp() throws QueryException {
     checkNoneUp(preExpr);
@@ -290,128 +316,38 @@ public final class GroupBy extends Clause {
   }
 
   @Override
-  void calcSize(final long[] minMax) {
+  public void calcSize(final long[] minMax) {
     minMax[0] = Math.min(minMax[0], 1);
   }
 
   @Override
   public int exprSize() {
-    int sz = 0;
-    for(final Expr e : preExpr) sz += e.exprSize();
-    for(final Expr e : specs) sz += e.exprSize();
-    return sz;
+    int size = 0;
+    for(final Expr expr : preExpr) size += expr.exprSize();
+    for(final Expr spec : specs) size += spec.exprSize();
+    return size;
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem();
-    for(final Spec spec : specs) spec.plan(e);
-    plan.add(e);
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof GroupBy)) return false;
+    final GroupBy g = (GroupBy) obj;
+    return Array.equals(specs, g.specs) && Array.equals(preExpr, g.preExpr) &&
+        Array.equals(post, g.post);
   }
 
   @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), specs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
     final int pl = post.length;
     for(int p = 0; p < pl; p++) {
-      sb.append(LET).append(" (: post-group :) ").append(post[p]);
-      sb.append(' ').append(ASSIGN).append(' ').append(preExpr[p]).append(' ');
+      qs.token(LET).token("(: post-group :)").token(post[p]).token(ASSIGN).token(preExpr[p]);
     }
-    sb.append(GROUP).append(' ').append(BY);
-    final int sl = specs.length;
-    for(int s = 0; s < sl; s++) sb.append(s == 0 ? " " : SEP).append(specs[s]);
-    return sb.toString();
-  }
-
-  /**
-   * Grouping spec.
-   *
-   * @author BaseX Team 2005-17, BSD License
-   * @author Leo Woerteler
-   */
-  public static final class Spec extends Single {
-    /** Grouping variable. */
-    public final Var var;
-    /** Occlusion flag, {@code true} if another grouping variable shadows this one. */
-    public boolean occluded;
-    /** Collation. */
-    private final Collation coll;
-
-    /**
-     * Constructor.
-     *
-     * @param info input info
-     * @param var grouping variable
-     * @param expr grouping expression
-     * @param coll collation
-     */
-    public Spec(final InputInfo info, final Var var, final Expr expr, final Collation coll) {
-      super(info, expr);
-      this.var = var;
-      this.coll = coll;
-    }
-
-    @Override
-    public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-      return expr.item(qc, info);
-    }
-
-    @Override
-    public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-      final Spec spec = new Spec(info, cc.copy(var, vm), expr.copy(cc, vm), coll);
-      spec.occluded = occluded;
-      return spec;
-    }
-
-    @Override
-    public boolean accept(final ASTVisitor visitor) {
-      return expr.accept(visitor) && visitor.declared(var);
-    }
-
-    @Override
-    public int exprSize() {
-      return expr.exprSize();
-    }
-
-    @Override
-    public void plan(final FElem plan) {
-      final FElem e = planElem();
-      var.plan(e);
-      expr.plan(e);
-      plan.add(e);
-    }
-
-    @Override
-    public String toString() {
-      final TokenBuilder tb = new TokenBuilder().add(var.toString()).add(' ').add(ASSIGN);
-      tb.add(' ').add(expr.toString());
-      if(coll != null) tb.add(' ').add(COLLATION).add(" \"").add(coll.uri()).add('"');
-      return tb.toString();
-    }
-  }
-
-  /**
-   * A group of tuples of post-grouping variables.
-   *
-   * @author BaseX Team 2005-17, BSD License
-   * @author Leo Woerteler
-   */
-  private static final class Group {
-    /** Grouping key, may contain {@code null} values. */
-    final Item[] key;
-    /** Non-grouping variables. */
-    final ValueBuilder[] ngv;
-    /** Overflow list. */
-    Group next;
-
-    /**
-     * Constructor.
-     * @param k grouping key
-     * @param ng non-grouping variables
-     */
-    Group(final Item[] k, final ValueBuilder[] ng) {
-      key = k;
-      ngv = ng;
-    }
+    qs.token(GROUP).token(BY).tokens(specs, SEP);
   }
 }

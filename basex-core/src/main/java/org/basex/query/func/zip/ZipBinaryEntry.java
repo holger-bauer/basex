@@ -13,13 +13,13 @@ import org.basex.util.*;
 /**
  * Functions on zip files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ZipBinaryEntry extends ZipFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return new B64(entry(qc));
+    return B64.get(entry(qc));
   }
 
   /**
@@ -37,6 +37,7 @@ public class ZipBinaryEntry extends ZipFn {
     try {
       return new Zip(file).read(path);
     } catch(final FileNotFoundException ex) {
+      Util.debug(ex);
       throw ZIP_NOTFOUND_X.get(info, file + "/" + path);
     } catch(final IOException ex) {
       throw ZIP_FAIL_X.get(info, ex);

@@ -4,39 +4,36 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
+import org.basex.io.*;
+
 /**
  * This class is a stream-wrapper for textual data encoded in UTF8.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class PrintOutput extends OutputStream {
-  /** Output stream reference. */
+  /** Output stream reference (can be {@code null}). */
   protected final OutputStream os;
   /** Maximum numbers of bytes to write. */
-  long max = Long.MAX_VALUE;
+  protected long max = Long.MAX_VALUE;
   /** Number of bytes written. */
-  long size;
-
-  /** Protected default constructor. */
-  PrintOutput() {
-    this((OutputStream) null);
-  }
+  protected long size;
 
   /**
    * Constructor, given a filename.
-   * @param fn filename
+   * @param file file
    * @throws IOException I/O exception
    */
-  public PrintOutput(final String fn) throws IOException {
-    this(new BufferOutput(fn));
+  public PrintOutput(final IOFile file) throws IOException {
+    this(new BufferOutput(file));
   }
 
   /**
    * Constructor, given an output stream.
-   * @param os output stream reference
+   * @param os output stream reference (can be {@code null})
    */
-  protected PrintOutput(final OutputStream os) {
+  PrintOutput(final OutputStream os) {
     this.os = os;
   }
 
@@ -54,7 +51,7 @@ public class PrintOutput extends OutputStream {
 
   /**
    * Sets the maximum number of bytes to be written.
-   * Note that a specified limit might break unicode characters.
+   * Note that the limit might break unicode characters.
    * @param limit maximum
    */
   public final void setLimit(final int limit) {

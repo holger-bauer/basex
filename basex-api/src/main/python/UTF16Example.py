@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-# Documentation: http://docs.basex.org/wiki/Clients
+# Documentation: https://docs.basex.org/wiki/Clients
 #
 # (C) BaseX Team 2005-12, BSD License
-import BaseXClient
+
+from BaseXClient import BaseXClient
 
 import sys
 if sys.version < '3': # i'm testing with Python 2.7.3
@@ -33,8 +34,7 @@ try:
     # run query on database
     query = session.query("""doc('py3clientexample')""")
 
-    for typecode, item in query.iter():
-        print("typecode=%d" % typecode)
+    for item in query.iter():
         print("item=%s" % item)
 
     # drop database

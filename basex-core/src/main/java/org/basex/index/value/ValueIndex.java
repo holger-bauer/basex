@@ -6,7 +6,7 @@ import org.basex.index.*;
 /**
  * Index for texts, attribute values and full-texts.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class ValueIndex implements Index {
@@ -33,15 +33,15 @@ public abstract class ValueIndex implements Index {
 
   /**
    * Deletes entries from the index.
-   * @param vc value cache with [key, id-list] pairs
+   * @param values value cache with [key, id-list] pairs
    */
-  public abstract void delete(ValueCache vc);
+  public abstract void delete(ValueCache values);
 
   /**
    * Add entries to the index.
-   * @param vc value cache with [key, id-list] pairs
+   * @param values value cache with [key, id-list] pairs
    */
-  public abstract void add(ValueCache vc);
+  public abstract void add(ValueCache values);
 
   /**
    * Flushes the buffered data.

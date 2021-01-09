@@ -4,12 +4,13 @@ import static org.basex.data.DataText.*;
 import static org.basex.io.serial.SerializerOptions.*;
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
+import static org.basex.util.Token.normalize;
 
 import java.io.*;
-import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.hash.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -21,7 +22,7 @@ import org.basex.util.options.*;
 /**
  * This class serializes items to in a markup language.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class MarkupSerializer extends StandardSerializer {
@@ -29,9 +30,9 @@ abstract class MarkupSerializer extends StandardSerializer {
   String docsys;
   /** Public document type. */
   String docpub;
-  /** Flag for printing content type. */
-  int ct;
 
+  /** Indicates if root element has been serialized. */
+  boolean root;
   /** Script flag. */
   boolean script;
 
@@ -66,7 +67,6 @@ abstract class MarkupSerializer extends StandardSerializer {
     html5 = htmlver.equals(V50) || ver.equals(V50);
 
     final boolean omitDecl = sopts.yes(OMIT_XML_DECLARATION);
-    final boolean bom  = sopts.yes(BYTE_ORDER_MARK);
     final YesNoOmit sa = sopts.get(STANDALONE);
     saomit = sa == YesNoOmit.OMIT;
 
@@ -79,17 +79,6 @@ abstract class MarkupSerializer extends StandardSerializer {
 
     if(docsys.isEmpty()) docsys = null;
     if(docpub.isEmpty()) docpub = null;
-
-    if(bom) {
-      // comparison by reference
-      if(encoding == Strings.UTF8) {
-        out.write(0xEF); out.write(0xBB); out.write(0xBF);
-      } else if(encoding == Strings.UTF16LE) {
-        out.write(0xFF); out.write(0xFE);
-      } else if(encoding == Strings.UTF16BE) {
-        out.write(0xFE); out.write(0xFF);
-      }
-    }
 
     final boolean html = this instanceof HTMLSerializer;
     final boolean xml = this instanceof XMLSerializer || this instanceof XHTMLSerializer;
@@ -148,9 +137,10 @@ abstract class MarkupSerializer extends StandardSerializer {
 
   @Override
   protected void text(final byte[] value, final FTPos ftp) throws IOException {
+    if(elems.isEmpty()) checkRoot(null);
     final byte[] val = norm(value);
     if(ftp == null) {
-      final ArrayList<QNm> qnames = cdata();
+      final QNmSet qnames = cdata();
       final int vl = val.length;
       if(qnames.isEmpty() || elems.isEmpty() || !qnames.contains(elems.peek())) {
         for(int k = 0; k < vl; k += cl(val, k)) {
@@ -178,7 +168,7 @@ abstract class MarkupSerializer extends StandardSerializer {
       final FTLexer lexer = new FTLexer().original().init(val);
       while(lexer.hasNext()) {
         final FTSpan span = lexer.next();
-        if(!span.del && ftp.contains(span.pos)) out.print((char) TokenBuilder.MARK);
+        if(!span.del && ftp.contains(span.pos)) out.print(TokenBuilder.MARK);
         final byte[] text = span.text;
         final int tl = text.length;
         for(int t = 0; t < tl; t += cl(text, t)) printChar(cp(text, t));
@@ -214,11 +204,25 @@ abstract class MarkupSerializer extends StandardSerializer {
 
   @Override
   protected void startOpen(final QNm name) throws IOException {
-    doctype(name);
+    if(elems.isEmpty()) checkRoot(name.string());
     if(sep) indent();
     out.print(ELEM_O);
     out.print(name.string());
     sep = true;
+  }
+
+  /**
+   * Checks if document serialization is valid.
+   * @param name name of doctype (if {@code null}, no doctype declaration will be output)
+   * @throws IOException I/O exception
+   */
+  final void checkRoot(final byte[] name) throws IOException {
+    if(root) {
+      if(!saomit) throw SERSA.getIO();
+      if(docsys != null) throw SERDT.getIO();
+    }
+    if(name != null) doctype(name);
+    root = true;
   }
 
   @Override
@@ -241,16 +245,13 @@ abstract class MarkupSerializer extends StandardSerializer {
   }
 
   @Override
-  protected void printChar(final int cp) throws IOException {
-    if(map != null) {
-      // character map
-      final byte[] value = map.get(cp);
-      if(value != null) {
-        out.print(value);
-        return;
-      }
-    }
+  protected void atomic(final Item item) throws IOException {
+    if(elems.isEmpty()) checkRoot(null);
+    super.atomic(item);
+  }
 
+  @Override
+  protected void print(final int cp) throws IOException {
     if(cp < ' ' && cp != '\n' && cp != '\t' || cp >= 0x7F && cp < 0xA0) {
       printHex(cp);
     } else if(cp == '&') {
@@ -263,7 +264,7 @@ abstract class MarkupSerializer extends StandardSerializer {
       out.print(E_2028);
     } else {
       try {
-        out.print(cp);
+        super.print(cp);
       } catch(final QueryIOException ex) {
         if(ex.getCause().error() == SERENC_X_X) printHex(cp);
         else throw ex;
@@ -273,34 +274,34 @@ abstract class MarkupSerializer extends StandardSerializer {
 
   /**
    * Prints the document type declaration.
-   * @param type document type or {@code null} for html type
+   * @param type document type
    * @throws IOException I/O exception
    */
-  protected abstract void doctype(QNm type) throws IOException;
+  protected abstract void doctype(byte[] type) throws IOException;
 
   @Override
-  protected boolean ignore(final ANode node) {
-    if(ct > 0 && node.type == NodeType.ELM && eq(node.name(), META)) {
-      final byte[] value = node.attribute(HTTPEQUIV);
-      if(value != null && eq(trim(value), CONTENT_TYPE)) return true;
+  protected boolean skipElement(final ANode node) {
+    if(node.type == NodeType.ELEMENT && eq(node.name(), META)) {
+      final byte[] value = node.attribute(HTTP_EQUIV);
+      return value != null && eq(trim(value), CONTENT_TYPE);
     }
     return false;
   }
 
   /**
    * Prints the document type declaration.
-   * @param type document type or {@code null} for html type
+   * @param type document type
    * @param pub doctype-public parameter
    * @param sys doctype-system parameter
    * @throws IOException I/O exception
    */
-  protected final void printDoctype(final QNm type, final String pub, final String sys)
+  protected final void printDoctype(final byte[] type, final String pub, final String sys)
       throws IOException {
 
-    if(level != 0) return;
+    if(level != 0 || root) return;
     if(sep) indent();
     out.print(DOCTYPE);
-    out.print(type == null ? HTML : type.string());
+    out.print(type);
     if(sys != null || pub != null) {
       if(pub != null) out.print(' ' + PUBLIC + " \"" + pub + '"');
       else out.print(' ' + SYSTEM);
@@ -315,7 +316,7 @@ abstract class MarkupSerializer extends StandardSerializer {
     if(atomic) {
       atomic = false;
     } else if(indent) {
-      final ArrayList<QNm> qnames = suppress();
+      final QNmSet qnames = suppress();
       if(!qnames.isEmpty()) {
         for(final QNm qname : elems) {
           if(qnames.contains(qname)) return;
@@ -333,14 +334,14 @@ abstract class MarkupSerializer extends StandardSerializer {
    * @throws IOException I/O exception
    */
   protected final boolean printCT(final boolean empty, final boolean html) throws IOException {
-    if(ct != 1) return false;
-    ct++;
+    if(skip != 1) return false;
+    skip++;
     if(empty) finishOpen();
     level++;
     startOpen(new QNm(META));
-    attribute(HTTPEQUIV, CONTENT_TYPE, false);
-    attribute(CONTENT, new TokenBuilder(media.isEmpty() ? MediaType.TEXT_HTML.toString() : media).
-        add("; ").add(CHARSET).add('=').add(encoding).finish(), false);
+    attribute(HTTP_EQUIV, CONTENT_TYPE, false);
+    attribute(CONTENT, concat(media.isEmpty() ? MediaType.TEXT_HTML : media, "; ",
+      CHARSET, "=", encoding), false);
     if(html) {
       out.print(ELEM_C);
     } else {
@@ -367,22 +368,24 @@ abstract class MarkupSerializer extends StandardSerializer {
 
     final String string = opts.get(option);
     if(string.isEmpty()) return allowed.length > 0 ? allowed[0] : string;
-    for(final String value : allowed) if(value.equals(string)) return string;
+    for(final String value : allowed) {
+      if(value.equals(string)) return string;
+    }
     throw SERNOTSUPP_X.getIO(Options.allowed(option, string, (Object[]) allowed));
   }
 
   /** CData elements. */
-  private ArrayList<QNm> cdata;
+  private QNmSet cdata;
 
   /**
    * Initializes the CData elements.
    * @return list
    * @throws QueryIOException query I/O exception
    */
-  private ArrayList<QNm> cdata() throws QueryIOException {
-    ArrayList<QNm> list = cdata;
+  private QNmSet cdata() throws QueryIOException {
+    QNmSet list = cdata;
     if(list == null) {
-      list = new ArrayList<>();
+      list = new QNmSet();
       final boolean html = this instanceof HTMLSerializer;
       final String cdse = sopts.get(CDATA_SECTION_ELEMENTS);
       for(final byte[] name : split(normalize(token(cdse)), ' ')) {
@@ -398,17 +401,17 @@ abstract class MarkupSerializer extends StandardSerializer {
   }
 
   /** Suppress indentation elements. */
-  private ArrayList<QNm> suppress;
+  private QNmSet suppress;
 
   /**
    * Initializes and returns the elements whose contents must not be indented.
    * @return list
    * @throws QueryIOException query I/O exception
    */
-  private ArrayList<QNm> suppress() throws QueryIOException {
-    ArrayList<QNm> list = suppress;
+  private QNmSet suppress() throws QueryIOException {
+    QNmSet list = suppress;
     if(list == null) {
-      list = new ArrayList<>();
+      list = new QNmSet();
       final String supp = sopts.get(SUPPRESS_INDENTATION);
       for(final byte[] name : split(normalize(token(supp)), ' ')) {
         if(name.length != 0) list.add(resolve(name));

@@ -8,7 +8,7 @@ import org.basex.gui.layout.*;
 /**
  * Editor preferences.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogEditorPrefs extends BaseXBack {
@@ -41,31 +41,32 @@ final class DialogEditorPrefs extends BaseXBack {
 
   /**
    * Default constructor.
-   * @param d dialog reference
+   * @param dialog dialog reference
    */
-  DialogEditorPrefs(final BaseXDialog d) {
-    border(8).setLayout(new TableLayout(1, 2, 40, 0));
-    final GUIOptions gopts = d.gui.gopts;
-    showmargin = new BaseXCheckBox(SHOW_LINE_MARGIN + COL, GUIOptions.SHOWMARGIN, gopts, d);
-    margin = new BaseXTextField(GUIOptions.MARGIN, gopts, d);
-    invisible = new BaseXCheckBox(SHOW_INVISIBLE, GUIOptions.SHOWINVISIBLE, gopts, d);
-    shownl = new BaseXCheckBox(SHOW_NEWLINES, GUIOptions.SHOWNL, gopts, d);
-    numbers = new BaseXCheckBox(SHOW_LINE_NUMBERS, GUIOptions.SHOWLINES, gopts, d);
-    markline = new BaseXCheckBox(MARK_EDITED_LINE, GUIOptions.MARKLINE, gopts, d);
-    spaces = new BaseXCheckBox(TABS_AS_SPACES, GUIOptions.TABSPACES, gopts, d);
-    indent = new BaseXTextField(GUIOptions.INDENT, gopts, d);
-    auto = new BaseXCheckBox(AUTO_ADD_CHARS, GUIOptions.AUTO, gopts, d);
-    saverun = new BaseXCheckBox(SAVE_BEFORE_EXECUTE, GUIOptions.SAVERUN, gopts, d);
-    parseproj = new BaseXCheckBox(PARSE_PROJECT_FILES, GUIOptions.PARSEPROJ, gopts, d);
-    files = new BaseXTextField(GUIOptions.FILES, gopts, d);
-    showHidden = new BaseXCheckBox(SHOW_HIDDEN_FILES, GUIOptions.HIDDENFILES, gopts, d);
+  DialogEditorPrefs(final BaseXDialog dialog) {
+    border(8).setLayout(new ColumnLayout(40));
+
+    final GUIOptions gopts = dialog.gui.gopts;
+    showmargin = new BaseXCheckBox(dialog, SHOW_LINE_MARGIN + COL, GUIOptions.SHOWMARGIN, gopts);
+    margin = new BaseXTextField(dialog, GUIOptions.MARGIN, gopts);
+    invisible = new BaseXCheckBox(dialog, SHOW_INVISIBLE, GUIOptions.SHOWINVISIBLE, gopts);
+    shownl = new BaseXCheckBox(dialog, SHOW_NEWLINES, GUIOptions.SHOWNL, gopts);
+    numbers = new BaseXCheckBox(dialog, SHOW_LINE_NUMBERS, GUIOptions.SHOWLINES, gopts);
+    markline = new BaseXCheckBox(dialog, MARK_EDITED_LINE, GUIOptions.MARKLINE, gopts);
+    spaces = new BaseXCheckBox(dialog, TABS_AS_SPACES, GUIOptions.TABSPACES, gopts);
+    indent = new BaseXTextField(dialog, GUIOptions.INDENT, gopts);
+    auto = new BaseXCheckBox(dialog, AUTO_ADD_CHARS, GUIOptions.AUTO, gopts);
+    saverun = new BaseXCheckBox(dialog, SAVE_BEFORE_EXECUTE, GUIOptions.SAVERUN, gopts);
+    parseproj = new BaseXCheckBox(dialog, PARSE_PROJECT_FILES, GUIOptions.PARSEPROJ, gopts);
+    files = new BaseXTextField(dialog, GUIOptions.FILES, gopts);
+    showHidden = new BaseXCheckBox(dialog, SHOW_HIDDEN_FILES, GUIOptions.SHOWHIDDEN, gopts);
     margin.setColumns(4);
     indent.setColumns(3);
     files.setColumns(18);
 
-    BaseXBack p = new BaseXBack().layout(new TableLayout(8, 1));
+    BaseXBack p = new BaseXBack().layout(new RowLayout());
     p.add(new BaseXLabel(VIEW + COL, true, true));
-    BaseXBack pp = new BaseXBack().layout(new TableLayout(1, 2, 8, 0));
+    BaseXBack pp = new BaseXBack().layout(new ColumnLayout(8));
     pp.add(showmargin);
     pp.add(margin);
     p.add(pp);
@@ -77,10 +78,10 @@ final class DialogEditorPrefs extends BaseXBack {
     p.add(files);
     add(p);
 
-    final BaseXBack pv = new BaseXBack().layout(new TableLayout(3, 1, 0, 8));
-    p = new BaseXBack().layout(new TableLayout(4, 1));
+    final BaseXBack pv = new BaseXBack().layout(new RowLayout(8));
+    p = new BaseXBack().layout(new RowLayout());
     p.add(new BaseXLabel(EDIT + COL, true, true));
-    pp = new BaseXBack().layout(new TableLayout(1, 2, 8, 0));
+    pp = new BaseXBack().layout(new ColumnLayout(8));
     pp.add(new BaseXLabel(INDENTATION_SIZE + COL));
     pp.add(indent);
     p.add(pp);
@@ -88,13 +89,13 @@ final class DialogEditorPrefs extends BaseXBack {
     p.add(auto);
     pv.add(p);
 
-    p = new BaseXBack().layout(new TableLayout(3, 1));
+    p = new BaseXBack().layout(new RowLayout());
     p.add(new BaseXLabel(EVALUATING + COL, true, true));
     p.add(saverun);
     p.add(parseproj);
     pv.add(p);
 
-    p = new BaseXBack().layout(new TableLayout(2, 1));
+    p = new BaseXBack().layout(new RowLayout());
     p.add(new BaseXLabel(PROJECT + COL, true, true));
     p.add(showHidden);
     pv.add(p);

@@ -11,7 +11,7 @@ import org.basex.io.in.DataInput;
 /**
  * This class provides data for merging temporary value indexes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DiskValuesMerger {
@@ -38,7 +38,7 @@ final class DiskValuesMerger {
    */
   DiskValuesMerger(final Data data, final IndexType type, final int i) throws IOException {
     pref = DiskValues.fileSuffix(type) + i;
-    dk = new DataInput(data.meta.dbfile(pref + 't'));
+    dk = new DataInput(data.meta.dbFile(pref + 't'));
     dv = new DiskValues(data, type, pref);
     this.data = data;
     next();

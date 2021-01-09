@@ -8,13 +8,10 @@ import org.basex.util.list.*;
 /**
  * Match full-text container, referencing several {@link FTStringMatch} instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FTMatch extends ElementList implements Iterable<FTStringMatch> {
-  /** String matches. */
-  FTStringMatch[] match;
-
+public final class FTMatch extends ObjectList<FTStringMatch, FTMatch> {
   /**
    * Constructor.
    */
@@ -23,32 +20,11 @@ public final class FTMatch extends ElementList implements Iterable<FTStringMatch
   }
 
   /**
-   * Constructor, specifying an initial internal array size.
-   * @param capacity initial array capacity
+   * Constructor with initial capacity.
+   * @param capacity array capacity
    */
-  public FTMatch(final int capacity) {
-    match = new FTStringMatch[capacity];
-  }
-
-  /**
-   * Adds all matches of a full-text match.
-   * @param ftm match to be added
-   * @return self reference
-   */
-  public FTMatch add(final FTMatch ftm) {
-    for(final FTStringMatch sm : ftm) add(sm);
-    return this;
-  }
-
-  /**
-   * Adds a single string match.
-   * @param ftm match to be added
-   * @return self reference
-   */
-  public FTMatch add(final FTStringMatch ftm) {
-    if(size == match.length) match = Array.copy(match, new FTStringMatch[newSize()]);
-    match[size++] = ftm;
-    return this;
+  public FTMatch(final long capacity) {
+    super(new FTStringMatch[Array.checkCapacity(capacity)]);
   }
 
   /**
@@ -58,7 +34,9 @@ public final class FTMatch extends ElementList implements Iterable<FTStringMatch
    */
   public boolean notin(final FTMatch ftm) {
     for(final FTStringMatch s : this) {
-      for(final FTStringMatch sm : ftm) if(!s.in(sm)) return true;
+      for(final FTStringMatch sm : ftm) {
+        if(!s.in(sm)) return true;
+      }
     }
     return false;
   }
@@ -68,7 +46,9 @@ public final class FTMatch extends ElementList implements Iterable<FTStringMatch
    * @return result of check
    */
   boolean match() {
-    for(final FTStringMatch s : this) if(s.exclude) return false;
+    for(final FTStringMatch s : this) {
+      if(s.exclude) return false;
+    }
     return true;
   }
 
@@ -76,20 +56,11 @@ public final class FTMatch extends ElementList implements Iterable<FTStringMatch
    * Sorts the matches by their start and end positions.
    */
   public void sort() {
-    Arrays.sort(match, 0, size, null);
+    Arrays.sort(list, 0, size, null);
   }
 
   @Override
-  public Iterator<FTStringMatch> iterator() {
-    return new ArrayIterator<>(match, size);
-  }
-
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
-    for(final FTStringMatch s : this) {
-      sb.append(sb.length() == 0 ? "" : ", ").append(s);
-    }
-    return Util.className(this) + ' ' + sb;
+  protected FTStringMatch[] newArray(final int s) {
+    return new FTStringMatch[s];
   }
 }

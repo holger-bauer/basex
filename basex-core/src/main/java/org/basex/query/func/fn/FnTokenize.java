@@ -1,57 +1,71 @@
 package org.basex.query.func.fn;
 
-import static org.basex.query.QueryError.*;
+import static org.basex.query.func.Function.*;
 import static org.basex.util.Token.*;
 
 import java.util.regex.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
+import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnTokenize extends RegEx {
-  @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
+  /** Placeholder for default search. */
+  private static final byte[] DEFAULT = Token.token("\\s+");
+  /** Single space. */
+  private static final byte[] SPACE = Token.token(" ");
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final byte[] val = toEmptyToken(exprs[0], qc);
-    if(exprs.length < 2) return StrSeq.get(split(normalize(val), ' '));
+    final byte[] value = toZeroToken(exprs[0], qc);
+    if(exprs.length < 2) return StrSeq.get(split(normalize(value), ' '));
 
-    final Pattern p = pattern(exprs[1], exprs.length == 3 ? exprs[2] : null, qc, true);
-    if(p.matcher("").matches()) throw REGROUP.get(info);
+    final Pattern pattern = pattern(exprs[1], exprs.length == 3 ? exprs[2] : null, qc, true);
 
     final TokenList tl = new TokenList();
-    final String str = string(val);
-    if(!str.isEmpty()) {
-      final Matcher m = p.matcher(str);
-      int s = 0;
-      while(m.find()) {
-        tl.add(str.substring(s, m.start()));
-        s = m.end();
+    final String string = string(value);
+    if(!string.isEmpty()) {
+      final Matcher matcher = pattern.matcher(string);
+      int start = 0;
+      while(matcher.find()) {
+        tl.add(string.substring(start, matcher.start()));
+        start = matcher.end();
       }
-      tl.add(str.substring(s, str.length()));
+      tl.add(string.substring(start));
     }
     return StrSeq.get(tl);
   }
 
+  @Override
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    final Expr expr = exprs[0], ptrn = exprs.length == 2 ? exprs[1] : null;
+
+    // tokenize(normalize-space(A), ' ')  ->  tokenize(A)
+    if(NORMALIZE_SPACE.is(expr) && ptrn instanceof Str && eq(((Str) ptrn).string(), SPACE)) {
+      final Expr arg = expr.args().length == 1 ? expr.arg(0) : new ContextValue(info).optimize(cc);
+      return cc.function(TOKENIZE, info, arg);
+    }
+
+    return this;
+  }
+
   /**
-   * Returns the input argument if no others are specified, and if it returns at most one item.
-   * @return first argument
+   * Indicates if a default whitespace tokenization is to be performed.
+   * @return result of check
    */
-  public Expr input() {
-    // X must yield single result (otherwise, it may result in an error)
-    return exprs.length == 1 && exprs[0].seqType().zeroOrOne() ? exprs[0] : null;
+  public boolean whitespaces() {
+    final int el = exprs.length;
+    return el == 1 || el == 2 && exprs[1] instanceof Str &&
+        Token.eq(((Str) exprs[1]).string(), DEFAULT);
   }
 }

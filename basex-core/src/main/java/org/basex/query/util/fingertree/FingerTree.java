@@ -2,10 +2,13 @@ package org.basex.query.util.fingertree;
 
 import java.util.*;
 
+import org.basex.query.*;
+import org.basex.util.*;
+
 /**
  * A node of a FingerTree.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -69,9 +72,9 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
         Node<?, E> nd = null;
         for(int i = 0; i < deep.left.length; i++) {
           nd = deep.left[i];
-          final long s = nd.size();
-          if(pos < s) break;
-          pos -= s;
+          final long sz = nd.size();
+          if(pos < sz) break;
+          pos -= sz;
         }
         digit = nd;
         break;
@@ -86,9 +89,9 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
         Node<?, E> nd = null;
         for(int i = 0; i < deep.right.length; i++) {
           nd = deep.right[i];
-          final long s = nd.size();
-          if(pos < s) break;
-          pos -= s;
+          final long sz = nd.size();
+          if(pos < sz) break;
+          pos -= sz;
         }
         digit = nd;
         break;
@@ -119,7 +122,6 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
    * @param pos position
    * @param val element
    * @return resulting tree
-   * @throws IndexOutOfBoundsException if the position is out of bounds
    */
   public abstract FingerTree<N, E> set(long pos, E val);
 
@@ -172,33 +174,36 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
   /**
    * Concatenates this finger tree with the given one.
    * @param mid nodes between the two trees
-   * @param sz sum of the sizes of all nodes in the middle array
+   * @param size sum of the sizes of all nodes in the middle array
    * @param other the other tree
    * @return concatenation of both trees
    */
-  public abstract FingerTree<N, E> concat(Node<N, E>[] mid, long sz, FingerTree<N, E> other);
+  public abstract FingerTree<N, E> concat(Node<N, E>[] mid, long size, FingerTree<N, E> other);
 
   /**
    * Creates a reversed version of this tree.
+   * @param qc query context
    * @return reversed tree
    */
-  public abstract FingerTree<N, E> reverse();
+  public abstract FingerTree<N, E> reverse(QueryContext qc);
 
   /**
    * Inserts the given value at the given position into this tree.
    * @param pos position to insert at
    * @param val value to insert
+   * @param qc query context
    * @return resulting tree
    */
-  public abstract FingerTree<N, E> insert(long pos, E val);
+  public abstract FingerTree<N, E> insert(long pos, E val, QueryContext qc);
 
   /**
    * Removes an element from this tree.
    * @param pos position of the element to remove
+   * @param qc query context
    * @return resulting (potentially partial) tree
    * @throws AssertionError if this tree is empty
    */
-  public abstract TreeSlice<N, E> remove(long pos);
+  public abstract TreeSlice<N, E> remove(long pos, QueryContext qc);
 
   /**
    * Extracts a slice from this tree containing the {@code len} elements starting with that at
@@ -241,16 +246,16 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
       final int mid = n / 2;
       @SuppressWarnings("unchecked")
       final Node<N, E>[] left = new Node[mid], right = new Node[n - mid];
-      System.arraycopy(nodes, 0, left, 0, mid);
-      System.arraycopy(nodes, mid, right, 0, n - mid);
+      Array.copy(nodes, mid, left);
+      Array.copyToStart(nodes, mid, n - mid, right);
       return DeepTree.get(left, right, size);
     }
 
     final int k = Math.min((n - MAX_ARITY) / 2, MAX_ARITY);
     @SuppressWarnings("unchecked")
     final Node<N, E>[] left = new Node[k], right = new Node[k];
-    System.arraycopy(nodes, 0, left, 0, k);
-    System.arraycopy(nodes, n - k, right, 0, k);
+    Array.copy(nodes, k, left);
+    Array.copyToStart(nodes, n - k, k, right);
     final long leftSize = DeepTree.size(left), rightSize = DeepTree.size(right);
 
     @SuppressWarnings("unchecked")
@@ -260,7 +265,7 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
       final int rem = ns - i, sz = (remaining - j + rem - 1) / rem;
       @SuppressWarnings("unchecked")
       final Node<N, E>[] ch = new Node[sz];
-      System.arraycopy(nodes, j, ch, 0, sz);
+      Array.copyToStart(nodes, j, sz, ch);
       outNodes[i] = new InnerNode<>(ch);
       j += sz;
     }
@@ -272,11 +277,11 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
   /**
    * Adds all nodes in the given array to the given side of this tree.
    * @param nodes the nodes
-   * @param sz sum of the sizes of all nodes in the array
+   * @param size sum of the sizes of all nodes in the array
    * @param left insertion direction, {@code true} adds to the left, {@code false} to the right
    * @return resulting tree
    */
-  abstract FingerTree<N, E> addAll(Node<N, E>[] nodes, long sz, boolean left);
+  abstract FingerTree<N, E> addAll(Node<N, E>[] nodes, long size, boolean left);
 
   @Override
   public final String toString() {

@@ -2,12 +2,14 @@ package org.basex.query.expr.constr;
 
 import static org.basex.query.QueryError.*;
 
+import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
+import org.basex.query.util.hash.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
-import org.basex.query.value.array.Array;
+import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -16,7 +18,7 @@ import org.basex.util.*;
 /**
  * Element constructor.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Constr {
@@ -28,10 +30,10 @@ public final class Constr {
   final Atts nspaces = new Atts();
   /** Error: attribute position. */
   public QNm errAtt;
-  /** Error: namespace position. */
-  public QNm errNS;
   /** Error: duplicate attribute. */
   public QNm duplAtt;
+  /** Error: namespace position. */
+  QNm errNS;
   /** Error: duplicate namespace. */
   byte[] duplNS;
 
@@ -62,49 +64,53 @@ public final class Constr {
    * @throws QueryException query exception
    */
   public Constr add(final QueryContext qc, final Expr... exprs) throws QueryException {
-    final int s = sc.ns.size();
+    final int size = sc.ns.size();
     try {
+      final QNmSet qnames = new QNmSet();
       for(final Expr expr : exprs) {
         more = false;
-        final Iter iter = qc.iter(expr);
-        for(Item it; (it = iter.next()) != null && add(qc, it););
+        final Iter iter = expr.iter(qc);
+        for(Item item; (item = qc.next(iter)) != null && add(qc, item, qnames););
       }
       if(!text.isEmpty()) children.add(new FTxt(text.toArray()));
       return this;
     } finally {
-      sc.ns.size(s);
+      sc.ns.size(size);
     }
   }
 
   /**
    * Recursively adds nodes to the element arrays.
    * @param qc query context
-   * @param it current item
+   * @param item current item
+   * @param qnames assigned attributes (required for duplicate check)
    * @return true if item was added
    * @throws QueryException query exception
    */
-  private boolean add(final QueryContext qc, final Item it) throws QueryException {
-    if(it instanceof Array) {
-      for(final Value val : ((Array) it).members()) {
-        for(final Item i : val) {
-          if(!add(qc, i)) return false;
+  private boolean add(final QueryContext qc, final Item item, final QNmSet qnames)
+      throws QueryException {
+
+    if(item instanceof XQArray) {
+      for(final Value value : ((XQArray) item).members()) {
+        for(final Item it : value) {
+          if(!add(qc, it, qnames)) return false;
         }
       }
       return true;
     }
 
-    if(it instanceof FItem) throw CONSFUNC_X.get(info, it);
+    if(item instanceof FItem) throw CONSFUNC_X.get(info, item);
 
-    if(it instanceof ANode) {
+    if(item instanceof ANode) {
       // type: nodes
-      ANode node = (ANode) it;
+      final ANode node = (ANode) item;
 
-      final Type ip = it.type;
-      if(ip == NodeType.TXT) {
+      final Type type = item.type;
+      if(type == NodeType.TEXT) {
         // type: text node
         text.add(node.string());
 
-      } else if(ip == NodeType.ATT) {
+      } else if(type == NodeType.ATTRIBUTE) {
         // type: attribute node
 
         // check if attribute is specified after texts or child nodes
@@ -114,18 +120,16 @@ public final class Constr {
           return false;
         }
         // check for duplicate attribute names
-        for(final ANode att : atts) {
-          if(name.eq(att.qname())) {
-            duplAtt = name;
-            return false;
-          }
+        if(!qnames.add(name)) {
+          duplAtt = name;
+          return false;
         }
         // add attribute
         atts.add(new FAttr(name, node.string()));
         // add new namespace
         if(name.hasURI()) sc.ns.add(name.prefix(), name.uri());
 
-      } else if(ip == NodeType.NSP) {
+      } else if(type == NodeType.NAMESPACE_NODE) {
         // type: namespace node
 
         // no attribute allowed after texts or child nodes
@@ -144,25 +148,24 @@ public final class Constr {
           return false;
         }
 
-      } else if(ip == NodeType.DOC) {
+      } else if(type == NodeType.DOCUMENT_NODE) {
         // type: document node
 
-        final BasicNodeIter iter = node.children();
-        for(ANode ch; (ch = iter.next()) != null && add(qc, ch););
+        final BasicNodeIter iter = node.childIter();
+        for(Item it; (it = qc.next(iter)) != null && add(qc, it, qnames););
 
       } else {
         // type: element/comment/processing instruction node
 
         // add text node
         if(!text.isEmpty()) children.add(new FTxt(text.next()));
-        node = node.deepCopy(qc.context.options);
-        children.add(node);
+        children.add(node.materialize(qc, qc.context.options.get(MainOptions.COPYNODE)));
       }
       more = false;
     } else {
       // type: atomic value
       if(more) text.add(' ');
-      text.add(it.string(info));
+      text.add(item.string(info));
       more = true;
 
     }

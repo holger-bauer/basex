@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'rename' command and renames resources or directories in a collection.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Rename extends ACreate {
@@ -89,8 +89,8 @@ public final class Rename extends ACreate {
     if(Prop.CASE ? path.equals(src) : path.equalsIgnoreCase(src)) return trg;
 
     // directory references: add trailing slashes to non-empty paths
-    final String source = src.isEmpty() || src.endsWith("/") ? src : src + '/';
-    final String target = trg.isEmpty() || trg.endsWith("/") ? trg : trg + '/';
+    final String source = src.isEmpty() || Strings.endsWith(src, '/') ? src : src + '/';
+    final String target = trg.isEmpty() || Strings.endsWith(trg, '/') ? trg : trg + '/';
     // merge target with old path
     return target + path.substring(source.length());
   }

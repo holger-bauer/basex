@@ -5,7 +5,7 @@ import org.basex.query.util.ft.*;
 /**
  * This interface provides methods for returning index results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class FTIndexIterator implements IndexIterator {
@@ -25,7 +25,7 @@ public abstract class FTIndexIterator implements IndexIterator {
 
   /**
    * Returns the next match.
-   * @return next match
+   * @return next match (can be {@code null})
    */
   public abstract FTMatches matches();
 
@@ -90,7 +90,7 @@ public abstract class FTIndexIterator implements IndexIterator {
    * Merges two index array iterators.
    * @param i1 first index array iterator to merge
    * @param i2 second index array iterator to merge
-   * @param dis word distance. Ignored if {@code 0}
+   * @param dis word distance (ignored if {@code 0})
    * @return IndexArrayIterator
    */
   public static FTIndexIterator intersect(final FTIndexIterator i1, final FTIndexIterator i2,

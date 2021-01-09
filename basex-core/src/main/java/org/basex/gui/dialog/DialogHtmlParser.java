@@ -15,7 +15,7 @@ import org.basex.util.options.*;
 /**
  * CSV parser panel.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogHtmlParser extends DialogParser {
@@ -28,22 +28,21 @@ final class DialogHtmlParser extends DialogParser {
 
   /**
    * Constructor.
-   * @param d dialog reference
+   * @param dialog dialog reference
    * @param opts main options
    */
-  DialogHtmlParser(final BaseXDialog d, final MainOptions opts) {
-    super(d);
+  DialogHtmlParser(final BaseXDialog dialog, final MainOptions opts) {
     hopts = new HtmlOptions(opts.get(MainOptions.HTMLPARSER));
 
     final boolean avl = HtmlParser.available();
-    final BaseXBack pp  = new BaseXBack(new TableLayout(3, 1, 0, 8));
+    final BaseXBack pp  = new BaseXBack(new RowLayout(8));
     pp.add(new BaseXLabel(avl ? H_HTML_PARSER : H_NO_HTML_PARSER));
 
-    options = new BaseXTextField(hopts.toString(), d);
+    options = new BaseXTextField(dialog, hopts.toString());
     options.setToolTipText(tooltip(hopts));
 
     if(avl) {
-      final BaseXBack p = new BaseXBack(new TableLayout(1, 2, 8, 0));
+      final BaseXBack p = new BaseXBack(new ColumnLayout(8));
       p.add(new BaseXLabel(PARAMETERS + COL, true, true));
       p.add(options);
       pp.add(p);

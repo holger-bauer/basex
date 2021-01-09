@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * This class organizes currently opened databases.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Datas {
@@ -17,9 +17,9 @@ public final class Datas {
   private final IdentityHashMap<Data, Integer> list = new IdentityHashMap<>();
 
   /**
-   * Pins and returns a database with the specified name, or returns {@code null}.
+   * Pins and returns a database with the specified name.
    * @param name name of the database
-   * @return data reference
+   * @return data reference, or {@code null} if the database is not registered
    */
   public synchronized Data pin(final String name) {
     final Entry<Data, Integer> entry = get(name);
@@ -35,8 +35,7 @@ public final class Datas {
    * @param data data reference
    */
   public synchronized void pin(final Data data) {
-    final Integer pins = list.get(data);
-    list.put(data, pins == null ? 1 : pins + 1);
+    list.compute(data, (key, pins) -> pins == null ? 1 : pins + 1);
   }
 
   /**
@@ -44,8 +43,8 @@ public final class Datas {
    * @param data data reference
    */
   public synchronized void unpin(final Data data) {
+    // can be null (for main-memory data instances)
     final Integer pins = list.get(data);
-    // main-memory instances are not pinned
     if(pins == null) return;
 
     final int p = pins;
@@ -88,7 +87,7 @@ public final class Datas {
   /**
    * Returns an entry for the database with the specified name.
    * @param name name of the database
-   * @return entry, or {@code null}
+   * @return entry, or {@code null} if the database is not registered
    */
   private Entry<Data, Integer> get(final String name) {
     for(final Entry<Data, Integer> entry : list.entrySet()) {

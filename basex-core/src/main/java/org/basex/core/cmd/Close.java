@@ -10,7 +10,7 @@ import org.basex.data.*;
 /**
  * Evaluates the 'close' command and closes the current database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Close extends Command {
@@ -43,5 +43,14 @@ public final class Close extends Command {
    */
   public static void close(final Data data, final Context ctx) {
     synchronized(ctx.datas) { ctx.datas.unpin(data); }
+  }
+
+  /**
+   * Closes a currently opened database.
+   * @param ctx database context
+   * @return {@code true} if no database was opened, or if database was closed
+   */
+  public static boolean close(final Context ctx) {
+    return new Close().run(ctx);
   }
 }

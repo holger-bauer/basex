@@ -11,7 +11,7 @@ import org.basex.util.options.*;
 /**
  * Dialog window for changing the used colors.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogColors extends BaseXDialog {
@@ -29,10 +29,10 @@ public final class DialogColors extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  private DialogColors(final GUI main) {
-    super(main, COLOR_SCHEMA, false);
+  private DialogColors(final GUI gui) {
+    super(gui, COLOR_SCHEMA, false);
 
     final BaseXBack p = new BaseXBack(new TableLayout(3, 2, 16, 8));
     p.add(new BaseXLabel(RED));
@@ -54,10 +54,10 @@ public final class DialogColors extends BaseXDialog {
 
   /**
    * Activates the dialog window.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public static void show(final GUI main) {
-    if(dialog == null) dialog = new DialogColors(main);
+  public static void show(final GUI gui) {
+    if(dialog == null) dialog = new DialogColors(gui);
     dialog.setVisible(true);
   }
 
@@ -67,7 +67,7 @@ public final class DialogColors extends BaseXDialog {
    * @return slider reference
    */
   private BaseXSlider newSlider(final NumberOption option) {
-    final BaseXSlider slider = new BaseXSlider(0, MAXCOLOR, option, gui.gopts, this);
+    final BaseXSlider slider = new BaseXSlider(this, 0, MAXCOLOR, option, gui.gopts);
     BaseXLayout.setWidth(slider, 150);
     return slider;
   }

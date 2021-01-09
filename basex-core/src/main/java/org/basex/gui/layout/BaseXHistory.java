@@ -1,43 +1,69 @@
 package org.basex.gui.layout;
 
-import org.basex.gui.*;
 import org.basex.util.list.*;
 import org.basex.util.options.*;
 
 /**
  * This class remembers previous text inputs of a GUI component.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXHistory {
   /** Maximum number of history entries. */
-  private static final int MAX = 12;
-  /** GUI reference. */
-  private final GUI gui;
+  public static final int MAX = 18;
+  /** Maximum number of compact history. */
+  public static final int MAXCOMPACT = 7;
+
+  /** Options. */
+  private final Options options;
   /** History option. */
   private final StringsOption history;
+  /** History index. */
+  private int index;
 
   /**
    * Constructor.
-   * @param gui main window
    * @param history history values
+   * @param options options
    */
-  public BaseXHistory(final GUI gui, final StringsOption history) {
+  public BaseXHistory(final StringsOption history, final Options options) {
+    this.options = options;
     this.history = history;
-    this.gui = gui;
   }
 
   /**
-   * Stores the current history.
+   * Adds the specified value on top of history and stores the history in the options.
+   * Empty values will be ignored.
    * @param input new input
    */
-  public void store(final String input) {
-    if(input == null) return;
-    final StringList sl = new StringList(MAX).add(input);
-    for(final String s : gui.gopts.get(history)) {
-      if(sl.size() < MAX && !input.equals(s)) sl.add(s);
+  public void add(final String input) {
+    if(input.isEmpty()) return;
+    final StringList list = new StringList(MAX).add(input);
+    for(final String value : values()) {
+      if(list.size() < MAX && !input.equals(value)) list.add(value);
     }
-    gui.gopts.set(history, sl.finish());
+    options.set(history, list.finish());
+    index = 0;
+  }
+
+  /**
+   * Returns a history value.
+   * @param next next/previous entry
+   * @return entry, or {@code null} if history is empty
+   */
+  public String get(final boolean next) {
+    final String[] list = values();
+    if(list.length == 0) return null;
+    index = next ? Math.min(list.length - 1, index + 1) : Math.max(0, index - 1);
+    return list[index];
+  }
+
+  /**
+   * Returns all values.
+   * @return history values
+   */
+  public String[] values() {
+    return options.get(history);
   }
 }

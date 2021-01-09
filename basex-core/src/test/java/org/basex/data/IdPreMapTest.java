@@ -1,17 +1,17 @@
 package org.basex.data;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 
 import org.basex.index.*;
 import org.basex.util.list.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * ID -> PRE mapping test.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class IdPreMapTest {
@@ -21,9 +21,9 @@ public final class IdPreMapTest {
   private static final int BASEID = 2000;
   /** Random number generator. */
   private static final Random RANDOM = new Random();
-  /** ID -> PRE map to compare to. */
+  /** ID-PRE map to compare to. */
   private DummyIdPreMap basemap;
-  /** ID -> PRE map to test. */
+  /** ID-PRE map to test. */
   private IdPreMap testedmap;
   /** Sequence of inserted PRE values. */
   private IntList insertedpres;
@@ -31,8 +31,7 @@ public final class IdPreMapTest {
   private IntList deletedpres;
 
   /** Set-up method. */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     final int ml = BASEID + 1;
     final int[] map = new int[ml];
     for(int m = 0; m < ml; m++) map[m] = m;
@@ -43,8 +42,7 @@ public final class IdPreMapTest {
   }
 
   /** Insert correctness: insert values at at the end. */
-  @Test
-  public void appendCorrectness() {
+  @Test public void appendCorrectness() {
     final int n = BASEID + ITERATIONS;
     for(int id = BASEID + 1; id <= n; ++id) {
       insert(id, id);
@@ -53,8 +51,7 @@ public final class IdPreMapTest {
   }
 
   /** Insert correctness: insert values at at the end. */
-  @Test
-  public void deleteFromEndCorrectness() {
+  @Test public void deleteFromEndCorrectness() {
     for(int id = BASEID; id >= 0; --id) {
       delete(id);
       check();
@@ -62,8 +59,7 @@ public final class IdPreMapTest {
   }
 
   /** Insert correctness: insert values at random positions. */
-  @Test
-  public void insertCorrectness() {
+  @Test public void insertCorrectness() {
     final int n = BASEID + ITERATIONS;
     for(int id = BASEID + 1; id <= n; ++id) {
       insert(RANDOM.nextInt(id), id);
@@ -72,8 +68,7 @@ public final class IdPreMapTest {
   }
 
   /** Delete correctness: delete values at random positions. */
-  @Test
-  public void deleteCorrectness() {
+  @Test public void deleteCorrectness() {
     for(int id = BASEID + 1; id > 0; --id) {
       delete(RANDOM.nextInt(id));
       check();
@@ -81,8 +76,7 @@ public final class IdPreMapTest {
   }
 
   /** Delete correctness: delete values at random positions. */
-  @Test
-  public void deleteCorrectness2() {
+  @Test public void deleteCorrectness2() {
     final int n = BASEID + ITERATIONS;
     for(int id = BASEID + 1; id <= n; ++id) insert(RANDOM.nextInt(id), id);
 
@@ -93,8 +87,7 @@ public final class IdPreMapTest {
   }
 
   /** Correctness: randomly insert/delete value at random positions. */
-  @Test
-  public void insertDeleteCorrectness() {
+  @Test public void insertDeleteCorrectness() {
     for(int i = 0, cnt = BASEID + 1, id = BASEID + 1; i < ITERATIONS; ++i) {
       // can't delete if all records have been deleted:
       if(RANDOM.nextBoolean() || cnt == 0) insert(RANDOM.nextInt(++cnt), id++);
@@ -104,38 +97,32 @@ public final class IdPreMapTest {
   }
 
   /** Insert performance: insert at random positions. */
-  @Test
-  public void insertPerformance() {
+  @Test public void insertPerformance() {
     insertPerformance(testedmap);
   }
 
   /** Delete performance: delete at random positions. */
-  @Test
-  public void deletePerformance() {
+  @Test public void deletePerformance() {
     deletePerformance(testedmap, basemap);
   }
 
   /** Search performance: insert at random positions and the search. */
-  @Test
-  public void searchPerformance() {
+  @Test public void searchPerformance() {
     searchPerformance(testedmap);
   }
 
   /** Dummy insert performance: insert at random positions. */
-  @Test
-  public void insertPerformanceDummy() {
+  @Test public void insertPerformanceDummy() {
     insertPerformance(basemap);
   }
 
   /** Dummy delete performance: delete at random positions. */
-  @Test
-  public void deletePerformanceDummy() {
+  @Test public void deletePerformanceDummy() {
     deletePerformance(basemap, basemap.copy());
   }
 
   /** Dummy search performance: insert at random positions and the search. */
-  @Test
-  public void searchPerformanceDummy() {
+  @Test public void searchPerformanceDummy() {
     searchPerformance(basemap);
   }
 
@@ -229,7 +216,7 @@ public final class IdPreMapTest {
 
     /**
      * Constructor.
-     * @param i initial list of ids.
+     * @param i initial list of ids
      */
     DummyIdPreMap(final int[] i) {
       super(i.length - 1);

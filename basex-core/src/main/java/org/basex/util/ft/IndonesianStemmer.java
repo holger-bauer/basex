@@ -10,7 +10,7 @@ import org.basex.util.*;
  * Information Retrieval in Bahasa Indonesia" by Fadillah Z Tala.
  * http://www.illc.uva.nl/Publications/ResearchReports/MoL-2003-02.text.pdf
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Andria Arisal
  */
 final class IndonesianStemmer extends InternalStemmer {
@@ -74,7 +74,7 @@ final class IndonesianStemmer extends InternalStemmer {
 
   @Override
   protected byte[] stem(final byte[] word) {
-    final TokenBuilder tb = new TokenBuilder(word);
+    final TokenBuilder tb = new TokenBuilder().add(word);
     numSyllables = countSyllables(tb);
     int s = tb.size();
 
@@ -319,12 +319,6 @@ final class IndonesianStemmer extends InternalStemmer {
         flags |= REMOVED_PE;
         numSyllables--;
         tb.delete(0, 3);
-      } else if(c1 == 'b' && c2 == 'e' && c3 == 'l' && c4 == 'a' && tl > 7) {
-        if(tb.get(4) == 'j' && tb.get(5) == 'a' && tb.get(6) == 'r') {
-          flags |= REMOVED_PE;
-          numSyllables--;
-          tb.delete(0, 3);
-        }
       } else if(c1 == 'p' && c2 == 'e') {
         flags |= REMOVED_PE;
         numSyllables--;

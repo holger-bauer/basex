@@ -8,12 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFalse extends StandardFunc {
+  // will always be pre-evaluated
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) {
+  public Bln item(final QueryContext qc, final InputInfo ii) {
     return Bln.FALSE;
   }
 }

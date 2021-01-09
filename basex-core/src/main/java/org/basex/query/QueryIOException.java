@@ -8,7 +8,7 @@ import org.basex.util.*;
  * This class indicates exceptions during the I/O operations of a query.
  * The exception contains a {@link QueryException}, which can later be unwrapped.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryIOException extends IOException {
@@ -31,11 +31,11 @@ public final class QueryIOException extends IOException {
 
   /**
    * Returns the query exception.
-   * @param info input info
+   * @param ii input info
    * @return query exception
    */
-  public QueryException getCause(final InputInfo info) {
-    if(info != null) cause.info(info);
+  public QueryException getCause(final InputInfo ii) {
+    if(ii != null) cause.info(ii);
     return cause;
   }
 

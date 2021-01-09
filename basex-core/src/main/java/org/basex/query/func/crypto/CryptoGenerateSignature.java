@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class CryptoGenerateSignature extends StandardFunc {
@@ -21,7 +21,7 @@ public final class CryptoGenerateSignature extends StandardFunc {
     Item arg6 = null;
     boolean arg6Str = false;
     if(exprs.length > 6) {
-      arg6 = toNodeOrAtomItem(exprs[6], qc);
+      arg6 = toNodeOrAtomItem(6, qc);
       if(!(arg6 instanceof ANode)) {
         if(!arg6.type.isStringOrUntyped()) throw STRNOD_X_X.get(info, arg6.type, arg6);
         arg6Str = true;
@@ -35,6 +35,6 @@ public final class CryptoGenerateSignature extends StandardFunc {
         arg6Str ? arg6.string(info) : Token.token(""),
         exprs.length > 7 ? toNode(exprs[7], qc) :
           exprs.length == 7 && !arg6Str ? toNode(exprs[6], qc) : null,
-        qc, info);
+        qc);
   }
 }

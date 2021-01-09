@@ -11,6 +11,7 @@ import org.basex.core.cmd.*;
 import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.*;
+import org.basex.query.util.list.*;
 import org.basex.query.util.pkg.*;
 import org.basex.query.value.*;
 import org.basex.query.value.node.*;
@@ -23,7 +24,7 @@ import org.basex.util.list.*;
  * This class provides access to all kinds of resources (databases, documents, database connections,
  * sessions) used by an XQuery expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QueryResources {
@@ -49,7 +50,9 @@ public final class QueryResources {
   /** Opened databases (both temporary and persistent ones). */
   private final ArrayList<Data> datas = new ArrayList<>(1);
   /** External resources. */
-  private Map<Class<? extends QueryResource>, QueryResource> external;
+  private final Map<Class<? extends QueryResource>, QueryResource> external = new HashMap<>();
+  /** Input references. */
+  private final ArrayList<InputStream> inputs = new ArrayList<>(1);
 
   /**
    * Constructor.
@@ -66,8 +69,7 @@ public final class QueryResources {
    */
   Value compile(final DBNodes nodes) {
     // add globally opened database
-    final Data data = nodes.data();
-    addData(data);
+    final Data data = addData(nodes.data());
     synchronized(qc.context.datas) { qc.context.datas.pin(data); }
     globalData = true;
 
@@ -91,10 +93,19 @@ public final class QueryResources {
     datas.clear();
     // close dynamically loaded JAR files
     if(modules != null) modules.close();
+    modules = null;
     // close external resources
-    if(external != null) {
-      for(final QueryResource c : external.values()) c.close();
+    for(final QueryResource c : external.values()) c.close();
+    external.clear();
+    // close external resources
+    for(final InputStream is : inputs) {
+      try {
+        is.close();
+      } catch(final IOException ex) {
+        Util.debug(ex);
+      }
     }
+    inputs.clear();
   }
 
   /**
@@ -113,11 +124,10 @@ public final class QueryResources {
    */
   @SuppressWarnings("unchecked")
   public synchronized <R extends QueryResource> R index(final Class<? extends R> resource) {
-    if(external == null) external = new HashMap<>();
     QueryResource value = external.get(resource);
     if(value == null) {
       try {
-        value = resource.newInstance();
+        value = resource.getDeclaredConstructor().newInstance();
         external.put(resource, value);
       } catch(final Throwable ex) {
         throw Util.notExpected(ex);
@@ -127,25 +137,48 @@ public final class QueryResources {
   }
 
   /**
+   * Adds an input stream reference.
+   * @param input input stream
+   */
+  public synchronized void add(final InputStream input) {
+    inputs.add(input);
+  }
+
+  /**
+   * Closes and removes an input stream reference.
+   * @param input input stream
+   * @throws IOException I/O exception
+   */
+  public synchronized void remove(final InputStream input) throws IOException {
+    inputs.remove(input);
+    input.close();
+  }
+
+  /**
    * Opens a new database or returns a reference to an already opened database.
    * @param name name of database
-   * @param info input info
+   * @param ii input info
    * @return database instance
    * @throws QueryException query exception
    */
-  public synchronized Data database(final String name, final InputInfo info) throws QueryException {
+  public synchronized Data database(final String name, final InputInfo ii) throws QueryException {
+    final Context ctx = qc.context;
+    final boolean mainmem = ctx.options.get(MainOptions.MAINMEM);
+
     // check if a database with the same name has already been opened
     for(final Data data : datas) {
-      if(data.inMemory()) continue;
+      // default mode: skip main-memory database instances (which may result from fn:doc calls)
+      if(data.inMemory() && !mainmem) continue;
       final String n = data.meta.name;
       if(Prop.CASE ? n.equals(name) : n.equalsIgnoreCase(name)) return data;
     }
+
+    // open and register database
+    if(!ctx.perm(Perm.READ, name)) throw BASEX_PERMISSION_X_X.get(ii, Perm.READ, name);
     try {
-      // open and add new data reference
-      final Context ctx = qc.context;
       return addData(Open.open(name, ctx, ctx.options));
     } catch(final IOException ex) {
-      throw BXDB_OPEN_X.get(info, ex);
+      throw DB_OPEN2_X.get(ii, ex);
     }
   }
 
@@ -153,61 +186,72 @@ public final class QueryResources {
    * Evaluates {@code fn:doc()}: opens an existing database document, or creates a new
    * database and node.
    * @param qi query input
-   * @param info input info
+   * @param ii input info
    * @return document
    * @throws QueryException query exception
    */
-  public synchronized DBNode doc(final QueryInput qi, final InputInfo info) throws QueryException {
-    // favor default database
-    Data data = globalData();
-    if(data != null && qc.context.options.get(MainOptions.DEFAULTDB)) {
-      final int pre = data.resources.doc(qi.original);
-      if(pre != -1) return new DBNode(data, pre, Data.DOC);
+  public synchronized DBNode doc(final QueryInput qi, final InputInfo ii) throws QueryException {
+    final MainOptions options = qc.context.options;
+    if(options.get(MainOptions.WITHDB)) {
+      // favor default database
+      if(options.get(MainOptions.DEFAULTDB)) {
+        final Data data = globalData();
+        if(data != null) {
+          final int pre = data.resources.doc(qi.original);
+          if(pre != -1) return new DBNode(data, pre, Data.DOC);
+        }
+      }
     }
 
     // access open database or create new one
-    data = data(qi, info, true);
+    final Data data = data(true, qi, ii);
     // ensure that database contains a single document
     final IntList docs = data.resources.docs(qi.dbPath);
     if(docs.size() == 1) return new DBNode(data, docs.get(0), Data.DOC);
-    throw (docs.isEmpty() ? BXDB_NODOC_X : BXDB_SINGLE_X).get(info, qi.original);
+    throw (docs.isEmpty() ? BASEX_DBPATH1_X : BASEX_DBPATH2_X).get(ii, qi.original);
   }
 
   /**
    * Evaluates {@code fn:collection()}: opens an existing collection,
    * or creates a new data reference.
    * @param qi query input (set to {@code null} if default collection is requested)
-   * @param info input info
+   * @param ii input info
    * @return collection
    * @throws QueryException query exception
    */
-  public synchronized Value collection(final QueryInput qi, final InputInfo info)
+  public synchronized Value collection(final QueryInput qi, final InputInfo ii)
       throws QueryException {
+
+    final Context ctx = qc.context;
+    final boolean withdb = ctx.options.get(MainOptions.WITHDB);
 
     // return default collection
     if(qi == null) {
-      if(colls.isEmpty()) throw NODEFCOLL.get(info);
+      if(!withdb || colls.isEmpty()) throw NODEFCOLL.get(ii);
       return colls.get(0);
     }
 
-    // favor default database
-    Data data = globalData();
-    if(data != null && qc.context.options.get(MainOptions.DEFAULTDB)) {
-      final IntList pres = data.resources.docs(qi.original);
-      return DBNodeSeq.get(pres, data, true, qi.original.isEmpty());
-    }
+    final MainOptions options = qc.context.options;
+    if(withdb) {
+      // favor default database
+      if(options.get(MainOptions.DEFAULTDB)) {
+        final Data data = globalData();
+        if(data != null) {
+          final IntList pres = data.resources.docs(qi.original);
+          return DBNodeSeq.get(pres, data, true, qi.original.isEmpty());
+        }
+      }
 
-    // check currently opened collections (required for tests)
-    final int cs = colls.size();
-    for(int c = 0; c < cs; c++) {
-      final String name = collNames.get(c), path = qi.io.path();
-      if(Prop.CASE ? name.equals(path) : name.equalsIgnoreCase(path)) {
-        return colls.get(c);
+      // check currently opened collections (required for tests)
+      final int cs = colls.size();
+      for(int c = 0; c < cs; c++) {
+        final String name = collNames.get(c), path = qi.io.path();
+        if(Prop.CASE ? name.equals(path) : name.equalsIgnoreCase(path)) return colls.get(c);
       }
     }
 
     // access open database or create new one
-    data = data(qi, info, false);
+    final Data data = data(false, qi, ii);
     final IntList docs = data.resources.docs(qi.dbPath);
     return DBNodeSeq.get(docs, data, true, qi.dbPath.isEmpty());
   }
@@ -222,14 +266,16 @@ public final class QueryResources {
   }
 
   /**
-   * Removes and closes a database. Called during updates.
+   * Removes and closes the specified database. Called during updates.
    * @param name name of database to be removed
    */
   public void remove(final String name) {
+    final boolean mainmem = qc.context.options.get(MainOptions.MAINMEM);
     final int ds = datas.size();
     for(int d = globalData ? 1 : 0; d < ds; d++) {
       final Data data = datas.get(d);
-      if(data.meta.name.equals(name)) {
+      // default mode: skip main-memory database instances (which may result from fn:doc calls)
+      if(data.meta.name.equals(name) && !(data.inMemory() || mainmem)) {
         Close.close(data, qc.context);
         datas.remove(d);
         break;
@@ -240,7 +286,7 @@ public final class QueryResources {
   /**
    * Returns the document path of a textual resource and its encoding. Only required for test APIs.
    * @param uri resource uri
-   * @return path and encoding, or {@code null}
+   * @return path and encoding or {@code null}
    */
   public String[] text(final String uri) {
     return texts == null ? null : texts.get(uri);
@@ -252,7 +298,7 @@ public final class QueryResources {
    * @param sc static context
    * @return file reference
    */
-  public IO stopWords(final String path, final StaticContext sc) {
+  IO stopWords(final String path, final StaticContext sc) {
     return stop != null ? stop.get(path) : sc.resolve(path, null);
   }
 
@@ -262,7 +308,7 @@ public final class QueryResources {
    * @param sc static context
    * @return file reference
    */
-  public IO thesaurus(final String path, final StaticContext sc) {
+  IO thesaurus(final String path, final StaticContext sc) {
     return thes != null ? thes.get(path) : sc.resolve(path, null);
   }
 
@@ -278,7 +324,7 @@ public final class QueryResources {
   public void addDoc(final String name, final String path, final StaticContext sc)
       throws QueryException {
     final QueryInput qi = new QueryInput(path, sc);
-    final Data data = create(qi, true, null);
+    final Data data = create(true, qi, null);
     if(name != null) data.meta.original = name;
   }
 
@@ -302,13 +348,12 @@ public final class QueryResources {
   public void addCollection(final String name, final String[] paths, final StaticContext sc)
       throws QueryException {
 
-    final int ns = paths.length;
-    final DBNode[] nodes = new DBNode[ns];
-    for(int n = 0; n < ns; n++) {
-      final QueryInput qi = new QueryInput(paths[n], sc);
-      nodes[n] = new DBNode(create(qi, true, null), 0, Data.DOC);
+    final ItemList items = new ItemList(paths.length);
+    for(final String path : paths) {
+      final QueryInput qi = new QueryInput(path, sc);
+      items.add(new DBNode(create(true, qi, null), 0, Data.DOC));
     }
-    addCollection(ValueBuilder.value(nodes, ns, NodeType.DOC), name);
+    addCollection(items.value(NodeType.DOCUMENT_NODE), name);
   }
 
   /**
@@ -325,35 +370,46 @@ public final class QueryResources {
 
   /**
    * Returns an already open database for the specified input or creates a new one.
-   * @param qi query input
-   * @param info input info
    * @param single single document
+   * @param qi query input
+   * @param ii input info
    * @return document
    * @throws QueryException query exception
    */
-  private Data data(final QueryInput qi, final InputInfo info, final boolean single)
+  private Data data(final boolean single, final QueryInput qi, final InputInfo ii)
       throws QueryException {
+
+    final Context ctx = qc.context;
+    final boolean withdb = ctx.options.get(MainOptions.WITHDB);
+    final String dbName = qi.dbName;
 
     // check opened databases
     for(final Data data : datas) {
-      // compare input path
-      final String orig = data.meta.original;
-      if(!orig.isEmpty() && IO.get(orig).eq(qi.io)) {
-        // reset database path: indicates that database includes all files of the original path
-        qi.dbPath = "";
-        return data;
+      if(withdb || data.inMemory()) {
+        // compare input path
+        final String orig = data.meta.original;
+        if(!orig.isEmpty() && IO.get(orig).eq(qi.io)) {
+          // reset database path: indicates that database includes all files of the original path
+          qi.dbPath = "";
+          return data;
+        }
+        // compare database name
+        final String name = data.meta.name;
+        if(Prop.CASE ? name.equals(dbName) : name.equalsIgnoreCase(dbName)) return data;
       }
-      // compare database name
-      final String name = data.meta.name, dbName = qi.dbName;
-      if(Prop.CASE ? name.equals(dbName) : name.equalsIgnoreCase(dbName)) return data;
     }
 
-    // open new database
-    Data data = open(qi);
-    if(data != null) return data;
+    // try to open existing database
+    if(withdb && dbName != null) {
+      try {
+        return addData(Open.open(dbName, ctx, ctx.options));
+      } catch(final IOException ex) {
+        Util.debug(ex);
+      }
+    }
 
     // otherwise, create new instance
-    data = create(qi, single, info);
+    final Data data = create(single, qi, ii);
     // reset database path: indicates that all documents were parsed
     qi.dbPath = "";
     return data;
@@ -361,32 +417,14 @@ public final class QueryResources {
   }
 
   /**
-   * Tries to open the addressed database, or returns {@code null}.
-   * @param input query input
-   * @return data reference
-   */
-  private Data open(final QueryInput input) {
-    final String dbName = input.dbName;
-    if(dbName != null) {
-      try {
-        final Context ctx = qc.context;
-        return addData(Open.open(dbName, ctx, ctx.options));
-      } catch(final IOException ex) {
-        Util.debug(ex);
-      }
-    }
-    return null;
-  }
-
-  /**
    * Creates a new database instance.
-   * @param input query input
    * @param single expect single document
+   * @param input query input
    * @param ii input info
    * @return data reference
    * @throws QueryException query exception
    */
-  private Data create(final QueryInput input, final boolean single, final InputInfo ii)
+  private Data create(final boolean single, final QueryInput input, final InputInfo ii)
       throws QueryException {
 
     // check if new databases can be created
@@ -394,7 +432,7 @@ public final class QueryResources {
 
     // do not check for existence of input if user has no read permissions
     if(!context.user().has(Perm.READ))
-      throw BXXQ_PERM_X.get(ii, Util.info(Text.PERM_REQUIRED_X, Perm.READ));
+      throw XQUERY_PERMISSION1_X.get(ii, Util.info(Text.PERM_REQUIRED_X, Perm.READ));
 
     // check if input points to a single file
     final IO io = input.io;

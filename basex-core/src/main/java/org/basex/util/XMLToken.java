@@ -8,7 +8,7 @@ import org.basex.util.hash.*;
  * This class provides convenience operations for XML-specific character
  * operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XMLToken {
@@ -107,7 +107,9 @@ public final class XMLToken {
    */
   public static boolean isNMToken(final byte[] value) {
     final int l = value.length;
-    for(int i = 0; i < l; i += cl(value, i)) if(!isChar(cp(value, i))) return false;
+    for(int i = 0; i < l; i += cl(value, i)) {
+      if(!isChar(cp(value, i))) return false;
+    }
     return l != 0;
   }
 
@@ -151,7 +153,7 @@ public final class XMLToken {
    */
   public static boolean isId(final byte[] name, final boolean idref) {
     final byte[] n = lc(local(name));
-    return idref ? contains(n, IDREF) : contains(n, ID) && !contains(n, IDREF);
+    return idref ? contains(n, REF) : contains(n, ID) && !contains(n, REF);
   }
 
   /**
@@ -219,15 +221,13 @@ public final class XMLToken {
    * @return cached QName, or {@code null} if not successful
    */
   public static byte[] decode(final byte[] name, final boolean lax) {
+    final int nl = name.length;
+    if(nl == 0) return null;
     if(lax) return name;
 
-    // convert name back to original representation
-    final TokenBuilder tb = new TokenBuilder();
-    int uc = 0;
-
     // mode: 0=normal, 1=unicode, 2=underscore, 3=building unicode
-    int mode = 0;
-    final int nl = name.length;
+    final TokenBuilder tb = new TokenBuilder();
+    int mode = 0, uc = 0;
     for(int n = 0; n < nl;) {
       final int cp = cp(name, n);
       if(mode >= 3) {
@@ -264,6 +264,7 @@ public final class XMLToken {
         continue;
       } else {
         // normal character
+        if(!(tb.isEmpty() ? isNCStartChar(cp) : isNCChar(cp))) return null;
         tb.add(cp);
         mode = 0;
       }
@@ -272,7 +273,7 @@ public final class XMLToken {
 
     if(mode == 2) {
       tb.add('_');
-    } else if(mode > 0 && !tb.isEmpty()) {
+    } else if(mode == 1 && !tb.isEmpty() || mode >= 3) {
       return null;
     }
     return tb.finish();

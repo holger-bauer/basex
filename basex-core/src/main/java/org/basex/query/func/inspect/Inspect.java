@@ -5,7 +5,6 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
-import org.basex.build.*;
 import org.basex.build.xml.*;
 import org.basex.core.*;
 import org.basex.io.*;
@@ -22,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * Abstract inspector class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Inspect {
@@ -42,7 +41,7 @@ public abstract class Inspect {
   final InputInfo info;
 
   /** Parsed main module. */
-  Module module;
+  AModule module;
 
   /**
    * Constructor.
@@ -107,8 +106,8 @@ public abstract class Inspect {
       annotation.add("name", name.string());
       if(uri) annotation.add("uri", name.uri());
 
-      for(final Item item : ann.args()) {
-        elem("literal", annotation).add("type", item.type.toString()).add(item.string(null));
+      for(final Item arg : ann.args()) {
+        elem("literal", annotation).add("type", arg.type.toString()).add(arg.string(null));
       }
     }
   }
@@ -136,8 +135,17 @@ public abstract class Inspect {
    */
   public static void add(final byte[] value, final FElem elem) {
     try {
-      final Parser parser = new XMLParser(new IOContent(value), MainOptions.get(), true);
-      for(final ANode node : new DBNode(parser).children()) elem.add(node.finish());
+      final MainOptions mopts = MainOptions.get();
+      if(contains(value, '<')) {
+        // contains angle brackets: add as XML structure
+        final ANode node = new DBNode(new XMLParser(new IOContent(value), mopts, true));
+        for(final ANode child : node.childIter()) {
+          elem.add(child.copy(mopts, null));
+        }
+      } else {
+        // add as single text node
+        elem.add(new FTxt(value));
+      }
     } catch(final IOException ex) {
       // fallback: add string representation
       Util.debug(ex);
@@ -149,7 +157,7 @@ public abstract class Inspect {
    * Returns a value for the specified parameter or {@code null}.
    * @param doc documentation
    * @param name parameter name
-   * @return documentation of specified variable
+   * @return documentation of specified variable or {@code null}
    */
   public static byte[] doc(final TokenObjMap<TokenList> doc, final byte[] name) {
     final TokenList params = doc != null ? doc.get(DOC_PARAM) : null;

@@ -3,13 +3,12 @@ package org.basex.query.simple;
 import org.basex.query.*;
 
 /**
- * XQuery 3.0 tests (former: 1.1).
+ * XQuery 3.0 tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XQuery30Test extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
       { "FLWOR 1", integers(1), "for $i in (1,1) group by $i return $i" },
@@ -35,6 +34,7 @@ public final class XQuery30Test extends QueryTest {
         "for $a in (1,1) let $b := $a group by $b order by $a return 1" },
       { "FLWOR Err 4",
         "for $a in (1,1) let $b := $a group by $b order by $a return 1" },
+
       { "FLWOR 6", integers(2),
         "for $a in 1 for $a in 2 group by $a return $a" },
       { "FLWOR 7", integers(2, 3),
@@ -62,12 +62,14 @@ public final class XQuery30Test extends QueryTest {
           "group by $g as xs:integer := $i mod 2 order by $g return $i" },
       { "FLWOR 18", integers(1, 2), "for $i in 1 to 2 group by $g as item() := 5 return $i" },
       { "FLWOR 19", "for $i in 1 to 2 group by $g as node() := 5 return $i" },
-      { "FLWOR 19", "for $i in 1 to 2 let $g := $i group by $i as xs:integer return $i" },
+      { "FLWOR 20", "for $i in 1 to 2 let $g := $i group by $i as xs:integer return $i" },
 
       { "Concat 1", strings("ab"), "'a'||'b'" },
       { "Concat 2", strings("ab"), "'a' || 'b'" },
       { "Concat 3", strings("abc"), "'a' || 'b' || 'c'" },
       { "Concat 4", strings("1true3"), "1 || true() || '3'" },
+
+      { "Sort 1", integers(1, 2), "sort((1,2), ())" },
 
       { "Try/catch 1", strings("X"), "try { 1+'a' } catch * { 'X' }" },
       { "Try/catch 2", strings("X"), "try { for $i in (42,0)" +

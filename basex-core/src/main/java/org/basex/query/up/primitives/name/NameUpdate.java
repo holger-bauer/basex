@@ -8,10 +8,9 @@ import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
- * Update operation that references databases by their name. The targeted database need not
- * be opened.
+ * Update operation that references databases by their name.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public abstract class NameUpdate extends Update implements Comparable<NameUpdate> {
@@ -24,11 +23,11 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
    * Constructor.
    * @param type type of this operation
    * @param name name of database
-   * @param info input info
    * @param qc query context
+   * @param info input info
    */
-  NameUpdate(final UpdateType type, final String name, final InputInfo info,
-      final QueryContext qc) {
+  NameUpdate(final UpdateType type, final String name, final QueryContext qc,
+      final InputInfo info) {
 
     super(type, info);
     this.name = name;
@@ -55,7 +54,7 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
 
   @Override
   public void merge(final Update update) throws QueryException {
-    throw BXDB_ONCE_X_X.get(info, name, operation());
+    throw DB_CONFLICT1_X_X.get(info, name, operation());
   }
 
   /**
@@ -96,15 +95,15 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
    * Closes an existing database.
    * @param name name of database
    * @param qc query context
-   * @param info input info
+   * @param ii input info
    * @throws QueryException query exception
    */
-  static void close(final String name, final QueryContext qc, final InputInfo info)
+  static void close(final String name, final QueryContext qc, final InputInfo ii)
       throws QueryException {
 
     // close data instance in query processor
     qc.resources.remove(name);
     // check if database is stilled pinned by another process
-    if(qc.context.pinned(name)) throw BXDB_OPENED_X.get(info, name);
+    if(qc.context.pinned(name)) throw DB_LOCK1_X.get(ii, name);
   }
 }

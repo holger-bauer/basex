@@ -1,23 +1,27 @@
 package org.basex.io.out;
 
-import static org.basex.util.Token.*;
-
 import java.io.*;
 import java.util.*;
 
 import org.basex.util.*;
 
 /**
- * This class caches the output bytes in an array, similar to the
- * {@link ByteArrayOutputStream} class. Bytes that exceed an
- * optional maximum are ignored.
+ * This class caches the output bytes in an array, similar to {@link ByteArrayOutputStream}.
+ * This implementation is faster because functions are not synchronized.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ArrayOutput extends PrintOutput {
   /** Byte buffer. */
-  private byte[] buffer = new byte[8];
+  private byte[] buffer = new byte[Array.INITIAL_CAPACITY];
+
+  /**
+   * Constructor.
+   */
+  public ArrayOutput() {
+    super((OutputStream) null);
+  }
 
   @Override
   public void write(final int b) {
@@ -25,30 +29,10 @@ public final class ArrayOutput extends PrintOutput {
     if(s == max) return;
 
     byte[] bffr = buffer;
-    if(s == bffr.length) bffr = Arrays.copyOf(bffr, Array.newSize(s));
+    if(s == bffr.length) bffr = Arrays.copyOf(bffr, Array.newCapacity(s));
     bffr[s] = (byte) b;
     buffer = bffr;
     size = s + 1;
-  }
-
-  /**
-   * Normalizes newlines in the byte array.
-   * @return self reference
-   */
-  public ArrayOutput normalize() {
-    final byte[] bffr = buffer;
-    final int s = (int) size;
-    int n = 0;
-    for(int o = 0; o < s; o++) {
-      byte ch = bffr[o];
-      if(ch == '\r') {
-        ch = '\n';
-        if(o + 1 < s && bffr[o + 1] == '\n') o++;
-      }
-      bffr[n++] = ch;
-    }
-    size = n;
-    return this;
   }
 
   /**
@@ -60,6 +44,16 @@ public final class ArrayOutput extends PrintOutput {
   }
 
   /**
+   * Returns an array with all elements and resets the internal buffer.
+   * @return array
+   */
+  public byte[] next() {
+    final byte[] lst = toArray();
+    reset();
+    return lst;
+  }
+
+  /**
    * Returns the output as byte array, and invalidates the internal array.
    * Warning: the function must only be called if the output stream is discarded afterwards.
    * @return token
@@ -68,7 +62,7 @@ public final class ArrayOutput extends PrintOutput {
     final byte[] bffr = buffer;
     buffer = null;
     final int s = (int) size;
-    return s == 0 ? EMPTY : s == bffr.length ? bffr : Arrays.copyOf(bffr, s);
+    return s == 0 ? Token.EMPTY : s == bffr.length ? bffr : Arrays.copyOf(bffr, s);
   }
 
   /**
@@ -88,6 +82,6 @@ public final class ArrayOutput extends PrintOutput {
 
   @Override
   public String toString() {
-    return string(buffer, 0, (int) size);
+    return Token.string(buffer, 0, (int) size);
   }
 }

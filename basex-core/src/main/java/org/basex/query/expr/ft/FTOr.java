@@ -5,8 +5,8 @@ import static org.basex.query.QueryText.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -16,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * FTOr expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
@@ -37,9 +37,9 @@ public final class FTOr extends FTExpr {
     for(final FTExpr expr : exprs) not &= expr instanceof FTNot;
     if(not) {
       // convert (!A or !B or ...) to !(A and B and ...)
-      final int es = exprs.length;
-      for(int e = 0; e < es; e++) exprs[e] = exprs[e].exprs[0];
-      return new FTNot(info, new FTAnd(info, exprs));
+      final int el = exprs.length;
+      for(int e = 0; e < el; e++) exprs[e] = exprs[e].exprs[0];
+      return (FTExpr) cc.replaceWith(this, new FTNot(info, new FTAnd(info, exprs)));
     }
     return this;
   }
@@ -47,22 +47,20 @@ public final class FTOr extends FTExpr {
   @Override
   public FTNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final FTNode item = exprs[0].item(qc, info);
-    final int es = exprs.length;
-    for(int e = 1; e < es; e++) {
-      or(item, exprs[e].item(qc, info));
-    }
+    final int el = exprs.length;
+    for(int e = 1; e < el; e++) or(item, exprs[e].item(qc, info));
     return item;
   }
 
   @Override
   public FTIter iter(final QueryContext qc) throws QueryException {
     // initialize iterators
-    final int es = exprs.length;
-    final FTIter[] ir = new FTIter[es];
-    final FTNode[] it = new FTNode[es];
-    for(int e = 0; e < es; e++) {
-      ir[e] = exprs[e].iter(qc);
-      it[e] = ir[e].next();
+    final int el = exprs.length;
+    final FTIter[] iters = new FTIter[el];
+    final FTNode[] nodes = new FTNode[el];
+    for(int e = 0; e < el; e++) {
+      iters[e] = exprs[e].iter(qc);
+      nodes[e] = iters[e].next();
     }
 
     return new FTIter() {
@@ -70,21 +68,21 @@ public final class FTOr extends FTExpr {
       public FTNode next() throws QueryException {
         // find item with smallest pre value
         int p = -1;
-        for(int i = 0; i < es; ++i) {
-          if(it[i] != null && (p == -1 || it[p].pre() > it[i].pre())) p = i;
+        for(int e = 0; e < el; ++e) {
+          if(nodes[e] != null && (p == -1 || nodes[p].pre() > nodes[e].pre())) p = e;
         }
         // no items left - leave
         if(p == -1) return null;
 
         // merge all matches
-        final FTNode item = it[p];
-        for(int i = 0; i < es; ++i) {
-          if(it[i] != null && p != i && item.pre() == it[i].pre()) {
-            or(item, it[i]);
-            it[i] = ir[i].next();
+        final FTNode item = nodes[p];
+        for(int e = 0; e < el; ++e) {
+          if(nodes[e] != null && p != e && item.pre() == nodes[e].pre()) {
+            or(item, nodes[e]);
+            nodes[e] = iters[e].next();
           }
         }
-        it[p] = ir[p].next();
+        nodes[p] = iters[p].next();
         return item;
       }
     };
@@ -106,24 +104,27 @@ public final class FTOr extends FTExpr {
 
   @Override
   public boolean indexAccessible(final IndexInfo ii) throws QueryException {
-    int costs = 0;
+    IndexCosts costs = IndexCosts.ZERO;
     for(final FTExpr expr : exprs) {
-      // no index access if negated queries is found
       if(!expr.indexAccessible(ii)) return false;
-      costs += ii.costs;
+      costs = IndexCosts.add(costs, ii.costs);
     }
-    // use summarized costs for estimation
     ii.costs = costs;
     return true;
   }
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTOr(info, Arr.copyAll(cc, vm, exprs));
+    return copyType(new FTOr(info, Arr.copyAll(cc, vm, exprs)));
   }
 
   @Override
-  public String toString() {
-    return PAREN1 + toString(' ' + FTOR + ' ') + PAREN2;
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTOr && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.tokens(exprs, ' ' + FTOR + ' ', true);
   }
 }

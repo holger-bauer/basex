@@ -13,7 +13,7 @@ import org.w3c.dom.*;
 /**
  * DOM - Node implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class BXNode implements Node {
@@ -39,20 +39,20 @@ public abstract class BXNode implements Node {
   }
 
   /**
-   * Creates a new DOM node instance for the input node. Returns a {@code null} reference
-   * if the input is also {@code null}.
+   * Creates a new DOM node instance for the input node.
    * @param node input node
-   * @return DOM node
+   * @return DOM node, or {@code null} if input is {@code null} as well
    */
   public static BXNode get(final ANode node) {
     if(node == null) return null;
     switch(node.nodeType()) {
-      case DOC: return new BXDoc(node);
-      case ELM: return new BXElem(node);
-      case TXT: return new BXText(node);
-      case ATT: return new BXAttr(node);
-      case COM: return new BXComm(node);
-      case PI : return new BXPI(node);
+      case DOCUMENT_NODE: return new BXDoc(node);
+      case ELEMENT: return new BXElem(node);
+      case TEXT: return new BXText(node);
+      case COMMENT: return new BXComm(node);
+      case PROCESSING_INSTRUCTION : return new BXPI(node);
+      // drop parent reference (see Xerces’ NodeImpl#getParentNode)
+      case ATTRIBUTE: return new BXAttr(new FAttr(node.qname(), node.string()));
       default : return null;
     }
   }
@@ -92,8 +92,7 @@ public abstract class BXNode implements Node {
 
   @Override
   public final short compareDocumentPosition(final Node node) {
-    final int d = nd.diff(((BXNode) node).nd);
-    return (short) (d < 0 ? -1 : d > 0 ? 1 : 0);
+    return (short) Integer.compare(nd.diff(((BXNode) node).nd), 0);
   }
 
   @Override
@@ -108,19 +107,19 @@ public abstract class BXNode implements Node {
 
   @Override
   public BXNList getChildNodes() {
-    return new BXNList(finish(nd.children()));
+    return new BXNList(finish(nd.childIter()));
   }
 
   @Override
   public BXNode getFirstChild() {
-    return get(nd.children().next());
+    return get(nd.childIter().next());
   }
 
   @Override
   public final BXNode getLastChild() {
-    ANode n = null;
-    for(final ANode t : nd.children()) n = t;
-    return n != null ? get(n) : null;
+    ANode node = null;
+    for(final ANode n : nd.childIter()) node = n;
+    return node != null ? get(node) : null;
   }
 
   @Override
@@ -130,12 +129,12 @@ public abstract class BXNode implements Node {
 
   @Override
   public BXNode getNextSibling() {
-    return get(nd.followingSibling().next());
+    return get(nd.followingSiblingIter().next());
   }
 
   @Override
   public BXNode getPreviousSibling() {
-    return get(nd.precedingSibling().next());
+    return get(nd.precedingSiblingIter().next());
   }
 
   @Override
@@ -157,7 +156,7 @@ public abstract class BXNode implements Node {
   public BXDoc getOwnerDocument() {
     ANode n = nd;
     for(ANode p; (p = n.parent()) != null;) n = p;
-    return n.type == NodeType.DOC ? (BXDoc) get(n) : null;
+    return n.type == NodeType.DOCUMENT_NODE ? (BXDoc) get(n) : null;
   }
 
   @Override
@@ -269,8 +268,8 @@ public abstract class BXNode implements Node {
   final BXNList getElements(final String name) {
     final ANodeList nb = new ANodeList();
     final byte[] nm = "*".equals(name) ? null : token(name);
-    for(final ANode n : nd.descendant()) {
-      if(n.type == NodeType.ELM && (nm == null || eq(nm, n.name()))) nb.add(n.finish());
+    for(final ANode n : nd.descendantIter()) {
+      if(n.type == NodeType.ELEMENT && (nm == null || eq(nm, n.name()))) nb.add(n.finish());
     }
     return new BXNList(nb);
   }

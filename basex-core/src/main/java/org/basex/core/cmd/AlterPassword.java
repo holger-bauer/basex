@@ -11,7 +11,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'alter password' command and alters the password of a user.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class AlterPassword extends AUser {
@@ -34,7 +34,7 @@ public final class AlterPassword extends AUser {
     if(user == null) return error(UNKNOWN_USER_X, name);
 
     user.password(pass);
-    users.write(context);
+    users.write();
     return info(PW_CHANGED_X, name);
   }
 

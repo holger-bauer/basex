@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Rename node primitive.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class RenameNode extends NodeUpdate {
@@ -34,7 +34,7 @@ public final class RenameNode extends NodeUpdate {
   }
 
   @Override
-  public void prepare(final MemData tmp) { }
+  public void prepare(final MemData tmp, final QueryContext qc) { }
 
   @Override
   public void merge(final Update update) throws QueryException {

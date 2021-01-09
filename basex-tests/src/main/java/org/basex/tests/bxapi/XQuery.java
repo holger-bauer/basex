@@ -20,14 +20,14 @@ import org.basex.util.list.*;
 /**
  * Wrapper for evaluating XQuery expressions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class XQuery implements Iterable<XdmItem>, Closeable {
   /** Query processor. */
   private final QueryProcessor qp;
   /** Query iterator. */
-  private Iter ir;
+  private Iter iter;
 
   /**
    * Constructor.
@@ -108,7 +108,6 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    * @throws XQueryException exception
    */
   public void addCollection(final String name, final String[] paths) {
-    if(name == null) System.out.println(name);
     final StringList sl = new StringList();
     for(final String p : paths) sl.add(p);
     try {
@@ -198,15 +197,15 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    * @throws XQueryException exception
    */
   public XdmItem next() {
-    Item it = null;
+    Item item = null;
     try {
-      if(ir == null) ir = qp.iter();
-      it = ir.next();
-      return it != null ? XdmItem.get(it) : null;
+      if(iter == null) iter = qp.iter();
+      item = iter.next();
+      return item != null ? XdmItem.get(item) : null;
     } catch(final QueryException ex) {
       throw new XQueryException(ex);
     } finally {
-      if(it == null) qp.close();
+      if(item == null) qp.close();
     }
   }
 
@@ -217,9 +216,9 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    */
   public XdmValue value() {
     try {
-      final Value v = qp.value();
-      v.materialize(null);
-      return XdmValue.get(v);
+      final Value value = qp.value();
+      value.cache(false, null);
+      return XdmValue.get(value);
     } catch(final QueryException ex) {
       throw new XQueryException(ex);
     } finally {
@@ -243,7 +242,6 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
   @Override
   public Iterator<XdmItem> iterator() {
     return new Iterator<XdmItem>() {
-      /** Current item. */
       private XdmItem next;
 
       @Override
@@ -254,9 +252,9 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
 
       @Override
       public XdmItem next() {
-        final XdmItem it = hasNext() ? next : null;
+        final XdmItem item = hasNext() ? next : null;
         next = null;
-        return it;
+        return item;
       }
 
       @Override

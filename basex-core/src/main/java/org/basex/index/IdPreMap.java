@@ -10,9 +10,9 @@ import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
- * Updatable ID -> PRE mapping.
+ * Updatable ID-PRE mapping.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public class IdPreMap {
@@ -101,7 +101,6 @@ public class IdPreMap {
     if(id > baseid) {
       // id was inserted by update
       for(int i = 0; i < rows; ++i) {
-        // if(fids[i] == id) return pres[i]; // is this optimization?
         if(fids[i] <= id && id <= nids[i]) return pres[i] + id - fids[i];
       }
     } else {
@@ -152,11 +151,10 @@ public class IdPreMap {
             incs[prev] -= prevcnt - split;
 
             oid = oids[prev];
-            inc += incs[prev];
           } else {
             oid = pre - incs[prev];
-            inc += incs[prev];
           }
+          inc += incs[prev];
         }
       } else if(pos > 0) {
         oid = oids[pos];
@@ -225,11 +223,10 @@ public class IdPreMap {
     if(startIndex < endIndex) {
       if(endIndex < rows && pres[endIndex] <= end) {
         shrinkFromStart(endIndex, pre, c);
-        shrinkFromEnd(startIndex, pre, inc + c);
       } else {
         --endIndex;     // endIndex is not processed, so we let the increment do that
-        shrinkFromEnd(startIndex, pre, inc + c);
       }
+      shrinkFromEnd(startIndex, pre, inc + c);
     } else if(min < pre) {
       add(++endIndex, pres[startIndex], fids[startIndex], nids[startIndex],
           incs[startIndex], oids[startIndex]);
@@ -281,7 +278,7 @@ public class IdPreMap {
 
   /**
    * Returns the size of the map.
-   * @return number of stored tuples.
+   * @return number of stored tuples
    */
   public int size() {
     return rows;
@@ -333,7 +330,7 @@ public class IdPreMap {
   private void add(final int i, final int pre, final int fid, final int nid,
       final int inc, final int oid) {
     if(rows == pres.length) {
-      final int s = Array.newSize(rows);
+      final int s = Array.newCapacity(rows);
       pres = Arrays.copyOf(pres, s);
       fids = Arrays.copyOf(fids, s);
       nids = Arrays.copyOf(nids, s);
@@ -343,11 +340,11 @@ public class IdPreMap {
     if(i < rows) {
       final int destPos = i + 1;
       final int length = rows - i;
-      System.arraycopy(pres, i, pres, destPos, length);
-      System.arraycopy(fids, i, fids, destPos, length);
-      System.arraycopy(nids, i, nids, destPos, length);
-      System.arraycopy(incs, i, incs, destPos, length);
-      System.arraycopy(oids, i, oids, destPos, length);
+      Array.copy(pres, i, length, pres, destPos);
+      Array.copy(fids, i, length, fids, destPos);
+      Array.copy(nids, i, length, nids, destPos);
+      Array.copy(incs, i, length, incs, destPos);
+      Array.copy(oids, i, length, oids, destPos);
     }
     pres[i] = pre;
     fids[i] = fid;
@@ -366,11 +363,11 @@ public class IdPreMap {
     if(s <= e) {
       final int last = e + 1;
       final int length = rows - last;
-      System.arraycopy(pres, last, pres, s, length);
-      System.arraycopy(fids, last, fids, s, length);
-      System.arraycopy(nids, last, nids, s, length);
-      System.arraycopy(incs, last, incs, s, length);
-      System.arraycopy(oids, last, oids, s, length);
+      Array.copy(pres, last, length, pres, s);
+      Array.copy(fids, last, length, fids, s);
+      Array.copy(nids, last, length, nids, s);
+      Array.copy(incs, last, length, incs, s);
+      Array.copy(oids, last, length, oids, s);
       rows -= last - s;
     }
   }

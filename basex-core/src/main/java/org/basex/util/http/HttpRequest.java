@@ -10,7 +10,7 @@ import org.basex.query.util.list.*;
 /**
  * Container for parsed data from {@code <http:request/>}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 public final class HttpRequest {
@@ -49,15 +49,15 @@ public final class HttpRequest {
   }
 
   /**
-   * Container for parsed data from <part/> element.
-   * @author BaseX Team 2005-17, BSD License
+   * Container for parsed data from "part" element.
+   * @author BaseX Team 2005-20, BSD License
    * @author Rositsa Shadura
    */
   public static class Part {
     /** Part headers. */
-    public final HashMap<String, String> headers = new HashMap<>();
+    public final Map<String, String> headers = new HashMap<>();
     /** Attributes of part body. */
-    public final HashMap<String, String> bodyAtts = new HashMap<>();
+    public final Map<String, String> bodyAtts = new HashMap<>();
     /** Content of part body. */
     public final ItemList bodyContents = new ItemList();
   }

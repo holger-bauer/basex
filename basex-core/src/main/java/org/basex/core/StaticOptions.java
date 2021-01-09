@@ -10,26 +10,21 @@ import org.basex.util.options.*;
  * This class defines options which are used all around the project.
  * The initial keys and values are also stored in the project's home directory.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class StaticOptions extends Options {
-  /** Indicates if the user's home directory has been chosen as home directory. */
-  private static final boolean USERHOME = Prop.HOME.equals(Prop.USERHOME);
-
   /** Comment: written to options file. */
   public static final Comment C_GENERAL = new Comment("General Options");
 
   /** Debug mode. */
   public static final BooleanOption DEBUG = new BooleanOption("DEBUG", false);
   /** Database path. */
-  public static final StringOption DBPATH = new StringOption("DBPATH",
-      Prop.HOME + (USERHOME ? Prop.NAME + "Data" : "data"));
+  public static final StringOption DBPATH = new StringOption("DBPATH", Prop.HOMEDIR + "data");
   /** Log path (relative to database path). */
   public static final StringOption LOGPATH = new StringOption("LOGPATH", ".logs");
   /** Package repository path. */
-  public static final StringOption REPOPATH = new StringOption("REPOPATH",
-      Prop.HOME + (USERHOME ? Prop.NAME + "Repo" : "repo"));
+  public static final StringOption REPOPATH = new StringOption("REPOPATH", Prop.HOMEDIR + "repo");
   /** Language name. */
   public static final StringOption LANG = new StringOption("LANG", Prop.language);
   /** Flag to include key names in the language strings. */
@@ -62,6 +57,8 @@ public final class StaticOptions extends Options {
   public static final StringOption NONPROXYHOSTS = new StringOption("NONPROXYHOSTS", "");
   /** Ignore missing certificates. */
   public static final BooleanOption IGNORECERT = new BooleanOption("IGNORECERT", false);
+  /** Ignore verification of hostname in certificates. */
+  public static final BooleanOption IGNOREHOSTNAME = new BooleanOption("IGNOREHOSTNAME", false);
 
   /** Timeout (seconds) for processing client requests; deactivated if set to 0. */
   public static final NumberOption TIMEOUT = new NumberOption("TIMEOUT", 30);
@@ -73,19 +70,25 @@ public final class StaticOptions extends Options {
   public static final BooleanOption LOG = new BooleanOption("LOG", true);
   /** Log message cut-off. */
   public static final NumberOption LOGMSGMAXLEN = new NumberOption("LOGMSGMAXLEN", 1000);
+  /** Write trace output to logs. */
+  public static final BooleanOption LOGTRACE = new BooleanOption("LOGTRACE", true);
 
   /** Comment: written to options file. */
   public static final Comment C_HTTP = new Comment("HTTP Services");
 
-  /** Web path. */
-  public static final StringOption WEBPATH = new StringOption("WEBPATH",
-      Prop.HOME + (USERHOME ? Prop.NAME + "Web" : "webapp"));
+  /** Web path (cannot be specified in web.xml). */
+  public static final StringOption WEBPATH = new StringOption("WEBPATH", Prop.HOMEDIR + "webapp");
+  /** Enable GZIP support (cannot be specified in web.xml). */
+  public static final BooleanOption GZIP = new BooleanOption("GZIP", false);
+
   /** REST path (relative to web path). */
   public static final StringOption RESTPATH = new StringOption("RESTPATH", "");
   /** RESTXQ path (relative to web path). */
   public static final StringOption RESTXQPATH = new StringOption("RESTXQPATH", "");
   /** Minimum timeout for parsing RESTXQ files. */
   public static final NumberOption PARSERESTXQ = new NumberOption("PARSERESTXQ", 3);
+  /** Show errors in RESTXQ directory. */
+  public static final BooleanOption RESTXQERRORS = new BooleanOption("RESTXQERRORS", true);
   /** Local (embedded) mode. */
   public static final BooleanOption HTTPLOCAL = new BooleanOption("HTTPLOCAL", false);
   /** Port for stopping the web server. */
@@ -103,7 +106,7 @@ public final class StaticOptions extends Options {
     @Override
     public String toString() {
       final String name = name();
-      return name.substring(0, 1) + name.substring(1).toLowerCase(Locale.ENGLISH);
+      return name.charAt(0) + name.substring(1).toLowerCase(Locale.ENGLISH);
     }
   }
 
@@ -111,11 +114,16 @@ public final class StaticOptions extends Options {
    * Constructor, adopting system properties starting with "org.basex.".
    * @param file if {@code true}, options will be read from disk
    */
-  StaticOptions(final boolean file) {
-    super(file ? new IOFile(Prop.HOME, IO.BASEXSUFFIX) : null);
+  public StaticOptions(final boolean file) {
+    super(file ? new IOFile(Prop.HOMEDIR, IO.BASEXSUFFIX) : null);
     setSystem();
+  }
 
-    // set some static options
+  @Override
+  public void setSystem() {
+    super.setSystem();
+
+    // assigns static variables and system properties
     Prop.language = get(LANG);
     Prop.langkeys = get(LANGKEYS);
     Prop.debug = get(DEBUG);
@@ -134,6 +142,7 @@ public final class StaticOptions extends Options {
       Prop.setSystem("http.nonProxyHosts", nph);
     }
     if(get(IGNORECERT)) IOUrl.ignoreCert();
+    if(get(IGNOREHOSTNAME)) IOUrl.ignoreHostname();
   }
 
   /**
@@ -146,20 +155,25 @@ public final class StaticOptions extends Options {
   }
 
   /**
-   * Returns a random temporary name for the specified database name.
-   * @param db name of database
-   * @return random database name
+   * Creates a random database directory and returns its name.
+   * @param name name of the original database
+   * @return name of random database
    */
-  public String randomDbName(final String db) {
-    String nm;
+  public String createRandomDb(final String name) {
+    String db;
+    int c = 0;
     do {
-      nm = db + '_' + new Random().nextInt(0x7FFFFFFF);
-    } while(dbPath(nm).exists());
-    return nm;
+      db = name + '.' + c++;
+      final IOFile io = dbPath(db);
+      if(!io.exists()) {
+        io.md();
+        return db;
+      }
+    } while(true);
   }
 
   /**
-   * Returns the current database path.
+   * Returns the path to the directory that contains all databases.
    * @return database filename
    */
   public IOFile dbPath() {

@@ -15,27 +15,28 @@ import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
 import org.basex.util.*;
 import org.basex.util.ft.*;
+import org.basex.util.list.*;
 
 /**
  * This class provides meta information on a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MetaData {
-  /** Database path. Set to {@code null} if database is in main memory. */
-  public final IOFile path;
+  /** Database directory. Set to {@code null} if database is in main memory. */
+  public final IOFile dir;
 
   /** Database name. */
   public String name;
 
-  /** Path to original document. */
+  /** Path to initially imported resources. */
   public String original = "";
-  /** Size of original document. */
-  public long filesize;
-  /** Timestamp of original document. */
+  /** Size of initially imported resources. */
+  public long inputsize;
+  /** Database timestamp. */
   public long time;
-  /** Number of stored documents. */
+  /** Number of stored XML documents. */
   public int ndocs;
 
   /** Indicates if a text index exists. */
@@ -61,13 +62,13 @@ public final class MetaData {
   /** Indicates if the full-text index is to be recreated. */
   public boolean createft;
   /** Text index: names to include. */
-  public String textinclude = "";
+  public String textinclude;
   /** Attribute index: names to include. */
-  public String attrinclude = "";
+  public String attrinclude;
   /** Token index: names to tokenize. */
-  public String tokeninclude = "";
+  public String tokeninclude;
   /** Full-text index: names to include. */
-  public String ftinclude = "";
+  public String ftinclude;
 
   /** Flag for full-text stemming. */
   public boolean stemming;
@@ -76,7 +77,7 @@ public final class MetaData {
   /** Flag for full-text diacritics removal. */
   public boolean diacritics;
   /** Full-text stopword file. */
-  public String stopwords = "";
+  public String stopwords;
 
   /** Maximum number of categories. */
   public int maxcats;
@@ -102,17 +103,13 @@ public final class MetaData {
 
   /** Flag for out-of-date indexes. */
   private boolean oldindex;
-  /** Flag for out-of-date wildcard index (legacy, deprecated). */
-  private boolean wcindex;
-  /** Scoring mode (legacy, deprecated). */
-  private int scoring;
 
   /**
    * Constructor for a main-memory database instance.
    * @param options database options
    */
-  MetaData(final MainOptions options) {
-    this("", options, null);
+  public MetaData(final MainOptions options) {
+    this("", null, options);
   }
 
   /**
@@ -122,8 +119,18 @@ public final class MetaData {
    * @param sopts static options
    */
   public MetaData(final String name, final MainOptions options, final StaticOptions sopts) {
+    this(name, sopts.dbPath(name), options);
+  }
+
+  /**
+   * Constructor.
+   * @param name name of the database
+   * @param dir database directory ({@code null} if database is in main memory)
+   * @param options database options
+   */
+  private MetaData(final String name, final IOFile dir, final MainOptions options) {
     this.name = name;
-    path = sopts != null ? sopts.dbPath(name) : null;
+    this.dir = dir;
     createtext = options.get(MainOptions.TEXTINDEX);
     createattr = options.get(MainOptions.ATTRINDEX);
     createtoken = options.get(MainOptions.TOKENINDEX);
@@ -147,28 +154,54 @@ public final class MetaData {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Normalizes a database path. Converts backslashes and
-   * removes duplicate and leading slashes.
+   * Normalizes a database path. Converts backslashes and removes duplicate and leading slashes.
    * Returns {@code null} if the path contains invalid characters.
    * @param path input path
    * @return normalized path or {@code null}
    */
   public static String normPath(final String path) {
+    // scan path segments
+    final StringList list = new StringList();
     final StringBuilder sb = new StringBuilder();
-    boolean slash = false;
     final int pl = path.length();
     for(int p = 0; p < pl; p++) {
-      final char c = path.charAt(p);
-      if(c == '\\' || c == '/') {
-        if(!slash && p != 0) sb.append('/');
-        slash = true;
+      final char ch = path.charAt(p);
+      if(ch == '\\' || ch == '/') {
+        if(!addToPath(sb, list)) return null;
       } else {
-        if(Prop.WIN && ":*?\"<>\\|".indexOf(c) != -1) return null;
-        if(slash) slash = false;
-        sb.append(c);
+        if(Prop.WIN && ":*?\"<>\\|".indexOf(ch) != -1) return null;
+        sb.append(ch);
       }
     }
+    if(!addToPath(sb, list)) return null;
+    sb.append(String.join("/", list.finish()));
+
+    // add trailing slash
+    if(pl > 0 && sb.length() > 0) {
+      final char ch = path.charAt(pl - 1);
+      if(ch == '\\' || ch == '/') sb.append('/');
+    }
     return sb.toString();
+  }
+
+  /**
+   * Adds a path segment.
+   * @param sb string builder
+   * @param list list of segments
+   * @return result flag
+   */
+  private static boolean addToPath(final StringBuilder sb, final StringList list) {
+    if(sb.length() != 0) {
+      final String seg = sb.toString();
+      if(seg.equals("..")) {
+        if(list.isEmpty()) return false;
+        list.remove(list.size() - 1);
+      } else if(!seg.equals(".")) {
+        list.add(seg);
+      }
+      sb.setLength(0);
+    }
+    return true;
   }
 
   /**
@@ -176,10 +209,10 @@ public final class MetaData {
    * @param file current file
    * @return file length
    */
-  private static long dbsize(final IOFile file) {
+  private static long dbSize(final IOFile file) {
     long s = 0;
     if(file.isDir()) {
-      for(final IOFile f : file.children()) s += dbsize(f);
+      for(final IOFile f : file.children()) s += dbSize(f);
     } else {
       s += file.length();
     }
@@ -203,23 +236,23 @@ public final class MetaData {
    * @return result of check
    */
   public boolean oldindex() {
-    return oldindex || wcindex || scoring != 0;
+    return oldindex;
   }
 
   /**
    * Returns the disk size of the database.
    * @return database size
    */
-  public long dbsize() {
-    return path != null ? dbsize(path) : 0;
+  public long dbSize() {
+    return dir != null ? dbSize(dir) : 0;
   }
 
   /**
    * Returns the disk timestamp of the database.
    * @return database size
    */
-  public long dbtime() {
-    return path != null ? path.timeStamp() : 0;
+  public long dbTime() {
+    return dir != null ? dir.timeStamp() : 0;
   }
 
   /**
@@ -228,16 +261,16 @@ public final class MetaData {
    * @param filename filename
    * @return database filename
    */
-  public IOFile dbfile(final String filename) {
-    return file(path, filename);
+  public IOFile dbFile(final String filename) {
+    return file(dir, filename);
   }
 
   /**
    * Returns the binary directory.
-   * @return binary directory
+   * @return binary directory, or {@code null} if this is a main-memory database
    */
-  public IOFile binaries() {
-    return new IOFile(path, IO.RAW);
+  public IOFile binaryDir() {
+    return dir == null ? null : new IOFile(dir, IO.RAW);
   }
 
   /**
@@ -245,20 +278,20 @@ public final class MetaData {
    * @return updating file
    */
   public IOFile updateFile() {
-    return dbfile(DATAUPD);
+    return dbFile(DATAUPD);
   }
 
   /**
-   * Returns the specified binary file or {@code null} if the resource path cannot be resolved
-   * (e.g. if it points to a parent directory).
-   * @param pth internal file path
-   * @return binary directory
+   * Returns a reference to the specified binary file.
+   * @param path internal file path
+   * @return path, or {@code null} if this is a main-memory database of
+   *   if the resource path cannot be resolved (e.g. because it points to a parent directory).
    */
-  public IOFile binary(final String pth) {
-    if(path == null) return null;
-    final IOFile dir = binaries();
-    final IOFile file = new IOFile(dir, pth);
-    return file.path().startsWith(dir.path()) ? file : null;
+  public IOFile binary(final String path) {
+    if(dir == null) return null;
+    final IOFile bin = binaryDir();
+    final IOFile file = new IOFile(bin, path);
+    return file.path().startsWith(bin.path()) ? file : null;
   }
 
   /**
@@ -268,7 +301,7 @@ public final class MetaData {
    * @return result of check
    */
   public synchronized boolean drop(final String pattern) {
-    return path != null && DropDB.drop(path, pattern + IO.BASEXSUFFIX);
+    return dir != null && DropDB.drop(dir, pattern + IO.BASEXSUFFIX);
   }
 
   /**
@@ -276,7 +309,7 @@ public final class MetaData {
    * @throws IOException exception
    */
   public void read() throws IOException {
-    try(DataInput di = new DataInput(dbfile(DATAINF))) {
+    try(DataInput di = new DataInput(dbFile(DATAINF))) {
       read(di);
     }
   }
@@ -353,46 +386,39 @@ public final class MetaData {
     while(true) {
       final String k = Token.string(in.readToken());
       if(k.isEmpty()) break;
-      if(k.equals(DBPERM)) {
-        // legacy (Version < 8)
-        for(int u = in.readNum(); u > 0; --u) { in.readToken(); in.readToken(); in.readNum(); }
-      } else {
-        final String v = Token.string(in.readToken());
-        if(k.equals(DBSTR))           storage      = v;
-        else if(k.equals(IDBSTR))     istorage     = v;
-        else if(k.equals(DBFNAME))    original     = v;
-        else if(k.equals(DBFTSW))     stopwords    = v;
-        else if(k.equals(DBFTLN))     language     = Language.get(v);
-        else if(k.equals(DBSIZE))     size         = toInt(v);
-        else if(k.equals(DBNDOCS))    ndocs        = toInt(v);
-        else if(k.equals(DBSCTYPE))   scoring      = toInt(v);
-        else if(k.equals(DBMAXLEN))   maxlen       = toInt(v);
-        else if(k.equals(DBMAXCATS))  maxcats      = toInt(v);
-        else if(k.equals(DBLASTID))   lastid       = toInt(v);
-        else if(k.equals(DBTIME))     time         = toLong(v);
-        else if(k.equals(DBFSIZE))    filesize     = toLong(v);
-        else if(k.equals(DBFTDC))     diacritics   = toBool(v);
-        else if(k.equals(DBUPDIDX))   updindex     = toBool(v);
-        else if(k.equals(DBAUTOOPT))  autooptimize = toBool(v);
-        else if(k.equals(DBTXTIDX))   textindex    = toBool(v);
-        else if(k.equals(DBATVIDX))   attrindex    = toBool(v);
-        else if(k.equals(DBTOKIDX))   tokenindex   = toBool(v);
-        else if(k.equals(DBFTXIDX))   ftindex      = toBool(v);
-        else if(k.equals(DBTXTINC))   textinclude  = v;
-        else if(k.equals(DBATVINC))   attrinclude  = v;
-        else if(k.equals(DBTOKINC))   tokeninclude = v;
-        else if(k.equals(DBFTXINC))   ftinclude    = v;
-        else if(k.equals(DBSPLITS))   splitsize    = toInt(v);
-        else if(k.equals(DBCRTTXT))   createtext   = toBool(v);
-        else if(k.equals(DBCRTATV))   createattr   = toBool(v);
-        else if(k.equals(DBCRTTOK))   createtoken  = toBool(v);
-        else if(k.equals(DBCRTFTX))   createft     = toBool(v);
-        else if(k.equals(DBWCIDX))    wcindex      = toBool(v);
-        else if(k.equals(DBFTST))     stemming     = toBool(v);
-        else if(k.equals(DBFTCS))     casesens     = toBool(v);
-        else if(k.equals(DBUPTODATE)) uptodate     = toBool(v);
-        // legacy: set up-to-date flag to false if path index does not exist
-        else if(k.equals(DBPTHIDX) && !toBool(v)) uptodate = false;
+      final String v = Token.string(in.readToken());
+      switch(k) {
+        case DBSTR:      storage = v; break;
+        case IDBSTR:     istorage = v; break;
+        case DBFNAME:    original = v; break;
+        case DBFTSW:     stopwords = v; break;
+        case DBFTLN:     language = Language.get(v); break;
+        case DBSIZE:     size = toInt(v); break;
+        case DBNDOCS:    ndocs = toInt(v); break;
+        case DBMAXLEN:   maxlen = toInt(v); break;
+        case DBMAXCATS:  maxcats = toInt(v); break;
+        case DBLASTID:   lastid = toInt(v); break;
+        case DBTIME:     time = toLong(v); break;
+        case DBFSIZE:    inputsize = toLong(v); break;
+        case DBFTDC:     diacritics = toBoolean(v); break;
+        case DBUPDIDX:   updindex = toBoolean(v); break;
+        case DBAUTOOPT:  autooptimize = toBoolean(v); break;
+        case DBTXTIDX:   textindex = toBoolean(v); break;
+        case DBATVIDX:   attrindex = toBoolean(v); break;
+        case DBTOKIDX:   tokenindex = toBoolean(v); break;
+        case DBFTXIDX:   ftindex = toBoolean(v); break;
+        case DBTXTINC:   textinclude = v; break;
+        case DBATVINC:   attrinclude = v; break;
+        case DBTOKINC:   tokeninclude = v; break;
+        case DBFTXINC:   ftinclude = v; break;
+        case DBSPLITS:   splitsize = toInt(v); break;
+        case DBCRTTXT:   createtext = toBoolean(v); break;
+        case DBCRTATV:   createattr = toBoolean(v); break;
+        case DBCRTTOK:   createtoken = toBoolean(v); break;
+        case DBCRTFTX:   createft = toBoolean(v); break;
+        case DBFTST:     stemming = toBoolean(v); break;
+        case DBFTCS:     casesens = toBoolean(v); break;
+        case DBUPTODATE: uptodate = toBoolean(v); break;
       }
     }
 
@@ -402,9 +428,7 @@ public final class MetaData {
     // check version of database indexes
     oldindex = !istorage.equals(ISTORAGE) &&
         new Version(istorage).compareTo(new Version(ISTORAGE)) > 0;
-    corrupt = dbfile(DATAUPD).exists();
-    // deactivate full-text index if obsolete trie structure was used
-    if(wcindex) ftindex = false;
+    corrupt = dbFile(DATAUPD).exists();
   }
 
   /**
@@ -417,7 +441,7 @@ public final class MetaData {
     writeInfo(out, DBFNAME,    original);
     writeInfo(out, DBTIME,     time);
     writeInfo(out, IDBSTR,     ISTORAGE);
-    writeInfo(out, DBFSIZE,    filesize);
+    writeInfo(out, DBFSIZE,    inputsize);
     writeInfo(out, DBNDOCS,    ndocs);
     writeInfo(out, DBSIZE,     size);
     writeInfo(out, DBUPDIDX,   updindex);
@@ -468,22 +492,13 @@ public final class MetaData {
    * @param parser parser
    */
   public void assign(final Parser parser) {
-    final IO file = parser.source;
-    original = file != null ? file.path() : "";
-    filesize = file != null ? file.length() : 0;
-    time = file != null ? file.timeStamp() : System.currentTimeMillis();
+    final IO source = parser.source;
+    original = source != null ? source.path() : "";
+    inputsize = source != null ? source.length() : 0;
+    time = source != null ? source.timeStamp() : System.currentTimeMillis();
   }
 
   // PRIVATE METHODS ==============================================================================
-
-  /**
-   * Converts the specified string to a boolean value.
-   * @param value value
-   * @return result
-   */
-  private static boolean toBool(final String value) {
-    return "1".equals(value);
-  }
 
   /**
    * Writes a boolean option to the specified output.

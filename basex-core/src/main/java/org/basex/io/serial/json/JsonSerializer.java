@@ -12,7 +12,7 @@ import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.map.Map;
+import org.basex.query.value.map.XQMap;
 import org.basex.query.value.type.*;
 import org.basex.util.hash.*;
 import org.basex.util.options.Options.YesNo;
@@ -20,7 +20,7 @@ import org.basex.util.options.Options.YesNo;
 /**
  * Abstract JSON serializer class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class JsonSerializer extends StandardSerializer {
@@ -72,13 +72,13 @@ public abstract class JsonSerializer extends StandardSerializer {
   @Override
   public void function(final FItem item) throws IOException {
     try {
-      if(item instanceof Map) {
+      if(item instanceof XQMap) {
         level++;
         out.print('{');
 
         boolean s = false;
         final TokenSet set = nodups ? new TokenSet() : null;
-        final Map m = (Map) item;
+        final XQMap m = (XQMap) item;
         for(final Item key : m.keys()) {
           final byte[] name = key.string(null);
           if(nodups) {
@@ -98,15 +98,15 @@ public abstract class JsonSerializer extends StandardSerializer {
         indent();
         out.print('}');
 
-      } else if(item instanceof Array) {
+      } else if(item instanceof XQArray) {
         level++;
         out.print('[');
 
         boolean s = false;
-        for(final Value val : ((Array) item).members()) {
+        for(final Value value : ((XQArray) item).members()) {
           if(s) out.print(',');
           indent();
-          serialize(val);
+          serialize(value);
           s = true;
         }
 
@@ -128,9 +128,9 @@ public abstract class JsonSerializer extends StandardSerializer {
     try {
       if(item.type.isNumber()) {
         final byte[] str = item.string(null);
-        if(eq(str, NAN, INF, NINF)) throw SERNUMBER_X.getIO(str);
+        if(eq(str, NAN, INF, NEGATVE_INF)) throw SERNUMBER_X.getIO(str);
         out.print(str);
-      } else if(item.type == AtomType.BLN) {
+      } else if(item.type == AtomType.BOOLEAN) {
         out.print(item.string(null));
       } else {
         string(item.string(null));
@@ -154,16 +154,7 @@ public abstract class JsonSerializer extends StandardSerializer {
   }
 
   @Override
-  protected final void printChar(final int cp) throws IOException {
-    if(map != null) {
-      // character map
-      final byte[] value = map.get(cp);
-      if(value != null) {
-        out.print(value);
-        return;
-      }
-    }
-
+  protected final void print(final int cp) throws IOException {
     if(escape) {
       switch(cp) {
         case '\b': out.print("\\b");  break;
@@ -177,7 +168,7 @@ public abstract class JsonSerializer extends StandardSerializer {
         default  : out.print(cp);     break;
       }
     } else {
-      out.print(cp);
+      super.print(cp);
     }
   }
 

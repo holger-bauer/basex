@@ -5,10 +5,9 @@ import static java.lang.Long.*;
 import java.util.*;
 
 /**
- * Bit array that grows when needed. The implementation is similar to
- * {@link BitSet}.
+ * Bit array that grows when needed. The implementation is similar to {@link BitSet}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class BitArray {
@@ -24,26 +23,30 @@ public final class BitArray {
   /** Number of used bits. */
   private int size;
 
-  /** Construct a new bit array. */
-  public BitArray() {
-    init();
-  }
-
   /**
-   * Construct a new bit array with the specified number of bits.
-   * @param capacity initial number of bits
+   * Constructs a new bit array with the specified backing array.
+   * @param array array with bits
+   * @param nr number of used bits
    */
-  private BitArray(final int capacity) {
-    init(new long[(Math.max(0, capacity - 1) >>> WORD_POWER) + 1], capacity);
+  public BitArray(final long[] array, final int nr) {
+    words = array;
+    size = nr;
   }
 
   /**
-   * Construct a new bit array and an initial value.
+   * Constructs a new bit array.
+   */
+  public BitArray() {
+    this(new long[1], 0);
+  }
+
+  /**
+   * Constructs a new bit array and an initial value.
    * @param capacity initial number of bits
    * @param set sets or clears all values
    */
   public BitArray(final int capacity, final boolean set) {
-    this(capacity);
+    this(new long[(Math.max(0, capacity - 1) >>> WORD_POWER) + 1], capacity);
     if(set) {
       final int p = Math.max(0, capacity - 1) >>> WORD_POWER;
       for(int i = 0; i < p; i++) words[i] = 0XFFFFFFFFFFFFFFFFL;
@@ -52,42 +55,15 @@ public final class BitArray {
   }
 
   /**
-   * Construct a new bit array with the specified backing array.
-   * @param a array with bits
-   * @param l number of used bits
-   */
-  public BitArray(final long[] a, final int l) {
-    init(a, l);
-  }
-
-  /** Initialize the bit array with an empty array. */
-  void init() {
-    init(new long[1], 0);
-  }
-
-  /**
-   * Initialize the bit array with the specified backing array.
-   * @param a array with bits
-   * @param l number of used bits
-   */
-  void init(final long[] a, final int l) {
-    words = a;
-    size = l;
-  }
-
-  /**
    * The word array used to store the bits. The array is shrunk to the last
    * word, where a bit is set.
    * @return array of longs
    */
   public long[] toArray() {
-    // find the last index of a word which is different from 0:
+    // find the last index of a word which is different from 0
     int i = words.length;
     while(--i >= 0 && words[i] == 0);
-
-    final long[] result = new long[++i];
-    System.arraycopy(words, 0, result, 0, i);
-    return result;
+    return Arrays.copyOf(words, ++i);
   }
 
   /**
@@ -102,7 +78,7 @@ public final class BitArray {
   }
 
   /**
-   * Get the value of the i<sup>th</sup> bit.
+   * Gets the value of the i<sup>th</sup> bit.
    * @param i index of the bit
    * @return {@code true} if the i<sup>th</sup> bit is set
    */
@@ -115,7 +91,7 @@ public final class BitArray {
   }
 
   /**
-   * Set the i<sup>th</sup> bit to 1.
+   * Sets the i<sup>th</sup> bit to 1.
    * @param i index of the bit
    */
   public void set(final int i) {
@@ -127,7 +103,7 @@ public final class BitArray {
   }
 
   /**
-   * Set the i<sup>th</sup> bit to 0.
+   * Sets the i<sup>th</sup> bit to 0.
    * @param i index of the bit
    */
   public void clear(final int i) {
@@ -139,33 +115,22 @@ public final class BitArray {
   }
 
   /**
-   * Get the next bit set to 0, starting from the i<sup>th</sup> bit.
-   * @param i index from which to start the search (inclusive)
-   * @return index of the next clear bit after the i<sup>th</sup> bit
+   * Gets the index of the first clear bit.
+   * @return index
    */
-  public int nextFree(final int i) {
-    // calculate the index of the word in the array: i div 2^6 = i >> 6
-    int wi = i >>> WORD_POWER;
-    // invert the word and skip the first i bits:
-    long word = ~words[wi] & WORD_MASK << i;
-
-    if(word != 0) {
-      return (wi << WORD_POWER) + numberOfTrailingZeros(word);
-    }
-
+  public int nextFree() {
     final int wl = words.length;
-    while(++wi < wl) {
-      if((word = ~words[wi]) != 0) {
-        return (wi << WORD_POWER) + numberOfTrailingZeros(word);
+    for(int w = 0; w < wl; w++) {
+      final long word = ~words[w];
+      if(word != 0) {
+        return (w << WORD_POWER) + numberOfTrailingZeros(word);
       }
     }
-
-    // wi * 2^6:
-    return wi << WORD_POWER;
+    return wl << WORD_POWER;
   }
 
   /**
-   * Get the next bit set to 1, starting from the i<sup>th</sup> bit.
+   * Gets the next bit set to 1, starting from the i<sup>th</sup> bit.
    * @param i index from which to start the search (inclusive)
    * @return index of the next set bit after the i<sup>th</sup> bit
    */
@@ -183,12 +148,17 @@ public final class BitArray {
   }
 
   /**
-   * Expand the {@link #words} array to the desired size.
+   * Expands the {@link #words} array to the desired size.
    * @param s new size
    */
   private void resize(final int s) {
-    final long[] tmp = new long[Math.max(words.length << 1, s)];
-    System.arraycopy(words, 0, tmp, 0, words.length);
-    words = tmp;
+    words = Arrays.copyOf(words, Math.max(words.length << 1, s));
+  }
+
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("BitArray. Size: " + size + ", Entries: ");
+    for(final long w : words) sb.append(toBinaryString(w)).append(' ');
+    return sb.toString();
   }
 }

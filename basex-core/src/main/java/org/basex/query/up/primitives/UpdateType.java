@@ -6,7 +6,7 @@ import org.basex.query.up.*;
  * Types of update operations. Do not change the order as this affects
  * {@link NodeUpdateComparator} and will most likely lead to weird results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public enum UpdateType {
@@ -23,6 +23,7 @@ public enum UpdateType {
 
   // Backup operation
 
+  /** Alter backup.         */ BACKUPALTER,
   /** Create backup.        */ BACKUPCREATE,
 
   // Operations on nodes of existing databases

@@ -7,20 +7,22 @@ import java.util.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
+import org.basex.core.cmd.Check;
 import org.basex.core.cmd.List;
 import org.basex.core.cmd.Set;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * This is a parser for XML input, creating {@link Command} instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class XMLParser extends CommandParser {
@@ -42,12 +44,14 @@ final class XMLParser extends CommandParser {
         query = COMMANDS + query;
         // ensure that the root contains no text nodes as children
         final String ws = COMMANDS + "/text()[normalize-space()]";
-        try(QueryProcessor qp = new QueryProcessor(ws, ctx).context(node)) {
+        try(QueryProcessor qp = new QueryProcessor(ws, ctx)) {
+          qp.context(node);
           if(!qp.value().isEmpty())
             throw error(Text.SYNTAX_X, '<' + COMMANDS + "><...></" + COMMANDS + '>');
         }
       }
-      try(QueryProcessor qp = new QueryProcessor(query, ctx).context(node)) {
+      try(QueryProcessor qp = new QueryProcessor(query, ctx)) {
+        qp.context(node);
         for(final Item ia : qp.value()) cmds.add(command(ia).baseURI(uri));
       }
     } catch(final IOException ex) {
@@ -66,6 +70,8 @@ final class XMLParser extends CommandParser {
     final String e = ((ANode) root).qname().toJava().toString();
     if(e.equals(ADD) && check(root, PATH + '?', '<' + INPUT))
       return new Add(value(root, PATH), xml(root));
+    if(e.equals(ALTER_BACKUP) && check(root, NAME, NEWNAME))
+      return new AlterBackup(value(root, NAME), value(root, NEWNAME));
     if(e.equals(ALTER_DB) && check(root, NAME, NEWNAME))
       return new AlterDB(value(root, NAME), value(root, NEWNAME));
     if(e.equals(ALTER_PASSWORD) && check(root, NAME, '#' + PASSWORD + '?'))
@@ -228,10 +234,11 @@ final class XMLParser extends CommandParser {
    * @throws QueryException query exception
    */
   private String execute(final String query, final Item context) throws QueryException {
-    try(QueryProcessor qp = new QueryProcessor(query, ctx).context(context)) {
-      final Iter ir = qp.iter();
-      final Item it = ir.next();
-      return it == null ? "" : it.toJava().toString().trim();
+    try(QueryProcessor qp = new QueryProcessor(query, ctx)) {
+      qp.context(context);
+      final Iter iter = qp.iter();
+      final Item item = iter.next();
+      return item == null ? "" : item.toJava().toString().trim();
     }
   }
 
@@ -250,27 +257,26 @@ final class XMLParser extends CommandParser {
    *   <li> <code>{}</code> means that the command must not have any arguments }</li>
    * </ul>
    * @param root root node
-   * @param checks checks to be performed.
+   * @param checks checks to be performed
    * @return success flag
    * @throws QueryException query exception
    */
   private boolean check(final Item root, final String... checks) throws QueryException {
     // prepare validating query
-    final ValueBuilder ma = new ValueBuilder();
-    final ValueBuilder oa = new ValueBuilder();
+    final TokenList mand = new TokenList(), opt = new TokenList();
     String t = null;
     boolean ot = true;
     boolean n = false;
-    for(String c : checks) {
-      final boolean o = c.endsWith("?");
-      c = c.replace("?", "");
-      if(!c.isEmpty() && !Character.isLetter(c.charAt(0))) {
+    for(String check : checks) {
+      final boolean o = Strings.endsWith(check, '?');
+      check = check.replace("?", "");
+      if(!check.isEmpty() && !Character.isLetter(check.charAt(0))) {
         // textual contents
-        t = c.substring(1);
+        t = check.substring(1);
         ot = o;
-        n = c.charAt(0) == '<';
+        n = check.charAt(0) == '<';
       } else {
-        (o ? oa : ma).add(Str.get(c));
+        (o ? opt : mand).add(check);
       }
     }
 
@@ -295,23 +301,17 @@ final class XMLParser extends CommandParser {
     }
 
     // run query
-    final Value mv = ma.value(), ov = oa.value();
-    try(QueryProcessor qp = new QueryProcessor(tb.toString(), ctx).context(root)) {
-      qp.bind("A", mv).bind("O", ov);
+    try(QueryProcessor qp = new QueryProcessor(tb.toString(), ctx)) {
+      qp.context(root);
+      qp.bind("A", StrSeq.get(mand.toArray())).bind("O", StrSeq.get(opt.toArray()));
       if(!qp.value().isEmpty()) return true;
     }
     // build error string
     final TokenBuilder syntax = new TokenBuilder();
     final byte[] nm = ((ANode) root).qname().string();
     syntax.reset().add('<').add(nm);
-    for(final Item i : mv) {
-      final byte[] a = i.string(null);
-      syntax.add(' ').add(a).add("=\"...\"");
-    }
-    for(final Item i : ov) {
-      final byte[] a = i.string(null);
-      syntax.add(" (").add(a).add("=\"...\")");
-    }
+    for(final byte[] m : mand) syntax.add(' ').add(m).add("=\"...\"");
+    for(final byte[] o : opt) syntax.add(" (").add(o).add("=\"...\")");
     if(t != null) {
       syntax.add('>');
       if(ot) syntax.add('(');
@@ -331,6 +331,6 @@ final class XMLParser extends CommandParser {
    * @return query exception
    */
   private static QueryException error(final String msg, final Object... ext) {
-    return new QueryException(null, new QNm(), msg, ext);
+    return new QueryException(null, QNm.EMPTY, msg, ext);
   }
 }

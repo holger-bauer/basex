@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 
 import java.io.*;
 
+import org.basex.core.parse.*;
 import org.basex.core.users.*;
 import org.basex.data.*;
 import org.basex.io.*;
@@ -13,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'replace' command and replaces documents in a collection.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Replace extends ACreate {
@@ -23,13 +24,13 @@ public final class Replace extends ACreate {
    * @param path resource path
    */
   public Replace(final String path) {
-    super(Perm.WRITE, true, path);
+    this(path, null);
   }
 
   /**
    * Constructor.
    * @param path resource path
-   * @param input input file or XML string
+   * @param input input reference (local/remote file path or XML string; can be {@code null})
    */
   public Replace(final String path, final String input) {
     super(Perm.WRITE, true, path, input);
@@ -45,7 +46,7 @@ public final class Replace extends ACreate {
     }
 
     final String path = MetaData.normPath(args[0]);
-    if(path == null || path.isEmpty() || path.endsWith(".")) return error(PATH_INVALID_X, args[0]);
+    if(path == null) return error(PATH_INVALID_X, args[0]);
 
     final Data data = context.data();
     final IOFile bin = data.meta.binary(path);
@@ -87,10 +88,11 @@ public final class Replace extends ACreate {
         add.init(context, out);
         if(!add.build()) return error(add.info());
 
+        final DataClip clip = new DataClip(add.tmpData);
         if(docs.isEmpty()) {
-          auc.addInsert(data.meta.size, -1, add.clip);
+          auc.addInsert(data.meta.size, -1, clip);
         } else {
-          auc.addReplace(docs.get(d++), add.clip);
+          auc.addReplace(docs.get(d++), clip);
         }
         context.invalidate();
       } finally {
@@ -104,5 +106,10 @@ public final class Replace extends ACreate {
     auc.execute(false);
 
     return info(RES_REPLACED_X_X, ds + bs, jc().performance);
+  }
+
+  @Override
+  public void build(final CmdBuilder cb) {
+    cb.init().arg(0).add(1);
   }
 }

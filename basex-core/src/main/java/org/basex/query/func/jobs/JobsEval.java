@@ -1,13 +1,13 @@
 package org.basex.query.func.jobs;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
+import java.io.*;
 import java.util.*;
 import java.util.Map.*;
 
-import org.basex.core.*;
 import org.basex.core.jobs.*;
+import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.value.*;
@@ -17,31 +17,54 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class JobsEval extends StandardFunc {
+public class JobsEval extends StandardFunc {
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    return eval(toQuery(0, qc), qc);
+  }
+
+  /**
+   * Evaluates a query as job.
+   * @param query query
+   * @param qc query context
+   * @return resulting value
+   * @throws QueryException query exception
+   */
+  final Str eval(final IOContent query, final QueryContext qc) throws QueryException {
     checkAdmin(qc);
-
-    final String query = string(toToken(exprs[0], qc));
     final HashMap<String, Value> bindings = toBindings(1, qc);
+    final JobsOptions opts = toOptions(2, new JobsOptions(), qc);
+    opts.set(JobsOptions.BASE_URI, toBaseUri(query.url(), opts));
 
-    final EvalOptions opts = new EvalOptions();
-    if(exprs.length > 2) toOptions(2, opts, qc);
-
-    // copy variable values
-    final Context ctx = qc.context;
-    for(final Entry<String, Value> it : bindings.entrySet()) {
-      final String key = it.getKey();
-      bindings.put(key, ScheduledXQuery.copy(it.getValue().iter(), ctx, qc));
+    final boolean service = Boolean.TRUE.equals(opts.get(JobsOptions.SERVICE));
+    if(service) {
+      if(!bindings.isEmpty()) throw JOBS_SERVICE.get(info);
+      // invalidate option (not relevant for next steps, i.e., if services are written to disk)
+      opts.put(JobsOptions.SERVICE, null);
     }
 
-    // check if number of maximum queries has been reached
-    if(ctx.jobs.active.size() >= JobPool.MAXQUERIES) throw JOBS_OVERFLOW.get(info);
+    // copy variable values
+    for(final Entry<String, Value> it : bindings.entrySet()) {
+      bindings.put(it.getKey(), it.getValue().materialize(qc, BASEX_FUNCTION_X, info));
+    }
 
-    final ScheduledXQuery job = new ScheduledXQuery(query, bindings, opts, info, qc, sc);
+    final QueryJobSpec spec = new QueryJobSpec(opts, bindings, query);
+    final QueryJob job = new QueryJob(spec, qc.context, info, null);
+
+    // add service
+    if(service) {
+      if(!bindings.isEmpty()) throw JOBS_SERVICE.get(info);
+      try {
+        final Jobs jobs = new Jobs(qc.context);
+        jobs.add(spec);
+        jobs.write();
+      } catch(final IOException ex) {
+        throw JOBS_SERVICE_X_X.get(info, ex);
+      }
+    }
     return Str.get(job.jc().id());
   }
 }

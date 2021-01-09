@@ -11,7 +11,7 @@ import javax.xml.xquery.*;
  *
  * Part 2: Configuring XQJ Connections.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  */
 public final class Part2 extends Main {
   /**
@@ -29,7 +29,7 @@ public final class Part2 extends Main {
 
     String xqdsClassName = p.getProperty("ClassName");
     Class<?> xqdsClass = Class.forName(xqdsClassName);
-    XQDataSource xqds = (XQDataSource) xqdsClass.newInstance();
+    XQDataSource xqds = (XQDataSource) xqdsClass.getDeclaredConstructor().newInstance();
 
     // Connect with user name and password
     info("Connect with user name and password");

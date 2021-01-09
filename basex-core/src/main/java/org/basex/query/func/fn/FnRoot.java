@@ -1,33 +1,27 @@
 package org.basex.query.func.fn;
 
-import org.basex.core.locks.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
-import org.basex.query.util.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FnRoot extends StandardFunc {
+public final class FnRoot extends ContextFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toEmptyNode(ctxArg(0, qc), qc);
-    return node != null ? node.root() : null;
+    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    return node == null ? Empty.VALUE : node.root();
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.CTX && exprs.length == 0 || super.has(flag);
-  }
-
-  @Override
-  public boolean accept(final ASTVisitor visitor) {
-    return (exprs.length != 0 || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
+  protected Expr opt(final CompileContext cc) {
+    return optFirst(true, false, cc.qc.focus.value);
   }
 }

@@ -5,27 +5,27 @@ import static org.basex.http.webdav.WebDAVUtils.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 import javax.servlet.http.*;
 
 import org.apache.commons.fileupload.*;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.servlet.*;
+import org.basex.http.*;
 import org.basex.util.*;
 
 import com.bradmcevoy.http.*;
-import com.bradmcevoy.http.Response.ContentType;
 import com.bradmcevoy.http.Cookie;
+import com.bradmcevoy.http.Response.*;
 
 /**
- * Wrapper around {@link HttpServletRequest}, which in addition implements {@link Request}.<br/>
+ * Wrapper around {@link HttpServletRequest}, which in addition implements {@link Request}.
  * This implementation is the same as the implementation of {@code ServletRequest} found in
  * {@code milton-servlet}. Since this is one of the few classes which is needed from that library
  * the source is integrated into BaseX.
  *
  * @author Milton Development Team
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */
@@ -34,7 +34,7 @@ final class WebDAVRequest extends AbstractRequest {
   private static final String DESTINATION = "Destination";
 
   /** HTTP servlet request. */
-  private final HttpServletRequest req;
+  private final HttpServletRequest request;
   /** Request method. */
   private final Method method;
   /** Request URL. */
@@ -50,28 +50,28 @@ final class WebDAVRequest extends AbstractRequest {
     CONTENT_TYPES.put(ContentType.HTTP, Response.HTTP);
     CONTENT_TYPES.put(ContentType.MULTIPART, Response.MULTIPART);
     CONTENT_TYPES.put(ContentType.XML, Response.XML);
-    for(final Entry<ContentType, String> entry : CONTENT_TYPES.entrySet())
-      TYPE_CONTENTS.put(entry.getValue(), entry.getKey());
+    CONTENT_TYPES.forEach((key, value) -> TYPE_CONTENTS.put(value, key));
   }
 
   /**
    * Constructor.
-   * @param req HTTP servlet request
+   * @param conn HTTP connection
    */
-  WebDAVRequest(final HttpServletRequest req) {
-    this.req = req;
-    method = Method.valueOf(req.getMethod());
-    url = decode(req.getRequestURL().toString());
+  WebDAVRequest(final HTTPConnection conn) {
+    request = conn.request;
+    method = Method.valueOf(request.getMethod());
+    url = decode(request.getRequestURL().toString());
+    auth = new Auth(conn.clientName(), null);
   }
 
   @Override
   public String getFromAddress() {
-    return req.getRemoteHost();
+    return request.getRemoteHost();
   }
 
   @Override
   public String getRequestHeader(final Header header) {
-    final String value = req.getHeader(header.code);
+    final String value = request.getHeader(header.code);
     return header.code.equals(DESTINATION) ? decode(value) : value;
   }
 
@@ -87,15 +87,11 @@ final class WebDAVRequest extends AbstractRequest {
 
   @Override
   public String getRemoteAddr() {
-    return req.getRemoteAddr();
+    return request.getRemoteAddr();
   }
 
   @Override
   public Auth getAuthorization() {
-    if(auth == null) {
-      final String enc = getRequestHeader(Header.AUTHORIZATION);
-      if(enc != null && !enc.isEmpty()) auth = new Auth(enc);
-    }
     return auth;
   }
 
@@ -106,16 +102,16 @@ final class WebDAVRequest extends AbstractRequest {
 
   @Override
   public InputStream getInputStream() throws IOException {
-    return req.getInputStream();
+    return request.getInputStream();
   }
 
   @Override
   public Map<String, String> getHeaders() {
     final Map<String, String> map = new HashMap<>();
-    final Enumeration<String> en = req.getHeaderNames();
+    final Enumeration<String> en = request.getHeaderNames();
     while(en.hasMoreElements()) {
       final String name = en.nextElement();
-      final String val = req.getHeader(name);
+      final String val = request.getHeader(name);
       map.put(name, val);
     }
     return map;
@@ -123,7 +119,7 @@ final class WebDAVRequest extends AbstractRequest {
 
   @Override
   public Cookie getCookie(final String name) {
-    for(final javax.servlet.http.Cookie c : req.getCookies()) {
+    for(final javax.servlet.http.Cookie c : request.getCookies()) {
       if(c.getName().equals(name)) return new WebDAVCookie(c);
     }
     return null;
@@ -132,7 +128,7 @@ final class WebDAVRequest extends AbstractRequest {
   @Override
   public List<Cookie> getCookies() {
     final List<Cookie> list = new ArrayList<>();
-    for(final javax.servlet.http.Cookie c : req.getCookies()) {
+    for(final javax.servlet.http.Cookie c : request.getCookies()) {
       list.add(new WebDAVCookie(c));
     }
     return list;
@@ -143,8 +139,8 @@ final class WebDAVRequest extends AbstractRequest {
       final Map<String, com.bradmcevoy.http.FileItem> files) throws RequestParseException {
     try {
       if(isMultiPart()) {
-        parseQueryString(params, req.getQueryString());
-        final List<FileItem> items = new ServletFileUpload().parseRequest(req);
+        parseQueryString(params, request.getQueryString());
+        final List<FileItem> items = new ServletFileUpload().parseRequest(request);
         for(final FileItem item : items) {
           if(item.isFormField())
             params.put(item.getFieldName(), item.getString());
@@ -152,10 +148,10 @@ final class WebDAVRequest extends AbstractRequest {
             files.put(item.getFieldName(), new FileItemWrapper(item));
         }
       } else {
-        final Enumeration<String> en = req.getParameterNames();
+        final Enumeration<String> en = request.getParameterNames();
         while(en.hasMoreElements()) {
           final String nm = en.nextElement();
-          final String val = req.getParameter(nm);
+          final String val = request.getParameter(nm);
           params.put(nm, val);
         }
       }
@@ -193,7 +189,7 @@ final class WebDAVRequest extends AbstractRequest {
    * @return the content type of the current request
    */
   private ContentType getRequestContentType() {
-    final String s = req.getContentType();
+    final String s = request.getContentType();
     if(s == null) return null;
     if(s.contains(Response.MULTIPART)) return ContentType.MULTIPART;
     return TYPE_CONTENTS.get(s);
@@ -210,13 +206,13 @@ final class WebDAVRequest extends AbstractRequest {
 
 /**
  * Wrapper around {@link FileItem}, which in addition implements
- * {@link com.bradmcevoy.http.FileItem}.<br/>
+ * {@link com.bradmcevoy.http.FileItem}.
  * This implementation is the same as the implementation of
  * {@code FileItemWrapper} found in {@code milton-servlet}. Since this is one of
  * the few classes which is needed from that library, the source is integrated
  * into BaseX.
  * @author Milton Development Team
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */

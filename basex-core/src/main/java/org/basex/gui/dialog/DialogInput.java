@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Dialog with a single text field.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogInput extends BaseXDialog {
@@ -42,7 +42,7 @@ final class DialogInput extends BaseXDialog {
     super(dialog, title);
     this.old = old;
     this.type = type;
-    db = dialog.gui.context.databases.listDBs();
+    db = dialog.gui.context.listDBs();
 
     String t = "";
     if(type == 0) {
@@ -55,7 +55,7 @@ final class DialogInput extends BaseXDialog {
 
     set(new BaseXLabel(t, false, true).border(0, 0, 6, 0), BorderLayout.NORTH);
 
-    input = new BaseXTextField(old, this);
+    input = new BaseXTextField(this, old);
     info = new BaseXLabel(" ");
 
     final BaseXBack p = new BaseXBack(new BorderLayout(0, 8));

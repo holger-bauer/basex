@@ -13,7 +13,7 @@ import org.basex.util.ft.*;
 /**
  * Constructor for marked full-text results.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DataFTBuilder {
@@ -37,7 +37,6 @@ final class DataFTBuilder {
     this.len = len;
     this.name = name;
   }
-
 
   /**
    * Returns the id of the marker element name.

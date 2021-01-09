@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract class for database updates.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class ACreate extends Command {
@@ -69,7 +69,7 @@ public abstract class ACreate extends Command {
 
     // assign (intermediate) name to input reference
     if(io instanceof IOContent || io instanceof IOStream) {
-      if(name.endsWith("/")) throw new BaseXException(NAME_INVALID_X, name);
+      if(Strings.endsWith(name, '/')) throw new BaseXException(NAME_INVALID_X, name);
       io.name(name.isEmpty() ? "" : name + '.' + options.get(MainOptions.PARSER));
     }
     return io;
@@ -106,7 +106,7 @@ public abstract class ACreate extends Command {
 
   @Override
   public boolean newData(final Context ctx) {
-    if(newData) close(ctx);
+    if(newData) Close.close(ctx);
     return newData;
   }
 
@@ -129,7 +129,7 @@ public abstract class ACreate extends Command {
   /**
    * Update code.
    *
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Christian Gruen
    */
   abstract static class Code {

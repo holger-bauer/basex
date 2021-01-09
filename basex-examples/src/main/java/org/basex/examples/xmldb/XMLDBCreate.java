@@ -7,7 +7,7 @@ import org.xmldb.api.base.*;
 /**
  * This class serves as an example for creating a database with the XML:DB API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  */
 public final class XMLDBCreate {
   /** Database driver. */
@@ -27,7 +27,7 @@ public final class XMLDBCreate {
     try {
       // Register the database
       Class<?> c = Class.forName(DRIVER);
-      Database db = (Database) c.newInstance();
+      Database db = (Database) c.getDeclaredConstructor().newInstance();
       DatabaseManager.registerDatabase(db);
 
       System.out.println("\n* Create a new collection.");

@@ -8,7 +8,7 @@ import org.basex.util.list.*;
  * This class indexes keys in a balanced binary tree, including their id values.
  * Iterator methods are available to traverse through the tree.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
@@ -333,8 +333,8 @@ public class IndexTree {
   public String toString() {
     final TokenBuilder tb = new TokenBuilder();
     tb.add("IndexTree[Root: ").addInt(root).add(Prop.NL);
-    final int sz = keys.size();
-    for(int c = 0; c < sz; c++) {
+    final int size = keys.size();
+    for(int c = 0; c < size; c++) {
       tb.add("  \"").add(keys.get(c)).add("\": ").add("ids");
       if(tokenize) tb.add("/pos");
       tb.add(": (").add(Num.toString(ids.get(c))).add(')');

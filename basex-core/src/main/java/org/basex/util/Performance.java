@@ -3,7 +3,7 @@ package org.basex.util;
 /**
  * This class contains methods for performance measurements.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Performance {
@@ -11,21 +11,22 @@ public final class Performance {
   private long time = System.nanoTime();
 
   /**
-   * Returns the start time.
-   * @return start time
-   */
-  public long start() {
-    return time;
-  }
-
-  /**
    * Returns the measured execution time in nanoseconds and resets the timer.
    * @return execution time
    */
-  public long time() {
+  public long ns() {
+    return ns(true);
+  }
+
+  /**
+   * Returns the measured execution time in nanoseconds.
+   * @param reset reset timer
+   * @return execution time
+   */
+  public long ns(final boolean reset) {
     final long time2 = System.nanoTime();
     final long diff = time2 - time;
-    time = time2;
+    if(reset) time = time2;
     return diff;
   }
 
@@ -51,13 +52,23 @@ public final class Performance {
   }
 
   /**
-   * Returns a string with the measured execution time in milliseconds.
-   * @param time measured time in nanoseconds
+   * Returns the measured execution time in nanoseconds and resets the timer.
+   * @param nano execution time in nanoseconds
    * @param runs number of runs
    * @return execution time
    */
-  public static String getTime(final long time, final int runs) {
-    return Math.round(time / 10000.0d / runs) / 100.0d + " ms" + (runs > 1 ? " (avg)" : "");
+  public static double ms(final long nano, final int runs) {
+    return Math.round(nano / 10000.0d / runs) / 100.0d;
+  }
+
+  /**
+   * Returns a string with the measured execution time in milliseconds.
+   * @param nano measured time in nanoseconds
+   * @param runs number of runs
+   * @return execution time
+   */
+  public static String getTime(final long nano, final int runs) {
+    return ms(nano, runs) + " ms" + (runs > 1 ? " (avg)" : "");
   }
 
   /**
@@ -69,39 +80,19 @@ public final class Performance {
   }
 
   /**
-   * Formats a number according to the binary size orders (KB, MB, ...).
+   * Returns a human-readable representation for the specified size value (b, kB, MB, ...).
    * @param size value to be formatted
    * @return formatted size value
    */
   public static String format(final long size) {
-    return format(size, true, 5);
-  }
-
-  /**
-   * Formats a file size according to the binary size orders (KB, MB, ...).
-   * @param size file size
-   * @param det detailed suffix
-   * @return formatted size value
-   */
-  public static String format(final long size, final boolean det) {
-    return format(size, det, 0);
-  }
-
-  /**
-   * Formats a file size according to the binary size orders (KB, MB, ...),
-   * adding the specified offset to the orders of magnitude.
-   * @param size file size
-   * @param det detailed suffix
-   * @param off offset: higher values will result in more digits
-   * @return formatted size value
-   */
-  private static String format(final long size, final boolean det, final int off) {
-    if(size >= 1L << 50 + off) return (size + (1L << 49) >> 50) + " PB";
-    if(size >= 1L << 40 + off) return (size + (1L << 39) >> 40) + " TB";
-    if(size >= 1L << 30 + off) return (size + (1L << 29) >> 30) + " GB";
-    if(size >= 1L << 20 + off) return (size + (1L << 19) >> 20) + " MB";
-    if(size >= 1L << 10 + off) return (size + (1L <<  9) >> 10) + " KB";
-    return size + (det ? " Byte"  + (size == 1 ? "" : "s") : " B");
+    final String num = Long.toString(size);
+    final int nl = num.length();
+    if(nl > 16) return units(size, 1L << 40) + " PB";
+    if(nl > 13) return units(size, 1L << 40) + " TB";
+    if(nl > 10) return units(size, 1L << 30) + " GB";
+    if(nl >  7) return units(size, 1L << 20) + " MB";
+    if(nl >  4) return units(size, 1L << 10) + " kB";
+    return num + " b";
   }
 
   /**
@@ -116,10 +107,10 @@ public final class Performance {
    * Performs some garbage collection.
    * GC behavior in Java is a pretty complex task. Still, garbage collection
    * can be forced by calling it several times.
-   * @param number number of times to execute garbage collection
+   * @param count number of times to execute garbage collection
    */
-  public static void gc(final int number) {
-    for(int i = 0; i < number; ++i) System.gc();
+  public static void gc(final int count) {
+    for(int c = 0; c < count; ++c) System.gc();
   }
 
   /**
@@ -129,6 +120,16 @@ public final class Performance {
   public static long memory() {
     final Runtime rt = Runtime.getRuntime();
     return rt.totalMemory() - rt.freeMemory();
+  }
+
+  /**
+   * Returns the rounded up number of units.
+   * @param number number
+   * @param size size of unit
+   * @return units
+   */
+  private static long units(final long number, final long size) {
+    return (number + size - 1) / size;
   }
 
   @Override

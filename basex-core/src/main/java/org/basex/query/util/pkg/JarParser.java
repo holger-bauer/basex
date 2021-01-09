@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Parses the jar descriptors and performs schema checks.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 final class JarParser {
@@ -40,21 +40,20 @@ final class JarParser {
   public JarDesc parse(final IO io) throws QueryException {
     final JarDesc desc = new JarDesc();
     try {
-      final ANode node = new DBNode(io).children().next();
-      for(final ANode next : node.children()) {
-        if(next.type != NodeType.ELM) continue;
+      final ANode node = new DBNode(io).childIter().next();
+      for(final ANode next : node.childIter()) {
+        if(next.type != NodeType.ELEMENT) continue;
 
         final QNm name = next.qname();
         // ignore namespace to improve compatibility
-        if(eq(JAR, name.local())) desc.jars.add(next.string());
-        else if(eq(CLASS, name.local())) desc.classes.add(next.string());
-        // [CG] Packaging: add warning if unknown elements are encountered
+        if(eq(E_JAR, name.local())) desc.jars.add(next.string());
+        else if(eq(E_CLASS, name.local())) desc.classes.add(next.string());
       }
-      if(desc.jars.isEmpty()) throw BXRE_JARDESC_X.get(info, NOJARS);
-      if(desc.classes.isEmpty()) throw BXRE_JARDESC_X.get(info, NOCLASSES);
+      if(desc.jars.isEmpty()) throw REPO_PARSE_X_X.get(info, io.name(), NOJARS);
+      if(desc.classes.isEmpty()) throw REPO_PARSE_X_X.get(info, io.name(), NOCLASSES);
       return desc;
     } catch(final IOException ex) {
-      throw BXRE_JARFAIL_X.get(info, ex);
+      throw REPO_PARSE_X_X.get(info, io.name(), ex);
     }
   }
 }

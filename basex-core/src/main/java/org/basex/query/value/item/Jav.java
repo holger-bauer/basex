@@ -8,7 +8,7 @@ import org.basex.util.*;
 /**
  * Java item.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Jav extends Item {
@@ -39,19 +39,19 @@ public final class Jav extends Item {
   }
 
   @Override
-  public boolean eq(final Item it, final Collation coll, final StaticContext sc,
+  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
       final InputInfo ii) throws QueryException {
-    return Token.eq(string(ii), it.string(ii));
+    return Token.eq(string(ii), item.string(ii));
   }
 
   @Override
-  public boolean sameKey(final Item it, final InputInfo ii) {
+  public boolean sameKey(final Item item, final InputInfo ii) {
     return false;
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    return Token.diff(string(ii), it.string(ii));
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    return Token.diff(string(ii), item.string(ii));
   }
 
   @Override
@@ -60,7 +60,12 @@ public final class Jav extends Item {
   }
 
   @Override
-  public String toString() {
-    return Util.info("\"%\"", value);
+  public boolean equals(final Object obj) {
+    return obj == this || obj instanceof Jav && value.equals(((Jav) obj).value);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.quoted(Token.token(value.toString()));
   }
 }

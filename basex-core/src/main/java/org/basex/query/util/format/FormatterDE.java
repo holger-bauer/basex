@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * English language formatter. Can be instantiated via {@link Formatter#get}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class FormatterDE extends Formatter {
@@ -121,7 +121,7 @@ final class FormatterDE extends Formatter {
     return ERAS[year <= 0 ? 0 : 1];
   }
 
-  // PRIVATE METHODS ==========================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Creates a word character sequence for the specified number.

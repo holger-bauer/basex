@@ -16,13 +16,14 @@ import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Functions on zip files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ZipZipFile extends ZipFn {
@@ -41,20 +42,19 @@ public class ZipZipFile extends ZipFn {
     final ANode elm = toElem(exprs[0], qc);
     if(!elm.qname().eq(Q_FILE)) throw ZIP_UNKNOWN_X.get(info, elm.qname());
     // get file
-    final String file = attribute(elm, HREF, true);
+    final IOFile file = new IOFile(attribute(elm, HREF, true));
 
     // write zip file
     boolean ok = true;
-    try(FileOutputStream fos = new FileOutputStream(file);
-        ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(fos))) {
-      create(zos, elm.children(), "", null, qc);
+    try(ZipOutputStream zos = new ZipOutputStream(new BufferOutput(file))) {
+      create(zos, elm.childIter(), "", null, qc);
     } catch(final IOException ex) {
       ok = false;
       throw ZIP_FAIL_X.get(info, ex);
     } finally {
-      if(!ok) new IOFile(file).delete();
+      if(!ok) file.delete();
     }
-    return null;
+    return Empty.VALUE;
   }
 
   /**
@@ -73,6 +73,7 @@ public class ZipZipFile extends ZipFn {
 
     final byte[] data = new byte[IO.BLOCKSIZE];
     for(ANode node; (node = iter.next()) != null;) {
+      qc.checkStop();
       // get entry type
       final QNm mode = node.qname();
       final boolean dir = mode.eq(Q_DIR);
@@ -96,7 +97,7 @@ public class ZipZipFile extends ZipFn {
       zos.putNextEntry(new ZipEntry(root + name));
 
       if(dir) {
-        create(zos, node.children(), root + name, zf, qc);
+        create(zos, node.childIter(), root + name, zf, qc);
       } else {
         if(src != null) {
           // write file to zip archive
@@ -106,7 +107,7 @@ public class ZipZipFile extends ZipFn {
           }
         } else {
           // no source reference: the child nodes are treated as file contents
-          final BasicNodeIter ch = node.children();
+          final BasicNodeIter ch = node.childIter();
           final String m = attribute(node, METHOD, false);
           // retrieve first child (might be null)
           ANode n = ch.next();
@@ -127,7 +128,7 @@ public class ZipZipFile extends ZipFn {
               final ByteList bl = new ByteList();
               do bl.add(n.string()); while((n = ch.next()) != null);
               final byte[] bytes = bl.finish();
-              zos.write((hex ? new Hex(bytes) : new B64(bytes)).toJava());
+              zos.write((hex ? new Hex(bytes) : B64.get(bytes)).toJava());
             } else {
               // serialize new nodes
               final ArrayOutput ao = new ArrayOutput();
@@ -152,16 +153,15 @@ public class ZipZipFile extends ZipFn {
    * Returns the value of the specified attribute.
    * @param elm element node
    * @param name attribute to be found
-   * @param force if set to {@code true}, an exception is thrown if the
-   * attribute is not found
+   * @param enforce if set to {@code true}, an exception is thrown if the attribute is not found
    * @return attribute value
    * @throws QueryException query exception
    */
-  final String attribute(final ANode elm, final byte[] name, final boolean force)
+  final String attribute(final ANode elm, final byte[] name, final boolean enforce)
       throws QueryException {
 
     final byte[] val = elm.attribute(name);
-    if(val == null && force) throw ZIP_INVALID_X_X.get(info, elm.qname(), name);
+    if(val == null && enforce) throw ZIP_INVALID_X_X.get(info, elm.qname(), name);
     return val == null ? null : string(val);
   }
 
@@ -174,7 +174,7 @@ public class ZipZipFile extends ZipFn {
   private static SerializerOptions sopts(final ANode node) throws BaseXException {
     // interpret query parameters
     final SerializerOptions sopts = new SerializerOptions();
-    final BasicNodeIter ati = node.attributes();
+    final BasicNodeIter ati = node.attributeIter();
     for(ANode at; (at = ati.next()) != null;) {
       final byte[] name = at.qname().string();
       if(eq(name, NAME, SRC)) continue;

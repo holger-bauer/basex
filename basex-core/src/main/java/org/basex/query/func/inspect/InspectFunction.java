@@ -8,15 +8,15 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class InspectFunction extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final FItem fn = toFunc(exprs[0], qc);
-    final QNm name = fn.funcName();
-    final StaticFunc sf = name == null ? null : qc.funcs.get(name, fn.arity(), null, false);
-    return new PlainDoc(qc, info).function(name, sf, fn.funcType(), fn.annotations(), null);
+    final FItem func = toFunc(exprs[0], qc);
+    final QNm name = func.funcName();
+    final StaticFunc sf = name == null ? null : qc.funcs.get(name, func.arity());
+    return new PlainDoc(qc, info).function(name, sf, func.funcType(), func.annotations(), null);
   }
 }

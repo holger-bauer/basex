@@ -20,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * This view creates a flat table view on the database contents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TableView extends View {
@@ -40,10 +40,10 @@ public final class TableView extends View {
 
   /**
    * Default constructor.
-   * @param man view manager
+   * @param notifier view notifier
    */
-  public TableView(final ViewNotifier man) {
-    super(TABLEVIEW, man);
+  public TableView(final ViewNotifier notifier) {
+    super(TABLEVIEW, notifier);
     tdata = new TableData(gui.context, gui.gopts);
     layout(new BorderLayout());
     header = new TableHeader(this);
@@ -80,20 +80,17 @@ public final class TableView extends View {
     } else {
       if(!more) tdata.resetFilter();
       gui.updating = true;
-      new Thread() {
-        @Override
-        public void run() {
-          // current zoom step
-          int zoomstep = ZOOM.length;
-          while(--zoomstep >= 0) {
-            scroll.height(tdata.rows.size() * tdata.rowH(ZOOM[zoomstep]));
-            repaint();
-            Performance.sleep(25);
-          }
-          gui.updating = false;
-          focus();
+      new Thread(() -> {
+        // current zoom step
+        int zoomstep = ZOOM.length;
+        while(--zoomstep >= 0) {
+          scroll.height(tdata.rows.size() * tdata.rowH(ZOOM[zoomstep]));
+          repaint();
+          Performance.sleep(25);
         }
-      }.start();
+        gui.updating = false;
+        focus();
+      }).start();
     }
   }
 
@@ -159,10 +156,10 @@ public final class TableView extends View {
    * @param pre pre value
    */
   private void setPos(final int pre) {
-    final int off = getOff(pre);
-    if(off == -1) return;
+    final int o = getOff(pre);
+    if(o == -1) return;
     final int h = getHeight() - header.getHeight() - 2 * tdata.rowH;
-    final int y = (off - 1) * tdata.rowH;
+    final int y = (o - 1) * tdata.rowH;
     final int s = scroll.pos();
     if(y < s || y > s + h) scroll.pos(y);
   }
@@ -202,12 +199,12 @@ public final class TableView extends View {
     int focused = -1;
     if(valid) {
       final int pre = tdata.rows.get(l);
-      final TableIterator it = new TableIterator(data, tdata);
+      final TableIterator iter = new TableIterator(data, tdata);
       final int c = tdata.column(getWidth() - scroll.getWidth(), tdata.mouseX);
-      it.init(pre);
-      while(it.more()) {
-        if(it.col == c) {
-          focused = it.pre;
+      iter.init(pre);
+      while(iter.more()) {
+        if(iter.col == c) {
+          focused = iter.pre;
           break;
         }
       }
@@ -255,12 +252,12 @@ public final class TableView extends View {
         gui.notify.context(nodes, false, null);
       }
     } else {
-      final TableIterator it = new TableIterator(data, tdata);
+      final TableIterator iter = new TableIterator(data, tdata);
       final int c = tdata.column(getWidth() - scroll.getWidth(), e.getX());
-      it.init(pre);
-      while(it.more()) {
-        if(it.col == c) {
-          gui.notify.mark(new DBNodes(data, it.pre), null);
+      iter.init(pre);
+      while(iter.more()) {
+        if(iter.col == c) {
+          gui.notify.mark(new DBNodes(data, iter.pre), null);
           return;
         }
       }

@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 import static org.basex.util.Token.*;
 
 import java.io.*;
+import java.math.*;
 import java.util.*;
 import java.util.Set;
 
@@ -12,6 +13,7 @@ import org.basex.core.jobs.*;
 import org.basex.core.parse.*;
 import org.basex.core.parse.Commands.*;
 import org.basex.core.users.*;
+import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
@@ -19,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'jobs list' command.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JobsList extends Command {
@@ -33,7 +35,7 @@ public final class JobsList extends Command {
   @Override
   protected boolean run() throws IOException {
     final Table table = new Table();
-    table.description = JOBS;
+    table.description = JOBS_X;
     table.header.add(uc(ID));
     table.header.add(TYPE);
     table.header.add(STATE);
@@ -41,8 +43,10 @@ public final class JobsList extends Command {
     table.header.add(DURATION);
     table.header.add(START);
     table.header.add(END);
+    table.header.add(INTERVAL);
     table.header.add(READS);
     table.header.add(WRITES);
+    table.header.add(TIME);
 
     final JobPool jobs = context.jobs;
     for(final byte[] key : ids(context)) {
@@ -61,9 +65,9 @@ public final class JobsList extends Command {
   public static TokenList ids(final Context ctx) {
     final JobPool jobs = ctx.jobs;
     final Set<String> set = new HashSet<>();
-    for(final String id : jobs.results.keySet()) set.add(id);
-    for(final String id : jobs.active.keySet()) set.add(id);
-    for(final String id : jobs.tasks.keySet()) set.add(id);
+    set.addAll(jobs.results.keySet());
+    set.addAll(jobs.active.keySet());
+    set.addAll(jobs.tasks.keySet());
     final TokenList list = new TokenList(set.size());
     for(final String id : set) list.add(id);
     return sort(list);
@@ -74,34 +78,52 @@ public final class JobsList extends Command {
    * @param key job id
    * @param jobs job pool
    * @param max maximum length of text entry
-   * @return table entry
+   * @return table entry, or {@code null} if the job does not exist
    */
   public static TokenList entry(final byte[] key, final JobPool jobs, final int max) {
     final String id = string(key);
     Job job = jobs.active.get(id);
-    final JobTask jt = jobs.tasks.get(id);
-    final JobResult jr = jobs.results.get(id);
+    final QueryJobTask jt = jobs.tasks.get(id);
+    final QueryJobResult jr = jobs.results.get(id);
     if(job == null && jr != null) job = jr.job;
     if(job == null && jt != null) job = jt.job;
     if(job == null) return null;
 
     final JobContext jc = job.jc();
     final long ms = jc.performance != null
-        ? (System.nanoTime() - jc.performance.start()) / 1000000 : jr != null
+        ? jc.performance.ns(false) / 1000000 : jr != null
         ? jr.time / 1000000 : -1;
 
-    final TokenList tl = new TokenList(5);
+    final TokenList tl = new TokenList(10);
     tl.add(id);
     tl.add(jc.type());
     tl.add(job.state.toString().toLowerCase(Locale.ENGLISH));
-    tl.add(jc.context.user().name());
+    tl.add(jc.context.clientName());
     tl.add(ms >= 0 ? DTDur.get(ms).string(null) : EMPTY);
-    tl.add(jt != null ? Dtm.get(jt.start).string(null) : EMPTY);
-    tl.add(jt != null && jt.end != Long.MAX_VALUE ? Dtm.get(jt.end).string(null) : EMPTY);
+    tl.add(jt != null ? dateTime(jt.start) : EMPTY);
+    tl.add(jt != null && jt.end != Long.MAX_VALUE ? dateTime(jt.end) : EMPTY);
+    tl.add(jt != null && jt.interval != 0 ? DTDur.get(jt.interval).string(null) : EMPTY);
     tl.add(jc.locks.reads.toString());
     tl.add(jc.locks.writes.toString());
-    tl.add(chop(normalize(token(jc.toString())), max));
+    tl.add(dateTime(jc.time));
+    if(max != 0) tl.add(chop(normalize(token(jc.toString())), max));
     return tl;
+  }
+
+  /**
+   * Returns a timezone-adjusted dateTime representation.
+   * @param ms milliseconds since 01/01/1970
+   * @return string
+   */
+  private static byte[] dateTime(final long ms) {
+    final Dtm dtm = Dtm.get(ms);
+    final DTDur tz = new DTDur(BigDecimal.valueOf(TimeZone.getDefault().getOffset(ms) / 1000));
+    try {
+      dtm.timeZone(tz, true, null);
+    } catch(final QueryException ex) {
+      Util.debug(ex);
+    }
+    return dtm.string(null);
   }
 
   /**
@@ -110,13 +132,10 @@ public final class JobsList extends Command {
    * @return sorted list
    */
   private static TokenList sort(final TokenList list) {
-    return list.sort(new Comparator<byte[]>() {
-      @Override
-      public int compare(final byte[] token1, final byte[] token2) {
-        final byte[] t1 = substring(token1, 3), t2 = substring(token2, 3);
-        final long diff = toLong(t1) - toLong(t2);
-        return diff < 0 ? -1 : diff > 0 ? 1 : 0;
-      }
+    return list.sort((token1, token2) -> {
+      final byte[] id1 = substring(token1, 3), id2 = substring(token2, 3);
+      final long diff = toLong(id1) - toLong(id2);
+      return diff < 0 ? -1 : diff > 0 ? 1 : 0;
     }, true);
   }
 

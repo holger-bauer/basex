@@ -11,12 +11,13 @@ import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbExport extends DbAccess {
@@ -25,13 +26,13 @@ public final class DbExport extends DbAccess {
     checkCreate(qc);
     final Data data = checkData(qc);
     final String path = string(toToken(exprs[1], qc));
-    final Item so = exprs.length > 2 ? exprs[2].item(qc, info) : null;
+    final Item so = exprs.length > 2 ? exprs[2].item(qc, info) : Empty.VALUE;
     final SerializerOptions sopts = FuncOptions.serializer(so, info);
     try {
       Export.export(data, path, sopts, null);
     } catch(final IOException ex) {
       throw SER_X.get(info, ex);
     }
-    return null;
+    return Empty.VALUE;
   }
 }

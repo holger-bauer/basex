@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Resizable-array implementation for native bytes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ByteList extends ElementList {
@@ -20,15 +20,15 @@ public class ByteList extends ElementList {
    * Default constructor.
    */
   public ByteList() {
-    this(Array.CAPACITY);
+    this(Array.INITIAL_CAPACITY);
   }
 
   /**
-   * Constructor, specifying an initial internal array size.
-   * @param capacity initial array capacity
-   */
-  public ByteList(final int capacity) {
-    list = new byte[capacity];
+   * Constructor with initial array capacity.
+   * @param capacity array capacity
+3   */
+  public ByteList(final long capacity) {
+    list = new byte[Array.checkCapacity(capacity)];
   }
 
   /**
@@ -39,7 +39,7 @@ public class ByteList extends ElementList {
   public ByteList add(final int element) {
     byte[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Arrays.copyOf(lst, newSize());
+    if(s == lst.length) lst = Arrays.copyOf(lst, newCapacity());
     lst[s] = (byte) element;
     list = lst;
     size = s + 1;
@@ -64,8 +64,8 @@ public class ByteList extends ElementList {
    */
   public ByteList add(final byte[] elements, final int start, final int end) {
     final int l = end - start;
-    if(size + l > list.length) list = Arrays.copyOf(list, newSize(size + l));
-    System.arraycopy(elements, start, list, size, l);
+    if(size + l > list.length) list = Arrays.copyOf(list, newCapacity(size + l));
+    Array.copy(elements, start, l, list, size);
     size += l;
     return this;
   }
@@ -109,6 +109,18 @@ public class ByteList extends ElementList {
     list = null;
     final int s = size;
     return s == 0 ? EMPTY : s == lst.length ? lst : Arrays.copyOf(lst, s);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(obj == this) return true;
+    if(!(obj instanceof ByteList)) return false;
+    final ByteList bl = (ByteList) obj;
+    if(size != bl.size) return false;
+    for(int l = 0; l < size; ++l) {
+      if(list[l] != bl.list[l]) return false;
+    }
+    return true;
   }
 
   @Override

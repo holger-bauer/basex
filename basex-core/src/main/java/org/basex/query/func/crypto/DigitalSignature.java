@@ -31,7 +31,7 @@ import org.xml.sax.*;
 /**
  * This class generates and validates digital signatures for XML data.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class DigitalSignature {
@@ -86,34 +86,32 @@ final class DigitalSignature {
   /**
    * Generates a signature.
    * @param node node to be signed
-   * @param c canonicalization algorithm
-   * @param d digest algorithm
+   * @param can canonicalization algorithm
+   * @param dig digest algorithm
    * @param sig signature algorithm
    * @param ns signature element namespace prefix
-   * @param t signature type (enveloped, enveloping, detached)
+   * @param tp signature type (enveloped, enveloping, detached)
    * @param expr XPath expression which specifies node to be signed
-   * @param ce certificate which contains keystore information for signing the node, may be null
+   * @param cert certificate which contains keystore information for signing the node, may be null
    * @param qc query context
-   * @param ii input info
-   *
    * @return signed node
    * @throws QueryException query exception
    */
-  Item generateSignature(final ANode node, final byte[] c, final byte[] d, final byte[] sig,
-      final byte[] ns, final byte[] t, final byte[] expr, final ANode ce, final QueryContext qc,
-      final InputInfo ii) throws QueryException {
+  Item generateSignature(final ANode node, final byte[] can, final byte[] dig, final byte[] sig,
+      final byte[] ns, final byte[] tp, final byte[] expr, final ANode cert, final QueryContext qc)
+      throws QueryException {
 
     // checking input variables
-    byte[] b = c;
+    byte[] b = can;
     if(b.length == 0) b = DEFC;
     b = CANONICALS.get(lc(b));
-    if(b == null) throw CX_CANINV.get(info, c);
+    if(b == null) throw CX_CANINV.get(info, can);
     final String canonicalization = string(b);
 
-    b = d;
+    b = dig;
     if(b.length == 0) b = DEFD;
     b = DIGESTS.get(lc(b));
-    if(b == null) throw CX_DIGINV.get(info, d);
+    if(b == null) throw CX_DIGINV.get(info, dig);
     final String digest = string(b);
 
     b = sig;
@@ -124,9 +122,9 @@ final class DigitalSignature {
     final String signature = string(b);
     final String keytype = string(tsig).substring(0, 3);
 
-    b = t;
+    b = tp;
     if(b.length == 0) b = DEFT;
-    if(!TYPES.contains(lc(b))) throw CX_SIGTYPINV.get(info, t);
+    if(!TYPES.contains(lc(b))) throw CX_SIGTYPINV.get(info, tp);
     final byte[] type = b;
 
     final Item signedNode;
@@ -136,8 +134,8 @@ final class DigitalSignature {
       final KeyInfo ki;
 
       // dealing with given certificate details to initialize the keystore
-      if(ce != null) {
-        final Document ceDOM = toDOMNode(ce);
+      if(cert != null) {
+        final Document ceDOM = toDOMNode(cert);
         if(!"digital-certificate".equals(ceDOM.getDocumentElement().getNodeName()))
           throw CX_INVNM.get(info, ceDOM);
         final NodeList ceChildren = ceDOM.getDocumentElement().getChildNodes();
@@ -147,12 +145,13 @@ final class DigitalSignature {
         String ksURI = null, pkPW = null, kAlias = null, ksPW = null, ksTY = null;
         while(ci < s) {
           final Node cn = ceChildren.item(ci++);
-          final String name = cn.getNodeName();
-          if("keystore-type".equals(name)) ksTY = cn.getTextContent();
-          else if("keystore-password".equals(name)) ksPW = cn.getTextContent();
-          else if("key-alias".equals(name)) kAlias = cn.getTextContent();
-          else if("private-key-password".equals(name)) pkPW = cn.getTextContent();
-          else if("keystore-uri".equals(name)) ksURI = cn.getTextContent();
+          switch(cn.getNodeName()) {
+            case "keystore-type":        ksTY = cn.getTextContent(); break;
+            case "keystore-password":    ksPW = cn.getTextContent(); break;
+            case "key-alias":            kAlias = cn.getTextContent(); break;
+            case "private-key-password": pkPW = cn.getTextContent(); break;
+            case "keystore-uri":         ksURI = cn.getTextContent(); break;
+          }
         }
 
         // initialize the keystore
@@ -244,21 +243,21 @@ final class DigitalSignature {
 
       // actually sign the document
       xmlSig.sign(signContext);
-      signedNode = NodeType.DOC.cast(inputNode, qc, null, ii);
+      signedNode = NodeType.DOCUMENT_NODE.cast(inputNode, qc, null, info);
 
-    } catch(final XPathExpressionException e) {
-      throw CX_XPINV.get(info, e);
-    } catch(final SAXException | IOException | ParserConfigurationException e) {
-      throw CX_IOEXC.get(info, e);
-    } catch(final KeyStoreException e) {
-      throw CX_KSEXC.get(info, e);
-    } catch(final MarshalException |  XMLSignatureException e) {
-      throw CX_SIGEXC.get(info, e);
+    } catch(final XPathExpressionException ex) {
+      throw CX_XPINV.get(info, ex);
+    } catch(final SAXException | IOException | ParserConfigurationException ex) {
+      throw CX_IOEXC.get(info, ex);
+    } catch(final KeyStoreException ex) {
+      throw CX_KSEXC.get(info, ex);
+    } catch(final MarshalException |  XMLSignatureException ex) {
+      throw CX_SIGEXC.get(info, ex);
     } catch(final NoSuchAlgorithmException | CertificateException |
-        InvalidAlgorithmParameterException e) {
-      throw CX_ALGEXC.get(info, e);
-    } catch(final UnrecoverableKeyException | KeyException e) {
-      throw CX_NOKEY.get(info, e);
+        InvalidAlgorithmParameterException ex) {
+      throw CX_ALGEXC.get(info, ex);
+    } catch(final UnrecoverableKeyException | KeyException ex) {
+      throw CX_NOKEY.get(info, ex);
     }
     return signedNode;
   }
@@ -282,10 +281,10 @@ final class DigitalSignature {
       return Bln.get(signature.validate(valContext));
 
     } catch(final XMLSignatureException | SAXException | ParserConfigurationException |
-        IOException e) {
-      throw CX_IOEXC.get(info, e);
-    } catch(final MarshalException e) {
-      throw CX_SIGEXC.get(info, e);
+        IOException ex) {
+      throw CX_IOEXC.get(info, ex);
+    } catch(final MarshalException ex) {
+      throw CX_SIGEXC.get(info, ex);
     }
   }
 
@@ -311,8 +310,8 @@ final class DigitalSignature {
    * @throws IOException exception
    * @throws ParserConfigurationException exception
    */
-  private static Document toDOMNode(final ANode node)
-      throws SAXException, IOException, ParserConfigurationException {
+  private static Document toDOMNode(final ANode node) throws SAXException, IOException,
+  ParserConfigurationException {
 
     final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
     dbf.setNamespaceAware(true);

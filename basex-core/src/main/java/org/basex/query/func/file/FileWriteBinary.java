@@ -9,28 +9,29 @@ import org.basex.io.in.*;
 import org.basex.io.out.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class FileWriteBinary extends FileFn {
   @Override
   public Item item(final QueryContext qc) throws IOException, QueryException {
-    return write(false, qc);
+    write(false, qc);
+    return Empty.VALUE;
   }
 
   /**
    * Writes items to a file.
    * @param append append flag
    * @param qc query context
-   * @return true if file was successfully written
    * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  final synchronized Item write(final boolean append, final QueryContext qc)
+  final synchronized void write(final boolean append, final QueryContext qc)
       throws QueryException, IOException {
 
     final Path path = checkParentDir(toPath(0, qc));
@@ -52,6 +53,5 @@ public class FileWriteBinary extends FileFn {
         raf.write(bin.binary(info));
       }
     }
-    return null;
   }
 }

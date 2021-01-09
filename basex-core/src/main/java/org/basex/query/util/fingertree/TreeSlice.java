@@ -4,7 +4,7 @@ package org.basex.query.util.fingertree;
  * A slice of a finger tree, used as internal representation
  * for {@link FingerTree#slice(long, long)}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -103,7 +103,7 @@ public final class TreeSlice<N, E> {
    * @return type-cast version of this slice
    */
   <M> TreeSlice<M, E> setNodes(final NodeLike<M, E>[] arr, final int n, final long size) {
-    if(n == 0) return setTree(EmptyTree.<M, E>getInstance());
+    if(n == 0) return setTree(EmptyTree.getInstance());
     if(n == 1) return setNodeLike(arr[0]);
     final int mid = n / 2;
     final Node<M, E>[] left = DeepTree.slice(arr, 0, mid), right = DeepTree.slice(arr, mid, n);

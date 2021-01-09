@@ -3,7 +3,7 @@ package org.basex.util.options;
 /**
  * Single option, stored in {@link Options} instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <O> option type
  */
@@ -55,6 +55,6 @@ public abstract class Option<O> {
    * @return string representation
    */
   public final String arg(final String arg) {
-    return "declare option output:" + name() + '\'' + arg.replace("'", "''") + "';";
+    return "declare option output:" + name() + " '" + arg.replace("'", "''") + "';";
   }
 }

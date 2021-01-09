@@ -1,5 +1,7 @@
 package org.basex.http.rest;
 
+import static javax.servlet.http.HttpServletResponse.*;
+
 import java.io.*;
 
 import org.basex.core.*;
@@ -10,7 +12,7 @@ import org.basex.util.http.*;
 /**
  * <p>This servlet receives and processes REST requests.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RESTServlet extends BaseXServlet {
@@ -23,8 +25,12 @@ public final class RESTServlet extends BaseXServlet {
 
     // generate and run commands
     final RESTCmd cmd = command(session);
+    final Context ctx = conn.context;
+    if(ctx.soptions.get(StaticOptions.LOGTRACE)) cmd.jc().tracer = ctx.log;
+
     try {
-      cmd.execute(conn.context);
+      cmd.execute(ctx);
+      conn.log(SC_OK, "");
     } catch(final BaseXException ex) {
       // ignore error if code was assigned (same error message)
       if(cmd.code == null) throw ex;
@@ -46,6 +52,6 @@ public final class RESTServlet extends BaseXServlet {
     if(mth.equals(HttpMethod.POST.name()))   return RESTPost.get(session);
     if(mth.equals(HttpMethod.PUT.name()))    return RESTPut.get(session);
     if(mth.equals(HttpMethod.DELETE.name())) return RESTDelete.get(session);
-    throw HTTPCode.NOT_IMPLEMENTED_X.get(session.conn.req.getMethod());
+    throw HTTPCode.NOT_IMPLEMENTED_X.get(session.conn.request.getMethod());
   }
 }

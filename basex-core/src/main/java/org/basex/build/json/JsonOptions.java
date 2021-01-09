@@ -7,7 +7,7 @@ import org.basex.util.options.*;
 /**
  * Options for processing JSON documents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class JsonOptions extends Options {
@@ -22,11 +22,11 @@ public class JsonOptions extends Options {
 
   /** JSON formats. */
   public enum JsonFormat {
-    /** Direct.        */ DIRECT,
-    /** Attributes.    */ ATTRIBUTES,
-    /** JsonML.        */ JSONML,
-    /** Basic.         */ BASIC,
-    /** Map (non-XML). */ MAP;
+    /** Direct.     */ DIRECT,
+    /** Attributes. */ ATTRIBUTES,
+    /** JsonML.     */ JSONML,
+    /** Basic.      */ BASIC,
+    /** XQuery.     */ XQUERY;
 
     @Override
     public String toString() {

@@ -11,17 +11,17 @@ import org.basex.gui.layout.*;
  * View observer pattern. All inheriting classes are attached to the
  * views array
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class View extends BaseXPanel {
   /**
    * Registers the specified view.
    * @param name name of view
-   * @param man view manager
+   * @param notifier view notifier
    */
-  protected View(final String name, final ViewNotifier man) {
-    super(man.gui);
+  protected View(final String name, final ViewNotifier notifier) {
+    super(notifier.gui);
     setFocusable(true);
     setBackground(GUIConstants.BACK);
     setName(name);
@@ -30,7 +30,7 @@ public abstract class View extends BaseXPanel {
     addMouseWheelListener(this);
     addKeyListener(this);
     addComponentListener(this);
-    man.add(this);
+    notifier.add(this);
   }
 
   /**

@@ -9,7 +9,7 @@ import org.basex.util.list.*;
 /**
  * Simple Thesaurus entry for full-text requests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ThesQuery {
@@ -31,7 +31,7 @@ public final class ThesQuery {
   public void merge(final ThesQuery th) {
     for(final Thesaurus t : th.thes) {
       boolean f = false;
-      for(final Thesaurus tt : thes) f |= tt.sameAs(t);
+      for(final Thesaurus tt : thes) f |= tt.equals(t);
       if(!f) thes.add(t);
     }
   }

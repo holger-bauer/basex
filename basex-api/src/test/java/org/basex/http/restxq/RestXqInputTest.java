@@ -1,12 +1,12 @@
 package org.basex.http.restxq;
 
 import org.basex.util.http.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This test contains RESTXQ filters.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RestXqInputTest extends RestXqTest {
@@ -14,8 +14,7 @@ public final class RestXqInputTest extends RestXqTest {
    * JSON: {@code %input} annotation, content-type parameters.
    * @throws Exception exception
    */
-  @Test
-  public void json() throws Exception {
+  @Test public void json() throws Exception {
     // test input annotation
     post("declare %R:POST('{$x}') %R:path('') %input:json('lax=no') function m:f($x) {$x/*/*};",
         "", "{ \"A_B\": \"\" }", MediaType.APPLICATION_JSON, "<A__B/>");
@@ -38,8 +37,7 @@ public final class RestXqInputTest extends RestXqTest {
    * CSV: {@code %input} annotation, content-type parameters.
    * @throws Exception exception
    */
-  @Test
-  public void csv() throws Exception {
+  @Test public void csv() throws Exception {
     // test input annotation
     post("declare %R:POST('{$x}') %R:path('') %input:csv('header=no') function m:f($x) {$x//A};",
         "", "A\n1", MediaType.TEXT_CSV, "");

@@ -1,15 +1,14 @@
 package org.basex.query.func.repo;
 
 import org.basex.query.*;
-import org.basex.query.iter.*;
-import org.basex.query.util.list.*;
 import org.basex.query.util.pkg.*;
+import org.basex.query.value.*;
 import org.basex.query.value.node.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RepoList extends RepoFn {
@@ -23,15 +22,15 @@ public final class RepoList extends RepoFn {
   private static final String VERSION = "version";
 
   @Override
-  public BasicNodeIter iter(final QueryContext qc) {
-    final ANodeList list = new ANodeList();
-    for(final Pkg pkg : new RepoManager(qc.context).all()) {
+  public Value value(final QueryContext qc) {
+    final ValueBuilder vb  = new ValueBuilder(qc);
+    for(final Pkg pkg : new RepoManager(qc.context).packages()) {
       final FElem elem = new FElem(PACKAGE);
       elem.add(NAME, pkg.name());
       elem.add(VERSION, pkg.version());
-      elem.add(TYPE, pkg.type());
-      list.add(elem);
+      elem.add(TYPE, pkg.type().toString());
+      vb.add(elem);
     }
-    return list.iter();
+    return vb.value(this);
   }
 }

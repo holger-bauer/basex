@@ -1,9 +1,7 @@
 package org.basex.query.func.fn;
 
-import org.basex.core.locks.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
-import org.basex.query.util.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
@@ -11,24 +9,27 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FnName extends StandardFunc {
+public class FnName extends FnNodeName {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toEmptyNode(ctxArg(0, qc), qc);
-    final QNm qname = node != null ? node.qname() : null;
-    return qname != null ? Str.get(qname.string()) : Str.ZERO;
+  public final Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    return node == null || empty(node.type) ? Str.EMPTY : Str.get(name(node));
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return flag == Flag.CTX && exprs.length == 0 || super.has(flag);
+  protected final Expr opt(final CompileContext cc) {
+    return empty(cc, false) ? Str.EMPTY : this;
   }
 
-  @Override
-  public boolean accept(final ASTVisitor visitor) {
-    return (exprs.length != 0 || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
+  /**
+   * Returns the name of the specified node.
+   * @param node node
+   * @return name
+   */
+  byte[] name(final ANode node) {
+    return node.name();
   }
 }

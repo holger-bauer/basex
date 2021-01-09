@@ -16,7 +16,7 @@ import org.xml.sax.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ValidateRng extends ValidateFn {
@@ -31,8 +31,8 @@ public class ValidateRng extends ValidateFn {
     return process(new Validation() {
       @Override
       void process(final ValidationHandler handler) throws IOException, QueryException {
-        final IO in = read(toNodeOrAtomItem(exprs[0], qc), null);
-        final Item sch = toNodeOrAtomItem(exprs[1], qc);
+        final IO in = read(toNodeOrAtomItem(0, qc), null);
+        final Item sch = toNodeOrAtomItem(1, qc);
         final boolean compact = exprs.length > 2 && toBoolean(exprs[2], qc);
 
         // detect format of schema input
@@ -47,33 +47,54 @@ public class ValidateRng extends ValidateFn {
         schema = prepare(schema, handler);
 
         try {
+          /*
+          PropertyMapBuilder pmb = new PropertyMapBuilder();
+          pmb.put(RngProperty.ERROR_HANDLER, handler);
+          pmb.put(RngProperty.CHECK_ID_IDREF, Flag.PRESENT);
+
+          SchemaReader sr = compact ? CompactSchemaReader.getInstance() : null;
+          ValidationDriver vd = new ValidationDriver(pmb.toPropertyMap(), sr);
+
+          if(vd.loadSchema(schema.inputSource())) vd.validate(in.inputSource());
+          */
+
           final Class<?>
-            pmb = Class.forName("com.thaiopensource.util.PropertyMapBuilder"),
-            vd = Class.forName("com.thaiopensource.validate.ValidationDriver"),
-            vp = Class.forName("com.thaiopensource.validate.ValidateProperty"),
-            pi = Class.forName("com.thaiopensource.util.PropertyId"),
-            pm = Class.forName("com.thaiopensource.util.PropertyMap"),
-            sr = Class.forName("com.thaiopensource.validate.SchemaReader"),
-            csr = Class.forName("com.thaiopensource.validate.rng.CompactSchemaReader");
+            pmbClass = Class.forName("com.thaiopensource.util.PropertyMapBuilder"),
+            flClass = Class.forName("com.thaiopensource.validate.Flag"),
+            vdClass = Class.forName("com.thaiopensource.validate.ValidationDriver"),
+            vpClass = Class.forName("com.thaiopensource.validate.ValidateProperty"),
+            rpClass = Class.forName("com.thaiopensource.validate.prop.rng.RngProperty"),
+            piClass = Class.forName("com.thaiopensource.util.PropertyId"),
+            pmClass = Class.forName("com.thaiopensource.util.PropertyMap"),
+            srClass = Class.forName("com.thaiopensource.validate.SchemaReader"),
+            csrClass = Class.forName("com.thaiopensource.validate.rng.CompactSchemaReader");
+          final Method
+            piPut = piClass.getMethod("put", pmbClass, Object.class),
+            vdLoadSchema = vdClass.getMethod("loadSchema", InputSource.class),
+            vdValidate = vdClass.getMethod("validate", InputSource.class);
 
-          final Object ehInstance = vp.getField("ERROR_HANDLER").get(null);
-          final Object pmbInstance = pmb.newInstance();
-          pi.getMethod("put", pmb, Object.class).invoke(ehInstance, pmbInstance, handler);
+          // assign error handler
+          final Object pmb = pmbClass.getDeclaredConstructor().newInstance();
+          piPut.invoke(vpClass.getField("ERROR_HANDLER").get(null), pmb, handler);
 
-          final Object srInstance = compact ? csr.getMethod("getInstance").invoke(null) : null;
-          final Object pmInstance = pmb.getMethod("toPropertyMap").invoke(pmbInstance);
-          final Object vdInstance = vd.getConstructor(pm, sr).newInstance(pmInstance, srInstance);
+          // enable ID/IDREF checks
+          final Object present = flClass.getField("PRESENT").get(null);
+          piPut.invoke(rpClass.getField("CHECK_ID_IDREF").get(null), pmb, present);
 
-          final Method vdLs = vd.getMethod("loadSchema", InputSource.class);
-          final Object loaded = vdLs.invoke(vdInstance, schema.inputSource());
-          if(Boolean.TRUE.equals(loaded)) {
-            final Method vdV = vd.getMethod("validate", InputSource.class);
-            vdV.invoke(vdInstance, in.inputSource());
-          }
+          // create driver
+          final Object sr = compact ? csrClass.getMethod("getInstance").invoke(null) : null;
+          final Object pm = pmbClass.getMethod("toPropertyMap").invoke(pmb);
+          final Object vd = vdClass.getConstructor(pmClass, srClass).newInstance(pm, sr);
+
+          // load schema, validate document
+          final Object loaded = vdLoadSchema.invoke(vd, schema.inputSource());
+          if(loaded.equals(Boolean.TRUE)) vdValidate.invoke(vd, in.inputSource());
+
         } catch(final ClassNotFoundException ex) {
-          throw BXVA_RELAXNG_X.get(info);
+          Util.debug(ex);
+          throw VALIDATE_NOTFOUND_X.get(info);
         } catch(final Exception ex) {
-          throw BXVA_FAIL_X.get(info, Util.rootException(ex));
+          throw VALIDATE_ERROR_X.get(info, Util.rootException(ex));
         }
       }
     });

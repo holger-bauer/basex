@@ -10,7 +10,7 @@ import org.basex.gui.layout.*;
 /**
  * This class displays editor components with an integrated search bar.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class SearchEditor extends BaseXBack {
@@ -50,9 +50,9 @@ public final class SearchEditor extends BaseXBack {
   }
 
   /**
-   * Sets the search button.
+   * Returns a search button.
    * @param help help text
-   * @return self reference
+   * @return button
    */
   public AbstractButton button(final String help) {
     return search.button(help);

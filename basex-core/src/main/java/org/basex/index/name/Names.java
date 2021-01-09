@@ -9,13 +9,14 @@ import org.basex.index.query.*;
 import org.basex.index.stats.*;
 import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * This class indexes and organizes the element or attribute names used in an XML document.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Lukas Kircher
  */
@@ -31,7 +32,7 @@ public final class Names extends TokenSet implements Index {
    */
   public Names(final MetaData meta) {
     this.meta = meta;
-    stats = new Stats[Array.CAPACITY];
+    stats = new Stats[Array.INITIAL_CAPACITY];
   }
 
   /**
@@ -119,8 +120,8 @@ public final class Names extends TokenSet implements Index {
     final int[] ids = Array.createOrder(tl, false);
 
     final TokenBuilder tb = new TokenBuilder();
-    tb.add(Text.LI_STRUCTURE + Text.HASH + Text.NL);
-    tb.add(Text.LI_ENTRIES + (size - 1) + Text.NL);
+    tb.add(Text.LI_STRUCTURE).add(Text.HASH).add(Text.NL);
+    tb.add(Text.LI_ENTRIES).addInt(size - 1).add(Text.NL);
     for(int i = 0; i < size - 1; i++) {
       final int id = ids[i];
       if(stats[id] == null) continue;
@@ -143,15 +144,15 @@ public final class Names extends TokenSet implements Index {
   }
 
   @Override
-  protected void rehash(final int s) {
-    super.rehash(s);
-    stats = Array.copy(stats, new Stats[s]);
+  protected void rehash(final int newSize) {
+    super.rehash(newSize);
+    stats = Array.copy(stats, new Stats[newSize]);
   }
 
   @Override
   public void close() { }
 
-  // Unsupported methods ======================================================
+  // Unsupported methods ==========================================================================
 
   @Override
   public boolean drop() {
@@ -159,12 +160,12 @@ public final class Names extends TokenSet implements Index {
   }
 
   @Override
-  public IndexIterator iter(final IndexToken token) {
+  public IndexIterator iter(final IndexSearch search) {
     throw Util.notExpected();
   }
 
   @Override
-  public int costs(final IndexToken token) {
+  public IndexCosts costs(final IndexSearch search) {
     throw Util.notExpected();
   }
 }

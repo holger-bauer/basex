@@ -11,15 +11,15 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FetchText extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final byte[] uri = toToken(exprs[0], qc);
-    final String enc = toEncoding(1, BXFE_ENCODING_X, qc);
-    final boolean val = exprs.length < 3 || !toBoolean(exprs[2], qc);
-    return new StrStream(IO.get(Token.string(uri)), enc, BXFE_IO_X, val);
+    final String encoding = toEncodingOrNull(1, FETCH_ENCODING_X, qc);
+    final boolean validate = exprs.length < 3 || !toBoolean(exprs[2], qc);
+    return new StrLazy(IO.get(Token.string(uri)), encoding, FETCH_OPEN_X, validate);
   }
 }

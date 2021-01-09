@@ -10,17 +10,19 @@ import org.basex.gui.layout.*;
 /**
  * Dialog window for changing some project's preferences.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogPrefs extends BaseXDialog {
   /** Dialog. */
-  private static Dialog dialog;
+  private static DialogPrefs dialog;
 
   /** General preferences. */
   private final DialogGeneralPrefs general;
   /** Editor preferences. */
   private final DialogEditorPrefs editor;
+  /** Result preferences. */
+  private final DialogResultPrefs result;
   /** Visualization preferences. */
   private final DialogVisualPrefs visual;
   /** Tabs. */
@@ -28,18 +30,20 @@ public final class DialogPrefs extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  private DialogPrefs(final GUI main) {
-    super(main, PREFERENCES, false);
+  private DialogPrefs(final GUI gui) {
+    super(gui, PREFERENCES, false);
 
     tabs = new BaseXTabs(this);
     general = new DialogGeneralPrefs(this);
     editor = new DialogEditorPrefs(this);
+    result = new DialogResultPrefs(this);
     visual = new DialogVisualPrefs(this);
 
     tabs.add(GENERAL, general);
     tabs.add(EDITOR, editor);
+    tabs.add(RESULT, result);
     tabs.add(VISUALIZATION, visual);
     tabs.setSelectedIndex(gui.gopts.get(GUIOptions.PREFTAB));
 
@@ -50,17 +54,18 @@ public final class DialogPrefs extends BaseXDialog {
 
   /**
    * Activates the dialog window.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public static void show(final GUI main) {
-    if(dialog == null) dialog = new DialogPrefs(main);
+  public static void show(final GUI gui) {
+    if(dialog == null) dialog = new DialogPrefs(gui);
+    dialog.result.update();
     dialog.setVisible(true);
   }
 
   @Override
   public void action(final Object cmp) {
     // no short-circuiting, do all checks...
-    ok = general.action(cmp) & editor.action() & visual.action();
+    ok = general.action(cmp) & editor.action() & result.action() & visual.action();
     gui.notify.layout();
   }
 
@@ -71,8 +76,8 @@ public final class DialogPrefs extends BaseXDialog {
 
   @Override
   public void cancel() {
+    result.cancel();
     gui.gopts.set(GUIOptions.PREFTAB, tabs.getSelectedIndex());
-    gui.saveOptions();
     super.close();
   }
 }

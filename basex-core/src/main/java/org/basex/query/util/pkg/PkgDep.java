@@ -3,12 +3,12 @@ package org.basex.query.util.pkg;
 /**
  * Package dependency.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 final class PkgDep {
   /** Name of package a package depends on. */
-  String name;
+  final String name;
   /** Name of processor a package depends on. */
   String processor;
   /** Set of acceptable version. */
@@ -19,6 +19,14 @@ final class PkgDep {
   String semverMin;
   /** Maximum acceptable version. */
   String semverMax;
+
+  /**
+   * Constructor.
+   * @param name name of package dependency
+   */
+  PkgDep(final String name) {
+    this.name = name;
+  }
 
   /**
    * Returns the unique package name, suffixed by the specified version.

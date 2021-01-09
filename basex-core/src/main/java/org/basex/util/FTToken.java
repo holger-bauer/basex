@@ -5,7 +5,7 @@ import org.basex.util.hash.*;
 /**
  * <p>This class provides mapping tables for converting full-text tokens.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTToken {
@@ -13,8 +13,8 @@ public final class FTToken {
   private FTToken() { }
 
   /**
-   * Returns true if the specified character is a valid full-text letter or digit.
-   * @param ch character to be tested
+   * Returns true if the specified codepoint is whitespace.
+   * @param ch codepoint to be tested
    * @return result of check
    */
   public static boolean ws(final int ch) {
@@ -22,12 +22,12 @@ public final class FTToken {
   }
 
   /**
-   * Returns true if the specified character is a valid full-text letter or digit.
-   * @param ch character to be tested
+   * Returns true if the specified codepoint is a valid letter, digit, or a combining mark.
+   * @param cp codepoint to be tested
    * @return result of check
    */
-  public static boolean lod(final int ch) {
-    final int t = Character.getType(ch);
+  public static boolean lod(final int cp) {
+    final int t = Character.getType(cp);
     return isLOD(t) || isCombining(t);
   }
 
@@ -55,7 +55,7 @@ public final class FTToken {
    * @param type character type
    * @return result of check
    */
-  public static boolean isLOD(final int type) {
+  private static boolean isLOD(final int type) {
     return ((1 << Character.UPPERCASE_LETTER |
       1 << Character.LOWERCASE_LETTER |
       1 << Character.TITLECASE_LETTER |

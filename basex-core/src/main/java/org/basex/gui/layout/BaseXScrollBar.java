@@ -10,7 +10,7 @@ import org.basex.util.*;
  * This is a scrollbar implementation, supporting arbitrary
  * panel heights without increasing the memory consumption.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXScrollBar extends BaseXPanel {
@@ -60,11 +60,12 @@ public final class BaseXScrollBar extends BaseXPanel {
   /**
    * Default constructor. By default, the scrollbar is switched off
    * if the component is completely displayed.
-   * @param cmp reference to the scrolled component
+   * @param comp reference to the scrolled component
    */
-  public BaseXScrollBar(final BaseXPanel cmp) {
-    super(cmp.gui);
-    comp = cmp;
+  public BaseXScrollBar(final BaseXPanel comp) {
+    super(comp.gui);
+    this.comp = comp;
+
     addMouseListener(this);
     addKeyListener(this);
     addMouseMotionListener(this);
@@ -134,7 +135,7 @@ public final class BaseXScrollBar extends BaseXPanel {
     int bh = ww - 2 + barPos;
     BaseXLayout.drawCell(g, 0, ww, bh, bh + barSize, false);
 
-    final int d = (int) (2 * GUIConstants.scale);
+    final int d = 2;
     bh += barSize / 2;
     g.setColor(GUIConstants.dgray);
     g.drawLine(5, bh, ww - 6, bh);
@@ -183,31 +184,28 @@ public final class BaseXScrollBar extends BaseXPanel {
     // start dragging
     if(sliding || animated) return;
 
-    new Thread() {
-      @Override
-      public void run() {
-        // scroll up/down/move slider
-        animated = moving;
-        while(animated) {
-          if(moving) step = Math.max(0, Math.min(STEPS.length - 1, step + (down ? 1 : -1)));
-          else step += step < STEPS.length / 2 ? 1 : -1;
-          int offset = STEPS[step];
+    new Thread(() -> {
+      // scroll up/down/move slider
+      animated = moving;
+      while(animated) {
+        if(moving) step = Math.max(0, Math.min(STEPS.length - 1, step + (down ? 1 : -1)));
+        else step += step < STEPS.length / 2 ? 1 : -1;
+        int offset = STEPS[step];
 
-          if(!button) offset = offset * hh / MAXSTEP / 4;
-          pos = Math.max(0, Math.min(height - hh, pos + offset));
-          comp.repaint();
-          Performance.sleep(25);
-          animated = step != STEPS.length / 2;
+        if(!button) offset = offset * hh / MAXSTEP / 4;
+        pos = Math.max(0, Math.min(height - hh, pos + offset));
+        comp.repaint();
+        Performance.sleep(25);
+        animated = step != STEPS.length / 2;
 
-          if(y > ww + barPos && y < ww + barPos + barSize) {
-            dragPos = barPos - y;
-            animated = false;
-            sliding = true;
-            step = STEPS.length / 2;
-          }
+        if(y > ww + barPos && y < ww + barPos + barSize) {
+          dragPos = barPos - y;
+          animated = false;
+          sliding = true;
+          step = STEPS.length / 2;
         }
       }
-    }.start();
+    }).start();
   }
 
   @Override

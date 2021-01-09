@@ -14,7 +14,7 @@ import org.basex.util.list.*;
  * This class analyzes the current path and gives suggestions for code
  * completions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class QuerySuggest extends QueryParser {
@@ -36,10 +36,8 @@ public final class QuerySuggest extends QueryParser {
    * @param query query string
    * @param qc query context
    * @param data data reference
-   * @throws QueryException query exception
    */
-  public QuerySuggest(final String query, final QueryContext qc, final Data data)
-      throws QueryException {
+  public QuerySuggest(final String query, final QueryContext qc, final Data data) {
     super(query, null, qc, null);
     this.data = data;
     checkInit();
@@ -52,8 +50,8 @@ public final class QuerySuggest extends QueryParser {
   public StringList complete() {
     final StringList sl = new StringList();
     if(show) {
-      for(final PathNode n : curr) {
-        final String nm = string(n.token(data));
+      for(final PathNode pn : curr) {
+        final String nm = string(pn.token(data));
         if(!nm.isEmpty() && !sl.contains(nm)) sl.add(nm);
       }
       sl.sort();
@@ -71,17 +69,17 @@ public final class QuerySuggest extends QueryParser {
 
   @Override
   void checkAxis(final Axis axis) {
-    all = axis != Axis.CHILD && axis != Axis.DESC ?
-      new ArrayList<PathNode>() : PathIndex.desc(curr, axis == Axis.DESC);
+    all = axis != Axis.CHILD && axis != Axis.DESCENDANT ?
+      new ArrayList<>() : PathIndex.desc(curr, axis == Axis.DESCENDANT);
     curr = all;
     show = true;
   }
 
   @Override
-  protected void checkTest(final Test test, final boolean attr) {
+  protected void checkTest(final Test test, final boolean element) {
     final TokenBuilder tb = new TokenBuilder();
-    if(attr) tb.add('@');
-    if(test != null) tb.add(test.toString().replaceAll("\\*:", ""));
+    if(!element) tb.add('@');
+    if(test != null) tb.add(test.toString(false).replaceAll("\\*:", ""));
     name = tb.finish();
     // use inexact matching only if the element is at the end:
     checkTest(pos < length);
@@ -112,9 +110,7 @@ public final class QuerySuggest extends QueryParser {
     if(stack == null) return;
     if(open) {
       checkTest(true);
-      final ArrayList<PathNode> tmp = new ArrayList<>();
-      for(final PathNode p : curr) tmp.add(p);
-      stack.add(tmp);
+      stack.add(new ArrayList<>(curr));
       checkAxis(Axis.CHILD);
     } else {
       curr = stack.pop();
@@ -124,7 +120,7 @@ public final class QuerySuggest extends QueryParser {
   }
 
   @Override
-  public QueryException error(final QueryError err, final Object... arg) {
-    return err.get(info(), arg).suggest(this, complete());
+  public QueryException error(final QueryError err, final InputInfo ii, final Object... arg) {
+    return err.get(ii, arg).suggest(this, complete());
   }
 }

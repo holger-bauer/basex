@@ -2,12 +2,12 @@ package org.basex.data;
 
 import java.util.*;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * ID -> PRE mapping test.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
@@ -19,8 +19,7 @@ public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
   private static final int ITER = 20;
 
   /** Set-up method. */
-  @Before
-  @Override
+  @BeforeEach @Override
   public void setUp() {
     baseid = 200;
     opcount = 100;
@@ -31,8 +30,7 @@ public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
    * Bulk insert correctness: insert random number of values at random
    * positions.
    */
-  @Test
-  public void bulkInsertCorrectness() {
+  @Test public void bulkInsertCorrectness() {
     for(int k = 0; k < ITER; ++k) {
       setUp();
       for(int c, id = baseid + 1, i = 0; i < opcount; i += c) {
@@ -45,8 +43,7 @@ public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
   }
 
   /** Delete correctness: delete values at random positions. */
-  @Test
-  public void bulkDeleteCorrectness() {
+  @Test public void bulkDeleteCorrectness() {
     for(int k = 0; k < ITER; ++k) {
       setUp();
       for(int id = baseid; id > 0;) {
@@ -61,8 +58,7 @@ public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
   }
 
   /** Delete correctness: delete values at random positions. */
-  @Test
-  public void bulkDeleteCorrectness2() {
+  @Test public void bulkDeleteCorrectness2() {
     for(int k = 0; k < ITER; ++k) {
       setUp();
       int n = baseid + 1;
@@ -91,8 +87,7 @@ public final class IdPreMapBulkTest extends IdPreMapBulkTestBase {
   }
 
   /** Correctness: randomly insert/delete value at random positions. */
-  @Test
-  public void bulkInsertDeleteCorrectness() {
+  @Test public void bulkInsertDeleteCorrectness() {
     for(int k = 0; k < ITER; ++k) {
       setUp();
       for(int i = 0, n = baseid, id = baseid + 1; i < opcount; ++i) {

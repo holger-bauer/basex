@@ -3,17 +3,17 @@ package org.basex.gui.dialog;
 import static org.basex.core.Text.*;
 
 import java.awt.*;
-import java.awt.event.*;
 
 import org.basex.gui.*;
-import org.basex.gui.GUIConstants.Msg;
+import org.basex.gui.GUIConstants.*;
 import org.basex.gui.layout.*;
+import org.basex.gui.listener.*;
 import org.basex.util.*;
 
 /**
  * URL dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogInstallURL extends BaseXDialog {
@@ -26,7 +26,7 @@ final class DialogInstallURL extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param dialog reference to main dialog
+   * @param dialog dialog reference
    */
   DialogInstallURL(final BaseXDialog dialog) {
     super(dialog, INSTALL_FROM_URL);
@@ -34,15 +34,10 @@ final class DialogInstallURL extends BaseXDialog {
     url = new BaseXTextField(this);
     info = new BaseXLabel(" ");
 
-    final BaseXLabel link = new BaseXLabel("<html><u>" + Prop.REPO_URL + "</u></html>");
+    final BaseXLabel link = new BaseXLabel("<html><u>" + REPO_URL + "</u></html>");
     link.setForeground(GUIConstants.BLUE);
     link.setCursor(GUIConstants.CURSORHAND);
-    link.addMouseListener(new MouseAdapter() {
-      @Override
-      public void mouseClicked(final MouseEvent e) {
-        BaseXDialog.browse(gui, Prop.REPO_URL);
-      }
-    });
+    link.addMouseListener((MouseClickedListener) e -> BaseXDialog.browse(gui, REPO_URL));
 
     BaseXBack p = new BaseXBack(new BorderLayout(0, 8));
     p.add(url, BorderLayout.NORTH);
@@ -68,8 +63,7 @@ final class DialogInstallURL extends BaseXDialog {
 
   @Override
   public void close() {
-    if(!ok) return;
-    super.close();
+    if(ok) super.close();
   }
 
   /**

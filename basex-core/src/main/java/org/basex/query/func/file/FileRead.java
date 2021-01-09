@@ -11,7 +11,7 @@ import org.basex.query.value.item.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class FileRead extends FileFn {
@@ -21,12 +21,13 @@ abstract class FileRead extends FileFn {
    * @return string
    * @throws QueryException query exception
    */
-  final StrStream text(final QueryContext qc) throws QueryException {
+  final StrLazy text(final QueryContext qc) throws QueryException {
     final Path path = toPath(0, qc);
-    final String enc = toEncoding(1, FILE_UNKNOWN_ENCODING_X, qc);
-    final boolean val = exprs.length < 3 || !toBoolean(exprs[2], qc);
+    final String encoding = toEncodingOrNull(1, FILE_UNKNOWN_ENCODING_X, qc);
+    final boolean validate = exprs.length < 3 || !toBoolean(exprs[2], qc);
     if(!Files.exists(path)) throw FILE_NOT_FOUND_X.get(info, path.toAbsolutePath());
     if(Files.isDirectory(path)) throw FILE_IS_DIR_X.get(info, path.toAbsolutePath());
-    return new StrStream(new IOFile(path.toFile()), enc, FILE_IO_ERROR_X, val);
+
+    return new StrLazy(new IOFile(path.toFile()), encoding, FILE_IO_ERROR_X, validate);
   }
 }

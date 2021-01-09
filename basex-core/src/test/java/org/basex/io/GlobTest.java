@@ -1,13 +1,13 @@
 package org.basex.io;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Test class for glob patterns.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class GlobTest {
@@ -55,17 +55,16 @@ public final class GlobTest {
   /**
    * Glob test.
    */
-  @Test
-  public void test() {
-    for(final TEST g : TEST.values()) {
-      final String regex = IOFile.regex(g.glob);
+  @Test public void test() {
+    for(final TEST test : TEST.values()) {
+      final String regex = IOFile.regex(test.glob);
       final int sl = STRINGS.length;
       for(int s = 0; s < sl; s++) {
-        final boolean exp = g.results[s];
-        final boolean res = STRINGS[s].matches(regex);
-        if(exp != res) fail(g + " #" + s + " failed.\n" +
-            "Query: \"" + g.glob + "\" matches \"" + STRINGS[s] +
-            "\" \u2192 " + res + "\nExpected: " + exp +
+        final boolean expected = test.results[s];
+        final boolean result = STRINGS[s].matches(regex);
+        if(expected != result) fail(test + " #" + s + " failed.\n" +
+            "Query: \"" + test.glob + "\" matches \"" + STRINGS[s] +
+            "\" \u2192 " + result + "\nExpected: " + expected +
             "\nRegex: " + regex);
       }
     }

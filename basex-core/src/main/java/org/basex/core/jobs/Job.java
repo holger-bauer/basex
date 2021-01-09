@@ -9,23 +9,24 @@ import org.basex.util.*;
 /**
  * Job class. This abstract class is implemented by all command and query instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Job {
   /** Child jobs. */
-  private final List<Job> children = Collections.synchronizedList(new ArrayList<Job>(0));
+  private final List<Job> children = Collections.synchronizedList(new ArrayList<>(0));
   /** Job context. */
   private JobContext jc = new JobContext(this);
+  // state and control flags must be volatile so that all threads see the actual non-cached values
   /** Timer. */
-  private Timer timer;
+  private volatile Timer timer;
 
   /** This flag indicates that a job is updating. */
-  public boolean updating;
+  public volatile boolean updating;
   /** State of job. */
-  public JobState state = JobState.SCHEDULED;
+  public volatile JobState state = JobState.SCHEDULED;
   /** Stopped flag. */
-  private boolean stopped;
+  private volatile boolean stopped;
 
   /**
    * Returns the job context.
@@ -65,8 +66,7 @@ public abstract class Job {
    * @return job
    */
   public final Job active() {
-    for(final Job job : children) return job.active();
-    return this;
+    return children.isEmpty() ? this : children.get(0).active();
   }
 
   /**
@@ -110,10 +110,18 @@ public abstract class Job {
   }
 
   /**
-   * Checks if the job was interrupted; if yes, sends a runtime exception.
+   * Checks if the job was stopped; if yes, throws a runtime exception.
    */
   public final void checkStop() {
-    if(stopped) throw new JobException();
+    if(stopped) throw new JobException(Text.INTERRUPTED);
+  }
+
+  /**
+   * Indicates if the job was stopped.
+   * @return result of check
+   */
+  public final boolean stopped() {
+    return stopped;
   }
 
   /**

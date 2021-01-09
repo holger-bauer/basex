@@ -8,20 +8,21 @@ import org.basex.core.users.*;
 import org.basex.query.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UserGrant extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     checkAdmin(qc);
-    final User user = toSafeUser(0, qc);
+    final User user = toInactiveUser(0, qc);
     final ArrayList<Perm> perms = toPerms(1, qc);
     final StringList patterns = toPatterns(2, qc);
 
@@ -33,7 +34,7 @@ public final class UserGrant extends UserFn {
     }
 
     qc.updates().add(new Grant(user, perms, patterns, qc, info), qc);
-    return null;
+    return Empty.VALUE;
   }
 
   /** Update primitive. */

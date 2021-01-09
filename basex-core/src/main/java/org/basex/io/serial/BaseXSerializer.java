@@ -10,14 +10,14 @@ import org.basex.query.value.map.*;
 /**
  * This class serializes items in a project-specific mode.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXSerializer extends AdaptiveSerializer {
   /** Binary. */
   private final boolean binary;
   /** Level counter. */
-  private int count;
+  private int nested;
 
   /**
    * Constructor, specifying serialization options.
@@ -25,15 +25,14 @@ public final class BaseXSerializer extends AdaptiveSerializer {
    * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  BaseXSerializer(final OutputStream os, final SerializerOptions sopts)
-      throws IOException {
+  BaseXSerializer(final OutputStream os, final SerializerOptions sopts) throws IOException {
     super(os, sopts, false);
     binary = sopts.yes(SerializerOptions.BINARY);
   }
 
   @Override
   protected void atomic(final Item item) throws IOException {
-    if(count == 0) {
+    if(nested == 0) {
       try {
         if(binary && item instanceof Bin) {
           try(InputStream is = item.input(null)) {
@@ -51,16 +50,16 @@ public final class BaseXSerializer extends AdaptiveSerializer {
   }
 
   @Override
-  protected void array(final Array item) throws IOException {
-    ++count;
+  protected void array(final XQArray item) throws IOException {
+    ++nested;
     super.array(item);
-    --count;
+    --nested;
   }
 
   @Override
-  protected void map(final Map item) throws IOException {
-    ++count;
+  protected void map(final XQMap item) throws IOException {
+    ++nested;
     super.map(item);
-    --count;
+    --nested;
   }
 }

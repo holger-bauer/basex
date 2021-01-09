@@ -7,14 +7,12 @@ import org.basex.util.*;
 /**
  * This class converts CSV data to XML, using direct or attributes conversion.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class CsvDirectConverter extends CsvConverter {
   /** Root node. */
   private final FElem root = new FElem(CSV);
-  /** Document node. */
-  private final FDoc doc = new FDoc().add(root);
   /** Record. */
   private FElem record;
 
@@ -52,7 +50,7 @@ final class CsvDirectConverter extends CsvConverter {
   }
 
   @Override
-  protected FDoc finish() {
-    return doc;
+  protected FDoc finish(final String uri) {
+    return new FDoc(uri).add(root);
   }
 }

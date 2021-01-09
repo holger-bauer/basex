@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Abstract class for database info.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class AInfo extends Command {
@@ -30,7 +30,7 @@ abstract class AInfo extends Command {
    * @param val value
    */
   static void info(final TokenBuilder tb, final Object key, final Object val) {
-    tb.add(' ').addExt(key).add(COLS).add(val.toString().replaceAll("\r\n?|\n", " ")).add(NL);
+    tb.add(' ').add(key).add(COLS).add(val.toString().replaceAll("\r\n?|\n", " ")).add(NL);
   }
 
   /**

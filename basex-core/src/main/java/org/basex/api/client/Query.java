@@ -16,7 +16,7 @@ import org.basex.util.list.*;
  * stream that has been specified via the constructor or via
  * {@link Session#setOutputStream(OutputStream)}.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Query implements Closeable {
@@ -87,16 +87,17 @@ public abstract class Query implements Closeable {
   public abstract void cache(boolean full) throws IOException;
 
   /**
-   * Returns the next item of the query.
-   * @return item string or {@code null}
+   * Returns the next item of the query as string.
+   * @return string or {@code null}
    * @throws IOException I/O exception
    */
   public final String next() throws IOException {
-    if(!more()) return null;
-    final byte[] item = cache.get(pos);
-    cache.set(pos++, null);
-    if(out == null) return Token.string(item);
-    out.write(item);
+    if(more()) {
+      final byte[] item = cache.get(pos);
+      cache.set(pos++, null);
+      if(out == null) return Token.string(item);
+      out.write(item);
+    }
     return null;
   }
 
@@ -120,8 +121,11 @@ public abstract class Query implements Closeable {
     final ByteList bl = new ByteList();
     for(int t; (t = input.read()) > 0;) {
       // skip type information
-      if(full && ID.get(t).isExtended()) {
-        while(input.read() > 0);
+      if(full) {
+        final ID id = ID.get(t);
+        if(id != null && id.isExtended()) {
+          while(input.read() > 0);
+        }
       }
       // read and decode result
       final ServerInput si = new ServerInput(input);
@@ -141,7 +145,7 @@ public abstract class Query implements Closeable {
 
   /**
    * Returns the serialization options.
-   * @return serialization options.
+   * @return serialization options
    * @throws IOException I/O exception
    */
   public abstract String options() throws IOException;

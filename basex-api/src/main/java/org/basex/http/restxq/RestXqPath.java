@@ -1,34 +1,33 @@
 package org.basex.http.restxq;
 
-import org.basex.http.*;
-import org.basex.query.QueryException;
-import org.basex.query.value.item.QNm;
-import org.basex.util.InputInfo;
+import java.util.*;
 
-import java.util.List;
-import java.util.Map;
+import org.basex.http.*;
+import org.basex.http.web.*;
+import org.basex.query.*;
+import org.basex.query.util.hash.*;
+import org.basex.query.value.item.*;
+import org.basex.util.*;
 
 /**
  * This class represents the path of a RESTXQ function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class RestXqPath implements Comparable<RestXqPath> {
-  /** Path. */
-  private final String path;
+final class RestXqPath extends WebPath implements Comparable<RestXqPath> {
   /** Path matcher. */
   private final RestXqPathMatcher matcher;
 
   /**
    * Constructor.
    * @param path path
-   * @param info input info
+   * @param ii input info
    * @throws QueryException query exception
    */
-  RestXqPath(final String path, final InputInfo info) throws QueryException {
-    this.path = path;
-    matcher = RestXqPathMatcher.parse(path, info);
+  RestXqPath(final String path, final InputInfo ii) throws QueryException {
+    super(path);
+    matcher = RestXqPathMatcher.parse(path, ii);
   }
 
   /**
@@ -44,8 +43,8 @@ final class RestXqPath implements Comparable<RestXqPath> {
    * Returns the names of the template variables.
    * @return list of qualified variable names
    */
-  List<QNm> vars() {
-    return matcher.vars;
+  List<QNm> varNames() {
+    return matcher.varNames;
   }
 
   /**
@@ -53,7 +52,7 @@ final class RestXqPath implements Comparable<RestXqPath> {
    * @param conn HTTP connection
    * @return map with variable values
    */
-  Map<QNm, String> values(final HTTPConnection conn) {
+  QNmMap<String> values(final HTTPConnection conn) {
     return matcher.values(conn.path());
   }
 
@@ -67,19 +66,18 @@ final class RestXqPath implements Comparable<RestXqPath> {
   }
 
   @Override
-  public int compareTo(final RestXqPath rxs) {
-    final int ms = matcher.segments;
-    final int d = ms - rxs.matcher.segments;
+  public int compareTo(final RestXqPath rxp) {
+    // compare number of path segments: path with less segments is less specific
+    final int sl = matcher.segments, d = rxp.matcher.segments - sl;
     if(d != 0) return d;
-    for(int s = 0; s < ms; s++) {
-      final boolean wc1 = isTemplate(s), wc2 = rxs.isTemplate(s);
-      if(wc1 != wc2) return wc1 ? 1 : -1;
-    }
-    return 0;
-  }
 
-  @Override
-  public String toString() {
-    return path;
+    // look for templates: segment with template is less specific
+    for(int s = 0; s < sl; s++) {
+      final boolean t1 = isTemplate(s), t2 = rxp.isTemplate(s);
+      if(t1 != t2) return t1 ? 1 : -1;
+    }
+
+    // identical specifity
+    return 0;
   }
 }

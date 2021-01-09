@@ -11,13 +11,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FetchBinary extends StandardFunc {
   @Override
-  public B64Stream item(final QueryContext qc, final InputInfo ii) throws QueryException {
+  public B64Lazy item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final byte[] uri = toToken(exprs[0], qc);
-    return new B64Stream(IO.get(Token.string(uri)), BXFE_IO_X);
+    return new B64Lazy(IO.get(Token.string(uri)), FETCH_OPEN_X);
   }
 }

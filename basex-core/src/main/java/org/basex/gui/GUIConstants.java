@@ -3,6 +3,8 @@ package org.basex.gui;
 import static org.basex.gui.GUIMenuCmd.*;
 
 import java.awt.*;
+import java.awt.event.*;
+import java.nio.charset.*;
 
 import javax.swing.*;
 
@@ -15,8 +17,8 @@ import org.basex.util.*;
 /**
  * GUI Constants used in different views.
  *
- * To add a new view, please proceed as follows:<br/>
- * <br/>
+ * To add a new view, please proceed as follows:
+ *
  * All views have unique names, which are defined below.
  * The following steps are necessary to add a new view
  * (the implementation of the existing views might help you):
@@ -43,19 +45,12 @@ import org.basex.util.*;
  *   {@link #MENUITEMS} menu structure</li>
  * </ul>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class GUIConstants {
 
-  // DUMMY OBJECTS ============================================================
-
-  /** Dummy textfield. */
-  public static final JTextField TEXTFIELD = new JTextField();
-  /** Dummy label, used for size calculations. */
-  public static final JLabel LABEL = new JLabel();
-
-  // VIEW NAMES ===============================================================
+  // VIEW NAMES ===================================================================================
 
   /** Internal name of the Map View. */
   public static final String MAPVIEW = "map";
@@ -87,17 +82,17 @@ public final class GUIConstants {
     ' ' + MAPVIEW + ' ' + PLOTVIEW + ' ' + " - H " + TEXTVIEW + ' ' + INFOVIEW +
     ' ' + TABLEVIEW + ' ' + TREEVIEW + ' ' + EXPLOREVIEW + " - -";
 
-  // TOOLBAR ==================================================================
+  // TOOLBAR ======================================================================================
 
   /** Toolbar entries, containing the button commands. */
   static final GUIMenuCmd[] TOOLBAR = {
     C_CREATE, C_OPEN_MANAGE, C_INFO, C_CLOSE, null,
     C_GOHOME, C_GOBACK, C_GOUP, C_GOFORWARD, null,
-    C_SHOWEDITOR, C_SHOWRESULT, C_SHOWINFO, null, C_SHOWMAP, C_SHOWTREE,
-    C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE, C_SHOWEXPLORE
+    C_SHOWEDITOR, C_SHOWRESULT, C_SHOWINFO, null,
+    C_SHOWMAP, C_SHOWTREE, C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE, C_SHOWEXPLORE
   };
 
-  // MENUBARS =================================================================
+  // MENUBARS =====================================================================================
 
   /** Top menu entries. */
   static final String[] MENUBAR = {
@@ -109,28 +104,26 @@ public final class GUIConstants {
    * {@link GUIPopupCmd#SEPARATOR} references serve as menu separators.
    */
   static final GUICommand[][] MENUITEMS = { {
-    C_CREATE, C_OPEN_MANAGE, SEPARATOR,
-    C_INFO, C_EXPORT, C_CLOSE, SEPARATOR,
-    Prop.MAC ? null : C_EXIT
+    C_CREATE, C_OPEN_MANAGE, SEPARATOR, C_INFO, C_EXPORT, C_CLOSE,
+    Prop.MAC ? null : SEPARATOR, Prop.MAC ? null : C_EXIT
   }, {
-    C_EDITNEW, C_EDITOPEN, C_EDITREOPEN, C_EDITSAVE, C_EDITSAVEAS, C_EDITCLOSE,
-    SEPARATOR, C_FORMAT, C_COMMENT, C_SORT, SEPARATOR, C_LOWERCASE, C_UPPERCASE, C_TITLECASE,
-    SEPARATOR, C_NEXTERROR, C_JUMPFILE
+    C_EDITNEW, C_EDITOPEN, C_EDITREOPEN, C_EDITSAVE, C_EDITSAVEAS, C_EDITCLOSE, C_EDITCLOSEALL,
+    SEPARATOR, C_FORMAT, C_COMMENT, C_SORT,
+    SEPARATOR, C_LOWERCASE, C_UPPERCASE, C_TITLECASE,
+    SEPARATOR, C_BRACKET, C_JUMPFILE, C_NEXTERROR,
+    SEPARATOR, C_VARS
   }, {
     C_SHOWEDITOR, C_SHOWPROJECT, C_FILESEARCH, SEPARATOR,
     C_SHOWRESULT, C_SHOWINFO, SEPARATOR, C_SHOWBUTTONS, C_SHOWINPUT, C_SHOWSTATUS,
-    GUIMacOSX.nativeFullscreen() ? null : C_FULL
+    Prop.MAC ? null : C_FULL
   }, {
-    C_SHOWMAP, C_SHOWTREE, C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE,
-    C_SHOWEXPLORE,
+    C_SHOWMAP, C_SHOWTREE, C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE, C_SHOWEXPLORE,
   }, {
-    C_RTEXEC, C_RTFILTER, SEPARATOR,
-    C_COLOR, C_FONTS, Prop.MAC ? null : SEPARATOR,
-    C_PACKAGES, Prop.MAC ? null : C_PREFS
+    C_RTEXEC, C_RTFILTER, SEPARATOR, C_COLOR, C_FONTS, SEPARATOR, C_PACKAGES,
+    Prop.MAC ? null : SEPARATOR, Prop.MAC ? null : C_PREFS
   }, {
-    C_HELP, Prop.MAC ? null : SEPARATOR,
-    C_COMMUNITY, C_UPDATES, Prop.MAC ? null : SEPARATOR,
-    Prop.MAC ? null : C_ABOUT
+    C_HELP, SEPARATOR, C_COMMUNITY, C_UPDATES,
+    SEPARATOR, C_SHOWMEM, Prop.MAC ? null : C_ABOUT
   }};
 
   /** Context menu entries. */
@@ -138,7 +131,7 @@ public final class GUIConstants {
     C_GOBACK, C_FILTER, null, C_COPY, C_PASTE, C_DELETE, C_INSERT, C_EDIT, null, C_COPYPATH
   };
 
-  // CURSORS ==================================================================
+  // CURSORS ======================================================================================
 
   /** Arrow cursor. */
   public static final Cursor CURSORARROW = new Cursor(Cursor.DEFAULT_CURSOR);
@@ -184,7 +177,14 @@ public final class GUIConstants {
     }
   }
 
-  // COLORS ===================================================================
+  // DUMMY OBJECTS ============================================================
+
+  /** Dummy text field. */
+  private static final JTextField TEXTFIELD = new JTextField();
+  /** Dummy label, used for size calculations. */
+  private static final JLabel LABEL = new JLabel();
+
+  // COLORS =======================================================================================
 
   /** Background color. */
   public static final Color BACK = new Color(TEXTFIELD.getBackground().getRGB());
@@ -192,9 +192,6 @@ public final class GUIConstants {
   public static final Color TEXT = new Color(TEXTFIELD.getForeground().getRGB());
   /** Panel color. */
   public static final Color PANEL = new Color(LABEL.getBackground().getRGB());
-
-  /** Dark theme. */
-  public static final boolean INVERT = BACK.getRed() + BACK.getGreen() + BACK.getBlue() < 384;
 
   /** Color: red. */
   public static final Color RED = color(224, 0, 0);
@@ -204,20 +201,31 @@ public final class GUIConstants {
   public static final Color GREEN = color(0, 160, 0);
   /** Color: blue. */
   public static final Color BLUE = color(0, 64, 192);
-  /** Color: cyan. */
-  public static final Color CYAN = color(0, 160, 160);
-  /** Color: purple. */
-  public static final Color PURPLE = color(160, 0, 160);
+
+  /** Color: keywords. */
+  public static final Color KEYWORD = color(32, 96, 176);
+  /** Color: comments. */
+  public static final Color COMMENT = color(0, 160, 160);
+  /** Color: digits. */
+  public static final Color DIGIT = color(192, 112, 32);
+  /** Color: variables. */
+  public static final Color VARIABLE = color(32, 160, 32);
+  /** Color: names. */
+  public static final Color VALUE = color(112, 112, 112);
 
   /** Cell color. */
   public static Color lgray;
   /** Button color. */
   public static Color gray;
+  /** Middle gray color. */
+  public static Color mgray;
   /** Background color. */
   public static Color dgray;
 
   /** Cached color gradient. */
   private static final Color[] COLORS = new Color[100];
+  /** Dark theme. */
+  private static final boolean INVERT = BACK.getRed() + BACK.getGreen() + BACK.getBlue() < 384;
 
   /** Second bright GUI color. */
   public static Color color1;
@@ -248,20 +256,18 @@ public final class GUIConstants {
   /** Second mark color, custom alpha value. */
   public static Color colormark2A;
 
-  // FONTS ====================================================================
+  // ENCODING =====================================================================================
 
-  /** Standard font size (unscaled). */
-  public static final int FONTSIZE = 13;
+  /** Available encodings. */
+  public static final String[] ENCODINGS;
 
-  /** Standard line height. */
-  private static int height = -1;
-  /** Standard scale factor (>= 1). */
-  public static double scale;
-  /** Adapted scale factor. */
-  public static double ascale;
+  // initialize encodings
+  static {
+    ENCODINGS = Charset.availableCharsets().keySet().toArray(new String[0]);
+  }
 
-  /** Large font. */
-  public static Font lfont;
+  // FONTS ========================================================================================
+
   /** Font. */
   public static Font font;
   /** Bold Font. */
@@ -273,29 +279,21 @@ public final class GUIConstants {
   /** Current font size. */
   public static int fontSize;
 
-  /** Character widths. */
-  private static int[] fwidth;
-  /** Monospace character widths. */
-  private static int[] mfwidth;
-  /** Bold character widths. */
-  private static int[] bwidth;
-  /** Character large character widths. */
-  private static int[] lwidth;
-  /** Default monospace font widths. */
-  private static int[] dmwidth;
-
-  // KEYS =====================================================================
+  // KEYS =========================================================================================
 
   /** No modifier. */
   public static final int NO_MOD = 0;
   /** Shift key. */
-  public static final int SHIFT = Event.SHIFT_MASK;
+  public static final int SHIFT = InputEvent.SHIFT_DOWN_MASK;
   /** Alt key. */
-  public static final int ALT = Event.ALT_MASK;
+  public static final int ALT = InputEvent.ALT_DOWN_MASK;
   /** Control key. */
-  public static final int CTRL = Event.CTRL_MASK;
+  public static final int CTRL = InputEvent.CTRL_DOWN_MASK;
   /** Shortcut key (CTRL/META). */
-  public static final int META = Prop.MAC ? Event.META_MASK : Event.CTRL_MASK;
+  public static final int META = Prop.MAC ? InputEvent.META_DOWN_MASK :
+    InputEvent.CTRL_DOWN_MASK;
+
+  // INITIALIZATION ===============================================================================
 
   /** Private constructor, preventing class instantiation. */
   private GUIConstants() { }
@@ -305,16 +303,9 @@ public final class GUIConstants {
    * @param opts gui options
    */
   public static synchronized void init(final GUIOptions opts) {
-    if(height < 0) {
-      // initialize scaling only once
-      final int h = FONTSIZE + 3;
-      height = opts.get(GUIOptions.SCALE) ? LABEL.getFontMetrics(LABEL.getFont()).getHeight() : h;
-      scale = Math.max(1, (height - h) / 10.0d + 1);
-      ascale = 1 + (scale - 1) / 2;
-    }
-
     lgray = color(224, 224, 224);
     gray = color(160, 160, 160);
+    mgray = color(128, 128, 128);
     dgray = color(64, 64, 64);
 
     // create color array
@@ -346,26 +337,11 @@ public final class GUIConstants {
     final String name = opts.get(GUIOptions.FONT);
     final int type = opts.get(GUIOptions.FONTTYPE);
 
-    fontSize = (int) (opts.get(GUIOptions.FONTSIZE) * scale);
+    fontSize = opts.get(GUIOptions.FONTSIZE);
     font  = new Font(name, type, fontSize);
     mfont = new Font(opts.get(GUIOptions.MONOFONT), type, fontSize);
     bfont = new Font(name, Font.BOLD, fontSize);
-    lfont = new Font(name, type, (int) (FONTSIZE * ascale * 1.5 + fontSize / 2.0));
-    dmfont = new Font(opts.get(GUIOptions.MONOFONT), 0, (int) (height * 0.8));
-
-    dmwidth  = LABEL.getFontMetrics(dmfont).getWidths();
-    fwidth  = LABEL.getFontMetrics(font).getWidths();
-    lwidth  = LABEL.getFontMetrics(lfont).getWidths();
-    mfwidth = LABEL.getFontMetrics(mfont).getWidths();
-    bwidth  = LABEL.getFontMetrics(bfont).getWidths();
-  }
-
-  /**
-   * Indicates if images are to be scaled.
-   * @return result of check
-   */
-  public static boolean large() {
-    return height > FONTSIZE + 3;
+    dmfont = new Font(opts.get(GUIOptions.MONOFONT), 0, fontSize());
   }
 
   /**
@@ -378,18 +354,14 @@ public final class GUIConstants {
   }
 
   /**
-   * Returns the character widths for the current font.
-   * @param f font reference
-   * @return character widths
+   * Returns the standard font size.
+   * @return font size
    */
-  public static int[] fontWidths(final Font f) {
-    if(f == font)  return fwidth;
-    if(f == mfont) return mfwidth;
-    if(f == bfont) return bwidth;
-    if(f == lfont) return lwidth;
-    if(f == dmfont) return dmwidth;
-    return LABEL.getFontMetrics(f).getWidths();
+  public static int fontSize() {
+    return LABEL.getFont().getSize();
   }
+
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Combines the color value with specified factor and returns a new value.

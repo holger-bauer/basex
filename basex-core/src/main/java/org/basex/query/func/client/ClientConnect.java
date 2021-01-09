@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ClientConnect extends ClientFn {
@@ -27,7 +27,7 @@ public final class ClientConnect extends ClientFn {
     try {
       return sessions(qc).add(new ClientSession(host, port, user, pass));
     } catch(final IOException ex) {
-      throw BXCL_CONN_X.get(info, ex);
+      throw CLIENT_CONNECT_X.get(info, ex);
     }
   }
 }

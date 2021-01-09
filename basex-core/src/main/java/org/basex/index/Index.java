@@ -2,12 +2,13 @@ package org.basex.index;
 
 import org.basex.core.*;
 import org.basex.index.query.*;
+import org.basex.query.util.index.*;
 
 /**
  * This interface defines the methods which have to be implemented
  * by an index structure.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public interface Index {
@@ -27,23 +28,23 @@ public interface Index {
 
   /**
    * Returns an iterator for the index results.
-   * @param token token to be found
+   * @param search index search definition
    * @return sorted pre values for the token
    */
-  IndexIterator iter(IndexToken token);
+  IndexIterator iter(IndexSearch search);
 
   /**
-   * Computes costs for accessing the specified token. An integer is returned:
+   * Computes costs for performing the specified search. An integer is returned:
    * <ul>
-   *   <li> A negative zero indicates that index access is not possible.</li>
+   *   <li> A negative value indicates that index access is not possible.</li>
    *   <li> A value of zero indicates that no results will be returned.</li>
    *   <li> A small value indicates that index access is fast.</li>
    * </ul>
    * Smaller values are better, a value of zero indicates that no results will be returned.
-   * @param token token to be found
+   * @param search index search definition
    * @return cost estimation
    */
-  int costs(IndexToken token);
+  IndexCosts costs(IndexSearch search);
 
   /**
    * Drops the index. Also returns true if the index does not exist.

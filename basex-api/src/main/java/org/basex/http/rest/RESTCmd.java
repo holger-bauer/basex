@@ -20,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * Abstract class for performing REST operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class RESTCmd extends Command {
@@ -35,7 +35,8 @@ abstract class RESTCmd extends Command {
    * @param session REST session
    */
   RESTCmd(final RESTSession session) {
-    super(max(session));
+    // permissions will be tested if single commands are run
+    super(Perm.NONE);
     this.session = session;
     jc().type(RESTText.REST);
   }
@@ -71,7 +72,7 @@ abstract class RESTCmd extends Command {
     } catch(final IOException ex) {
       return error(ex.getMessage());
     } finally {
-      new Close().run(context);
+      Close.close(context);
     }
   }
 
@@ -123,26 +124,15 @@ abstract class RESTCmd extends Command {
    */
   static void list(final Table table, final FElem root, final QNm header, final int skip) {
     for(final TokenList list : table.contents) {
-      final FElem el = new FElem(header);
+      final FElem elem = new FElem(header);
       // don't show last attribute (input path)
       final int ll = list.size() - skip;
       for(int l = 1; l < ll; l++) {
-        el.add(new QNm(lc(table.header.get(l))), list.get(l));
+        elem.add(new QNm(lc(table.header.get(l))), list.get(l));
       }
-      el.add(list.get(0));
-      root.add(el);
+      elem.add(list.get(0));
+      root.add(elem);
     }
-  }
-
-  /**
-   * Returns the strictest permission required for the specified commands.
-   * @param session commands to be checked
-   * @return permission
-   */
-  private static Perm max(final RESTSession session) {
-    Perm p = Perm.NONE;
-    for(final Command cmd : session) p = p.max(cmd.perm);
-    return p;
   }
 
   /**
@@ -152,8 +142,9 @@ abstract class RESTCmd extends Command {
    * @throws IOException I/O exception
    */
   static void parseOptions(final RESTSession session) throws IOException {
-    for(final Entry<String, String[]> param : session.conn.params.map().entrySet())
+    for(final Entry<String, String[]> param : session.conn.requestCtx.queryStrings().entrySet()) {
       parseOption(session, param, true);
+    }
   }
 
   /**

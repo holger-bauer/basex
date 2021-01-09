@@ -2,59 +2,17 @@ package org.basex.query.util.list;
 
 import static org.basex.query.QueryError.*;
 
-import java.util.*;
-
 import org.basex.query.*;
 import org.basex.query.ann.*;
-import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * List of annotations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class AnnList extends ElementList implements Iterable<Ann> {
-  /** Annotations. */
-  private Ann[] anns = {};
-
-  /**
-   * Adds a QName/value pair.
-   * @param ann annotation
-   */
-  public void add(final Ann ann) {
-    // create new entry
-    final int s = size;
-    if(s == anns.length) anns = Array.copy(anns, new Ann[newSize()]);
-    anns[s] = ann;
-    size = s + 1;
-  }
-
-  /**
-   * Checks if the specified annotation is found in the list.
-   * @param ann annotation to be found
-   * @return result of check
-   */
-  public boolean contains(final Ann ann) {
-    for(final Ann a : anns) if(a.eq(ann)) return true;
-    return false;
-  }
-
-  /**
-   * Removes an annotation.
-   * @param sig signature to be found
-   */
-  public void delete(final Annotation sig) {
-    final Ann[] lst = anns;
-    final int sz = size;
-    int s = 0;
-    for(int i = 0; i < sz; ++i) {
-      if(lst[i].sig != sig) lst[s++] = lst[i];
-    }
-    size = s;
-  }
-
+public final class AnnList extends ObjectList<Ann, AnnList> {
   /**
    * Checks if the specified signature is found in the list.
    * @param sig signature to be found
@@ -67,19 +25,21 @@ public final class AnnList extends ElementList implements Iterable<Ann> {
   /**
    * Returns an annotation with the specified signature.
    * @param sig signature to be found
-   * @return result, or {@code null}
+   * @return annotation or {@code null}
    */
   public Ann get(final Annotation sig) {
-    for(final Ann ann : this) if(ann.sig == sig) return ann;
+    for(final Ann ann : this) {
+      if(ann.sig == sig) return ann;
+    }
     return null;
   }
 
   /**
-   * Returns the union of these annotations and the given ones.
-   * @param al other annotations
-   * @return a new instance, containing all annotations, or {@code null} if union is not possible
+   * Returns the intersection of these annotations and the given ones.
+   * @param anns other annotations
+   * @return a new instance with all annotations, or {@code null} if intersection is not possible
    */
-  public AnnList union(final AnnList al) {
+  public AnnList intersect(final AnnList anns) {
     final AnnList tmp = new AnnList();
     boolean pub = false, priv = false, up = false;
     for(final Ann ann : this) {
@@ -90,7 +50,7 @@ public final class AnnList extends ElementList implements Iterable<Ann> {
       tmp.add(ann);
     }
 
-    for(final Ann ann : al) {
+    for(final Ann ann : anns) {
       final Annotation sig = ann.sig;
       if(sig == Annotation.PUBLIC) {
         if(pub) continue;
@@ -107,15 +67,15 @@ public final class AnnList extends ElementList implements Iterable<Ann> {
   }
 
   /**
-   * Returns the intersection of these annotations and the given ones.
-   * @param al annotations
-   * @return those annotations that are present in both collections
+   * Returns the unions of these annotations and the given ones.
+   * @param anns annotations
+   * @return a new instance with annotations that are present in both lists
    */
-  public AnnList intersect(final AnnList al) {
+  public AnnList union(final AnnList anns) {
     final AnnList tmp = new AnnList();
     for(final Ann ann : this) {
-      for(final Ann ann2 : al.anns) {
-        if(ann.eq(ann2)) tmp.add(ann);
+      for(final Ann ann2 : anns) {
+        if(ann.equals(ann2)) tmp.add(ann);
       }
     }
     return tmp;
@@ -123,20 +83,21 @@ public final class AnnList extends ElementList implements Iterable<Ann> {
 
   /**
    * Checks all annotations for parsing errors.
-   * @param var variable flag (triggers different error codes)
+   * @param variable variable flag (triggers different error codes)
+   * @param visible check visibility annotations
    * @return self reference
    * @throws QueryException query exception
    */
-  public AnnList check(final boolean var) throws QueryException {
+  public AnnList check(final boolean variable, final boolean visible) throws QueryException {
     boolean up = false, vis = false;
     for(final Ann ann : this) {
       final Annotation sig = ann.sig;
       if(sig == Annotation.UPDATING) {
         if(up) throw DUPLUPD.get(ann.info);
         up = true;
-      } else if(sig == Annotation.PUBLIC || sig == Annotation.PRIVATE) {
+      } else if(visible && (sig == Annotation.PUBLIC || sig == Annotation.PRIVATE)) {
         // only one visibility modifier allowed
-        if(vis) throw (var ? DUPLVARVIS : DUPLFUNVIS).get(ann.info);
+        if(vis) throw (variable ? DUPLVARVIS : DUPLFUNVIS).get(ann.info);
         vis = true;
       }
     }
@@ -144,14 +105,15 @@ public final class AnnList extends ElementList implements Iterable<Ann> {
   }
 
   @Override
-  public Iterator<Ann> iterator() {
-    return new ArrayIterator<>(anns, size);
+  protected Ann[] newArray(final int s) {
+    return new Ann[s];
   }
 
-  @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
-    for(final Ann ann : this) sb.append(ann);
-    return sb.toString();
+  /**
+   * Adds the annotations to a query string.
+   * @param qs query string builder
+   */
+  public void plan(final QueryString qs) {
+    for(final Ann ann : this) ann.plan(qs);
   }
 }

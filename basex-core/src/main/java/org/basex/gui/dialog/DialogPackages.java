@@ -18,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * Open database dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogPackages extends BaseXDialog {
@@ -47,15 +47,15 @@ public final class DialogPackages extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public DialogPackages(final GUI main) {
-    super(main, PACKAGES);
+  public DialogPackages(final GUI gui) {
+    super(gui, PACKAGES);
     panel.setLayout(new BorderLayout(8, 0));
 
     // create package chooser
-    packages = new BaseXList(new String[0], this, false);
-    packages.setSize(270, 220);
+    packages = new BaseXList(this, false);
+    packages.setSize(400, 280);
 
     title = new BaseXLabel(" ").large().border(0, 5, 5, 0);
     name = new BaseXLabel(" ");
@@ -74,15 +74,15 @@ public final class DialogPackages extends BaseXDialog {
     table.add(path);
 
     // database buttons
-    installURL = new BaseXButton(INSTALL_FROM_URL + DOTS, this);
-    install = new BaseXButton(INSTALL + DOTS, this);
-    delete = new BaseXButton(DELETE + DOTS, this);
+    installURL = new BaseXButton(this, INSTALL_FROM_URL + DOTS);
+    install = new BaseXButton(this, INSTALL + DOTS);
+    delete = new BaseXButton(this, DELETE + DOTS);
 
     BaseXBack p = new BaseXBack(new BorderLayout());
     p.add(packages, BorderLayout.CENTER);
-    final BaseXBack ss = new BaseXBack(new TableLayout(1, 2, 8, 0)).border(8, 0, 0, 0);
+    final BaseXBack ss = new BaseXBack(new ColumnLayout(8)).border(8, 0, 0, 0);
     ss.add(new BaseXLabel(PATH + COL, true, true), BorderLayout.NORTH);
-    ss.add(new BaseXLabel(main.context.soptions.get(StaticOptions.REPOPATH)));
+    ss.add(new BaseXLabel(gui.context.soptions.get(StaticOptions.REPOPATH)));
     p.add(ss, BorderLayout.SOUTH);
     set(p, BorderLayout.CENTER);
 
@@ -103,7 +103,7 @@ public final class DialogPackages extends BaseXDialog {
     final Context ctx = gui.context;
     if(refresh) {
       // rebuild databases and focus list chooser
-      packages.setData(new RepoManager(ctx).list().finish());
+      packages.setData(new RepoManager(ctx).ids().finish());
       packages.requestFocusInWindow();
       refresh = false;
     }
@@ -118,31 +118,31 @@ public final class DialogPackages extends BaseXDialog {
       cmds.add(new RepoInstall(dialog.url(), null));
 
     } else if(cmp == install) {
-      final String pp = gui.gopts.get(GUIOptions.WORKPATH);
-      final BaseXFileChooser fc = new BaseXFileChooser(FILE_OR_DIR, pp, gui);
+      final BaseXFileChooser fc = new BaseXFileChooser(this, FILE_OR_DIR,
+          gui.gopts.get(GUIOptions.WORKPATH));
       fc.filter(XML_ARCHIVES, IO.XARSUFFIX);
       fc.filter(JAVA_ARCHIVES, IO.JARSUFFIX);
       fc.filter(XQUERY_FILES, IO.XQSUFFIXES);
       final IOFile file = fc.select(Mode.FDOPEN);
       if(file == null) return;
-      gui.gopts.set(GUIOptions.WORKPATH, file.path());
+      gui.gopts.setFile(GUIOptions.WORKPATH, file);
       refresh = true;
       cmds.add(new RepoInstall(file.path(), null));
 
     } else if(cmp == delete) {
       if(!BaseXDialog.confirm(gui, Util.info(DELETE_PACKAGES_X, pkgs.size()))) return;
       refresh = true;
-      for(final String p : pkgs) cmds.add(new RepoDelete(p, null));
+      for(final String pkg : pkgs) cmds.add(new RepoDelete(pkg, null));
 
     } else {
       final String key = packages.getValue();
-      for(final Pkg pkg : new RepoManager(ctx).all()) {
+      for(final Pkg pkg : new RepoManager(ctx).packages()) {
         if(pkg.id().equals(key)) {
           title.setText(key);
           name.setText(pkg.name());
           version.setText(pkg.version());
-          type.setText(pkg.type());
-          path.setText(pkg.dir());
+          type.setText(pkg.type().toString());
+          path.setText(pkg.path());
           break;
         }
       }
@@ -152,7 +152,7 @@ public final class DialogPackages extends BaseXDialog {
 
     // run all commands
     if(!cmds.isEmpty()) {
-      DialogProgress.execute(this, cmds.toArray(new Command[cmds.size()]));
+      DialogProgress.execute(this, cmds.toArray(new Command[0]));
     }
   }
 }

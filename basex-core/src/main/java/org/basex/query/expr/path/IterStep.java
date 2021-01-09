@@ -12,10 +12,10 @@ import org.basex.util.hash.*;
 /**
  * Step expression: iterative evaluation (no positional access).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class IterStep extends Step {
+public final class IterStep extends Step {
   /**
    * Constructor.
    * @param info input info
@@ -23,7 +23,7 @@ final class IterStep extends Step {
    * @param test node test
    * @param preds predicates
    */
-  IterStep(final InputInfo info, final Axis axis, final Test test, final Expr[] preds) {
+  IterStep(final InputInfo info, final Axis axis, final Test test, final Expr... preds) {
     super(info, axis, test, preds);
   }
 
@@ -35,9 +35,9 @@ final class IterStep extends Step {
       @Override
       public ANode next() throws QueryException {
         if(iter == null) iter = axis.iter(checkNode(qc));
-        for(final ANode node : iter) {
+        for(ANode node; (node = iter.next()) != null;) {
           qc.checkStop();
-          if(test.eq(node) && preds(node, qc)) return node.finish();
+          if(test.matches(node) && match(node, qc)) return node.finish();
         }
         return null;
       }
@@ -46,6 +46,6 @@ final class IterStep extends Step {
 
   @Override
   public IterStep copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new IterStep(info, axis, test.copy(), Arr.copyAll(cc, vm, preds)));
+    return copyType(new IterStep(info, axis, test.copy(), Arr.copyAll(cc, vm, exprs)));
   }
 }

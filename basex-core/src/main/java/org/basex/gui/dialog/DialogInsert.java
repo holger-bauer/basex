@@ -19,7 +19,7 @@ import org.basex.util.list.*;
 /**
  * Dialog window for inserting new database nodes.
 
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 public final class DialogInsert extends BaseXDialog {
@@ -47,10 +47,10 @@ public final class DialogInsert extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    */
-  public DialogInsert(final GUI main) {
-    super(main, INSERT_NEW_DATA);
+  public DialogInsert(final GUI gui) {
+    super(gui, INSERT_NEW_DATA);
 
     label1 = new BaseXLabel(NAME + COLS, true, true).border(0, 0, 0, 0);
     label2 = new BaseXLabel(VALUE + COLS, true, true).border(0, 0, 0, 0);
@@ -58,25 +58,20 @@ public final class DialogInsert extends BaseXDialog {
     input1 = new BaseXTextField(this);
     BaseXLayout.setWidth(input1, 500);
 
-    input2 = new TextPanel(true, this);
+    input2 = new TextPanel(this, true);
     input2.addKeyListener(keys);
     BaseXLayout.setWidth(input2, 500);
 
-    final BaseXBack knd = new BaseXBack(new TableLayout(1, 5));
+    final BaseXBack knd = new BaseXBack(new ColumnLayout());
     final ButtonGroup group = new ButtonGroup();
 
-    final ActionListener al = new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        change(e.getSource());
-      }
-    };
+    final ActionListener al = e -> change(e.getSource());
 
     final int lkind = gui.gopts.get(GUIOptions.LASTINSERT);
     final int nl = NODE_KINDS.length;
     radio = new BaseXRadio[nl];
     for(int i = 1; i < nl; ++i) {
-      radio[i] = new BaseXRadio(NODE_KINDS[i], false, this);
+      radio[i] = new BaseXRadio(this, NODE_KINDS[i], false);
       radio[i].addActionListener(al);
       radio[i].setSelected(i == lkind);
       radio[i].addKeyListener(keys);
@@ -110,8 +105,10 @@ public final class DialogInsert extends BaseXDialog {
   private void change(final Object src) {
     int n = 0;
     final int rl = radio.length;
-    for(int r = 0; r < rl; ++r) if(src == radio[r]) n = r;
-    final int h = n == Data.ATTR ? input1.getHeight() : (int) (GUIConstants.scale * 350);
+    for(int r = 0; r < rl; ++r) {
+      if(src == radio[r]) n = r;
+    }
+    final int h = n == Data.ATTR ? input1.getHeight() : 350;
     input2.setPreferredSize(new Dimension(input2.getPreferredSize().width, h));
 
     back.removeAll();
@@ -151,10 +148,7 @@ public final class DialogInsert extends BaseXDialog {
 
   @Override
   public void close() {
-    super.close();
-
-    final String in1 = input1.getText();
-    final String in2 = string(input2.getText());
+    final String in1 = input1.getText(), in2 = string(input2.getText());
     switch(kind) {
       case Data.ATTR: case Data.PI:
         result.add(in1).add(in2);
@@ -166,5 +160,6 @@ public final class DialogInsert extends BaseXDialog {
         result.add(in2);
         break;
     }
+    super.close();
   }
 }

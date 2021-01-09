@@ -2,11 +2,13 @@ package org.basex.util.hash;
 
 import java.util.*;
 
+import org.basex.util.*;
+
 /**
  * This is the basic structure of an efficient and memory-saving hash set.
  * The first entry of the token set (offset 0) will always be kept empty.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class ASet {
@@ -23,20 +25,21 @@ public abstract class ASet {
   protected ASet() { }
 
   /**
-   * Initializes the data structure with an initial array size.
-   * @param capacity initial array capacity (will be resized to a power of two)
+   * Constructor with initial capacity.
+   * @param capacity array capacity (will be resized to a power of two)
    */
-  protected ASet(final int capacity) {
-    int c = 1;
+  protected ASet(final long capacity) {
+    long c = 1;
     while(c < capacity) c <<= 1;
-    buckets = new int[c];
-    next = new int[c];
+    final int s = Array.checkCapacity(c);
+    buckets = new int[s];
+    next = new int[s];
   }
 
   /**
-   * Resets the data structure. Must be called when data structure is initialized.
+   * Resets the data structure.
    */
-  void clear() {
+  protected void clear() {
     Arrays.fill(buckets, 0);
     size = 1;
   }
@@ -62,15 +65,15 @@ public abstract class ASet {
    * Resizes the hash table.
    */
   protected final void checkSize() {
-    if(size < next.length) return;
+    if(size < capacity()) return;
 
-    final int s = size << 1;
-    final int[] tmp = new int[s];
+    final int newSize = size << 1;
+    final int[] tmp = new int[newSize];
 
     for(final int b : buckets) {
       int id = b;
       while(id != 0) {
-        final int p = hash(id) & s - 1;
+        final int p = hash(id) & newSize - 1;
         final int nx = next[id];
         next[id] = tmp[p];
         tmp[p] = id;
@@ -78,8 +81,16 @@ public abstract class ASet {
       }
     }
     buckets = tmp;
-    next = Arrays.copyOf(next, s);
-    rehash(s);
+    next = Arrays.copyOf(next, newSize);
+    rehash(newSize);
+  }
+
+  /**
+   * Returns the current array capacity.
+   * @return array capacity
+   */
+  protected final int capacity() {
+    return next.length;
   }
 
   /**
@@ -94,4 +105,33 @@ public abstract class ASet {
    * @param newSize new hash size
    */
   protected abstract void rehash(int newSize);
+
+  /**
+   * Returns a string representation of the set or map.
+   * @param keys hash keys
+   * @return string
+   */
+  public String toString(final Object[] keys) {
+    return toString(keys, null);
+  }
+
+  /**
+   * Returns a string representation of the set or map.
+   * @param keys hash keys
+   * @param values hash values or {@code null}
+   * @return string
+   */
+  public String toString(final Object[] keys, final Object[] values) {
+    final TokenBuilder tb = new TokenBuilder().add(Util.className(this)).add('[');
+    boolean more = false;
+    for(int i = 1; i < size; i++) {
+      final Object key = keys[i];
+      if(key == null) continue;
+      if(more) tb.add(',');
+      tb.add(key);
+      if(values != null) tb.add('=').add(values[i]);
+      more = true;
+    }
+    return tb.add(']').toString();
+  }
 }

@@ -4,8 +4,7 @@ import static org.basex.core.Text.*;
 import static org.basex.gui.GUIConstants.*;
 
 import java.awt.*;
-import java.awt.event.*;
-import java.text.*;
+import java.util.concurrent.atomic.*;
 import java.util.regex.*;
 
 import javax.swing.*;
@@ -38,16 +37,16 @@ import org.basex.util.options.*;
 /**
  * This class is the main window of the GUI. It is the central instance for user interactions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class GUI extends JFrame {
+public final class GUI extends JFrame implements BaseXWindow {
   /** Database Context. */
   public final Context context;
   /** GUI options. */
   public final GUIOptions gopts;
 
-  /** View Manager. */
+  /** view notifier. */
   public final ViewNotifier notify;
 
   /** Status line. */
@@ -63,13 +62,8 @@ public final class GUI extends JFrame {
 
   /** Painting flag; if activated, interactive operations are skipped. */
   public boolean painting;
-  /** Updating flag; if activated, operations accessing the data are skipped. */
+  /** Indicates if a running command or operation is updating. */
   public boolean updating;
-
-  /** Currently executed command ({@code null} otherwise). */
-  public Command command;
-  /** ID of currently executed command. */
-  public int commandID;
 
   /** Fullscreen flag. */
   boolean fullscreen;
@@ -82,10 +76,6 @@ public final class GUI extends JFrame {
   private final GUIMenu menu;
   /** Content panel, containing all views. */
   private final ViewContainer views;
-  /** History button. */
-  private final AbstractButton hist;
-  /** Execution Button. */
-  private final AbstractButton go;
   /** Execution Button. */
   private final AbstractButton stop;
   /** Current input Mode. */
@@ -98,9 +88,16 @@ public final class GUI extends JFrame {
   /** Control panel. */
   private final BaseXBack control;
   /** Results label. */
-  private final BaseXLabel hits;
+  private final BaseXLabel results;
   /** Buttons. */
   private final GUIToolBar toolbar;
+
+  /** Currently executed command ({@code null} otherwise). */
+  private volatile Command command;
+  /** ID of currently executed command. */
+  private final AtomicInteger commandID = new AtomicInteger(0);
+  /** Indicates if a command is running. */
+  private boolean running;
 
   /** Menu panel height. */
   private int menuHeight;
@@ -119,19 +116,18 @@ public final class GUI extends JFrame {
     this.context = context;
     this.gopts = gopts;
 
+    if(Prop.MAC) GUIMacOS.init(this);
     setIconImage(BaseXImages.get("logo_64"));
     setTitle();
 
-    GUIMacOSX.enableOSXFullscreen(this);
-
     // set window size
     final Dimension scr = Toolkit.getDefaultToolkit().getScreenSize();
-    final int[] loc = this.gopts.get(GUIOptions.GUILOC);
-    final int[] size = this.gopts.get(GUIOptions.GUISIZE);
+    final int[] loc = gopts.get(GUIOptions.GUILOC);
+    final int[] size = gopts.get(GUIOptions.GUISIZE);
     final int x = Math.max(0, Math.min(scr.width - size[0], loc[0]));
     final int y = Math.max(0, Math.min(scr.height - size[1], loc[1]));
     setBounds(x, y, size[0], size[1]);
-    if(this.gopts.get(GUIOptions.MAXSTATE)) {
+    if(gopts.get(GUIOptions.MAXSTATE)) {
       setExtendedState(MAXIMIZED_HORIZ);
       setExtendedState(MAXIMIZED_VERT);
       setExtendedState(MAXIMIZED_BOTH);
@@ -150,91 +146,51 @@ public final class GUI extends JFrame {
     toolbar = new GUIToolBar(TOOLBAR, this);
     buttons.add(toolbar, BorderLayout.WEST);
 
-    hits = new BaseXLabel(" ");
-    hits.setFont(hits.getFont().deriveFont(18.0f));
-    hits.setHorizontalAlignment(SwingConstants.RIGHT);
+    results = new BaseXLabel(" ").border(0, 0, 0, 4).resize(1.7f);
+    results.setHorizontalAlignment(SwingConstants.RIGHT);
 
     BaseXBack b = new BaseXBack();
-    b.add(hits);
+    b.add(results);
 
     buttons.add(b, BorderLayout.EAST);
     if(this.gopts.get(GUIOptions.SHOWBUTTONS)) control.add(buttons, BorderLayout.CENTER);
 
-    nav = new BaseXBack(new BorderLayout(5, 0)).border(2, 2, 0, 2);
-
     mode = new BaseXCombo(this, FIND, XQUERY, COMMAND);
     mode.setSelectedIndex(2);
-
-    mode.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        final int s = mode.getSelectedIndex();
-        if(s == gopts.get(GUIOptions.SEARCHMODE) || !mode.isEnabled()) return;
-
-        gopts.set(GUIOptions.SEARCHMODE, s);
-        input.mode(mode.getSelectedItem());
-        refreshControls();
-      }
-    });
-    nav.add(mode, BorderLayout.WEST);
 
     input = new GUIInput(this);
     input.mode(mode.getSelectedItem());
 
-    hist = BaseXButton.get("c_hist", INPUT_HISTORY, false, this);
-    hist.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        final JPopupMenu pop = new JPopupMenu();
-        final ActionListener al = new ActionListener() {
-          @Override
-          public void actionPerformed(final ActionEvent ac) {
-            input.setText(ac.getActionCommand());
-            input.requestFocusInWindow();
-            pop.setVisible(false);
-          }
-        };
-        final int i = context.data() == null ? 2 : gopts.get(GUIOptions.SEARCHMODE);
-        final String[] hs = gopts.get(
-          i == 0 ? GUIOptions.SEARCH : i == 1 ? GUIOptions.XQUERY : GUIOptions.COMMANDS);
-        for(final String en : hs) {
-          final JMenuItem jmi = new JMenuItem(en);
-          jmi.addActionListener(al);
-          pop.add(jmi);
-        }
-        pop.show(hist, 0, hist.getHeight());
-      }
+    mode.addActionListener(e -> {
+      final int s = mode.getSelectedIndex();
+      if(s == gopts.get(GUIOptions.SEARCHMODE) || !mode.isEnabled()) return;
+
+      gopts.set(GUIOptions.SEARCHMODE, s);
+      input.mode(mode.getSelectedItem());
     });
 
-    b = new BaseXBack(new BorderLayout(5, 0));
-    b.add(hist, BorderLayout.WEST);
+    b = new BaseXBack(new BorderLayout(4, 0));
     b.add(input, BorderLayout.CENTER);
+
+    nav = new BaseXBack(new BorderLayout(5, 0)).border(2, 2, 0, 2);
+    nav.add(mode, BorderLayout.WEST);
     nav.add(b, BorderLayout.CENTER);
 
     stop = BaseXButton.get("c_stop", STOP, false, this);
     stop.setEnabled(false);
-    stop.addActionListener(new ActionListener() {
-      @Override
-     public void actionPerformed(final ActionEvent e) {
-        if(command != null) {
-          command.stop();
-          stop.setEnabled(false);
-        }
+    stop.addActionListener(e -> {
+      if(command != null) {
+        command.stop();
+        stop.setEnabled(false);
       }
     });
 
-    go = BaseXButton.get("c_go", RUN_QUERY, false, this);
-    go.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        input.store();
-        execute();
-      }
-    });
+    final AbstractButton go = BaseXButton.get("c_go", RUN_QUERY, false, this);
+    go.addActionListener(e -> execute());
 
     filter = BaseXButton.command(GUIMenuCmd.C_FILTER, this);
 
-    b = new BaseXBack(new TableLayout(1, 3, 1, 0));
+    b = new BaseXBack(new ColumnLayout(1));
     b.add(stop);
     b.add(go);
     b.add(filter);
@@ -266,11 +222,10 @@ public final class GUI extends JFrame {
 
     setVisible(true);
     views.updateViews();
-    refreshControls();
+    refreshControls(true);
 
     // check version
     checkVersion();
-    input.requestFocusInWindow();
   }
 
   @Override
@@ -287,7 +242,7 @@ public final class GUI extends JFrame {
    * Saves the current configuration.
    */
   public void saveOptions() {
-    editor.saveOptions();
+    gopts.setFiles(GUIOptions.OPEN, editor.openFiles());
     final boolean max = getExtendedState() == MAXIMIZED_BOTH;
     gopts.set(GUIOptions.MAXSTATE, max);
     if(!max) {
@@ -305,11 +260,7 @@ public final class GUI extends JFrame {
     final TokenBuilder tb = new TokenBuilder();
     final EditorArea ea = editor == null ? null : editor.getEditor();
     if(ea != null) {
-      if(ea.opened()) {
-        tb.add(ea.file().path());
-      } else {
-        tb.add(ea.file().name());
-      }
+      tb.add(ea.opened() ? ea.file().path() : ea.file().name());
       if(ea.modified()) tb.add('*');
     }
     final Data data = context.data();
@@ -318,26 +269,26 @@ public final class GUI extends JFrame {
       tb.add("[").add(data.meta.name).add("]");
     }
     if(!tb.isEmpty()) tb.add(" - ");
-    tb.add(Prop.TITLE);
+    tb.add(TITLE);
     setTitle(tb.toString());
   }
 
   /**
    * Sets a cursor.
-   * @param c cursor to be set
+   * @param cursor cursor to be set
    */
-  public void cursor(final Cursor c) {
-    cursor(c, false);
+  public void cursor(final Cursor cursor) {
+    cursor(cursor, false);
   }
 
   /**
-   * Sets a cursor, forcing a new look if necessary.
-   * @param c cursor to be set
-   * @param force new cursor
+   * Sets a cursor, enforcing a new look if necessary.
+   * @param cursor cursor to be set
+   * @param enforce enforce new cursor
    */
-  public void cursor(final Cursor c, final boolean force) {
+  public void cursor(final Cursor cursor, final boolean enforce) {
     final Cursor cc = getCursor();
-    if(cc != c && (cc != CURSORWAIT || force)) setCursor(c);
+    if(cc != cursor && (cc != CURSORWAIT || enforce)) setCursor(cursor);
   }
 
   /**
@@ -347,17 +298,14 @@ public final class GUI extends JFrame {
     final String in = input.getText().trim();
     final boolean cmd = mode.getSelectedIndex() == 2;
     // run as command: command mode or exclamation mark as first character
-    final boolean exc = in.startsWith("!");
+    final boolean exc = Strings.startsWith(in, '!');
     if(cmd || exc) {
       try {
         // parse and execute all commands
         final CommandParser cp = CommandParser.get(in.substring(exc ? 1 : 0), context);
-        if(pwReader == null) pwReader = new PasswordReader() {
-          @Override
-          public String password() {
-            final DialogPass dp = new DialogPass(GUI.this);
-            return dp.ok() ? dp.password() : "";
-          }
+        if(pwReader == null) pwReader = () -> {
+          final DialogPass dp = new DialogPass(this);
+          return dp.ok() ? dp.password() : "";
         };
         cp.pwReader(pwReader);
         execute(cp.parse());
@@ -365,7 +313,7 @@ public final class GUI extends JFrame {
         if(!info.visible()) GUIMenuCmd.C_SHOWINFO.execute(this);
         info.setInfo(Util.message(ex), null, false, true);
       }
-    } else if(gopts.get(GUIOptions.SEARCHMODE) == 1 || in.startsWith("/")) {
+    } else if(gopts.get(GUIOptions.SEARCHMODE) == 1 || Strings.startsWith(in, '/')) {
       simpleQuery(in);
     } else {
       execute(new Find(in, gopts.get(GUIOptions.FILTERRT)));
@@ -399,21 +347,18 @@ public final class GUI extends JFrame {
    * Launches the specified commands in a separate thread.
    * Commands are ignored if an update operation takes place.
    * @param edit call from editor view
-   * @param cmd commands to be executed
+   * @param cmds commands to be executed
    */
-  public void execute(final boolean edit, final Command... cmd) {
+  public void execute(final boolean edit, final Command... cmds) {
     // ignore command if updates take place
     if(updating) return;
 
-    new Thread() {
-      @Override
-      public void run() {
-        if(cmd.length == 0) info.setInfo("", null, true, true);
-        for(final Command c : cmd) {
-          if(!exec(c, edit)) break;
-        }
+    new Thread(() -> {
+      if(cmds.length == 0) info.setInfo("", null, true, true);
+      for(final Command cmd : cmds) {
+        if(!exec(cmd, edit)) break;
       }
-    }.start();
+    }).start();
   }
 
   /**
@@ -424,20 +369,20 @@ public final class GUI extends JFrame {
    */
   private boolean exec(final Command cmd, final boolean edit) {
     // wait when command is still running
-    final int thread = ++commandID;
+    final int id = commandID.incrementAndGet();
     while(true) {
       final Command c = command;
       if(c == null) break;
       c.stop();
       Performance.sleep(1);
-      if(commandID != thread) return true;
+      if(commandID.get() != id) return true;
     }
 
-    // indicates that the command will be executed
+    // indicate to the user that the command will be executed
     cursor(CURSORWAIT);
     input.setCursor(CURSORWAIT);
     stop.setEnabled(true);
-    if(edit) editor.pleaseWait(thread);
+    if(edit) editor.pleaseWait(id);
 
     final Data data = context.data();
     // reset current context if realtime filter is activated
@@ -448,27 +393,27 @@ public final class GUI extends JFrame {
     command = cmd;
 
     // execute command and cache result
-    final ArrayOutput ao = new ArrayOutput();
-    ao.setLimit(gopts.get(GUIOptions.MAXTEXT));
+    final ArrayOutput output = new ArrayOutput();
+    output.setLimit(gopts.get(GUIOptions.MAXTEXT));
     // sets the maximum number of hits
     cmd.maxResults(gopts.get(GUIOptions.MAXRESULTS));
+    // attaches the info listener to the command
+    cmd.jc().tracer = info;
 
     final Performance perf = new Performance();
     boolean ok = true;
     try {
-      // checks if the command is updating
+      running = true;
       updating = cmd.updating(context);
 
-      // reset visualizations if data reference will be changed
+      // reset visualizations if data reference may be changed by command
       if(cmd.newData(context)) notify.init();
-      // attaches the info listener to the command
-      cmd.jc().tracer = info;
 
       // evaluate command
       String inf;
       Throwable cause = null;
       try {
-        cmd.execute(context, ao);
+        cmd.execute(context, output);
         inf = cmd.info();
       } catch(final BaseXException ex) {
         cause = ex.getCause();
@@ -477,26 +422,27 @@ public final class GUI extends JFrame {
         inf = Util.message(ex);
       } finally {
         updating = false;
+        running = false;
       }
 
       // show query info, send feedback to query editor
       final String time = info.setInfo(inf, cmd, perf.getTime(), ok, true);
-      final boolean stopped = inf.endsWith(INTERRUPTED);
+      final boolean stopped = inf.substring(inf.lastIndexOf('\n') + 1).equals(INTERRUPTED);
       if(edit) editor.info(cause, stopped, true);
 
       // get query result and node references to currently opened database
       final Value result = cmd.result();
-      DBNodes nodes = result instanceof DBNodes && !result.isEmpty() ? (DBNodes) result : null;
+      DBNodes nodes = result instanceof DBNodes ? (DBNodes) result : null;
 
       // show text view if a non-empty result does not reference the currently opened database
-      if(!text.visible() && ao.size() != 0 && nodes == null) {
+      if(!text.visible() && output.size() != 0 && nodes == null) {
         GUIMenuCmd.C_SHOWRESULT.execute(this);
       }
 
       // check if query feedback was evaluated in the query view
       if(!ok && !stopped) {
         // display error in info view
-        text.setText(ao);
+        text.setText(output, 0);
         if(!info.visible() && (!edit || inf.startsWith(S_BUGINFO))) {
           GUIMenuCmd.C_SHOWINFO.execute(this);
         }
@@ -509,12 +455,12 @@ public final class GUI extends JFrame {
           // update visualizations
           notify.update();
           // adopt updated nodes as result set
-          if(nodes == null) nodes = context.current();
+          if(nodes == null && result == Empty.VALUE) nodes = context.current();
         } else if(result != null) {
           // check if result has changed
           final boolean flt = gopts.get(GUIOptions.FILTERRT);
           final DBNodes curr = context.current();
-          if(flt || curr != null && !curr.sameAs(current)) {
+          if(flt || curr != null && !curr.equals(current)) {
             // refresh context if at least one node was found
             if(nodes != null) notify.context(nodes, flt, null);
           } else if(context.marked != null) {
@@ -532,15 +478,17 @@ public final class GUI extends JFrame {
           }
         }
 
-        if(thread == commandID && !stopped) {
+        if(id == commandID.get() && !stopped) {
+          // refresh editor info
+          editor.refreshContextLabel();
           // show status info
           status.setText(TIME_REQUIRED + COLS + time);
           // show number of hits
-          if(result != null) setResults(result.size());
+          if(result != null) results.setText(gopts.results(result.size(), 0));
           // assign textual output if no node result was created
-          if(nodes == null) text.setText(ao);
+          if(nodes == null) text.setText(output, result != null ? result.size() : 0);
           // only cache output if data has not been updated (in which case notifyUpdate was called)
-          if(!updated) text.cache(ao, cmd, result);
+          if(!updated) text.cache(output, cmd, result);
         }
       }
     } catch(final Exception ex) {
@@ -561,6 +509,15 @@ public final class GUI extends JFrame {
     input.setCursor(CURSORTEXT);
     stop.setEnabled(false);
     command = null;
+  }
+
+  /**
+   * Checks if a command with the specified id is still running.
+   * @param id command id
+   * @return result of check
+   */
+  public boolean running(final int id) {
+    return id == commandID.get() && running;
   }
 
   /**
@@ -623,8 +580,9 @@ public final class GUI extends JFrame {
       else control.remove(comp);
     }
     setContentBorder();
-    (fullscr == null ? getRootPane() : fullscr).validate();
-    refreshControls();
+    final Component frame = fullscr == null ? getRootPane() : fullscr;
+    frame.validate();
+    refreshControls(false);
   }
 
   /**
@@ -632,16 +590,18 @@ public final class GUI extends JFrame {
    */
   public void layoutViews() {
     views.updateViews();
-    refreshControls();
-    repaint();
+    refreshControls(true);
   }
 
   /**
    * Refreshes the menu and the buttons.
+   * @param result update number of results
    */
-  public void refreshControls() {
+  public void refreshControls(final boolean result) {
     final DBNodes marked = context.marked;
-    if(marked != null) setResults(marked.size());
+    if(result && marked != null) {
+      results.setText(gopts.results((marked.isEmpty() ? context.current() : marked).size(), 0));
+    }
 
     filter.setEnabled(marked != null && !marked.isEmpty());
 
@@ -650,35 +610,15 @@ public final class GUI extends JFrame {
     context.options.set(MainOptions.XMLPLAN, inf);
 
     final Data data = context.data();
-    final int t = mode.getSelectedIndex();
-    final int s = data == null ? 2 : gopts.get(GUIOptions.SEARCHMODE);
-
     mode.setEnabled(data != null);
-    go.setEnabled(s == 2 || !gopts.get(GUIOptions.EXECRT));
-
-    if(s != t) {
-      mode.setSelectedIndex(s);
+    final int m = data == null ? 2 : gopts.get(GUIOptions.SEARCHMODE);
+    if(mode.getSelectedIndex() != m) {
+      mode.setSelectedIndex(m);
       input.mode(mode.getSelectedItem());
-      input.requestFocusInWindow();
     }
 
     toolbar.refresh();
     menu.refresh();
-
-    final int i = context.data() == null ? 2 : gopts.get(GUIOptions.SEARCHMODE);
-    final StringsOption options =
-        i == 0 ? GUIOptions.SEARCH : i == 1 ? GUIOptions.XQUERY : GUIOptions.COMMANDS;
-    hist.setEnabled(gopts.get(options).length != 0);
-  }
-
-  /**
-   * Sets results information.
-   * @param count number of results
-   */
-  private void setResults(final long count) {
-    final int max = gopts.get(GUIOptions.MAXRESULTS);
-    final String num = new DecimalFormat("#,###,###").format(count);
-    hits.setText(Util.info(RESULTS_X, (count >= max ? "\u2265" : "") + num));
   }
 
   /**
@@ -728,7 +668,6 @@ public final class GUI extends JFrame {
     GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().setFullScreenWindow(
         fullscr);
     setContentBorder();
-    refreshControls();
     updateControl(menu, !full, BorderLayout.NORTH);
     setVisible(!full);
   }
@@ -750,7 +689,7 @@ public final class GUI extends JFrame {
           // update version option to latest used version
           writeVersion(used);
         } else {
-          final String page = Token.string(new IOUrl(Prop.VERSION_URL).read());
+          final String page = Token.string(new IOUrl(VERSION_URL).read());
           final Matcher m = Pattern.compile("^(Version )?([\\w\\d.]*?)( .*|$)",
               Pattern.DOTALL).matcher(page);
           if(m.matches()) {
@@ -765,7 +704,7 @@ public final class GUI extends JFrame {
       protected void done(final Version latest) {
         if(BaseXDialog.confirm(GUI.this, Util.info(H_NEW_VERSION, Prop.NAME, latest))) {
           // jump to browser
-          BaseXDialog.browse(GUI.this, Prop.UPDATE_URL);
+          BaseXDialog.browse(GUI.this, UPDATE_URL);
         } else {
           // don't show update dialog anymore if it has been rejected once
           writeVersion(latest);
@@ -774,8 +713,23 @@ public final class GUI extends JFrame {
 
       private void writeVersion(final Version version) {
         gopts.set(GUIOptions.UPDATEVERSION, version.toString());
-        gopts.write();
+        saveOptions();
       }
     }.execute();
+  }
+
+  @Override
+  public GUI gui() {
+    return this;
+  }
+
+  @Override
+  public BaseXDialog dialog() {
+    return null;
+  }
+
+  @Override
+  public GUI component() {
+    return this;
   }
 }

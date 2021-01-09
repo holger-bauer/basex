@@ -12,11 +12,11 @@ import org.basex.util.list.*;
 /**
  * This class 'caches' all update operations that use a database name as reference.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class NameUpdates {
-  /** List of update operations [SINGLE]. */
+  /** List of update operations. */
   private final List<NameUpdate> nameUpdates = new LinkedList<>();
 
   /**
@@ -30,7 +30,7 @@ final class NameUpdates {
     for(final NameUpdate o : nameUpdates) {
       if(o.type == up.type) o.merge(up);
       if(drop && o.type == UpdateType.DBALTER || alter && o.type == UpdateType.DBDROP) {
-        throw BXDB_ALTERDROP_X.get(o.info(), o.name());
+        throw DB_CONFLICT3_X.get(o.info(), o.name());
       }
     }
     nameUpdates.add(up);

@@ -15,7 +15,7 @@ import org.xml.sax.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ValidateDtd extends ValidateFn {
@@ -32,11 +32,11 @@ public class ValidateDtd extends ValidateFn {
       void process(final ValidationHandler handler)
           throws IOException, ParserConfigurationException, SAXException, QueryException {
 
-        final Item input = toNodeOrAtomItem(exprs[0], qc);
+        final Item input = toNodeOrAtomItem(0, qc);
         IO schema = null;
-        if(exprs.length == 2) {
-          final Item in = exprs[1].item(qc, info);
-          if(in != null) schema = checkPath(toToken(in));
+        if(exprs.length > 1) {
+          final byte[] path = toTokenOrNull(exprs[1], qc);
+          if(path != null) schema = checkPath(path);
         }
 
         // integrate doctype declaration via serialization parameters

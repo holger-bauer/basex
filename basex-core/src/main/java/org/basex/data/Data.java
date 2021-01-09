@@ -4,6 +4,7 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.atomic.*;
 
 import org.basex.core.*;
 import org.basex.index.*;
@@ -14,6 +15,7 @@ import org.basex.index.resource.*;
 import org.basex.index.value.*;
 import org.basex.io.*;
 import org.basex.io.random.*;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
@@ -62,7 +64,7 @@ import org.basex.util.list.*;
  * NOTE: the class is not thread-safe. It is imperative that all read/write accesses
  * are synchronized over a single context's read/write lock.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Data {
@@ -78,6 +80,11 @@ public abstract class Data {
   public static final byte COMM = 0x04;
   /** Node kind: processing instruction (code: {@code 5}). */
   public static final byte PI = 0x05;
+
+  /** Static node counter. */
+  private static final AtomicInteger ID = new AtomicInteger();
+  /** Unique id. ID can get negative, as subtraction of ids is used for all comparisons. */
+  public final int dbid = ID.incrementAndGet();
 
   /** Resource index. */
   public final Resources resources = new Resources(this);
@@ -103,7 +110,7 @@ public abstract class Data {
 
   /** Indicates if distances are to be updated. */
   public boolean updateDists = true;
-  /** ID->PRE mapping. */
+  /** ID-PRE mapping. */
   public IdPreMap idmap;
 
   /** Table access file. */
@@ -171,21 +178,21 @@ public abstract class Data {
 
   /**
    * Returns an index iterator for the specified token.
-   * @param token index token reference
+   * @param search index search definition
    * @return index iterator
    */
-  public final IndexIterator iter(final IndexToken token) {
-    return index(token.type()).iter(token);
+  public final IndexIterator iter(final IndexSearch search) {
+    return index(search.type()).iter(search);
   }
 
   /**
    * Returns a cost estimation for searching the specified token.
    * Smaller values are better, a value of zero indicates that no results will be returned.
-   * @param token text to be found
-   * @return cost estimation
+   * @param search index search definition
+   * @return cost estimation, or {@code null} if index access is not possible
    */
-  public final int costs(final IndexToken token) {
-    return index(token.type()).costs(token);
+  public final IndexCosts costs(final IndexSearch search) {
+    return index(search.type()).costs(search);
   }
 
   /**
@@ -245,7 +252,7 @@ public abstract class Data {
             if(t == EMPTY) {
               t = txt;
             } else {
-              if(tb == null) tb = new TokenBuilder(t);
+              if(tb == null) tb = new TokenBuilder().add(t);
               tb.add(txt);
             }
           }
@@ -255,7 +262,15 @@ public abstract class Data {
     }
   }
 
-  // RETRIEVING VALUES ========================================================
+  /**
+   * Returns the common default namespace of all documents of the database.
+   * @return namespace, or {@code null} if there is no common namespace
+   */
+  public byte[] defaultNs() {
+    return nspaces.defaultNs(meta.ndocs);
+  }
+
+  // RETRIEVING VALUES ============================================================================
 
   /**
    * Returns a pre value for the specified id.
@@ -267,9 +282,13 @@ public abstract class Data {
 
     // find pre value in the table; start with specified id
     final int size = meta.size;
-    for(int p = Math.max(0, id); p < meta.size; ++p) if(id == id(p)) return p;
+    for(int p = Math.max(0, id); p < meta.size; ++p) {
+      if(id == id(p)) return p;
+    }
     final int ps = Math.min(size, id);
-    for(int p = 0; p < ps; ++p) if(id == id(p)) return p;
+    for(int p = 0; p < ps; ++p) {
+      if(id == id(p)) return p;
+    }
     // id not found
     return -1;
   }
@@ -354,12 +373,14 @@ public abstract class Data {
    * Finds the specified attribute and returns its value.
    * @param att the attribute id of the attribute to be found
    * @param pre pre value
-   * @return attribute value, or {@code null}
+   * @return attribute value or {@code null}
    */
   public final byte[] attValue(final int att, final int pre) {
     final int a = pre + attSize(pre, kind(pre));
     int p = pre;
-    while(++p != a) if(nameId(p) == att) return text(p, false);
+    while(++p != a) {
+      if(nameId(p) == att) return text(p, false);
+    }
     return null;
   }
 
@@ -480,7 +501,7 @@ public abstract class Data {
    */
   public abstract int textLen(int pre, boolean text);
 
-  // UPDATE OPERATIONS ========================================================
+  // UPDATE OPERATIONS ============================================================================
 
   /**
    * Updates (renames) the name of an element, attribute or processing instruction.
@@ -502,7 +523,7 @@ public abstract class Data {
       final int nsPre = kind == ATTR ? parent(pre, kind) : pre;
       final int uriId = nsFlag ? nspaces.add(nsPre, prefix, uri, this) :
         oldUriId != 0 && eq(nspaces.uri(oldUriId), uri) ? oldUriId : 0;
-      final int sz = size(pre, kind);
+      final int size = size(pre, kind);
 
       // write ids of namespace uri and name, and namespace flag
       if(kind == ATTR) {
@@ -525,7 +546,7 @@ public abstract class Data {
         final IntList pres = new IntList();
         // update text index
         if(meta.updindex && meta.textindex) {
-          final int last = pre + sz;
+          final int last = pre + size;
           for(int curr = pre + attSize(pre, kind); curr < last; curr += size(curr, kind(curr))) {
             if(kind(curr) == TEXT) pres.add(curr);
           }
@@ -800,7 +821,7 @@ public abstract class Data {
     nsScope.close();
 
     // write final entries and reset buffer
-    if(bp != 0) insert(pre + c - 1 - (c - 1) % bSize);
+    if(bufferPos != 0) insert(pre + c - 1 - (c - 1) % bSize);
     bufferSize(1);
 
     // increase size of ancestors
@@ -919,12 +940,12 @@ public abstract class Data {
    */
   protected abstract void delete(int pre, boolean text);
 
-  // INSERTS WITHOUT TABLE UPDATES ============================================
+  // INSERTS WITHOUT TABLE UPDATES ================================================================
 
   /** Buffer for caching new table entries. */
-  private byte[] b = new byte[IO.NODESIZE];
+  private byte[] buffer = new byte[IO.NODESIZE];
   /** Buffer position. */
-  private int bp;
+  private int bufferPos;
 
   /**
    * Sets the update buffer to a new size.
@@ -932,7 +953,7 @@ public abstract class Data {
    */
   private void bufferSize(final int size) {
     final int bs = size << IO.NODEPOWER;
-    if(b.length != bs) b = new byte[bs];
+    if(buffer.length != bs) buffer = new byte[bs];
   }
 
   /**
@@ -1010,7 +1031,7 @@ public abstract class Data {
    * @param value value to be stored
    */
   private void s(final int value) {
-    b[bp++] = (byte) value;
+    buffer[bufferPos++] = (byte) value;
   }
 
   /**
@@ -1026,7 +1047,7 @@ public abstract class Data {
    * @param value value to be stored
    */
   private void s(final long value) {
-    b[bp++] = (byte) value;
+    buffer[bufferPos++] = (byte) value;
   }
 
   /**
@@ -1034,8 +1055,8 @@ public abstract class Data {
    * @return byte buffer
    */
   private byte[] buffer() {
-    final byte[] bb = bp == b.length ? b : Arrays.copyOf(b, bp);
-    bp = 0;
+    final byte[] bb = bufferPos == buffer.length ? buffer : Arrays.copyOf(buffer, bufferPos);
+    bufferPos = 0;
     return bb;
   }
 
@@ -1080,7 +1101,7 @@ public abstract class Data {
     }
   }
 
-  // HELPER FUNCTIONS ===================================================================
+  // HELPER FUNCTIONS =============================================================================
 
   /**
    * Indicates if this data instance is in main memory or on disk.
@@ -1093,6 +1114,6 @@ public abstract class Data {
     final int max = 20;
     final DataPrinter dp = new DataPrinter(this);
     dp.add(0, max);
-    return meta.size > max ? dp + "..." : dp.toString();
+    return meta.size > max ? dp + Text.DOTS : dp.toString();
   }
 }

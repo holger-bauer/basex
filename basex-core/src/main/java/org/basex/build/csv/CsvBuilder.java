@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This class converts CSV data to XML, using direct or attributes conversion.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class CsvBuilder extends CsvConverter {
@@ -72,7 +72,7 @@ final class CsvBuilder extends CsvConverter {
   }
 
   @Override
-  public Str finish() throws IOException {
+  public Str finish(final String uri) throws IOException {
     if(record) builder.closeElem();
     builder.closeElem();
     return null;

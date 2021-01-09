@@ -7,7 +7,6 @@ import static org.basex.util.Token.*;
 import java.awt.*;
 
 import javax.swing.*;
-import javax.swing.event.*;
 import javax.swing.tree.*;
 
 import org.basex.core.*;
@@ -15,13 +14,12 @@ import org.basex.core.cmd.*;
 import org.basex.data.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
-import org.basex.gui.layout.ResourceNode;
 
 /**
  * Combination of a JTree and a text field. The tree visualizes the database content including raw
  * files and documents. The search field allows to quickly access specific files/documents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class DialogResources extends BaseXBack {
@@ -37,59 +35,41 @@ final class DialogResources extends BaseXBack {
   private final BaseXButton filter;
   /** Clear button. */
   private final BaseXButton clear;
+
   /** Avoids superfluous filtering steps. */
   private boolean filtered;
 
   /**
    * Constructor.
-   * @param dp dialog reference
+   * @param dialog dialog reference
    */
-  DialogResources(final DialogProps dp) {
+  DialogResources(final DialogProps dialog) {
     setLayout(new BorderLayout(0, 5));
-    dialog = dp;
+    this.dialog = dialog;
 
     // init tree - additional root node necessary to bypass
     // the egg/chicken dilemma
     final DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode();
-    tree = new BaseXTree(rootNode, dp).border(4, 4, 4, 4);
+    tree = new BaseXTree(dialog, rootNode).border(4, 4, 4, 4);
     tree.setRootVisible(false);
     tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
     tree.setRowHeight(getFontMetrics(getFont()).getHeight());
-
     tree.setCellRenderer(new TreeNodeRenderer());
-    tree.addTreeSelectionListener(new TreeSelectionListener() {
-      @Override
-      public void valueChanged(final TreeSelectionEvent e) {
-        ResourceNode n = (ResourceNode) e.getPath().getLastPathComponent();
-        String filt = n.equals(root) ? "" : n.path();
-        String trgt = filt + '/';
-
-        if(n.isLeaf()) {
-          n = (ResourceNode) n.getParent();
-          trgt = (n == null || n.equals(root) ? "" : n.path()) + '/';
-        } else {
-          filt = trgt;
-        }
-        filterText.setText(filt);
-        dp.addPanel.target.setText(trgt);
-        filtered = false;
-      }
-    });
 
     // add default children to tree
-    final Context context = dp.gui.context;
+    final Context context = dialog.gui.context;
     final Data data = context.data();
     final String label = data.meta.name + " (/)";
     root = new ResourceRootFolder(token(label), token("/"), tree, context);
     ((DefaultTreeModel) tree.getModel()).insertNodeInto(root, rootNode, 0);
 
-    filter = new BaseXButton(FILTER, dp);
-    clear = new BaseXButton(CLEAR, dp);
+    filter = new BaseXButton(dialog, FILTER);
+    clear = new BaseXButton(dialog, CLEAR);
     filter.setEnabled(false);
     clear.setEnabled(false);
 
     // popup menu for node interaction
-    new BaseXPopup(tree, dp.gui, new DeleteCmd(), new RenameCmd());
+    new BaseXPopup(tree, dialog.gui, new DeleteCmd(), new RenameCmd());
 
     // button panel
     final BaseXBack buttons = new BaseXBack();
@@ -98,9 +78,9 @@ final class DialogResources extends BaseXBack {
     final BaseXBack btn = new BaseXBack().layout(new BorderLayout());
     btn.add(buttons, BorderLayout.EAST);
 
-    filterText = new BaseXTextField(PLEASE_WAIT_D, dp);
+    filterText = new BaseXTextField(dialog, PLEASE_WAIT_D);
     filterText.setEnabled(false);
-    BaseXLayout.setWidth(filterText, 250);
+    BaseXLayout.setWidth(filterText, 300);
 
     // left panel
     final BaseXBack panel = new BaseXBack(new BorderLayout());
@@ -108,22 +88,34 @@ final class DialogResources extends BaseXBack {
     panel.add(btn, BorderLayout.SOUTH);
 
     final JScrollPane sp = new JScrollPane(tree);
-    BaseXLayout.setWidth(sp, 250);
     add(sp, BorderLayout.CENTER);
     add(panel, BorderLayout.SOUTH);
 
-    new Thread() {
-      @Override
-      public void run() {
-        tree.setCursor(CURSORWAIT);
-        tree.expandPath(new TreePath(root.getPath()));
-        filterText.setText("/");
-        filterText.setEnabled(true);
-        tree.setCursor(CURSORARROW);
-        filter.setEnabled(true);
-        clear.setEnabled(true);
+    tree.addTreeSelectionListener(e -> {
+      ResourceNode n = (ResourceNode) e.getPath().getLastPathComponent();
+      String filt = n.equals(root) ? "" : n.path();
+      String trgt = filt + '/';
+
+      if(n.isLeaf()) {
+        n = (ResourceNode) n.getParent();
+        trgt = (n == null || n.equals(root) ? "" : n.path()) + '/';
+      } else {
+        filt = trgt;
       }
-    }.start();
+      filterText.setText(filt);
+      dialog.addPanel.target.setText(trgt);
+      filtered = false;
+    });
+
+    new Thread(() -> {
+      tree.setCursor(CURSORWAIT);
+      tree.expandPath(new TreePath(root.getPath()));
+      filterText.setText("/");
+      filterText.setEnabled(true);
+      tree.setCursor(CURSORARROW);
+      filter.setEnabled(true);
+      clear.setEnabled(true);
+    }).start();
   }
 
   /**
@@ -233,7 +225,7 @@ final class DialogResources extends BaseXBack {
 
   /**
    * Custom tree cell renderer to distinguish between raw and xml leaf nodes.
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Lukas Kircher
    */
   private static final class TreeNodeRenderer extends DefaultTreeCellRenderer {
@@ -258,12 +250,7 @@ final class DialogResources extends BaseXBack {
       final ResourceNode n = selection();
       if(n == null || !BaseXDialog.confirm(dialog.gui, DELETE_NODES)) return;
 
-      final Runnable run = new Runnable() {
-        @Override
-        public void run() {
-          refreshNewFolder(n.path());
-        }
-      };
+      final Runnable run = () -> refreshNewFolder(n.path());
       DialogProgress.execute(dialog, run, new Delete(n.path()));
     }
 
@@ -288,12 +275,7 @@ final class DialogResources extends BaseXBack {
       if(!d.ok()) return;
 
       final String p = string(ResourceNode.preparePath(token(d.input())));
-      final Runnable run = new Runnable() {
-        @Override
-        public void run() {
-          refreshNewFolder(p);
-        }
-      };
+      final Runnable run = () -> refreshNewFolder(p);
       DialogProgress.execute(dialog, run, new Rename(n.path(), p));
     }
 

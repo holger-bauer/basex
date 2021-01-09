@@ -12,7 +12,7 @@ import org.basex.io.random.*;
 /**
  * This class provides temporary access to sorted list data.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Sebastian Gath
  */
 final class FTList {
@@ -45,7 +45,7 @@ final class FTList {
   /** Current data size. */
   int size;
   /** Next token. */
-  byte[] tok;
+  byte[] token;
   /** Next pre values. */
   int[] prv;
   /** Next pos values. */
@@ -58,14 +58,14 @@ final class FTList {
    * @throws IOException I/O exception
    */
   FTList(final Data data, final int prefix) throws IOException {
-    files = data.meta.dbfile(DATAFTX + prefix + 'y');
-    filed = data.meta.dbfile(DATAFTX + prefix + 'z');
+    files = data.meta.dbFile(DATAFTX + prefix + 'y');
+    filed = data.meta.dbFile(DATAFTX + prefix + 'z');
     str = new DataAccess(files);
     dat = new DataAccess(filed);
     tp = new int[data.meta.maxlen + 3];
     final int tl = tp.length;
     for(int t = 0; t < tl; t++) tp[t] = -1;
-    sizes = data.meta.dbfile(DATAFTX + prefix + 'x');
+    sizes = data.meta.dbFile(DATAFTX + prefix + 'x');
     try(DataAccess li = new DataAccess(sizes)) {
       int is = li.readNum();
       while(--is >= 0) {
@@ -83,8 +83,8 @@ final class FTList {
   void next() {
     if(wasted) return;
 
-    tok = token();
-    if(tok.length == 0) {
+    token = token();
+    if(token.length == 0) {
       wasted = true;
       prv = NOINTS;
       pov = NOINTS;

@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Caches values and ids for update operations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ValueCache implements Iterable<byte[]> {
@@ -51,7 +51,7 @@ public final class ValueCache implements Iterable<byte[]> {
    * @param data data reference
    */
   public ValueCache(final IntList pres, final IndexType type, final Data data) {
-    pos = type == IndexType.TOKEN ? new ArrayList<IntList>() : null;
+    pos = type == IndexType.TOKEN ? new ArrayList<>() : null;
 
     final IndexNames in = new IndexNames(type, data);
     final boolean text = type == IndexType.TEXT;
@@ -61,7 +61,7 @@ public final class ValueCache implements Iterable<byte[]> {
       if(data.kind(pre) == kind && in.contains(pre, text)) {
         if(type == IndexType.TOKEN) {
           int ps = 0;
-          for(final byte[] token : distinctTokens(data.text(pre, text))) {
+          for(final byte[] token : distinctTokens(data.text(pre, false))) {
             addId(token, pre, ps++, data);
           }
         } else if(data.textLen(pre, text) <= data.meta.maxlen) {
@@ -136,7 +136,7 @@ public final class ValueCache implements Iterable<byte[]> {
   /**
    * Returns the position list for the specified key.
    * @param key key
-   * @return id list, or {@code null}
+   * @return id list or {@code null}
    */
   IntList pos(final byte[] key) {
     return pos != null ? pos.get(keys.id(key) - 1) : null;

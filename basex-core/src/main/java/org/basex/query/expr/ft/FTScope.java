@@ -4,7 +4,6 @@ import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.util.ft.*;
-import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.ft.*;
@@ -14,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * FTScope expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTScope extends FTFilter {
@@ -35,6 +34,7 @@ public final class FTScope extends FTFilter {
 
   @Override
   protected boolean filter(final QueryContext qc, final FTMatch match, final FTLexer lexer) {
+    // same unit
     if(same) {
       int s = -1;
       for(final FTStringMatch sm : match) {
@@ -42,34 +42,41 @@ public final class FTScope extends FTFilter {
         final int p = pos(sm.start, lexer);
         if(s == -1) s = p;
         else if(s != p) return false;
+        if(sm.start != sm.end && s != pos(sm.end, lexer)) return false;
       }
       return true;
     }
+    // different unit
     int c = 0;
     final BoolList bl = new BoolList();
     for(final FTStringMatch sm : match) {
       if(sm.exclude) continue;
       c++;
-      final int p = pos(sm.start, lexer);
-      final int s = bl.size();
-      if(p < s && bl.get(p) && p == pos(sm.end, lexer)) return false;
-      bl.set(p, true);
+      final int pos = pos(sm.start, lexer), size = bl.size();
+      if(pos < size && bl.get(pos) && pos == pos(sm.end, lexer)) return false;
+      bl.set(pos, true);
     }
     return c > 1;
   }
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTScope(info, exprs[0].copy(cc, vm), same, unit);
+    return copyType(new FTScope(info, exprs[0].copy(cc, vm), same, unit));
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(same ? SAME : DIFFERENT, unit), exprs);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTScope && same == ((FTScope) obj).same &&
+        super.equals(obj);
   }
 
   @Override
-  public String toString() {
-    return super.toString() + (same ? SAME : DIFFERENT) + ' ' + unit;
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, same ? SAME : DIFFERENT, unit), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(exprs[0]).token(same ? SAME : DIFFERENT).token(unit);
   }
 }

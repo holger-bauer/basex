@@ -1,22 +1,21 @@
 package org.basex;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
-import java.security.*;
 
 import org.basex.core.*;
 import org.basex.io.serial.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the EXPath Cryptographic module. The tests in basex-test
  * package are only executable after a java keystore has been created.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
-public final class FNCryptoTest extends SandboxTest{
+public final class FNCryptoTest extends SandboxTest {
   /** User home directory. */
   private static final String KEYSTORE_DIR = System.getProperty("user.home");
   /** Java home directory. */
@@ -49,8 +48,7 @@ public final class FNCryptoTest extends SandboxTest{
    * Tests whether validate-signature returns true for a certificate created
    * with generate-signature.
    */
-  @Test
-  public void validateSignatureWithCertificate() {
+  @Test public void validateSignatureWithCertificate() {
     query("crypto:validate-signature(" +
         "crypto:generate-signature(<a/>,'','','','',''," + CT + "))", "true");
   }
@@ -59,8 +57,7 @@ public final class FNCryptoTest extends SandboxTest{
    * Tests whether validate-signature returns true for a certificate created
    * with generate-signature.
    */
-  @Test
-  public void validateSignatureWithXPathAndCertificate() {
+  @Test public void validateSignatureWithXPathAndCertificate() {
     query("crypto:validate-signature(crypto:generate-signature(<a><n/><n/></a>," +
         "'','','','','','/a/n'," + CT + "))", "true");
   }
@@ -69,43 +66,17 @@ public final class FNCryptoTest extends SandboxTest{
    * Tests whether validate-signature returns true for a certificate created
    * with generate-signature.
    */
-  @Test
-  public void validateSignatureFullySpecified() {
+  @Test public void validateSignatureFullySpecified() {
     query("crypto:validate-signature(crypto:generate-signature(<a><n/></a>," +
         "'exclusive','SHA512','RSA_SHA1','myPrefix','enveloped','/a/n'," + CT +
         "))", "true");
   }
 
   /**
-  * Test method for crypto:encrypt and crypto:decrypt with asymmetric keys.
-  */
-  @Test
-  public void encryptionAsym1() {
-   final String msg = "messagemessagemessagemessagemessagemessagemessage";
-
-   PublicKey puk = null;
-   PrivateKey prk = null;
-   try {
-
-     final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-     final KeyPair kp = gen.generateKeyPair();
-     puk = kp.getPublic();
-     prk = kp.getPrivate();
-
-   } catch(final NoSuchAlgorithmException e) {
-     e.printStackTrace();
-   }
-
-   query("let $e := crypto:encrypt('" + msg + "','asymmetric','" + prk + "','RSA')" +
-       "return crypto:decrypt($e,'asymmetric','" + puk + "','RSA')", msg);
-  }
-
-  /**
    * Creates the database context.
    * @throws Exception error during keystore generation or database exception
    */
-  @BeforeClass
-  public static void start() throws Exception {
+  @BeforeAll public static void start() throws Exception {
     new File(KEYSTORE).delete();
 
     final Process proc = Runtime.getRuntime().exec(GENKEY_CMD);
@@ -119,8 +90,7 @@ public final class FNCryptoTest extends SandboxTest{
   /**
    * Removes test databases and closes the database context.
    */
-  @AfterClass
-  public static void finish() {
+  @AfterAll public static void finish() {
     new File(KEYSTORE).delete();
   }
 
@@ -140,9 +110,7 @@ public final class FNCryptoTest extends SandboxTest{
    * @param second second query
    * @param expected expected output
    */
-  private static void query(final String first, final String second,
-      final String expected) {
-
+  private static void query(final String first, final String second, final String expected) {
     if(first != null) query(first);
     final String result = query(second);
     // quotes are replaced by apostrophes to simplify comparison

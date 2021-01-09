@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Utility class for comparing XQuery values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DeepEqual {
@@ -87,37 +87,56 @@ public final class DeepEqual {
    * @throws QueryException query exception
    */
   public boolean equal(final Iter iter1, final Iter iter2) throws QueryException {
+    return equal(iter1, iter2, null);
+  }
+
+  /**
+   * Checks values for deep equality.
+   * @param iter1 first iterator
+   * @param iter2 second iterator
+   * @param qc query context (allows interruption of process, can be {@code null})
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  public boolean equal(final Iter iter1, final Iter iter2, final QueryContext qc)
+      throws QueryException {
+
+    final long size1 = iter1.size(), size2 = iter2.size();
+    if(size1 != -1 && size2 != -1 && size1 != size2) return false;
+
     while(true) {
+      if(qc != null) qc.checkStop();
+
       // check if one or both iterators are exhausted
-      final Item it1 = iter1.next(), it2 = iter2.next();
-      if(it1 == null || it2 == null) return it1 == null && it2 == null;
+      final Item item1 = iter1.next(), item2 = iter2.next();
+      if(item1 == null || item2 == null) return item1 == null && item2 == null;
 
       // check functions
-      if(it1 instanceof FItem) {
-        if(((FItem) it1).deep(it2, info, coll)) continue;
+      if(item1 instanceof FItem) {
+        if(((FItem) item1).deep(item2, coll, info)) continue;
         return false;
       }
-      if(it2 instanceof FItem) {
-        if(((FItem) it2).deep(it1, info, coll)) continue;
+      if(item2 instanceof FItem) {
+        if(((FItem) item2).deep(item1, coll, info)) continue;
         return false;
       }
 
       // identical items are also equal
-      if(it1 == it2) continue;
+      if(item1 == item2) continue;
 
       // check atomic values
-      if(!(it1 instanceof ANode || it2 instanceof ANode)) {
-        if(it1.equiv(it2, coll, info)) continue;
+      if(!(item1 instanceof ANode || item2 instanceof ANode)) {
+        if(item1.equiv(item2, coll, info)) continue;
         return false;
       }
 
       // node types must be equal
-      Type t1 = it1.type, t2 = it2.type;
-      if(t1 != t2) return false;
+      Type type1 = item1.type, type2 = item2.type;
+      if(type1 != type2) return false;
 
-      ANode s1 = (ANode) it1, s2 = (ANode) it2;
-      if(s1.is(s2)) continue;
-      BasicNodeIter ch1 = s1.children(), ch2 = s2.children();
+      ANode node1 = (ANode) item1, node2 = (ANode) item2;
+      if(node1.is(node2)) continue;
+      BasicNodeIter ch1 = node1.childIter(), ch2 = node2.childIter();
 
       final Stack<BasicNodeIter> stack = new Stack<>();
       stack.push(ch1);
@@ -125,43 +144,43 @@ public final class DeepEqual {
 
       boolean skip = false;
       do {
-        t1 = s1 != null ? s1.type : null;
-        t2 = s2 != null ? s2.type : null;
+        type1 = node1 != null ? node1.type : null;
+        type2 = node2 != null ? node2.type : null;
 
         // skip comparison of descendant comments and processing instructions
         if(skip) {
-          if(t1 == NodeType.COM || t1 == NodeType.PI) {
-            s1 = ch1.next();
+          if(type1 == NodeType.COMMENT || type1 == NodeType.PROCESSING_INSTRUCTION) {
+            node1 = ch1.next();
             continue;
           }
-          if(t2 == NodeType.COM || t2 == NodeType.PI) {
-            s2 = ch2.next();
+          if(type2 == NodeType.COMMENT || type2 == NodeType.PROCESSING_INSTRUCTION) {
+            node2 = ch2.next();
             continue;
           }
         }
 
-        if(s1 == null || s2 == null) {
-          if(s1 != s2) return false;
+        if(node1 == null || node2 == null) {
+          if(node1 != node2) return false;
           ch2 = stack.pop();
           ch1 = stack.pop();
         } else {
           // ensure that nodes have same type
-          if(t1 != t2) return false;
+          if(type1 != type2) return false;
 
           // compare names
-          QNm n1 = s1.qname(), n2 = s2.qname();
+          QNm n1 = node1.qname(), n2 = node2.qname();
           if(n1 != null && (!n1.eq(n2) ||
               flags.contains(Mode.NAMESPACES) && !eq(n1.prefix(), n2.prefix())))
             return false;
 
-          if(t1 == NodeType.TXT || t1 == NodeType.ATT || t1 == NodeType.COM ||
-             t1 == NodeType.PI || t1 == NodeType.NSP) {
+          if(type1 == NodeType.TEXT || type1 == NodeType.ATTRIBUTE || type1 == NodeType.COMMENT ||
+             type1 == NodeType.PROCESSING_INSTRUCTION || type1 == NodeType.NAMESPACE_NODE) {
             // compare string values
-            if(!eq(s1.string(), s2.string())) return false;
-          } else if(t1 == NodeType.ELM) {
+            if(!eq(node1.string(), node2.string())) return false;
+          } else if(type1 == NodeType.ELEMENT) {
             // compare attributes
-            final BasicNodeIter ir1 = s1.attributes();
-            BasicNodeIter ir2 = s2.attributes();
+            final BasicNodeIter ir1 = node1.attributeIter();
+            BasicNodeIter ir2 = node2.attributeIter();
             if(ir1.size() != ir2.size()) return false;
 
             // compare names, values and prefixes
@@ -175,7 +194,7 @@ public final class DeepEqual {
                     !eq(a1.string(), a2.string())) {
                   return false;
                 }
-                ir2 = s2.attributes();
+                ir2 = node2.attributeIter();
                 continue LOOP;
               }
               return false;
@@ -183,7 +202,7 @@ public final class DeepEqual {
 
             // compare namespaces
             if(flags.contains(Mode.NAMESPACES)) {
-              final Atts ns1 = s1.namespaces(), ns2 = s2.namespaces();
+              final Atts ns1 = node1.namespaces(), ns2 = node2.namespaces();
               final int nl1 = ns1.size(), nl2 = ns2.size();
               if(nl1 != nl2) return false;
               LOOP:
@@ -200,14 +219,14 @@ public final class DeepEqual {
             // check children
             stack.push(ch1);
             stack.push(ch2);
-            ch1 = s1.children();
-            ch2 = s2.children();
+            ch1 = node1.childIter();
+            ch2 = node2.childIter();
           }
         }
 
         // check next child
-        s1 = ch1.next();
-        s2 = ch2.next();
+        node1 = ch1.next();
+        node2 = ch2.next();
         skip = !flags.contains(Mode.ALLNODES);
       } while(!stack.isEmpty());
     }

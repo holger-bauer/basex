@@ -5,22 +5,22 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
-import org.basex.build.*;
+import org.basex.build.Parser;
 import org.basex.build.xml.*;
 import org.basex.core.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
-import org.basex.util.*;
+import org.basex.query.value.seq.*;
+import org.xml.sax.*;
 
 /**
  * Parse functions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Parse extends StandardFunc {
@@ -29,22 +29,21 @@ public abstract class Parse extends StandardFunc {
    * @param qc query context
    * @param check only check if text is available
    * @param encoding parse encoding
-   * @return content string or boolean success flag
+   * @return content string, {@link Empty#VALUE} if no URL is supplied, or boolean success flag
+   *   if availability is checked
    * @throws QueryException query exception
    */
-  Item unparsedText(final QueryContext qc, final boolean check, final boolean encoding)
+  final Item unparsedText(final QueryContext qc, final boolean check, final boolean encoding)
       throws QueryException {
 
     checkCreate(qc);
-    final Item it = exprs[0].atomItem(qc, info);
-    if(it == null) return check ? Bln.FALSE : null;
+    final byte[] path = toTokenOrNull(exprs[0], qc);
+    if(path == null) return check ? Bln.FALSE : Empty.VALUE;
 
-    final byte[] path = toToken(it);
-
-    String enc = null;
-    IO io = null;
+    String enc;
+    IO io;
     try {
-      enc = encoding ? toEncoding(1, ENCODING_X, qc) : null;
+      enc = encoding ? toEncodingOrNull(1, ENCODING_X, qc) : null;
 
       final String p = string(path);
       if(p.indexOf('#') != -1) throw FRAGID_X.get(info, p);
@@ -66,22 +65,22 @@ public abstract class Parse extends StandardFunc {
         if(rp.length > 1) enc = rp[1];
       }
 
-      try(InputStream is = io.inputStream()) {
-        final TextInput ti = new TextInput(io).encoding(enc).validate(true);
+      try(InputStream is = io.inputStream(); TextInput ti = new TextInput(io)) {
+        ti.encoding(enc).validate(true);
         if(!check) return Str.get(ti.content());
+
         while(ti.read() != -1);
         return Bln.TRUE;
+      } catch(final IOException ex) {
+        if(check) return Bln.FALSE;
+        if(ex instanceof DecodingException) throw WHICHCHARS_X.get(info, ex);
+        if(ex instanceof InputException) throw INVCHARS_X.get(info, ex);
+        throw RESNF_X.get(info, io);
       }
+
     } catch(final QueryException ex) {
-      if(check && !ex.error().is(ErrType.XPTY)) return Bln.FALSE;
+      if(check && !ex.error().toString().startsWith(ErrType.XPTY.name())) return Bln.FALSE;
       throw ex;
-    } catch(final IOException ex) {
-      if(check) return Bln.FALSE;
-      if(ex instanceof InputException) {
-        final boolean inv = ex instanceof EncodingException || enc != null;
-        throw (inv ? INVCHARS_X : WHICHCHARS_X).get(info, ex);
-      }
-      throw RESNF_X.get(info, io);
     }
   }
 
@@ -89,49 +88,21 @@ public abstract class Parse extends StandardFunc {
    * Returns a document node for the parsed XML input.
    * @param qc query context
    * @param frag parse fragments
-   * @return result
+   * @return result or {@link Empty#VALUE}
    * @throws QueryException query exception
    */
-  ANode parseXml(final QueryContext qc, final boolean frag) throws QueryException {
-    final Item it = exprs[0].item(qc, info);
-    if(it == null) return null;
+  final Item parseXml(final QueryContext qc, final boolean frag) throws QueryException {
+    final byte[] token = toTokenOrNull(exprs[0], qc);
+    if(token == null) return Empty.VALUE;
 
-    final IO io = new IOContent(toToken(it), string(sc.baseURI().string()));
+    final IO io = new IOContent(token, string(sc.baseURI().string()));
     try {
-      final Parser parser;
-      if(frag) {
-        parser = new XMLParser(io, MainOptions.get(), true);
-      } else {
-        parser = Parser.xmlParser(io);
-      }
-      return new DBNode(parser);
+      return new DBNode(frag ? new XMLParser(io, MainOptions.get(), true) : Parser.xmlParser(io));
     } catch(final IOException ex) {
-      throw SAXERR_X.get(info, ex);
-    }
-  }
-
-  /**
-   * Returns the specified text as lines.
-   * @param str text input
-   * @return result
-   */
-  public static Iter textIter(final byte[] str) {
-    // no I/O exception expected, as input is a main-memory array
-    try {
-      final NewlineInput nli = new NewlineInput(new ArrayInput(str));
-      final TokenBuilder tb = new TokenBuilder();
-      return new Iter() {
-        @Override
-        public Item next() {
-          try {
-            return nli.readLine(tb) ? Str.get(tb.toArray()) : null;
-          } catch(final IOException ex) {
-            throw Util.notExpected(ex);
-          }
-        }
-      };
-    } catch(final IOException ex) {
-      throw Util.notExpected(ex);
+      final QueryException qe = SAXERR_X.get(info, ex);
+      final Throwable th = ex.getCause();
+      if(th instanceof SAXException) qe.value(Str.get(th.toString()));
+      throw qe;
     }
   }
 }

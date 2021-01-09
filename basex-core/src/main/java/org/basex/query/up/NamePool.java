@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This class serves as a container for updated names.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NamePool {
@@ -25,8 +25,8 @@ public final class NamePool {
    * @param type node type
    */
   public void add(final QNm name, final NodeType type) {
-    if(type != NodeType.ATT && type != NodeType.ELM) return;
-    final int i = index(name, type == NodeType.ATT);
+    if(type != NodeType.ATTRIBUTE && type != NodeType.ELEMENT) return;
+    final int i = index(name, type == NodeType.ATTRIBUTE);
     cache[i].add++;
   }
 
@@ -35,36 +35,38 @@ public final class NamePool {
    * @param node node
    */
   public void remove(final ANode node) {
-    if(node.type != NodeType.ATT && node.type != NodeType.ELM) return;
-    final int i = index(node.qname(), node.type == NodeType.ATT);
+    if(node.type != NodeType.ATTRIBUTE && node.type != NodeType.ELEMENT) return;
+    final int i = index(node.qname(), node.type == NodeType.ATTRIBUTE);
     cache[i].del = true;
   }
 
   /**
-   * Returns the name of a duplicate attribute or {@code null}.
-   * @return name of duplicate attribute
+   * Returns the name of a duplicate attribute.
+   * @return name of duplicate attribute or {@code null}
    */
   QNm duplicate() {
     // if node has been deleted, overall count for duplicates must be bigger 2
     for(int i = 0; i < size; ++i) {
-      if(cache[i].attr && cache[i].add > (cache[i].del ? 2 : 1)) return cache[i].name;
+      final NameCache nc = cache[i];
+      if(nc.attr && nc.add > (nc.del ? 2 : 1)) return nc.name;
     }
     return null;
   }
 
   /**
    * Checks if no namespace conflicts occur.
-   * @return {@code null} or conflicting namespaces
+   * @return conflicting namespaces or {@code null}
    */
   byte[][] nsOK() {
     final Atts at = new Atts();
     for(int i = 0; i < size; ++i) {
-      if(cache[i].add <= (cache[i].del ? 1 : 0)) continue;
-      final QNm nm = cache[i].name;
+      final NameCache nc = cache[i];
+      if(nc.add <= (nc.del ? 1 : 0)) continue;
+      final QNm nm = nc.name;
       final byte[] pref = nm.prefix();
       final byte[] uri = nm.uri();
       // attributes with empty URI don't conflict with anything
-      if(cache[i].attr && uri.length == 0) continue;
+      if(nc.attr && uri.length == 0) continue;
       final byte[] u = at.value(pref);
       if(u == null) at.add(pref, uri);
       // check if only one uri is assigned to a prefix
@@ -85,7 +87,7 @@ public final class NamePool {
       if(nc.name.eq(name) && nc.attr == at) return i;
     }
     if(size == cache.length)
-      cache = Array.copy(cache, new NameCache[Array.newSize(size)]);
+      cache = Array.copy(cache, new NameCache[Array.newCapacity(size)]);
     final NameCache nc = new NameCache();
     nc.name = name;
     nc.attr = at;

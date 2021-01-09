@@ -5,11 +5,10 @@ import org.basex.query.*;
 /**
  * Simple XQuery namespace tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NSTest extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
       { "NUFP 1", strings("http://www.w3.org/XML/1998/namespace"),
@@ -70,11 +69,14 @@ public final class NSTest extends QueryTest {
       { "STEP 1", strings("X"),
         "string(<e a='{ <e>X</e>/self::e }' xmlns='A'/>/@*)" },
 
-      /* Buggy queries:
-
       // expected error: XQDY0102
       { "NSCon 1", "<e xmlns='x'>{ namespace {''} { 'y' } }</e>" },
-      { "NSCon 2", "<e xmlns:p='x'>{ namespace {'p'} { 'y' } }</e>" },
+      { "NSCon 2", strings("p_1", "p", "xml"),
+        "declare namespace p = 'A'; <p:l>{ namespace p { 'B' } }</p:l> => in-scope-prefixes()" },
+
+      /* Buggy queries:
+
+      { "NSCon 3", "<p:l xmlns:p='A'>{ namespace {'p'} { 'B' } }</p:l>" },
 
       // function prefix is declared by element constructor
       { "FuncX 1", dbl(1),

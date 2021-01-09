@@ -1,18 +1,17 @@
 package org.basex.query.value.seq;
 
 import java.math.*;
-import java.util.*;
 
 import org.basex.query.*;
-import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
 
 /**
  * Sequence of items of type {@link Int xs:decimal}, containing at least two of them.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DecSeq extends NativeSeq {
@@ -24,7 +23,7 @@ public final class DecSeq extends NativeSeq {
    * @param values bytes
    */
   private DecSeq(final BigDecimal[] values) {
-    super(values.length, AtomType.DEC);
+    super(values.length, AtomType.DECIMAL);
     this.values = values;
   }
 
@@ -34,8 +33,11 @@ public final class DecSeq extends NativeSeq {
   }
 
   @Override
-  public boolean sameAs(final Expr cmp) {
-    return cmp instanceof DecSeq && Arrays.equals(values, ((DecSeq) cmp).values);
+  public Value reverse(final QueryContext qc) {
+    final int sz = (int) size;
+    final BigDecimal[] tmp = new BigDecimal[sz];
+    for(int i = 0; i < sz; i++) tmp[sz - i - 1] = values[i];
+    return get(tmp);
   }
 
   @Override
@@ -43,37 +45,42 @@ public final class DecSeq extends NativeSeq {
     return values;
   }
 
-  // STATIC METHODS =====================================================================
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || (obj instanceof DecSeq ? Array.equals(values, ((DecSeq) obj).values) :
+      super.equals(obj));
+  }
+
+  // STATIC METHODS ===============================================================================
 
   /**
    * Creates a sequence with the specified items.
-   * @param items items
+   * @param values values
    * @return value
    */
-  private static Value get(final BigDecimal[] items) {
-    return items.length == 0 ? Empty.SEQ : items.length == 1 ? Dec.get(items[0]) :
-      new DecSeq(items);
+  private static Value get(final BigDecimal[] values) {
+    final int vl = values.length;
+    return vl == 0 ? Empty.VALUE : vl == 1 ? Dec.get(values[0]) : new DecSeq(values);
   }
 
   /**
-   * Creates a sequence with the items in the specified expressions.
-   * @param values values
+   * Creates a typed sequence with the items of the specified values.
    * @param size size of resulting sequence
+   * @param values values
    * @return value
    * @throws QueryException query exception
    */
-  public static Value get(final Value[] values, final int size) throws QueryException {
+  static Value get(final int size, final Value... values) throws QueryException {
     final BigDecimal[] tmp = new BigDecimal[size];
     int t = 0;
-    for(final Value val : values) {
+    for(final Value value : values) {
       // speed up construction, depending on input
-      final int vs = (int) val.size();
-      if(val instanceof DecSeq) {
-        final DecSeq sq = (DecSeq) val;
-        System.arraycopy(sq.values, 0, tmp, t, vs);
+      if(value instanceof DecSeq) {
+        final int vs = (int) value.size();
+        Array.copyFromStart(((DecSeq) value).values, vs, tmp, t);
         t += vs;
       } else {
-        for(int v = 0; v < vs; v++) tmp[t++] = val.itemAt(v).dec(null);
+        for(final Item item : value) tmp[t++] = item.dec(null);
       }
     }
     return get(tmp);

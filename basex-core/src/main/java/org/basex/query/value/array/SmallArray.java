@@ -2,16 +2,17 @@ package org.basex.query.value.array;
 
 import java.util.*;
 
+import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.util.*;
 
 /**
  * A small array that is represented in a single Java array.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
-final class SmallArray extends Array {
+final class SmallArray extends XQArray {
   /** The elements. */
   final Value[] elems;
 
@@ -25,7 +26,7 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array cons(final Value head) {
+  public XQArray cons(final Value head) {
     if(elems.length < MAX_SMALL) {
       final Value[] newElems = slice(elems, -1, elems.length);
       newElems[0] = head;
@@ -39,7 +40,7 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array snoc(final Value last) {
+  public XQArray snoc(final Value last) {
     if(elems.length < MAX_SMALL) {
       final Value[] newElems = slice(elems, 0, elems.length + 1);
       newElems[newElems.length - 1] = last;
@@ -54,18 +55,11 @@ final class SmallArray extends Array {
 
   @Override
   public Value get(final long index) {
-    // index to small?
-    if(index < 0) throw new IndexOutOfBoundsException("Index < 0: " + index);
-
-    // index too big?
-    if(index >= elems.length) throw new IndexOutOfBoundsException(index + " >= " + elems.length);
-
     return elems[(int) index];
   }
 
   @Override
-  public Array put(final long pos, final Value val) {
-    if(pos < 0 || pos >= elems.length) throw new IndexOutOfBoundsException(Long.toString(pos));
+  public XQArray put(final long pos, final Value val) {
     final Value[] values = elems.clone();
     values[(int) pos] = val;
     return new SmallArray(values);
@@ -77,8 +71,8 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array concat(final Array seq) {
-    return seq.isEmptyArray() ? this : seq.consSmall(elems);
+  public XQArray concat(final XQArray seq) {
+    return seq.isEmptyArray() ? this : seq.prepend(this);
   }
 
   @Override
@@ -92,13 +86,13 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array init() {
+  public XQArray init() {
     if(elems.length == 1) return empty();
     return new SmallArray(slice(elems, 0, elems.length - 1));
   }
 
   @Override
-  public Array tail() {
+  public XQArray tail() {
     if(elems.length == 1) return empty();
     return new SmallArray(slice(elems, 1, elems.length));
   }
@@ -109,7 +103,8 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array reverseArray() {
+  public XQArray reverseArray(final QueryContext qc) {
+    qc.checkStop();
     final int n = elems.length;
     if(n == 1) return this;
     final Value[] es = new Value[n];
@@ -118,43 +113,35 @@ final class SmallArray extends Array {
   }
 
   @Override
-  public Array insertBefore(final long pos, final Value val) {
-    if(pos < 0) throw new IndexOutOfBoundsException("negative index: " + pos);
-    if(pos > elems.length) throw new IndexOutOfBoundsException("position too big: " + pos);
-
+  public XQArray insertBefore(final long pos, final Value value, final QueryContext qc) {
+    qc.checkStop();
     final int p = (int) pos, n = elems.length;
     final Value[] out = new Value[n + 1];
-    System.arraycopy(elems, 0, out, 0, p);
-    out[p] = val;
-    System.arraycopy(elems, p, out, p + 1, n - p);
+    Array.copy(elems, p, out);
+    out[p] = value;
+    Array.copy(elems, p, n - p, out, p + 1);
 
     if(n < MAX_SMALL) return new SmallArray(out);
     return new BigArray(slice(out, 0, MIN_DIGIT), slice(out, MIN_DIGIT, n + 1));
   }
 
   @Override
-  public Array remove(final long pos) {
-    if(pos < 0) throw new IndexOutOfBoundsException("negative index: " + pos);
-    if(pos >= elems.length) throw new IndexOutOfBoundsException("position too big: " + pos);
+  public XQArray remove(final long pos, final QueryContext qc) {
+    qc.checkStop();
     final int p = (int) pos, n = elems.length;
     if(n == 1) return empty();
 
     final Value[] out = new Value[n - 1];
-    System.arraycopy(elems, 0, out, 0, p);
-    System.arraycopy(elems, p + 1, out, p, n - 1 - p);
+    Array.copy(elems, p, out);
+    Array.copy(elems, p + 1, n - 1 - p, out, p);
     return new SmallArray(out);
   }
 
   @Override
-  public Array subArray(final long pos, final long len) {
-    if(pos < 0) throw new IndexOutOfBoundsException("first index < 0: " + pos);
-    if(len < 0) throw new IndexOutOfBoundsException("length < 0: " + len);
-    if(pos + len > elems.length)
-      throw new IndexOutOfBoundsException("end out of bounds: "
-          + (pos + len) + " > " + elems.length);
-
+  public XQArray subArray(final long pos, final long len, final QueryContext qc) {
+    qc.checkStop();
     final int p = (int) pos, n = (int) len;
-    return n == 0 ? Array.empty() : new SmallArray(slice(elems, p, p + n));
+    return n == 0 ? XQArray.empty() : new SmallArray(slice(elems, p, p + n));
   }
 
   @Override
@@ -174,7 +161,6 @@ final class SmallArray extends Array {
 
       @Override
       public Value next() {
-        if(index >= elems.length) throw new NoSuchElementException();
         return elems[index++];
       }
 
@@ -190,23 +176,22 @@ final class SmallArray extends Array {
 
       @Override
       public Value previous() {
-        if(index <= 0) throw new NoSuchElementException();
         return elems[--index];
       }
 
       @Override
       public void set(final Value e) {
-        throw new UnsupportedOperationException();
+        throw Util.notExpected();
       }
 
       @Override
       public void add(final Value e) {
-        throw new UnsupportedOperationException();
+        throw Util.notExpected();
       }
 
       @Override
       public void remove() {
-        throw new UnsupportedOperationException();
+        throw Util.notExpected();
       }
     };
   }
@@ -219,16 +204,16 @@ final class SmallArray extends Array {
   }
 
   @Override
-  Array consSmall(final Value[] left) {
-    final int l = left.length, r = elems.length, n = l + r;
-    if(Math.min(l, r) >= MIN_DIGIT) {
-      // both arrays can be used as digits
-      return new BigArray(left, elems);
-    }
+  XQArray prepend(final SmallArray array) {
+    final Value[] values = array.elems;
+    final int a = values.length, b = elems.length, n = a + b;
+
+    // both arrays can be used as digits
+    if(Math.min(a, b) >= MIN_DIGIT) return new BigArray(values, elems);
 
     final Value[] out = new Value[n];
-    System.arraycopy(left, 0, out, 0, l);
-    System.arraycopy(elems, 0, out, l, r);
+    Array.copy(values, a, out);
+    Array.copyFromStart(elems, b, out, a);
     if(n <= MAX_SMALL) return new SmallArray(out);
 
     final int mid = n / 2;

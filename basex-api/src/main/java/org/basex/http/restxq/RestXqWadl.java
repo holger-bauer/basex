@@ -1,12 +1,15 @@
 package org.basex.http.restxq;
 
-import static org.basex.http.restxq.RestXqText.*;
+import static org.basex.http.web.WebText.*;
 import static org.basex.util.Token.*;
 
 import java.util.*;
 import java.util.regex.*;
 
+import javax.servlet.http.*;
+
 import org.basex.http.*;
+import org.basex.http.web.*;
 import org.basex.query.func.inspect.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -18,19 +21,19 @@ import org.basex.util.list.*;
  * This class returns a Web Application Description Language (WADL) file,
  * listing all available RESTXQ services.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-final class RestXqWadl {
-  /** HTTP connection. */
-  private final HTTPConnection conn;
+public final class RestXqWadl {
+  /** HTTP request. */
+  private final HttpServletRequest request;
 
   /**
    * Constructor.
-   * @param conn HTTP connection
+   * @param request HTTP request
    */
-  RestXqWadl(final HTTPConnection conn) {
-    this.conn = conn;
+  public RestXqWadl(final HttpServletRequest request) {
+    this.request = request;
   }
 
   /**
@@ -38,16 +41,17 @@ final class RestXqWadl {
    * @param modules available modules
    * @return WADL description
    */
-  synchronized FElem create(final HashMap<String, RestXqModule> modules) {
+  public synchronized FElem create(final HashMap<String, WebModule> modules) {
     // create root nodes
     final FElem application = new FElem(WADL + "application", WADL_URI).declareNS();
-    final String base = conn.req.getRequestURL().toString();
+    final String base = request.getRequestURL().toString().replace(request.getRequestURI(),
+        request.getContextPath());
     final FElem resources = elem("resources", application).add("base", base);
 
     // create children
     final TreeMap<String, FElem> map = new TreeMap<>();
-    for(final RestXqModule mod : modules.values()) {
-      for(final RestXqFunction func : mod.functions()) {
+    for(final WebModule module : modules.values()) {
+      for(final RestXqFunction func : module.functions()) {
         if(func.path == null) continue;
 
         final TokenObjMap<TokenList> xqdoc = func.function.doc();
@@ -70,13 +74,13 @@ final class RestXqWadl {
         if(descs != null) for(final byte[] desc : descs) addDoc(desc, method);
 
         // create request
-        final FElem request = elem("request", method);
-        for(final RestXqParam rxp : func.queryParams)
-          addParam(rxp.name, "query",  request, xqdoc, func);
-        for(final RestXqParam rxp : func.formParams)
-          addParam(rxp.name, "query",  request, xqdoc, func);
-        for(final RestXqParam rxp : func.headerParams)
-          addParam(rxp.name, "header",  request, xqdoc, func);
+        final FElem rqst = elem("request", method);
+        for(final WebParam rxp : func.queryParams)
+          addParam(rxp.name, "query",  rqst, xqdoc, func);
+        for(final WebParam rxp : func.formParams)
+          addParam(rxp.name, "query",  rqst, xqdoc, func);
+        for(final WebParam rxp : func.headerParams)
+          addParam(rxp.name, "header",  rqst, xqdoc, func);
 
         // create response
         final FElem response = elem("response", method);
@@ -103,9 +107,9 @@ final class RestXqWadl {
     final FElem param = elem("param", root);
     param.add("name", name).add("style", style);
     final QNm qn = new QNm(name);
-    for(final Var var : func.function.args) {
-      if(var.name.eq(qn) && var.type != null) {
-        param.add("type", var.type.toString());
+    for(final Var var : func.function.params) {
+      if(var.name.eq(qn) && var.declType != null) {
+        param.add("type", var.declType.toString());
       }
     }
     addDoc(Inspect.doc(xqdoc, token(name)), param);

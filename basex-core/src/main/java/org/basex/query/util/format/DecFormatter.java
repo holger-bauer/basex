@@ -16,7 +16,7 @@ import org.basex.util.list.*;
 /**
  * Formatter for decimal numbers.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DecFormatter extends FormatUtil {
@@ -97,27 +97,29 @@ public final class DecFormatter extends FormatUtil {
     final IntSet is = new IntSet();
     for(int i = 0; i < 10; i++) is.add(zero + i);
     final int[] ss = { decimal, grouping, exponent, percent, permille, optional, pattern };
-    for(final int s : ss) if(!is.add(s)) throw DUPLDECFORM_X.get(info, (char) s);
+    for(final int s : ss) {
+      if(!is.add(s)) throw DUPLDECFORM_X.get(info, (char) s);
+    }
 
     // create auxiliary strings
     final TokenBuilder tb = new TokenBuilder();
     for(int i = 0; i < 10; i++) tb.add(zero + i);
     digits = tb.toArray();
     // decimal-separator, exponent-separator, ... , are classified as active characters.
-    // -> decimal-digit-family: added above. pattern-separator: will never occur at this stage
+    // decimal-digit-family: added above. pattern-separator: will never occur at this stage
     actives = tb.add(decimal).add(exponent).add(grouping).add(optional).finish();
     // "all other characters (...) are classified as passive characters."
   }
 
   /**
    * Returns a formatted number.
-   * @param info input info
    * @param number number to be formatted
    * @param picture picture
+   * @param ii input info
    * @return string representation
    * @throws QueryException query exception
    */
-  public byte[] format(final InputInfo info, final ANum number, final byte[] picture)
+  public byte[] format(final ANum number, final byte[] picture, final InputInfo ii)
       throws QueryException {
 
     // find pattern separator and sub-patterns
@@ -126,23 +128,20 @@ public final class DecFormatter extends FormatUtil {
     // "A picture-string consists either of a sub-picture, or of two sub-pictures separated by
     // the pattern-separator"
     final int i = indexOf(pic, pattern);
-    if(i == -1) {
-      tl.add(pic);
-    } else {
+    if(i != -1) {
       tl.add(substring(pic, 0, i));
       pic = substring(pic, i + cl(pic, i));
       // "A picture-string must not contain more than one instance of the pattern-separator"
-      if(contains(pic, pattern)) throw PICNUM_X.get(info, picture);
-      tl.add(pic);
+      if(contains(pic, pattern)) throw PICNUM_X.get(ii, picture);
     }
-    final byte[][] patterns = tl.finish();
+    final byte[][] patterns = tl.add(pic).finish();
 
     // check and analyze patterns
-    if(!checkSyntax(patterns)) throw PICNUM_X.get(info, picture);
+    if(!checkSyntax(patterns)) throw PICNUM_X.get(ii, picture);
     final Picture[] pics = analyze(patterns);
 
     // return formatted string
-    return format(number, pics, info);
+    return format(number, pics, ii);
   }
 
   /**
@@ -392,8 +391,8 @@ public final class DecFormatter extends FormatUtil {
 
     // Rule 3: percent/permille
     ANum num = item;
-    if(pic.pc) num = (ANum) Calc.MULT.ev(num, Int.get(100), ii);
-    if(pic.pm) num = (ANum) Calc.MULT.ev(num, Int.get(1000), ii);
+    if(pic.pc) num = (ANum) Calc.MULT.eval(num, Int.get(100), ii);
+    if(pic.pm) num = (ANum) Calc.MULT.eval(num, Int.get(1000), ii);
 
     if(Double.isInfinite(num.dbl(ii))) {
       // Rule 4: infinity
@@ -415,7 +414,7 @@ public final class DecFormatter extends FormatUtil {
         exp = scl - pic.scaling;
         if(exp != 0) {
           final BigDecimal n = BigDecimal.TEN.pow(Math.abs(exp));
-          num = (ANum) Calc.MULT.ev(num, Dec.get(
+          num = (ANum) Calc.MULT.eval(num, Dec.get(
               exp > 0 ? BigDecimal.ONE.divide(n, MathContext.DECIMAL64) : n), ii);
         }
       }
@@ -424,14 +423,14 @@ public final class DecFormatter extends FormatUtil {
       // convert positive number to string; chop leading 0
       String s = (num instanceof Dbl || num instanceof Flt ?
           Dec.get(BigDecimal.valueOf(num.dbl(ii))) : num).toString();
-      if(s.startsWith("0")) s = s.substring(1);
+      if(Strings.startsWith(s, '0')) s = s.substring(1);
 
       // integer/fractional separator
       final int fracSep = s.indexOf('.');
 
       // create integer part
       final int sl = s.length();
-      final int il = fracSep != -1 ? fracSep : sl;
+      final int il = fracSep == -1 ? sl : fracSep;
       for(int i = il; i < pic.minInt; ++i) intgr.add(zero);
       for(int i = 0; i < il; i++) intgr.add(zero + s.charAt(i) - '0');
 
@@ -439,8 +438,8 @@ public final class DecFormatter extends FormatUtil {
       final int gil = pic.groupInt.size();
       if(gil == 1 && pic.groupInt.get(0) > 0) {
         // regular pattern with repeating separators
-        for(int p = intgr.size() - (neg ? 2 : 1); p > 0; --p) {
-          if(p % pic.groupInt.get(0) == 0) intgr.insert(intgr.size() - p, grouping);
+        for(int i = intgr.size() - 1; i > 0; --i) {
+          if(i % pic.groupInt.get(0) == 0) intgr.insert(intgr.size() - i, grouping);
         }
       } else {
         // irregular pattern, or no separators at all
@@ -480,7 +479,10 @@ public final class DecFormatter extends FormatUtil {
     }
     // add suffix
     res.add(pic.suffix.toArray());
-    return new TokenBuilder(res.finish()).finish();
+
+    final TokenBuilder tb = new TokenBuilder(res.size());
+    for(final int r : res.finish()) tb.add(r);
+    return tb.finish();
   }
 
   /** Picture variables. */

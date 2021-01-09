@@ -3,17 +3,17 @@ package org.basex.gui.layout;
 import static org.basex.core.Text.*;
 
 import java.awt.*;
-import java.awt.event.*;
 import java.util.*;
 
 import javax.swing.*;
 
 import org.basex.gui.*;
+import org.basex.gui.listener.*;
 
 /**
  * Project specific button implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXButton extends JButton {
@@ -22,38 +22,32 @@ public final class BaseXButton extends JButton {
 
   /**
    * Constructor for text buttons.
-   * @param label button label
    * @param win parent window
+   * @param label button label
    */
-  public BaseXButton(final String label, final Window win) {
+  public BaseXButton(final BaseXWindow win, final String label) {
     super(label);
 
     BaseXLayout.addInteraction(this, win);
-    if(!(win instanceof BaseXDialog)) return;
+    final BaseXDialog dialog = win.dialog();
+    if(dialog == null) return;
 
-    final BaseXDialog d = (BaseXDialog) win;
-    addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        final String text = getText();
-        if(text.equals(B_CANCEL)) d.cancel();
-        else if(text.equals(B_OK)) d.close();
-        else d.action(e.getSource());
+    addActionListener(e -> {
+      final String text = getText();
+      if(text.equals(B_CANCEL)) dialog.cancel();
+      else if(text.equals(B_OK)) dialog.close();
+      else dialog.action(e.getSource());
+    });
+    addKeyListener((KeyPressedListener) e -> {
+      if(BaseXKeys.ESCAPE.is(e)) {
+        dialog.cancel();
+      } else if(BaseXKeys.NEXTCHAR.is(e) || BaseXKeys.NEXTLINE.is(e)) {
+        transferFocus();
+      } else if(BaseXKeys.PREVCHAR.is(e) || BaseXKeys.PREVLINE.is(e)) {
+        transferFocusBackward();
       }
     });
-    addKeyListener(new KeyAdapter() {
-      @Override
-      public void keyPressed(final KeyEvent e) {
-        if(BaseXKeys.ESCAPE.is(e)) {
-          d.cancel();
-        } else if(BaseXKeys.NEXTCHAR.is(e) || BaseXKeys.NEXTLINE.is(e)) {
-          transferFocus();
-        } else if(BaseXKeys.PREVCHAR.is(e) || BaseXKeys.PREVLINE.is(e)) {
-          transferFocusBackward();
-        }
-      }
-    });
-    BaseXLayout.setMnemonic(this, d.mnem);
+    BaseXLayout.setMnemonic(this, dialog.mnem);
   }
 
   /**
@@ -61,11 +55,11 @@ public final class BaseXButton extends JButton {
    * @param icon name of image icon
    * @param toggle toggle flag
    * @param tooltip tooltip text
-   * @param gui main window
+   * @param gui reference to the main window
    * @return button
    */
   public static AbstractButton get(final String icon, final String tooltip, final boolean toggle,
-      final Window gui) {
+      final GUI gui) {
 
     final AbstractButton button = toggle ? new JToggleButton() : new JButton();
     init(button, icon, tooltip, gui);
@@ -81,10 +75,10 @@ public final class BaseXButton extends JButton {
    * @param button button reference
    * @param icon name of image icon
    * @param tooltip tooltip text
-   * @param gui main window
+   * @param gui reference to the main window
    */
   private static void init(final AbstractButton button, final String icon, final String tooltip,
-      final Window gui) {
+      final GUI gui) {
 
     button.setIcon(BaseXImages.icon(icon));
     BaseXLayout.addInteraction(button, gui);
@@ -111,18 +105,13 @@ public final class BaseXButton extends JButton {
   /**
    * Creates a new image button for the specified command.
    * @param cmd command
-   * @param gui reference to main window
+   * @param gui reference to the main window
    * @return button
    */
   public static AbstractButton command(final GUICommand cmd, final GUI gui) {
     final String name = cmd.toString().toLowerCase(Locale.ENGLISH);
     final AbstractButton button = get(name, cmd.shortCut(), cmd.toggle(), gui);
-    button.addActionListener(new ActionListener() {
-      @Override
-      public void actionPerformed(final ActionEvent e) {
-        cmd.execute(gui);
-      }
-    });
+    button.addActionListener(e -> cmd.execute(gui));
     return button;
   }
 

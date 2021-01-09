@@ -1,12 +1,10 @@
 package org.basex.query.expr.gflwor;
 
+import static org.basex.query.QueryText.*;
+
 import org.basex.query.*;
-import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.GFLWOR.Clause;
-import org.basex.query.expr.gflwor.GFLWOR.Eval;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.hash.*;
@@ -14,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * GFLWOR {@code count} clause.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class Count extends Clause {
@@ -26,7 +24,7 @@ public final class Count extends Clause {
    * @param var variable
    */
   public Count(final Var var) {
-    super(var.info, var);
+    super(var.info, SeqType.INTEGER_O, var);
     this.var = var;
   }
 
@@ -55,7 +53,7 @@ public final class Count extends Clause {
   }
 
   @Override
-  public boolean has(final Flag flag) {
+  public boolean has(final Flag... flags) {
     return false;
   }
 
@@ -66,12 +64,12 @@ public final class Count extends Clause {
 
   @Override
   public Count optimize(final CompileContext cc) throws QueryException {
-    var.refineType(SeqType.ITR, cc);
+    var.refineType(seqType(), cc);
     return this;
   }
 
   @Override
-  public boolean removable(final Var v) {
+  public boolean inlineable(final InlineContext v) {
     return true;
   }
 
@@ -81,13 +79,13 @@ public final class Count extends Clause {
   }
 
   @Override
-  public Clause inline(final Var v, final Expr ex, final CompileContext cc) {
+  public Clause inline(final InlineContext ic) {
     return null;
   }
 
   @Override
   public Count copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new Count(cc.copy(var, vm));
+    return copyType(new Count(cc.copy(var, vm)));
   }
 
   @Override
@@ -101,23 +99,22 @@ public final class Count extends Clause {
   }
 
   @Override
-  void calcSize(final long[] minMax) {
-  }
-
-  @Override
   public int exprSize() {
     return 0;
   }
 
   @Override
-  public void plan(final FElem plan) {
-    final FElem e = planElem();
-    var.plan(e);
-    plan.add(e);
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Count && var.equals(((Count) obj).var);
   }
 
   @Override
-  public String toString() {
-    return "count " + var;
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.attachVariable(plan.create(this), var, false));
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(COUNT).token(var);
   }
 }

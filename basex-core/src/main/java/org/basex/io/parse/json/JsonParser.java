@@ -13,7 +13,7 @@ import org.basex.util.hash.*;
 /**
  * A JSON parser generating parse events similar to a SAX XML parser.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 final class JsonParser extends InputParser {
@@ -76,8 +76,12 @@ final class JsonParser extends InputParser {
   private void parse() throws QueryIOException {
     consume('\uFEFF');
     skipWs();
-    value();
-    if(more()) throw error("Unexpected trailing content: %", rest());
+    try {
+      value();
+    } catch(final StackOverflowError er) {
+      throw error("Input is too deeply nested");
+    }
+    if(more()) throw error("Unexpected trailing content: %", remaining());
   }
 
   /**
@@ -116,7 +120,7 @@ final class JsonParser extends InputParser {
         if(consume("true")) conv.booleanLit(TRUE);
         else if(consume("false")) conv.booleanLit(FALSE);
         else if(consume("null")) conv.nullLit();
-        else throw error("Unexpected JSON value: '%'", rest());
+        else throw error("Unexpected JSON value: '%'", remaining());
         skipWs();
     }
   }
@@ -134,7 +138,7 @@ final class JsonParser extends InputParser {
         final byte[] key = !liberal || curr() == '"' ? string() : unquoted();
         final boolean dupl = set.contains(key);
         if(dupl && duplicates == JsonDuplicates.REJECT)
-          throw error(BXJS_DUPLICATE_X, "Key '%' occurs more than once.", key);
+          throw error(JSON_DUPL_X_X_X, "Key \"%\" occurs more than once", key);
 
         final boolean add = !(dupl && duplicates == JsonDuplicates.USE_FIRST);
         conv.openPair(key, add);
@@ -174,7 +178,7 @@ final class JsonParser extends InputParser {
   private byte[] unquoted() throws QueryIOException {
     int cp = more() ? input.codePointAt(pos) : -1;
     if(cp < 0 || !Character.isJavaIdentifierStart(cp))
-      throw error("Expected unquoted string, found %", rest());
+      throw error("Expected unquoted string, found %", remaining());
     tb.reset();
     do {
       tb.add(cp);
@@ -204,7 +208,9 @@ final class JsonParser extends InputParser {
     final boolean zero = ch == '0';
     ch = curr();
     if(zero && ch >= '0' && ch <= '9') throw error("No digit allowed after '0'");
-    loop: while(true) {
+
+    LOOP:
+    while(true) {
       switch(ch) {
         case '0':
         case '1':
@@ -223,7 +229,7 @@ final class JsonParser extends InputParser {
         case '.':
         case 'e':
         case 'E':
-          break loop;
+          break LOOP;
         default:
           skipWs();
           return tb.toArray();
@@ -367,8 +373,8 @@ final class JsonParser extends InputParser {
       } else if(XMLToken.valid(ch)) {
         tb.add(ch);
       } else {
-        tb.add('\\').add('u').add(HEX[ch >> 12 & 0xF]).add(HEX[ch >> 8 & 0xF]);
-        tb.add(HEX[ch >> 4 & 0xF]).add(HEX[ch & 0xF]);
+        tb.add('\\').add('u').add(HEX_TABLE[ch >> 12 & 0xF]).add(HEX_TABLE[ch >> 8 & 0xF]);
+        tb.add(HEX_TABLE[ch >> 4 & 0xF]).add(HEX_TABLE[ch & 0xF]);
       }
     } else if(XMLToken.valid(ch)) {
       tb.add(ch);
@@ -430,7 +436,7 @@ final class JsonParser extends InputParser {
    * @return build exception
    */
   private QueryIOException error(final String msg, final Object... ext) {
-    return error(BXJS_PARSE_X_X_X, msg, ext);
+    return error(JSON_PARSE_X_X_X, msg, ext);
   }
 
   /**

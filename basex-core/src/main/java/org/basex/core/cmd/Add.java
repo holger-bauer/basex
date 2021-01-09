@@ -14,20 +14,20 @@ import org.basex.query.up.atomic.*;
 import org.basex.util.*;
 
 /**
- * Evaluates the 'add' command and adds a document to a collection.<br/>
+ * Evaluates the 'add' command and adds a document to a collection.
  * Note that the constructors of this class have changed with Version 7.0:
  * the target path and file name have been merged and are now specified
  * as first argument.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Add extends ACreate {
   /** Builder. */
-  private Builder build;
+  private Builder builder;
 
-  /** Data clip to insert. */
-  DataClip clip;
+  /** Data to insert. */
+  Data tmpData;
 
   /**
    * Constructor, specifying a target path.
@@ -40,7 +40,7 @@ public final class Add extends ACreate {
 
   /**
    * Constructor, specifying a target path and an input.
-   * @param path target path, optionally terminated by a new file name.
+   * @param path target path, optionally terminated by a new file name
    * If {@code null}, the name of the input will be set as path.
    * @param input input file or XML string
    */
@@ -57,10 +57,10 @@ public final class Add extends ACreate {
         @Override
         boolean run() {
           // skip update if fragment is empty
-          if(clip.data.meta.size > 1) {
+          if(tmpData.meta.size > 1) {
             context.invalidate();
             final AtomicUpdateCache auc = new AtomicUpdateCache(data);
-            auc.addInsert(data.meta.size, -1, clip);
+            auc.addInsert(data.meta.size, -1, new DataClip(tmpData));
             auc.execute(false);
           }
           return info(RES_ADDED_X, jc().performance);
@@ -80,19 +80,19 @@ public final class Add extends ACreate {
     if(name == null) return error(PATH_INVALID_X, args[0]);
 
     // retrieve input
-    final IO io;
+    final IO source;
     try {
-      io = sourceToIO(name);
+      source = sourceToIO(name);
     } catch(final IOException ex) {
       return error(Util.message(ex));
     }
 
     // check if resource exists
-    if(io == null) return error(RES_NOT_FOUND);
-    if(!io.exists()) return in != null ? error(RES_NOT_FOUND) :
-        error(RES_NOT_FOUND_X, context.user().has(Perm.CREATE) ? io : args[1]);
+    if(source == null) return error(RES_NOT_FOUND);
+    if(!source.exists()) return in != null ? error(RES_NOT_FOUND) :
+        error(RES_NOT_FOUND_X, context.user().has(Perm.CREATE) ? source : args[1]);
 
-    if(!name.endsWith("/") && (io.isDir() || io.isArchive())) name += '/';
+    if(!Strings.endsWith(name, '/') && (source.isDir() || source.isArchive())) name += '/';
 
     String target = "";
     final int s = name.lastIndexOf('/');
@@ -102,24 +102,24 @@ public final class Add extends ACreate {
     }
 
     // get name from io reference
-    if(name.isEmpty()) name = io.name();
-    else io.name(name);
+    if(name.isEmpty()) name = source.name();
+    else source.name(name);
 
     // ensure that the final name is not empty
     if(name.isEmpty()) return error(NAME_INVALID_X, name);
 
     try {
       final Data data = context.data();
-      final Parser parser = new DirParser(io, options, data.meta.path);
-      parser.target(target);
+      final Parser parser = new DirParser(source, options).target(target);
 
       // create random database name for disk-based creation
       if(cache(parser)) {
-        build = new DiskBuilder(soptions.randomDbName(data.meta.name), parser, soptions, options);
+        final String tmpName = soptions.createRandomDb(data.meta.name);
+        builder = new DiskBuilder(tmpName, parser, soptions, options);
       } else {
-        build = new MemBuilder(name, parser);
+        builder = new MemBuilder(name, parser);
       }
-      clip = build.dataClip();
+      tmpData = builder.binaryDir(data.meta.dir).build();
       return true;
     } catch(final IOException ex) {
       return error(Util.message(ex));
@@ -130,7 +130,10 @@ public final class Add extends ACreate {
    * Finalizes an add operation.
    */
   void finish() {
-    if(clip != null) DropDB.drop(clip.data, soptions);
+    if(tmpData != null) {
+      DropDB.drop(tmpData, soptions);
+      tmpData = null;
+    }
   }
 
   /**
@@ -165,7 +168,7 @@ public final class Add extends ACreate {
 
   @Override
   public void build(final CmdBuilder cb) {
-    cb.init().arg(S_TO, 0).arg(1);
+    cb.init().arg(S_TO, 0).add(1);
   }
 
   @Override
@@ -175,6 +178,6 @@ public final class Add extends ACreate {
 
   @Override
   public double progressInfo() {
-    return build != null ? build.progressInfo() : 0;
+    return builder != null ? builder.progressInfo() : 0;
   }
 }

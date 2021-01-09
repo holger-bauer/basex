@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * WebDAV utility methods.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Dimitar Popov
  */
 final class WebDAVUtils {
@@ -59,8 +59,8 @@ final class WebDAVUtils {
       try {
         final String ud = URLDecoder.decode(url, Strings.UTF8);
         return ud.contains("\uFFFD") ? URLDecoder.decode(url, Strings.ISO88591) : ud;
-      } catch(final Exception ignore) {
-        Util.errln(ignore);
+      } catch(final Exception ex) {
+        Util.stack(ex);
       }
     }
     return url;
@@ -73,12 +73,12 @@ final class WebDAVUtils {
    * @throws IOException I/O exception
    */
   static int peek(final BufferInput bi) throws IOException {
+    // input stream will be closed outside this function
     final TextInput ti = new TextInput(bi);
     final int c = ti.read();
     try {
       bi.reset();
-    } catch(final IOException ignore) {
-    }
+    } catch(final IOException ignore) { }
     return c;
   }
 }

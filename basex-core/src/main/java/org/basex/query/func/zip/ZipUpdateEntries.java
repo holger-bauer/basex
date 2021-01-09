@@ -11,12 +11,13 @@ import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Functions on zip files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ZipUpdateEntries extends ZipZipFile {
@@ -44,7 +45,7 @@ public final class ZipUpdateEntries extends ZipZipFile {
       try(FileOutputStream fos = new FileOutputStream(out.path());
           ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(fos))) {
         // fill new zip file with entries from old file and description
-        create(zos, elm.children(), "", zf, qc);
+        create(zos, elm.childIter(), "", zf, qc);
       } catch(final IOException ex) {
         ok = false;
         throw ZIP_FAIL_X.get(info, ex);
@@ -61,6 +62,6 @@ public final class ZipUpdateEntries extends ZipZipFile {
         out.delete();
       }
     }
-    return null;
+    return Empty.VALUE;
   }
 }

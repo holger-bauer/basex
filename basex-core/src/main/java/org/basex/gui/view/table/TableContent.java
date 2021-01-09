@@ -15,7 +15,7 @@ import org.basex.util.*;
 /**
  * This is the content area of the table view.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class TableContent extends BaseXBack {
@@ -121,7 +121,9 @@ final class TableContent extends BaseXBack {
       }
 
       // add dots if content is too long
-      for(final TokenBuilder t : tb) if(t.size() > 100) t.add(DOTS);
+      for(final TokenBuilder t : tb) {
+        if(t.size() > 100) t.add(DOTS);
+      }
 
       // draw row contents
       byte[] focusStr = null;

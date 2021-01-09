@@ -4,12 +4,9 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
-import org.basex.query.iter.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.value.*;
-import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.SeqType.Occ;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -17,12 +14,14 @@ import org.basex.util.hash.*;
 /**
  * Cast expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Cast extends Single {
   /** Static context. */
   private final StaticContext sc;
+  /** Sequence type to cast to. */
+  final SeqType seqType;
 
   /**
    * Function constructor.
@@ -33,7 +32,7 @@ public final class Cast extends Single {
    */
   public Cast(final StaticContext sc, final InputInfo info, final Expr expr,
       final SeqType seqType) {
-    super(info, expr);
+    super(info, expr, SeqType.ITEM_ZM);
     this.sc = sc;
     this.seqType = seqType;
   }
@@ -45,48 +44,74 @@ public final class Cast extends Single {
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    final SeqType st = expr.seqType();
-    if(st.one() && !st.mayBeArray()) seqType = SeqType.get(seqType.type, Occ.ONE);
+    expr = expr.simplifyFor(Simplify.STRING, cc);
 
-    // pre-evaluate value
-    if(expr.isValue()) return optPre(value(cc.qc), cc);
-
-    // skip cast if specified and return types are equal
-    // (the following types will always be correct)
-    final Type t = seqType.type;
-    if((t == AtomType.BLN || t == AtomType.FLT || t == AtomType.DBL ||
-        t == AtomType.QNM || t == AtomType.URI) && seqType.eq(expr.seqType())) {
-      optPre(expr, cc);
-      return expr;
+    // target type
+    final SeqType est = expr.seqType();
+    Type dt = seqType.type;
+    Occ o = seqType.occ;
+    if(dt instanceof ListType) {
+      dt = dt.atomic();
+      o = Occ.ZERO_OR_MORE;
+    } else if(o == Occ.ZERO_OR_ONE && est.oneOrMore() && !est.mayBeArray()) {
+      o = Occ.EXACTLY_ONE;
     }
-    size = seqType.occ();
-    return this;
-  }
+    exprType.assign(dt, o);
 
-  @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
+    if(!est.mayBeArray()) {
+      final long es = expr.size();
+      if(es != -1 && (es < o.min || es > o.max)) throw error(expr);
+
+      final Type et = est.type;
+      if(et.instanceOf(dt)) {
+        if(est.occ.instanceOf(o) && (et.eq(dt) || dt == AtomType.NUMERIC))
+          return cc.replaceWith(this, expr);
+      }
+    }
+    return expr instanceof Value ? cc.preEval(this) : this;
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Value v = expr.atomValue(qc, info);
-    if(!seqType.occ.check(v.size())) throw INVCAST_X_X_X.get(info, v.seqType(), seqType, v);
-    return v instanceof Item ? seqType.cast((Item) v, qc, sc, info, true) : v;
+    return seqType.cast(expr.atomValue(qc, info), true, qc, sc, info);
+  }
+
+  /**
+   * Throws a type error.
+   * @param ex expression that triggers the error
+   * @return query exception
+   */
+  private QueryException error(final Expr ex) {
+    return INVTYPE_X_X_X.get(info, ex.seqType(), seqType, ex);
   }
 
   @Override
-  public Cast copy(final CompileContext cc, final IntObjMap<Var> vs) {
-    return new Cast(sc, info, expr.copy(cc, vs), seqType);
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    return simplifyForCast(mode, cc);
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(TYP, seqType), expr);
+  public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
+    return copyType(new Cast(sc, info, expr.copy(cc, vm), seqType));
   }
 
   @Override
-  public String toString() {
-    return expr + " " + CAST + ' ' + AS + ' ' + seqType;
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof Cast && seqType.eq(((Cast) obj).seqType) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, AS, seqType), expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    if(seqType.one()) {
+      qs.token("(").token(expr).token(CAST).token(AS).token(seqType).token(')');
+    } else {
+      qs.token(seqType.type).paren(expr);
+    }
   }
 }

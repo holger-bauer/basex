@@ -6,6 +6,8 @@ import java.net.*;
 
 import org.basex.io.*;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.util.UriParser.*;
 import org.basex.query.value.type.*;
@@ -14,7 +16,7 @@ import org.basex.util.*;
 /**
  * URI item ({@code xs:anyURI}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Uri extends AStr {
@@ -28,7 +30,7 @@ public final class Uri extends AStr {
    * @param value value
    */
   private Uri(final byte[] value) {
-    super(AtomType.URI, value);
+    super(AtomType.ANY_URI, value);
   }
 
   /**
@@ -73,11 +75,11 @@ public final class Uri extends AStr {
    * Appends the specified address. If one of the URIs is invalid,
    * the original uri is returned.
    * @param add address to be appended
-   * @param info input info
+   * @param ii input info
    * @return new uri
    * @throws QueryException query exception
    */
-  public Uri resolve(final Uri add, final InputInfo info) throws QueryException {
+  public Uri resolve(final Uri add, final InputInfo ii) throws QueryException {
     if(add.value.length == 0) return this;
     try {
       final URI base = new URI(Token.string(value)), res = new URI(Token.string(add.value));
@@ -86,7 +88,7 @@ public final class Uri extends AStr {
         uri = uri.replaceAll('^' + IO.FILEPREF + "([^/])", IO.FILEPREF + "//$1");
       return uri(Token.token(uri), false);
     } catch(final URISyntaxException ex) {
-      throw URIARG_X.get(info, ex.getMessage());
+      throw URIARG_X.get(ii, ex.getMessage());
     }
   }
 
@@ -119,12 +121,18 @@ public final class Uri extends AStr {
     return value;
   }
 
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
+    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
+      cc.simplify(this, Bln.get(value.length != 0)) : this;
+  }
+
   /**
    * Caches and returns a parsed URI representation.
    * @return parsed uri
    */
   private ParsedUri parsed() {
-    if(pUri == null) pUri = UriParser.parse(Token.string(Token.uri(value, true)));
+    if(pUri == null) pUri = UriParser.parse(Token.string(Token.encodeUri(value, true)));
     return pUri;
   }
 
@@ -136,4 +144,13 @@ public final class Uri extends AStr {
       throw new QueryException(ex);
     }
   }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Uri)) return false;
+    final Uri u = (Uri) obj;
+    return type == u.type && Token.eq(value, u.value);
+  }
+
 }

@@ -1,10 +1,9 @@
 package org.basex.index;
 
 import static org.basex.util.Token.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import java.util.Map.Entry;
 import java.util.List;
 
 import org.basex.*;
@@ -14,30 +13,24 @@ import org.basex.core.cmd.Set;
 import org.basex.index.query.*;
 import org.basex.index.value.*;
 import org.basex.util.hash.*;
-import org.junit.*;
-import org.junit.Test;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Tests for the value index.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Jens Erat
  */
-@RunWith(Parameterized.class)
 public final class ValueIndexTest extends SandboxTest {
   /** Test file. */
   private static final String FILE = "src/test/resources/test.xml";
-  /** Test parameters. */
-  private final Collection<Set> paramSet;
 
   /**
    * Runs tests with different parameters, like in-memory or disk databases.
    * @return collection of parameter sets
    */
-  @Parameters
   public static Collection<Object[]> generateParams() {
     final List<Object[]> paramsSet = new ArrayList<>();
     paramsSet.add(paramSet(false, false));
@@ -62,17 +55,8 @@ public final class ValueIndexTest extends SandboxTest {
     return paramArray.toArray();
   }
 
-  /**
-   * Apply parameter sets.
-   * @param paramSet parameter set for current test run
-   */
-  public ValueIndexTest(final Collection<Set> paramSet) {
-    this.paramSet = paramSet;
-  }
-
   /** Set down database. */
-  @After
-  public void setDown() {
+  @AfterEach public void setDown() {
     set(MainOptions.MAINMEM, false);
     set(MainOptions.UPDINDEX, false);
     execute(new DropDB(NAME));
@@ -80,14 +64,16 @@ public final class ValueIndexTest extends SandboxTest {
 
   /**
    * Tests the text index.
+   * @param paramSet test parameters
    */
-  @Test
-  public void textIndexTest() {
+  @ParameterizedTest
+  @MethodSource("generateParams")
+  public void textIndexTest(final Collection<Set> paramSet) {
     final LinkedHashMap<String, Integer> tokens = new LinkedHashMap<>();
     tokens.put("3", 3);
     tokens.put("3.4", 1);
     tokens.put("text in child", 1);
-    tokens.put("nonexistant", 0);
+    tokens.put("nonexistent", 0);
     tokens.put("", 0);
 
     valueIndexTest(IndexType.TEXT, tokens, paramSet);
@@ -95,9 +81,11 @@ public final class ValueIndexTest extends SandboxTest {
 
   /**
    * Tests the attribute index.
+   * @param paramSet test parameters
    */
-  @Test
-  public void attributeIndexTest() {
+  @ParameterizedTest
+  @MethodSource("generateParams")
+  public void attributeIndexTest(final Collection<Set> paramSet) {
     final LinkedHashMap<String, Integer> tokens = new LinkedHashMap<>();
     tokens.put("context", 1);
     tokens.put("baz bar blu", 1);
@@ -105,15 +93,17 @@ public final class ValueIndexTest extends SandboxTest {
     tokens.put("bar", 0);
     tokens.put("blu", 0);
     tokens.put("", 0);
-    tokens.put("nonexistant", 0);
+    tokens.put("nonexistent", 0);
     valueIndexTest(IndexType.ATTRIBUTE, tokens, paramSet);
   }
 
   /**
    * Tests the token index.
+   * @param paramSet test parameters
    */
-  @Test
-  public void tokenIndexTest() {
+  @ParameterizedTest
+  @MethodSource("generateParams")
+  public void tokenIndexTest(final Collection<Set> paramSet) {
     set(MainOptions.TOKENINDEX, true);
 
     final LinkedHashMap<String, Integer> tokens = new LinkedHashMap<>();
@@ -123,7 +113,7 @@ public final class ValueIndexTest extends SandboxTest {
     tokens.put("bar", 1);
     tokens.put("blu", 1);
     tokens.put("", 0);
-    tokens.put("nonexistant", 0);
+    tokens.put("nonexistent", 0);
     valueIndexTest(IndexType.TOKEN, tokens, paramSet);
   }
 
@@ -145,23 +135,22 @@ public final class ValueIndexTest extends SandboxTest {
     final ValueIndex index = (ValueIndex) context.data().index(indexType);
 
     // receive, verify and count results for passed tokens
-    for(final Entry<String, Integer> entry : tokens.entrySet()) {
-      final byte[] token = token(entry.getKey());
+    tokens.forEach((key, value) -> {
+      final byte[] token = token(key);
       final IndexIterator it = index.iter(new IndexEntries(token, indexType));
       long count = 0;
       while(it.more()) {
         final int pre = it.pre();
         final byte[] result = context.data().text(pre, text);
         if(indexType == IndexType.TOKEN)
-          assertTrue("Token '" + entry.getKey() + "' not found in match '" + string(result) + "'!",
-              new TokenSet(distinctTokens(result)).contains(token(entry.getKey())));
+          assertTrue(new TokenSet(distinctTokens(result)).contains(token(key)),
+            "Token '" + key + "' not found in match '" + string(result) + "'!");
         else
-          assertEquals("Wrong result returned!", entry.getKey(), string(result));
+          assertEquals(key, string(result), "Wrong result returned!");
         count++;
       }
-      assertEquals("Wrong number of nodes returned: \"" + entry.getKey() + "\": ",
-          (long) entry.getValue(), count);
-    }
+      assertEquals((int) value, count, "Wrong number of nodes returned: \"" + key + "\": ");
+    });
   }
 
 }

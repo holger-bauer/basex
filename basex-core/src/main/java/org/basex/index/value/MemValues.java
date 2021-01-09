@@ -10,6 +10,7 @@ import org.basex.data.*;
 import org.basex.index.*;
 import org.basex.index.query.*;
 import org.basex.index.stats.*;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
@@ -17,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * This class provides main memory access to attribute values and text contents.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MemValues extends ValueIndex {
@@ -47,8 +48,8 @@ public final class MemValues extends ValueIndex {
   }
 
   @Override
-  public IndexIterator iter(final IndexToken token) {
-    final int id = values.id(token.get());
+  public IndexIterator iter(final IndexSearch search) {
+    final int id = values.id(search.token());
     if(id == 0) return IndexIterator.EMPTY;
 
     final int len = lenList.get(id);
@@ -73,13 +74,13 @@ public final class MemValues extends ValueIndex {
   }
 
   @Override
-  public int costs(final IndexToken it) {
-    return lenList.get(values.id(it.get()));
+  public IndexCosts costs(final IndexSearch search) {
+    return IndexCosts.get(lenList.get(values.id(search.token())));
   }
 
   @Override
   public EntryIterator entries(final IndexEntries entries) {
-    final byte[] prefix = entries.get();
+    final byte[] token = entries.token();
     return new EntryIterator() {
       final int s = values.size();
       int p;
@@ -88,7 +89,7 @@ public final class MemValues extends ValueIndex {
         while(++p <= s) {
           if(lenList.get(p) == 0) continue;
           final byte[] key = values.key(p);
-          if(startsWith(key, prefix)) return key;
+          if(startsWith(key, token)) return key;
         }
         return null;
       }
@@ -118,8 +119,11 @@ public final class MemValues extends ValueIndex {
   @Override
   public int size() {
     // returns the actual number of indexed entries
+    final int ll = lenList.size();
     int s = 0;
-    for(int c = 1; c < s; c++) if(lenList.get(c) > 0) s++;
+    for(int c = 1; c < ll; c++) {
+      if(lenList.get(c) > 0) s++;
+    }
     return s;
   }
 
@@ -133,8 +137,8 @@ public final class MemValues extends ValueIndex {
   @Override
   public void add(final ValueCache cache) {
     for(final byte[] key : cache) {
-      final IntList vals = cache.ids(key);
-      if(!vals.isEmpty()) add(key, vals.sort().finish());
+      final IntList ids = cache.ids(key);
+      if(!ids.isEmpty()) add(key, ids.sort().finish());
     }
     finish();
   }
@@ -169,8 +173,8 @@ public final class MemValues extends ValueIndex {
     if(ids == null) {
       ids = vals;
     } else {
-      if(ids.length < size) ids = Arrays.copyOf(ids, Array.newSize(size));
-      System.arraycopy(vals, 0, ids, len, vl);
+      if(ids.length < size) ids = Arrays.copyOf(ids, Array.newCapacity(size));
+      Array.copyFromStart(vals, vl, ids, len);
       if(ids[len - 1] > vals[0]) {
         if(reorder == null) reorder = new BoolList(values.size());
         reorder.set(id, true);
@@ -210,12 +214,12 @@ public final class MemValues extends ValueIndex {
   /**
    * Returns a string representation of the index structure.
    * @param all include database contents in the representation. During updates, database lookups
-   *        must be avoided, as the data structures will be inconsistent.
+   *        must be avoided, as the data structures will be inconsistent
    * @return string
    */
   public String toString(final boolean all) {
     final TokenBuilder tb = new TokenBuilder();
-    tb.addExt(type).add(" INDEX, '").add(data.meta.name).add("':\n");
+    tb.add(type).add(" INDEX, '").add(data.meta.name).add("':\n");
     final int s = lenList.size();
     for(int m = 1; m < s; m++) {
       final int len = lenList.get(m);

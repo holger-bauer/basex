@@ -1,35 +1,42 @@
 package org.basex.api.xmldb;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 import org.xmldb.api.*;
 import org.xmldb.api.base.*;
 
 /**
  * This class tests the XMLDB/API Database implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@SuppressWarnings("all")
 public final class DatabaseTest extends XMLDBBaseTest {
   /** Database. */
-  private Database database;
+  private BXDatabase database;
 
-  @Before
-  public void setUp() throws Exception {
+  /**
+   * Initializes a test.
+   * @throws Exception any exception
+   */
+  @BeforeEach public void setUp() throws Exception {
     createDB();
-    database = (Database) Class.forName(DRIVER).newInstance();
+    database = (BXDatabase) Class.forName(DRIVER).getDeclaredConstructor().newInstance();
   }
 
-  @After
-  public void tearDown() throws Exception {
+  /**
+   * Finalizes a test.
+   */
+  @AfterEach public void tearDown() {
     dropDB();
   }
 
-  @Test
-  public void testAcceptsURI() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testAcceptsURI() throws Exception {
     database.acceptsURI(PATH);
 
     try {
@@ -40,8 +47,11 @@ public final class DatabaseTest extends XMLDBBaseTest {
     }
   }
 
-  @Test
-  public void testGetCollection() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testGetCollection() throws Exception {
     // directly call and close database instance
     database.getCollection(PATH, LOGIN, PW).close();
 
@@ -57,18 +67,24 @@ public final class DatabaseTest extends XMLDBBaseTest {
     coll.close();
   }
 
-  @Test
-  public void testGetConformanceLevel() throws Exception {
+  /**
+   * Test.
+   */
+  @Test public void testGetConformanceLevel() {
     assertEquals(database.getConformanceLevel(), "0");
   }
 
-  @Test
-  public void testGetName() throws Exception {
+  /**
+   * Test.
+   */
+  @Test public void testGetName() {
     assertNotNull(database.getName());
   }
 
-  @Test
-  public void testGetProperty() throws Exception {
+  /**
+   * Test.
+   */
+  @Test public void testGetProperty() {
     assertNull(database.getProperty("ProbablyUnknown"));
 
     // the following tests are database specific...
@@ -76,8 +92,11 @@ public final class DatabaseTest extends XMLDBBaseTest {
     assertEquals("1", database.getProperty("runs"));
   }
 
-  @Test
-  public void testSetProperty() throws Exception {
+  /**
+   * Test.
+   * @throws Exception any exception
+   */
+  @Test public void testSetProperty() throws Exception {
     try {
       database.setProperty("ProbablyUnknown", "on");
       fail("Invalid key was assigned.");
@@ -102,7 +121,7 @@ public final class DatabaseTest extends XMLDBBaseTest {
    * @param exp expected error code
    * @param ex exception
    */
-  static void checkCode(final int exp, final XMLDBException ex) {
-    assertEquals("Wrong error code.", exp, ex.errorCode);
+  private static void checkCode(final int exp, final XMLDBException ex) {
+    assertEquals(exp, ex.errorCode, "Wrong error code.");
   }
 }

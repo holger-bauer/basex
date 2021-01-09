@@ -17,19 +17,19 @@ import org.basex.util.hash.*;
 /**
  * Functions on archives.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class ArchiveFn extends StandardFunc {
   /**
    * Checks if the specified item is a string or element.
-   * @param it item to be checked
+   * @param item item to be checked
    * @return item
    * @throws QueryException query exception
    */
-  final Item checkElemToken(final Item it) throws QueryException {
-    if(it instanceof AStr || ENTRY.eq(it)) return it;
-    throw ELMSTR_X_X_X.get(info, Q_ENTRY.prefixId(), it.type, it);
+  final Item checkElemToken(final Item item) throws QueryException {
+    if(item instanceof AStr || ENTRY.matches(item)) return item;
+    throw ELMSTR_X_X_X.get(info, Q_ENTRY.prefixId(), item.type, item);
   }
 
   /**
@@ -43,10 +43,10 @@ abstract class ArchiveFn extends StandardFunc {
   final byte[] encode(final byte[] value, final String encoding, final QueryContext qc)
       throws QueryException {
     try {
-      final boolean val = qc.context.options.get(MainOptions.CHECKSTRINGS);
-      return ConvertFn.toString(new ArrayInput(value), encoding, val);
+      final boolean validate = qc.context.options.get(MainOptions.CHECKSTRINGS);
+      return ConvertFn.toString(new ArrayInput(value), encoding, validate);
     } catch(final IOException ex) {
-      throw ARCH_ENCODE_X.get(info, ex);
+      throw ARCHIVE_ENCODE2_X.get(info, ex);
     }
   }
 
@@ -63,8 +63,10 @@ abstract class ArchiveFn extends StandardFunc {
     if(e < exprs.length) {
       // filter result to specified entries
       hs = new TokenSet();
-      final Iter names = qc.iter(exprs[e]);
-      for(Item en; (en = names.next()) != null;) hs.add(checkElemToken(en).string(info));
+      final Iter names = exprs[e].iter(qc);
+      for(Item en; (en = qc.next(names)) != null;) {
+        hs.add(checkElemToken(en).string(info));
+      }
     }
     return hs;
   }

@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UtilDeepEqual extends StandardFunc {
@@ -22,8 +22,8 @@ public final class UtilDeepEqual extends StandardFunc {
     final DeepEqual cmp = new DeepEqual(info);
     final Mode[] modes = Mode.values();
     if(exprs.length == 3) {
-      for(final Item it : exprs[2].atomValue(qc, info)) {
-        final byte[] key = uc(toToken(it));
+      for(final Item item : exprs[2].atomValue(qc, info)) {
+        final byte[] key = uc(toToken(item));
         boolean found = false;
         for(final Mode m : modes) {
           found = eq(key, token(m.name()));
@@ -35,6 +35,6 @@ public final class UtilDeepEqual extends StandardFunc {
         if(!found) throw INVALIDOPTION_X.get(info, key);
       }
     }
-    return Bln.get(cmp.equal(qc.iter(exprs[0]), qc.iter(exprs[1])));
+    return Bln.get(cmp.equal(exprs[0].iter(qc), exprs[1].iter(qc), qc));
   }
 }

@@ -1,7 +1,7 @@
 package org.basex.query.expr;
 
+import static java.lang.Double.*;
 import static org.basex.query.QueryText.*;
-import static org.basex.util.Token.*;
 
 import org.basex.data.*;
 import org.basex.index.*;
@@ -9,13 +9,16 @@ import org.basex.index.name.*;
 import org.basex.index.query.*;
 import org.basex.index.stats.*;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.CmpV.*;
 import org.basex.query.expr.index.*;
 import org.basex.query.expr.path.*;
-import org.basex.query.expr.path.Test.Kind;
+import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
+import org.basex.query.util.index.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -25,134 +28,163 @@ import org.basex.util.hash.*;
 /**
  * Numeric range expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CmpR extends Single {
+  /** Maximum integer value that can be represented losslessly as double value. */
+  private static final double MAX_INTEGER = 1L << 53;
+
   /** Minimum. */
-  final double min;
-  /** Include minimum value. */
-  final boolean mni;
+  private final double min;
   /** Maximum. */
-  final double max;
-  /** Include maximum value. */
-  final boolean mxi;
-  /** Flag for atomic evaluation. */
-  private final boolean atomic;
+  private final double max;
+
+  /** Evaluation flag: atomic evaluation. */
+  private boolean single;
 
   /**
    * Constructor.
    * @param expr (compiled) expression
    * @param min minimum value
-   * @param mni include minimum value
    * @param max maximum value
-   * @param mxi include maximum value
    * @param info input info
    */
-  private CmpR(final Expr expr, final double min, final boolean mni, final double max,
-      final boolean mxi, final InputInfo info) {
-
-    super(info, expr);
+  private CmpR(final Expr expr, final double min, final double max, final InputInfo info) {
+    super(info, expr, SeqType.BOOLEAN_O);
     this.min = min;
-    this.mni = mni;
     this.max = max;
-    this.mxi = mxi;
-    seqType = SeqType.BLN;
-    final SeqType st = expr.seqType();
-    atomic = st.zeroOrOne() && !st.mayBeArray();
+  }
+
+  /**
+   * Tries to convert the specified expression into a range expression.
+   * @param expr expression to be compared
+   * @param min minimum position
+   * @param max minimum position (inclusive)
+   * @param info input info
+   * @return expression
+   */
+  private static Expr get(final Expr expr, final double min, final double max,
+      final InputInfo info) {
+    return min > max ? Bln.FALSE : min == NEGATIVE_INFINITY && max == POSITIVE_INFINITY ? Bln.TRUE :
+      new CmpR(expr, min, max, info);
+  }
+
+  /**
+   * Tries to convert the specified expression into a range expression.
+   * @param cmp expression to be converted
+   * @param cc compilation context
+   * @return new or original expression
+   * @throws QueryException query exception
+   */
+  static Expr get(final CmpG cmp, final CompileContext cc) throws QueryException {
+    final Expr expr1 = cmp.exprs[0], expr2 = cmp.exprs[1];
+    final Type type1 = expr1.seqType().type, type2 = expr2.seqType().type;
+
+    // only rewrite deterministic comparisons if input is not decimal
+    if(cmp.has(Flag.NDT) || !type1.isNumberOrUntyped() || type1 == AtomType.DECIMAL) return cmp;
+
+    // if value to be compared is a decimal, input must be untyped or integer
+    if(!(expr2 instanceof ANum) || type2 == AtomType.DECIMAL && !type1.isUntyped() &&
+        !type1.instanceOf(AtomType.INTEGER)) return cmp;
+
+    // reject numbers that are too large or small to be safely compared as doubles
+    final double d = ((ANum) expr2).dbl();
+    if(d < -MAX_INTEGER || d > MAX_INTEGER) return cmp;
+
+    double mn = d, mx = d;
+    switch(cmp.op) {
+      case GE: mx = POSITIVE_INFINITY; break;
+      case GT: mn = Math.nextUp(d); mx = POSITIVE_INFINITY; break;
+      case LE: mn = NEGATIVE_INFINITY; break;
+      case LT: mn = NEGATIVE_INFINITY; mx = Math.nextDown(d); break;
+      // do not rewrite (non-)equality comparisons
+      default: return cmp;
+    }
+    return get(expr1, mn, mx, cmp.info).optimize(cc);
+  }
+
+  @Override
+  public Expr compile(final CompileContext cc) throws QueryException {
+    return super.compile(cc).optimize(cc);
   }
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    return expr.isValue() ? optPre(item(cc.qc, info), cc) : this;
-  }
+    expr = expr.simplifyFor(Simplify.NUMBER, cc);
 
-  /**
-   * Tries to convert the specified expression into a range expression.
-   * @param cmp expression to be converted
-   * @return new or original expression
-   */
-  static ParseExpr get(final CmpG cmp) {
-    final Expr e1 = cmp.exprs[0], e2 = cmp.exprs[1];
-    if(e1.has(Flag.NDT) || e1.has(Flag.UPD)) return cmp;
+    final SeqType st = expr.seqType();
+    single = st.zeroOrOne() && !st.mayBeArray();
 
-    if(e2 instanceof RangeSeq) {
-      final RangeSeq rs = (RangeSeq) e2;
-      return get(cmp, rs.start(), rs.end());
-    }
-    if(e2 instanceof ANum) {
-      final double d = ((ANum) e2).dbl();
-      return get(cmp, d, d);
-    }
-    return cmp;
-  }
+    if(expr instanceof Value) return cc.preEval(this);
 
-  /**
-   * Tries to convert the specified expression into a range expression.
-   * @param cmp expression to be converted
-   * @param start start
-   * @param end end (must be larger than end)
-   * @return new or original expression
-   */
-  private static ParseExpr get(final CmpG cmp, final double start, final double end) {
-    final Expr e = cmp.exprs[0];
-    // type must be numeric
-    if(!e.seqType().type.isNumberOrUntyped()) return cmp;
-    switch(cmp.op) {
-      case EQ: return new CmpR(e, start, true, end, true, cmp.info);
-      case GE: return new CmpR(e, start, true, Double.POSITIVE_INFINITY, true, cmp.info);
-      case GT: return new CmpR(e, start, false, Double.POSITIVE_INFINITY, true, cmp.info);
-      case LE: return new CmpR(e, Double.NEGATIVE_INFINITY, true, end, true, cmp.info);
-      case LT: return new CmpR(e, Double.NEGATIVE_INFINITY, true, end, false, cmp.info);
-      default: return cmp;
+    Expr ex = this;
+    if(Function.POSITION.is(expr)) {
+      final long mn = Math.max((long) Math.ceil(min), 1), mx = (long) Math.floor(max);
+      ex = ItrPos.get(RangeSeq.get(mn, mx - mn + 1, true), OpV.EQ, info);
     }
+    return cc.replaceWith(this, ex);
   }
 
   @Override
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
     // atomic evaluation of arguments (faster)
-    if(atomic) {
-      final Item it = expr.item(qc, info);
-      if(it == null) return Bln.FALSE;
-      final double d = it.dbl(info);
-      return Bln.get((mni ? d >= min : d > min) && (mxi ? d <= max : d < max));
+    if(single) {
+      final Item item = expr.item(qc, info);
+      return Bln.get(item != Empty.VALUE && inRange(item.dbl(info)));
+    }
+
+    // pre-evaluate ranges
+    if(expr instanceof Range || expr instanceof RangeSeq) {
+      final Value value = expr.value(qc);
+      final long size = value.size();
+      if(size == 0) return Bln.FALSE;
+      if(size == 1) return Bln.get(inRange(((Item) value).dbl(info)));
+      final long[] range = ((RangeSeq) value).range(false);
+      return Bln.get(range[1] >= min && range[0] <= max);
     }
 
     // iterative evaluation
-    final Iter ir = expr.atomIter(qc, info);
-    for(Item it; (it = ir.next()) != null;) {
-      final double d = it.dbl(info);
-      if((mni ? d >= min : d > min) && (mxi ? d <= max : d < max)) return Bln.TRUE;
+    final Iter iter = expr.atomIter(qc, info);
+    for(Item item; (item = qc.next(iter)) != null;) {
+      if(inRange(item.dbl(info))) return Bln.TRUE;
     }
     return Bln.FALSE;
   }
 
   /**
-   * Creates an intersection of the existing and the specified expressions.
-   * @param c range comparison
-   * @return resulting expression or {@code null}
+   * Checks if the specified value is within the allowed range.
+   * @param value double value
+   * @return result of check
    */
-  Expr intersect(final CmpR c) {
-    // skip intersection if expressions to be compared are different
-    if(!c.expr.sameAs(expr)) return null;
-
-    // find common minimum and maximum value
-    final double mn = Math.max(min, c.min);
-    final double mx = Math.min(max, c.max);
-
-    // remove comparisons that will never yield results
-    if(mn > mx) return Bln.FALSE;
-    // do not rewrite checks for identical values (will be evaluated faster by index)
-    return new CmpR(c.expr, mn, mni && c.mni, mx, mxi && c.mxi, info);
+  private boolean inRange(final double value) {
+    return value >= min && value <= max;
   }
 
   @Override
-  public boolean indexAccessible(final IndexInfo ii) {
+  public Expr mergeEbv(final Expr ex, final boolean or, final CompileContext cc) {
+    if(!(ex instanceof CmpR)) return null;
+
+    // do not merge if expressions to be compared are different
+    final CmpR cmp = (CmpR) ex;
+    if(!expr.equals(cmp.expr)) return null;
+
+    // do not merge if ranges are exclusive
+    if(or && (max < cmp.min || cmp.max < min)) return null;
+
+    // merge min and max values
+    final double mn = or ? Math.min(min, cmp.min) : Math.max(min, cmp.min);
+    final double mx = or ? Math.max(max, cmp.max) : Math.min(max, cmp.max);
+    return get(expr, mn, mx, info);
+  }
+
+  @Override
+  public boolean indexAccessible(final IndexInfo ii) throws QueryException {
     // accept only location path, string and equality expressions
-    final Data data = ii.ic.data;
-    // sequential main memory scan is assumed to be faster than range index access;
-    // no support for main-memory databases
-    if(!mni || !mxi || data.inMemory()) return false;
+    final Data data = ii.db.data();
+    // sequential main memory scan is usually faster than range index access
+    if(data == null ? !ii.enforce() : data.inMemory()) return false;
+
     final IndexType type = ii.type(expr, null);
     if(type == null) return false;
 
@@ -163,26 +195,26 @@ public final class CmpR extends Single {
     final NumericRange nr = new NumericRange(type, Math.max(min, key.min), Math.min(max, key.max));
     // skip queries with no results
     if(nr.min > nr.max || nr.max < key.min || nr.min > key.max) {
-      ii.costs = 0;
+      ii.costs = IndexCosts.get(0);
       return true;
     }
 
     // estimate costs
-    ii.costs = data.costs(nr);
-    if(ii.costs == -1) return false;
+    ii.costs = ii.costs(data, nr);
+    if(ii.costs == null) return false;
 
     // skip if numbers are negative, doubles, or of different string length
-    final int mnl = min >= 0 && (long) min == min ? token(min).length : -1;
-    final int mxl = max >= 0 && (long) max == max ? token(max).length : -1;
+    final int mnl = min >= 0 && (long) min == min ? Token.token(min).length : -1;
+    final int mxl = max >= 0 && (long) max == max ? Token.token(max).length : -1;
     if(mnl != mxl || mnl == -1) return false;
 
     // don't use index if min/max values are infinite
-    if(min == Double.NEGATIVE_INFINITY && max == Double.POSITIVE_INFINITY ||
-        token((int) nr.min).length != token((int) nr.max).length) return false;
+    if(min == NEGATIVE_INFINITY && max == POSITIVE_INFINITY ||
+        Token.token((int) nr.min).length != Token.token((int) nr.max).length) return false;
 
     final TokenBuilder tb = new TokenBuilder();
-    tb.add(mni ? '[' : '(').addExt(min).add(',').addExt(max).add(mxi ? ']' : ')');
-    ii.create(new RangeAccess(info, nr, ii.ic), true, info, Util.info(OPTINDEX_X_X, "range", tb));
+    tb.add('[').add(min).add(',').add(max).add(']');
+    ii.create(new RangeAccess(info, nr, ii.db), true, Util.info(OPTINDEX_X_X, "range", tb), info);
     return true;
   }
 
@@ -190,12 +222,13 @@ public final class CmpR extends Single {
    * Retrieves the statistics key for the element/attribute name.
    * @param ii index info
    * @param type index type
-   * @return key
+   * @return key, or {@code null} if statistics are not available
    */
   private Stats key(final IndexInfo ii, final IndexType type) {
     // statistics are not up-to-date
-    final Data data = ii.ic.data;
-    if(!data.meta.uptodate || !data.nspaces.isEmpty() || !(expr instanceof AxisPath)) return null;
+    final Data data = ii.db.data();
+    if(data == null || !data.meta.uptodate || !data.nspaces.isEmpty() ||
+        !(expr instanceof AxisPath)) return null;
 
     NameTest test = ii.test;
     if(test == null) {
@@ -204,39 +237,53 @@ public final class CmpR extends Single {
       final int st = path.steps.length - 1;
       if(type == IndexType.TEXT) {
         step = st == 0 ? ii.step : path.step(st - 1);
-        if(step.test.kind != Kind.NAME) return null;
       } else {
         step = path.step(st);
-        if(!step.simple(Axis.ATTR, true)) return null;
+        if(step.axis != Axis.ATTRIBUTE || step.exprs.length > 0) return null;
       }
+      if(!(step.test instanceof NameTest)) return null;
       test = (NameTest) step.test;
+      if(test.part() != NamePart.LOCAL) return null;
     }
 
     final Names names = type == IndexType.TEXT ? data.elemNames : data.attrNames;
-    final Stats stats = names.stats(names.id(test.name.local()));
+    final Stats stats = names.stats(names.id(test.qname.local()));
     return stats == null || StatsType.isNumeric(stats.type) ? stats : null;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new CmpR(expr.copy(cc, vm), min, mni, max, mxi, info);
+    final CmpR cmp = new CmpR(expr.copy(cc, vm), min, max, info);
+    cmp.single = single;
+    return copyType(cmp);
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(MIN, min, MAX, max), expr);
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof CmpR)) return false;
+    final CmpR c = (CmpR) obj;
+    return min == c.min && max == c.max && super.equals(obj);
   }
 
   @Override
-  public String toString() {
-    final StringBuilder sb = new StringBuilder();
+  public String description() {
+    return "range comparison";
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, MIN, min, MAX, max, SINGLE, single), expr);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
     if(min == max) {
-      sb.append(expr).append(" = ").append(min);
+      qs.token(expr).token("=").token(min);
     } else {
-      if(min != Double.NEGATIVE_INFINITY) sb.append(min).append(mni ? " <= " : " < ");
-      sb.append(expr);
-      if(max != Double.POSITIVE_INFINITY) sb.append(mxi ? " <= " : " < ").append(max);
+      if(min != NEGATIVE_INFINITY) qs.token(expr).token(">=").token(min);
+      if(min != NEGATIVE_INFINITY && max != POSITIVE_INFINITY) qs.token(AND);
+      if(max != POSITIVE_INFINITY) qs.token(expr).token("<=").token(max);
     }
-    return sb.toString();
   }
 }

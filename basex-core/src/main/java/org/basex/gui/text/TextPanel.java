@@ -17,19 +17,25 @@ import org.basex.core.*;
 import org.basex.gui.*;
 import org.basex.gui.dialog.*;
 import org.basex.gui.layout.*;
+import org.basex.gui.listener.*;
 import org.basex.gui.text.SearchBar.*;
 import org.basex.gui.text.TextEditor.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
+import org.basex.query.*;
+import org.basex.query.func.*;
 import org.basex.util.*;
 
 /**
  * Renders and provides edit capabilities for text.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class TextPanel extends BaseXPanel {
+  /** Text caret. */
+  private final Timer caretTimer;
+
   /** Editor action. */
   public enum Action {
     /** Check for changes; do nothing if input has not changed. */
@@ -61,20 +67,20 @@ public class TextPanel extends BaseXPanel {
 
   /**
    * Default constructor.
-   * @param edit editable flag
    * @param win parent window
+   * @param editable editable flag
    */
-  public TextPanel(final boolean edit, final Window win) {
-    this("", edit, win);
+  public TextPanel(final BaseXWindow win, final boolean editable) {
+    this(win, "", editable);
   }
 
   /**
    * Default constructor.
-   * @param txt initial text
-   * @param editable editable flag
    * @param win parent window
+   * @param text initial text
+   * @param editable editable flag
    */
-  public TextPanel(final String txt, final boolean editable, final Window win) {
+  public TextPanel(final BaseXWindow win, final String text, final boolean editable) {
     super(win);
     this.editable = editable;
     editor = new TextEditor(gui);
@@ -90,7 +96,7 @@ public class TextPanel extends BaseXPanel {
     addMouseListener(this);
     addKeyListener(this);
 
-    addFocusListener(new FocusAdapter() {
+    addFocusListener(new FocusListener() {
       @Override
       public void focusGained(final FocusEvent e) {
         if(isEnabled()) caret(true);
@@ -111,18 +117,24 @@ public class TextPanel extends BaseXPanel {
     add(rend, BorderLayout.CENTER);
     add(scroll, BorderLayout.EAST);
 
-    setText(txt);
+    setText(text);
     hist = new History(editable ? editor.text() : null);
 
     new BaseXPopup(this, editable ?
       new GUICommand[] {
-        new FindCmd(), new FindNextCmd(), new FindPrevCmd(), null, new GotoCmd(), null,
+        new FindCmd(), new FindNextCmd(), new FindPrevCmd(),
+        new MatchCaseCmd(), new WholeWordCmd(), new RegExCmd(), new MultiLineCmd(), null,
+        new GotoCmd(), null,
         new UndoCmd(), new RedoCmd(), null,
         new AllCmd(), new CutCmd(), new CopyCmd(), new PasteCmd(), new DelCmd() } :
       new GUICommand[] {
-        new FindCmd(), new FindNextCmd(), new FindPrevCmd(), null, new GotoCmd(), null,
+        new FindCmd(), new FindNextCmd(), new FindPrevCmd(),
+        new MatchCaseCmd(), new WholeWordCmd(), new RegExCmd(), new MultiLineCmd(), null,
+        new GotoCmd(), null,
         new AllCmd(), new CopyCmd() }
     );
+
+    caretTimer = new Timer(500, e -> rend.caret(!rend.caret()));
   }
 
   /**
@@ -147,8 +159,8 @@ public class TextPanel extends BaseXPanel {
    * @return search string
    */
   public final String searchString() {
-    final String string = editor.copy();
-    return string.indexOf('\n') != -1 ? "" : string;
+    final String string = editor.selected();
+    return string.indexOf('\n') == -1 ? string : "";
   }
 
   /**
@@ -192,8 +204,8 @@ public class TextPanel extends BaseXPanel {
   protected final void setSyntax(final IO file, final boolean opened) {
     setSyntax(!opened || file.hasSuffix(IO.XQSUFFIXES) ? new SyntaxXQuery() :
       file.hasSuffix(IO.JSONSUFFIX) ? new SyntaxJSON() :
-      file.hasSuffix(IO.JSSUFFIX) ? new SyntaxJS() :
-      file.hasSuffix(IO.XMLSUFFIXES) || file.hasSuffix(IO.HTMLSUFFIXES) ||
+      file.hasSuffix(IO.JSSUFFIXES) ? new SyntaxJS() :
+      file.hasSuffix(gui.gopts.xmlSuffixes()) || file.hasSuffix(IO.HTMLSUFFIXES) ||
       file.hasSuffix(IO.XSLSUFFIXES) || file.hasSuffix(IO.BXSSUFFIX) ?
       new SyntaxXML() : Syntax.SIMPLE);
   }
@@ -220,7 +232,7 @@ public class TextPanel extends BaseXPanel {
    */
   public final void setCaret(final int pos) {
     editor.pos(pos);
-    cursorCode.invokeLater(1);
+    updateScrollpos.invokeLater(1);
     caret(true);
   }
 
@@ -245,7 +257,7 @@ public class TextPanel extends BaseXPanel {
    * @return result of check
    */
   public final boolean selected() {
-    return editor.selected();
+    return editor.isSelected();
   }
 
   @Override
@@ -253,7 +265,7 @@ public class TextPanel extends BaseXPanel {
     super.setFont(f);
     if(rend != null) {
       rend.setFont(f);
-      scrollCode.invokeLater(true);
+      updateScrollbar.invokeLater(true);
     }
   }
 
@@ -280,7 +292,7 @@ public class TextPanel extends BaseXPanel {
   public final void comment() {
     final int caret = editor.pos();
     if(editor.comment(rend.getSyntax())) hist.store(editor.text(), caret, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
   }
 
   /**
@@ -290,7 +302,14 @@ public class TextPanel extends BaseXPanel {
   public final void toCase(final Case cs) {
     final int caret = editor.pos();
     if(editor.toCase(cs)) hist.store(editor.text(), caret, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
+  }
+
+  /**
+   * Jumps to a matching bracket.
+   */
+  public final void bracket() {
+    setCaret(editor.bracket());
   }
 
   /**
@@ -302,7 +321,7 @@ public class TextPanel extends BaseXPanel {
     if(!ds.ok() || !editor.sort()) return;
 
     hist.store(editor.text(), caret, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
     repaint();
   }
 
@@ -312,7 +331,7 @@ public class TextPanel extends BaseXPanel {
   public final void format() {
     final int caret = editor.pos();
     if(editor.format(rend.getSyntax())) hist.store(editor.text(), caret, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
   }
 
   @Override
@@ -331,7 +350,7 @@ public class TextPanel extends BaseXPanel {
     rend.repaint();
   }
 
-  // SEARCH OPERATIONS ==================================================================
+  // SEARCH OPERATIONS ============================================================================
 
   /**
    * Installs a link listener.
@@ -363,14 +382,7 @@ public class TextPanel extends BaseXPanel {
    * @param jump jump to next hit
    */
   final void search(final SearchContext sc, final boolean jump) {
-    try {
-      rend.search(sc);
-      if(!sc.search.isEmpty()) gui.status.setText(Util.info(Text.STRINGS_FOUND_X,  sc.nr()));
-      if(jump) jump(SearchDir.CURRENT, false);
-    } catch(final Exception ex) {
-      final String msg = Util.message(ex).replaceAll(Prop.NL + ".*", "");
-      gui.status.setError(Text.REGULAR_EXPR + Text.COLS + msg);
-    }
+    rend.search(sc, jump);
   }
 
   /**
@@ -381,7 +393,7 @@ public class TextPanel extends BaseXPanel {
     try {
       final int[] select = rend.replace(rc);
       if(rc.text != null) {
-        final boolean sel = editor.selected();
+        final boolean sel = editor.isSelected();
         setText(rc.text);
         editor.select(select[0], select[sel ? 1 : 0]);
         release(Action.CHECK);
@@ -399,16 +411,10 @@ public class TextPanel extends BaseXPanel {
    * @param select select hit
    */
   protected final void jump(final SearchDir dir, final boolean select) {
-    // updates the visible area
-    final int y = rend.jump(dir, select);
-    final int h = getHeight();
-    final int p = scroll.pos();
-    final int m = y + rend.fontHeight() * 3 - h;
-    if(y != -1 && (p < m || p > y)) scroll.pos(y - h / 2);
-    rend.repaint();
+    SwingUtilities.invokeLater(() -> scroll(rend.jump(dir, select), 1));
   }
 
-  // MOUSE INTERACTIONS =================================================================
+  // MOUSE INTERACTIONS ===========================================================================
 
   @Override
   public final void mouseEntered(final MouseEvent e) {
@@ -434,7 +440,7 @@ public class TextPanel extends BaseXPanel {
     if(SwingUtilities.isLeftMouseButton(e)) {
       editor.endSelection();
       // evaluate link
-      if(!editor.selected()) {
+      if(!editor.isSelected()) {
         final TextIterator iter = rend.jump(e.getPoint());
         final String link = iter.link();
         if(link != null) linkListener.linkClicked(link);
@@ -468,7 +474,7 @@ public class TextPanel extends BaseXPanel {
     if(SwingUtilities.isMiddleMouseButton(e)) copy();
 
     final boolean shift = e.isShiftDown();
-    final boolean selected = editor.selected();
+    final boolean selected = editor.isSelected();
     if(SwingUtilities.isLeftMouseButton(e)) {
       final int c = e.getClickCount();
       if(c == 1) {
@@ -495,7 +501,7 @@ public class TextPanel extends BaseXPanel {
     rend.repaint();
   }
 
-  // KEY INTERACTIONS =======================================================
+  // KEY INTERACTIONS ===========================================================================
 
   /**
    * Invokes special keys.
@@ -538,7 +544,7 @@ public class TextPanel extends BaseXPanel {
     }
 
     // set cursor position
-    final boolean selected = editor.selected();
+    final boolean selected = editor.isSelected();
     final int pos = editor.pos();
 
     final boolean shift = e.isShiftDown();
@@ -598,8 +604,10 @@ public class TextPanel extends BaseXPanel {
         editor.move(true);
       } else if(MOVEUP.is(e)) {
         editor.move(false);
-      } else if(DELLINE.is(e)) {
-        editor.deleteLine();
+      } else if(DUPLLINES.is(e)) {
+        editor.duplLines();
+      } else if(DELLINES.is(e)) {
+        editor.deleteLines();
       } else if(DELNEXTWORD.is(e)) {
         editor.deleteNext(true);
       } else if(DELLINEEND.is(e)) {
@@ -625,37 +633,44 @@ public class TextPanel extends BaseXPanel {
     if(txt != tmp) {
       // text has changed: add old text to history
       hist.store(tmp, pos, editor.pos());
-      scrollCode.invokeLater(down);
-    } else if(pos != editor.pos() || selected != editor.selected()) {
+      updateScrollbar.invokeLater(down);
+    } else if(pos != editor.pos() || selected != editor.isSelected()) {
       // cursor position or selection state has changed
-      cursorCode.invokeLater(down ? 2 : 0);
+      updateScrollpos.invokeLater(down ? 2 : 0);
     }
   }
 
-  /** Updates the scroll bar. */
-  private final GUICode scrollCode = new GUICode() {
+  /** Updates size and position of the scroll bar. */
+  private final GUICode updateScrollbar = new GUICode() {
     @Override
     public void execute(final Object down) {
       rend.updateScrollbar();
-      cursorCode.execute((Boolean) down ? 2 : 0);
+      updateScrollpos.execute((Boolean) down ? 2 : 0);
     }
   };
 
-  /** Updates the cursor position. */
-  private final GUICode cursorCode = new GUICode() {
+  /** Updates the position of the scroll bar. */
+  private final GUICode updateScrollpos = new GUICode() {
     @Override
-    public void execute(final Object algn) {
-      // updates the visible area
-      final int p = scroll.pos();
-      final int y = rend.cursorY();
-      final int m = y + rend.fontHeight() * 3 - getHeight();
-      if(p < m || p > y) {
-        final int align = (Integer) algn;
-        scroll.pos(align == 0 ? y : align == 1 ? y - getHeight() / 2 : m);
-      }
-      rend.repaint();
+    public void execute(final Object align) {
+      scroll(rend.cursorY(), (Integer) align);
     }
   };
+
+  /**
+   * Scrolls to the specified position.
+   * @param y new vertical position
+   * @param align alignment (0: scroll up, 1: jump, 2: scroll down)
+   */
+  private void scroll(final int y, final int align) {
+    if(y != -1) {
+      final int h = getHeight(), m = y + (rend.fontHeight() << 1) - h, p = scroll.pos();
+      if(p < m || p > y) {
+        scroll.pos(align == 0 ? y : align == 1 ? y - h / 2 : m);
+      }
+    }
+    rend.repaint();
+  }
 
   /** Last horizontal position. */
   private int lastCol = -1;
@@ -672,7 +687,7 @@ public class TextPanel extends BaseXPanel {
     final boolean indent = TAB.is(e) && editor.indent(sb, e.isShiftDown());
 
     // delete marked text
-    final boolean selected = editor.selected() && !indent;
+    final boolean selected = editor.isSelected() && !indent;
     if(selected) editor.delete();
 
     final int move = ENTER.is(e) ? editor.enter(sb) : editor.add(sb, selected);
@@ -682,7 +697,7 @@ public class TextPanel extends BaseXPanel {
     if(move != 0) editor.pos(Math.min(editor.size(), caret + move));
 
     // adjust text height
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
     e.consume();
   }
 
@@ -702,16 +717,16 @@ public class TextPanel extends BaseXPanel {
     scroll.refreshLayout();
   }
 
-  // EDITOR COMMANDS ==========================================================
+  // EDITOR COMMANDS ==============================================================================
 
   /**
    * Pastes a string.
    * @param string string to be pasted
    */
-  public final void paste(final String string) {
+  private void paste(final String string) {
     final int pos = editor.pos();
-    if(editor.selected()) editor.delete();
-    editor.add(string);
+    if(editor.isSelected()) editor.delete();
+    editor.insert(string);
     finish(pos);
   }
 
@@ -720,7 +735,7 @@ public class TextPanel extends BaseXPanel {
    * @return true if text was copied
    */
   private boolean copy() {
-    final String txt = editor.copy();
+    final String txt = editor.selected();
     if(txt.isEmpty()) return false;
 
     // copy selection to clipboard
@@ -730,7 +745,7 @@ public class TextPanel extends BaseXPanel {
 
   /**
    * Returns the clipboard text.
-   * @return text
+   * @return text or {@code null}
    */
   private static String clip() {
     // copy selection to clipboard
@@ -751,17 +766,9 @@ public class TextPanel extends BaseXPanel {
    */
   private void finish(final int old) {
     if(old != -1) hist.store(editor.text(), old, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
     release(Action.CHECK);
   }
-
-  /** Text caret. */
-  private final Timer caretTimer = new Timer(500, new ActionListener() {
-    @Override
-    public void actionPerformed(final ActionEvent e) {
-      rend.caret(!rend.caret());
-    }
-  });
 
   /**
    * Stops an old text cursor thread and, if requested, starts a new one.
@@ -844,7 +851,7 @@ public class TextPanel extends BaseXPanel {
       finish(pos);
     }
     @Override
-    public boolean enabled(final GUI main) { return hist.active() && editor.selected(); }
+    public boolean enabled(final GUI main) { return hist.active() && editor.isSelected(); }
   }
 
   /** Copy command. */
@@ -855,7 +862,7 @@ public class TextPanel extends BaseXPanel {
     @Override
     public void execute() { copy(); }
     @Override
-    public boolean enabled(final GUI main) { return editor.selected(); }
+    public boolean enabled(final GUI main) { return editor.isSelected(); }
   }
 
   /** Paste command. */
@@ -884,7 +891,7 @@ public class TextPanel extends BaseXPanel {
       finish(pos);
     }
     @Override
-    public boolean enabled(final GUI main) { return hist.active() && editor.selected(); }
+    public boolean enabled(final GUI main) { return hist.active() && editor.isSelected(); }
   }
 
   /** Select all command. */
@@ -902,7 +909,7 @@ public class TextPanel extends BaseXPanel {
     FindCmd() { super(Text.FIND + Text.DOTS, FIND); }
 
     @Override
-    public void execute() { search.activate(searchString(), true); }
+    public void execute() { search.activate(searchString(), true, false); }
     @Override
     public boolean enabled(final GUI main) { return search != null; }
   }
@@ -913,7 +920,7 @@ public class TextPanel extends BaseXPanel {
     FindNextCmd() { super(Text.FIND_NEXT, FINDNEXT1, FINDNEXT2); }
 
     @Override
-    public void execute() { find(true); }
+    public void execute() { search(true); }
     @Override
     public boolean enabled(final GUI main) { return search != null; }
   }
@@ -924,18 +931,79 @@ public class TextPanel extends BaseXPanel {
     FindPrevCmd() { super(Text.FIND_PREVIOUS, FINDPREV1, FINDPREV2); }
 
     @Override
-    public void execute() { find(false); }
+    public void execute() { search(false); }
     @Override
     public boolean enabled(final GUI main) { return search != null; }
+  }
+
+  /** Match-case search. */
+  private class MatchCaseCmd extends GUIPopupCmd {
+    /** Constructor. */
+    MatchCaseCmd() { super(Text.MATCH_CASE, MATCHCASE); }
+
+    @Override
+    public void execute() { search.toggle(search.mcase); }
+    @Override
+    public boolean toggle() { return true; }
+    @Override
+    public boolean enabled(final GUI main) { return search != null; }
+    @Override
+    public boolean selected(final GUI main) { return search.mcase.isSelected(); }
+  }
+
+  /** Whole-word search. */
+  private class WholeWordCmd extends GUIPopupCmd {
+    /** Constructor. */
+    WholeWordCmd() { super(Text.WHOLE_WORD, WHOLEWORD); }
+
+    @Override
+    public void execute() { search.toggle(search.word); }
+    @Override
+    public boolean toggle() { return true; }
+    @Override
+    public boolean enabled(final GUI main) { return search != null && search.word.isEnabled(); }
+    @Override
+    public boolean selected(final GUI main) { return search.word.isSelected(); }
+  }
+
+  /** Regular-expression search. */
+  private class RegExCmd extends GUIPopupCmd {
+    /** Constructor. */
+    RegExCmd() { super(Text.REGULAR_EXPR, REGEX); }
+
+    @Override
+    public void execute() {
+      search.toggle(search.regex); }
+    @Override
+    public boolean toggle() { return true; }
+    @Override
+    public boolean enabled(final GUI main) { return search != null; }
+    @Override
+    public boolean selected(final GUI main) { return search.regex.isSelected(); }
+  }
+
+  /** Multi-line search. */
+  private class MultiLineCmd extends GUIPopupCmd {
+    /** Constructor. */
+    MultiLineCmd() { super(Text.MULTI_LINE, MULTILINE); }
+
+    @Override
+    public void execute() { search.toggle(search.multi); }
+    @Override
+    public boolean toggle() { return true; }
+    @Override
+    public boolean enabled(final GUI main) { return search != null && search.multi.isEnabled(); }
+    @Override
+    public boolean selected(final GUI main) { return search.multi.isSelected(); }
   }
 
   /**
    * Highlights the next/previous hit.
    * @param next next/previous hit
    */
-  private void find(final boolean next) {
+  private void search(final boolean next) {
     final boolean vis = search.isVisible();
-    search.activate(searchString(), false);
+    search.activate(searchString(), false, false);
     jump(vis ? next ? SearchDir.FORWARD : SearchDir.BACKWARD : SearchDir.CURRENT, true);
   }
 
@@ -982,38 +1050,61 @@ public class TextPanel extends BaseXPanel {
     if(selected()) return;
 
     // find first character
-    final int caret = editor.pos(), startPos = editor.completionStart();
-    final String prefix = string(substring(editor.text(), startPos, caret));
-    if(prefix.isEmpty()) return;
+    final int caret = editor.pos(), start = editor.completionStart();
+    final String input = string(substring(editor.text(), start, caret)).toLowerCase(Locale.ENGLISH);
 
     // find insertion candidates
-    final ArrayList<Pair<String, String>> tmp = new ArrayList<>();
-    for(final Pair<String, String> pair : REPLACE) {
-      if(pair.name().startsWith(prefix)) tmp.add(pair);
+    final ArrayList<Pair<String, String>> pairs = new ArrayList<>();
+    final int il = LISTS.size();
+    for(int i = 0; i < il; i++) {
+      if(i > 0) pairs.add(null);
+      for(final Pair<String, String> pair : LISTS.get(i)) {
+        final String name = pair.name();
+        if(name.startsWith(input) || name.replace(":", "").startsWith(input)) pairs.add(pair);
+      }
+    }
+    if(pairs.size() < il) {
+      pairs.clear();
+      for(int i = 0; i < il; i++) {
+        if(i > 0) pairs.add(null);
+        for(final Pair<String, String> pair : LISTS.get(i)) {
+          if(SmartStrings.matches(pair.name(), input)) pairs.add(pair);
+        }
+      }
     }
 
-    if(tmp.size() == 1) {
+    // remove duplicate and trailing separators
+    for(int l = 0; l < pairs.size();) {
+      if(pairs.get(l) == null && (l == 0 || l + 1 == pairs.size() || pairs.get(l + 1) == null)) {
+        pairs.remove(l);
+      } else {
+        l++;
+      }
+    }
+
+    if(pairs.size() == 1) {
       // insert single candidate
-      complete(tmp.get(0).value(), startPos);
-    } else if(!tmp.isEmpty()) {
+      complete(pairs.get(0).value(), start);
+    } else if(!pairs.isEmpty()) {
       // show popup menu
       final JPopupMenu pm = new JPopupMenu();
-      final ActionListener al = new ActionListener() {
-        @Override
-        public void actionPerformed(final ActionEvent ae) {
-          complete(ae.getActionCommand().replaceAll("^.*?\\] ", ""), startPos);
+      final ActionListener al = ae -> complete(
+        ae.getActionCommand().replaceAll("^.*?] ", ""), start);
+      for(final Pair<String, String> entry : pairs) {
+        if(entry == null) {
+          pm.addSeparator();
+        } else {
+          final JMenuItem mi = new JMenuItem(entry.value());
+          pm.add(mi);
+          mi.addActionListener(al);
         }
-      };
-
-      for(final Pair<String, String> entry : tmp) {
-        final JMenuItem mi = new JMenuItem('[' + entry.name() + "] " + entry.value());
-        pm.add(mi);
-        mi.addActionListener(al);
+        if(pm.getComponentCount() >= 20) {
+          final JMenuItem mi = new JMenuItem("... " + Util.info(Text.RESULTS_X, pairs.size()));
+          mi.setEnabled(false);
+          pm.add(mi);
+          break;
+        }
       }
-      pm.addSeparator();
-      final JMenuItem mi = new JMenuItem(Text.INPUT + Text.COLS + prefix);
-      mi.setEnabled(false);
-      pm.add(mi);
 
       final int[] cursor = rend.cursor();
       pm.show(this, cursor[0], cursor[1]);
@@ -1033,31 +1124,47 @@ public class TextPanel extends BaseXPanel {
     final int caret = editor.pos();
     editor.complete(string, start);
     hist.store(editor.text(), caret, editor.pos());
-    scrollCode.invokeLater(true);
+    updateScrollbar.invokeLater(true);
   }
 
-  /** Index for all replacements. */
-  private static final ArrayList<Pair<String, String>> REPLACE = new ArrayList<>();
+  /** Replacement lists. */
+  private static final ArrayList<ArrayList<Pair<String, String>>> LISTS = new ArrayList<>();
 
-  /** Reads in the property file. */
+  /* Reads in the property file. */
   static {
-    try {
-      final String file = "/completions.properties";
-      final InputStream is = TextPanel.class.getResourceAsStream(file);
-      if(is == null) {
-        Util.errln(file + " not found.");
-      } else {
-        try(NewlineInput nli = new NewlineInput(is)) {
-          for(String line; (line = nli.readLine()) != null;) {
-            final int i = line.indexOf('=');
-            if(i == -1 || line.startsWith("#")) continue;
-            final String key = line.substring(0, i), value = line.substring(i + 1);
-            REPLACE.add(new Pair<>(key, value.replace("\\n", "\n")));
-          }
+    for(int i = 0; i < 5; i++) LISTS.add(new ArrayList<>());
+    final String file = "/completions.properties";
+    final InputStream is = TextPanel.class.getResourceAsStream(file);
+    if(is == null) {
+      Util.errln(file + " not found.");
+    } else {
+      // add custom completions
+      try(NewlineInput nli = new NewlineInput(is)) {
+        for(String line; (line = nli.readLine()) != null;) {
+          final int i = line.indexOf('=');
+          if(i == -1 || Strings.startsWith(line, '#')) continue;
+          LISTS.get(0).add(new Pair<>(line.substring(0, i),
+              line.substring(i + 1).replace("\\n", "\n")));
         }
+      } catch(final IOException ex) {
+        Util.errln(ex);
       }
-    } catch(final IOException ex) {
-      Util.errln(ex);
+    }
+    // add functions (default functions first)
+    for(final FuncDefinition fd : Functions.DEFINITIONS) {
+      final String func = fd.toString();
+      final String name = func.replaceAll("^fn:|\\(.*", "");
+      final String value = name + (func.contains("()") ? "()" : "(_)");
+      if(fd.uri() == QueryText.FN_URI) {
+        if(name.contains("-")) LISTS.get(1).add(
+            new Pair<>(name.replaceAll("(.)[^-A-Z]*-?", "$1").
+            toLowerCase(Locale.ENGLISH), value));
+        LISTS.get(2).add(new Pair<>(name.toLowerCase(Locale.ENGLISH), value));
+      } else {
+        LISTS.get(3).add(new Pair<>(name.replaceAll("(:?.)[^-:A-Z]*-?", "$1").
+            toLowerCase(Locale.ENGLISH), value));
+        LISTS.get(4).add(new Pair<>(name.toLowerCase(Locale.ENGLISH), value));
+      }
     }
   }
 }

@@ -17,7 +17,7 @@ import org.basex.util.list.*;
 /**
  * This class serializes items as CSV.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CsvDirectSerializer extends CsvSerializer {
@@ -28,8 +28,6 @@ public final class CsvDirectSerializer extends CsvSerializer {
   /** Lax flag. */
   private final boolean lax;
 
-  /** Header flag. */
-  private boolean header;
   /** Contents of current row. */
   private TokenMap data;
   /** Current attribute value. */
@@ -45,7 +43,6 @@ public final class CsvDirectSerializer extends CsvSerializer {
       throws IOException {
 
     super(os, opts);
-    header = copts.get(CsvOptions.HEADER);
     headers = header ? new TokenList() : null;
     atts = copts.get(CsvOptions.FORMAT) == CsvFormat.ATTRIBUTES;
     lax = copts.get(CsvOptions.LAX) || atts;
@@ -73,25 +70,22 @@ public final class CsvDirectSerializer extends CsvSerializer {
   protected void finishClose() throws IOException {
     if(level != 1) return;
 
+    final TokenList tl = new TokenList();
     if(headers != null) {
-      final int s = headers.size();
+      final int size = headers.size();
       // print header
       if(header) {
-        final TokenList tl = new TokenList();
-        for(int i = 0; i < s; i++) tl.add(headers.get(i));
+        for(int i = 0; i < size; i++) tl.add(headers.get(i));
         record(tl);
         header = false;
       }
       // print data, sorted by headers
-      final TokenList tl = new TokenList();
-      for(int i = 0; i < s; i++) tl.add(data.get(headers.get(i)));
-      record(tl);
+      for(int i = 0; i < size; i++) tl.add(data.get(headers.get(i)));
     } else {
       // no headers available: print data
-      final TokenList tl = new TokenList();
-      for(final byte[] v : data.values()) tl.add(v);
-      record(tl);
+      for(final byte[] value : data.values()) tl.add(value);
     }
+    record(tl);
   }
 
   @Override
@@ -108,24 +102,13 @@ public final class CsvDirectSerializer extends CsvSerializer {
     if(headers != null) {
       final byte[] key = atts && attv != null ? attv : elem.string();
       final byte[] name = XMLToken.decode(key, lax);
-      if(name == null) error("Invalid element name <%>", key);
+      if(name == null) throw CSV_SERIALIZE_X.getIO(Util.inf("Invalid element name <%>", key));
       if(!headers.contains(name)) headers.add(name);
       final byte[] old = data.get(name);
-      final byte[] txt = old == null || old.length == 0 ? value :
-        value.length == 0 ? old : new TokenBuilder(old).add(',').add(value).finish();
-      data.put(name, txt);
+      data.put(name, old == null || old.length == 0 ? value :
+        value.length == 0 ? old : concat(old, ',', value));
     } else {
       data.put(token(data.size()), value);
     }
-  }
-
-  /**
-   * Raises an error with the specified message.
-   * @param msg error message
-   * @param ext error details
-   * @throws IOException I/O exception
-   */
-  private static void error(final String msg, final Object... ext) throws IOException {
-    throw BXCS_SERIAL_X.getIO(Util.inf(msg, ext));
   }
 }

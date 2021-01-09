@@ -3,7 +3,7 @@ package org.basex.server;
 /**
  * This class defines the available command-line commands.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public enum ServerCmd {
@@ -52,13 +52,14 @@ public enum ServerCmd {
   }
 
   /**
-   * Returns the server command for the specified control byte
-   * (soon obsolete).
+   * Returns the server command for the specified control byte.
    * @param code control code
    * @return server command
    */
   static ServerCmd get(final int code) {
-    for(final ServerCmd s : values()) if(s.code == code) return s;
+    for(final ServerCmd value : values()) {
+      if(value.code == code) return value;
+    }
     // current default for unknown codes: database command.
     return COMMAND;
   }

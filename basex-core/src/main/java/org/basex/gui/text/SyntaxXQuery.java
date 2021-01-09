@@ -1,18 +1,25 @@
 package org.basex.gui.text;
 
-import static org.basex.data.DataText.*;
+import static org.basex.gui.GUIConstants.*;
+import static org.basex.util.Token.*;
 
 import java.awt.*;
 import java.lang.reflect.*;
 import java.util.*;
 
+import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.expr.CmpN.*;
+import org.basex.query.expr.CmpV.*;
+import org.basex.query.expr.path.*;
+import org.basex.query.func.*;
+import org.basex.query.util.*;
 import org.basex.util.*;
 
 /**
  * This class defines syntax highlighting for XQuery files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class SyntaxXQuery extends Syntax {
@@ -29,8 +36,10 @@ final class SyntaxXQuery extends Syntax {
   private int quote;
   /** Variable flag. */
   private boolean var;
+  /** Element flag. */
+  private boolean elem;
 
-  // initialize xquery keys
+  // initialize keywords
   static {
     try {
       // add query tokens
@@ -38,6 +47,14 @@ final class SyntaxXQuery extends Syntax {
         if("IGNORE".equals(f.getName())) break;
         Collections.addAll(KEYWORDS, ((String) f.get(null)).split("-"));
       }
+      for(final FuncDefinition fd : Functions.DEFINITIONS) {
+        Collections.addAll(KEYWORDS, string(fd.local()).split("-"));
+      }
+      for(final Axis a : Axis.VALUES) Collections.addAll(KEYWORDS, a.name);
+      for(final OpV o : OpV.VALUES) Collections.addAll(KEYWORDS, o.name);
+      for(final OpN o : OpN.VALUES) Collections.addAll(KEYWORDS, o.name);
+      final Atts ns = NSGlobal.NS;
+      for(int n = 0; n < ns.size(); n++) KEYWORDS.add(string(ns.name(n)));
     } catch(final Exception ex) {
       Util.stack(ex);
     }
@@ -48,6 +65,7 @@ final class SyntaxXQuery extends Syntax {
     super.init(color);
     quote = 0;
     var = false;
+    elem = false;
     comment = 0;
   }
 
@@ -58,7 +76,7 @@ final class SyntaxXQuery extends Syntax {
     // opened quote
     if(quote != 0) {
       if(ch == quote) quote = 0;
-      return STRING;
+      return VALUE;
     }
 
     // comment
@@ -79,7 +97,7 @@ final class SyntaxXQuery extends Syntax {
     // quotes
     if(ch == '"' || ch == '\'') {
       quote = ch;
-      return STRING;
+      return VALUE;
     }
 
     // variables
@@ -92,25 +110,31 @@ final class SyntaxXQuery extends Syntax {
       return VARIABLE;
     }
 
-    // digits
-    if(Token.digit(ch)) return FUNCTION;
+    // integers
+    if(digit(ch) && toLong(token(iter.currString())) != Long.MIN_VALUE) return DIGIT;
+
     // special characters
-    if(!XMLToken.isNCChar(ch)) return COMMENT;
+    if(!XMLToken.isNCChar(ch)) {
+      elem = ch == '<' || ch == '%';
+      return COMMENT;
+    }
+
     // check for keywords
-    if(KEYWORDS.contains(iter.nextString())) return KEYWORD;
+    if(!elem && KEYWORDS.contains(iter.currString())) return KEYWORD;
 
     // standard text
+    elem = false;
     return plain;
   }
 
   @Override
   public byte[] commentOpen() {
-    return XQCOMM_O;
+    return DataText.XQCOMM_O;
   }
 
   @Override
   public byte[] commentEnd() {
-    return XQCOMM_C;
+    return DataText.XQCOMM_C;
   }
 
   @Override
@@ -154,7 +178,7 @@ final class SyntaxXQuery extends Syntax {
     for(int t = text.size() - 1; t >= 0; t--) {
       final byte c = text.get(t);
       if(c == '\n') break;
-      if(!Token.ws(c)) return false;
+      if(!ws(c)) return false;
     }
     return true;
   }

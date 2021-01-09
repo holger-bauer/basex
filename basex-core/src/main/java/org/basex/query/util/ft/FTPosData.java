@@ -11,7 +11,7 @@ import org.basex.util.list.*;
  * This class provides a container for query full-text positions,
  * which is evaluated by the visualizations.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
@@ -47,9 +47,11 @@ public final class FTPosData {
     int c = find(pre);
     if(c < 0) {
       c = -c - 1;
-      if(size == pos.length) pos = Arrays.copyOf(pos, Array.newSize(size));
-      Array.move(pos, c, 1, size++ - c);
+      final int sz = size;
+      if(sz == pos.length) pos = Arrays.copyOf(pos, Array.newCapacity(sz));
+      Array.insert(pos, c, 1, sz, null);
       pos[c] = new FTPos(pre, il);
+      size++;
     } else {
       pos[c].union(il);
     }
@@ -80,20 +82,6 @@ public final class FTPosData {
   }
 
   /**
-   * Compares full-text position data.
-   * @param ft data to be compared
-   * @return result of check
-   */
-  public boolean sameAs(final FTPosData ft) {
-    if(size != ft.size) return false;
-    for(int i = 0; i < size; ++i) {
-      if(pos[i].pre != ft.pos[i].pre || !Arrays.equals(
-          pos[i].list.toArray(), ft.pos[i].list.toArray())) return false;
-    }
-    return true;
-  }
-
-  /**
    * Returns the index of the specified pre value.
    * @param pre int pre value
    * @return index, or negative index - 1 if pre value is not found
@@ -109,5 +97,27 @@ public final class FTPosData {
       else h = m - 1;
     }
     return -l - 1;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof FTPosData)) return false;
+    final FTPosData ft = (FTPosData) obj;
+    if(size != ft.size) return false;
+    for(int p = 0; p < size; p++) {
+      if(pos[p].pre != ft.pos[p].pre || !pos[p].equals(ft.pos[p])) return false;
+    }
+    return true;
+  }
+
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder();
+    for(int p = 0; p < size; p++) {
+      if(sb.length() > 0) sb.append('\n');
+      sb.append(pos[p]);
+    }
+    return sb.toString();
   }
 }

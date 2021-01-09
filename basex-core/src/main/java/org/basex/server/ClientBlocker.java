@@ -6,7 +6,7 @@ import org.basex.util.hash.*;
 /**
  * This class delays blocked clients.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ClientBlocker {
@@ -18,10 +18,10 @@ public final class ClientBlocker {
    * @param client client address
    */
   public synchronized void delay(final byte[] client) {
-    int delay = blocked.get(client);
-    delay = delay == -1 ? 1 : Math.min(delay, 1024) << 1;
+    // do not delay more than 10 seconds
+    int delay = Math.min(blocked.get(client) + 1, 20);
     blocked.put(client, delay);
-    for(int d = delay; d > 0; d--) Performance.sleep(100);
+    while(--delay > 0) Performance.sleep(500);
   }
 
   /**
@@ -29,6 +29,6 @@ public final class ClientBlocker {
    * @param client client address
    */
   public synchronized void remove(final byte[] client) {
-    blocked.delete(client);
+    blocked.remove(client);
   }
 }

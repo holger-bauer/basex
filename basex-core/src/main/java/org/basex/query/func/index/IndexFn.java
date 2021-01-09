@@ -1,6 +1,5 @@
 package org.basex.query.func.index;
 
-import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
 import org.basex.data.*;
@@ -15,7 +14,7 @@ import org.basex.query.value.node.*;
 /**
  * Index function.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class IndexFn extends StandardFunc {
@@ -41,7 +40,7 @@ public abstract class IndexFn extends StandardFunc {
       throws QueryException {
 
     final IndexType type = entries.type();
-    if(!data.meta.index(type)) throw BXDB_INDEX_X.get(call.info, data.meta.name, type);
+    type.check(data, call.info);
     return entries(data.index(type), entries);
   }
 

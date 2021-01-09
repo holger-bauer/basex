@@ -21,7 +21,7 @@ import org.basex.util.list.*;
  * the currently opened database. This effectively eliminates all fragmentation
  * and can lead to significant space savings after updates.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class OptimizeAll extends ACreate {
@@ -78,8 +78,8 @@ public final class OptimizeAll extends ACreate {
    * @throws IOException I/O Exception during index rebuild
    * @throws BaseXException database exception
    */
-  public static void optimizeAll(final Data data, final Context context,
-      final MainOptions options, final OptimizeAll cmd) throws IOException {
+  public static void optimizeAll(final Data data, final Context context, final MainOptions options,
+      final OptimizeAll cmd) throws IOException {
 
     if(data.inMemory()) throw new BaseXException(NO_MAINMEM);
 
@@ -111,7 +111,7 @@ public final class OptimizeAll extends ACreate {
 
     // build database and index structures
     final StaticOptions sopts = context.soptions;
-    final String tmpName = sopts.randomDbName(name);
+    final String tmpName = sopts.createRandomDb(name);
     final DBParser parser = new DBParser(odata, options);
     final DiskBuilder builder = new DiskBuilder(tmpName, parser, sopts, options);
     if(cmd != null) cmd.pushJob(builder);
@@ -132,7 +132,7 @@ public final class OptimizeAll extends ACreate {
     nmeta.createtoken = ometa.createtoken;
     nmeta.createft = ometa.createft;
     nmeta.original = ometa.original;
-    nmeta.filesize = ometa.filesize;
+    nmeta.inputsize = ometa.inputsize;
     nmeta.time = ometa.time;
     nmeta.dirty = true;
     try {
@@ -146,8 +146,8 @@ public final class OptimizeAll extends ACreate {
     }
 
     // move binary files
-    final IOFile bin = ometa.binaries();
-    if(bin.exists()) bin.rename(nmeta.binaries());
+    final IOFile bin = ometa.binaryDir();
+    if(bin.exists()) bin.rename(nmeta.binaryDir());
 
     // drop old database, rename temporary database
     if(!DropDB.drop(name, sopts)) throw new BaseXException(DB_NOT_DROPPED_X, name);
@@ -157,7 +157,7 @@ public final class OptimizeAll extends ACreate {
   /**
    * Parser for rebuilding existing databases.
    *
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Leo Woerteler
    */
   private static final class DBParser extends Parser {

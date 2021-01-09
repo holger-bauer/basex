@@ -1,6 +1,6 @@
 package org.basex.build;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.build.csv.*;
@@ -10,13 +10,13 @@ import org.basex.core.MainOptions.MainParser;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.util.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * CSV Parser Test.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CsvParserTest extends SandboxTest {
@@ -26,29 +26,26 @@ public final class CsvParserTest extends SandboxTest {
   /** Test CSV file. */
   private static final String FILE = "src/test/resources/input.csv";
   /** Temporary CSV file. */
-  private static final String TEMP = Prop.TMP + NAME + IO.CSVSUFFIX;
+  private static final String TEMP = Prop.TEMPDIR + NAME + IO.CSVSUFFIX;
 
   /**
    * Creates the initial database.
    */
-  @BeforeClass
-  public static void before() {
+  @BeforeAll public static void before() {
     set(MainOptions.PARSER, MainParser.CSV);
   }
 
   /**
    * Removes the temporary CSV file.
    */
-  @AfterClass
-  public static void after() {
+  @AfterAll public static void after() {
     new IOFile(TEMP).delete();
   }
 
   /**
    * Sets initial options.
    */
-  @Before
-  public void init() {
+  @BeforeEach public void init() {
     copts = new CsvParserOptions();
     context.options.set(MainOptions.CSVPARSER, copts);
   }
@@ -56,16 +53,14 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Drops the database.
    */
-  @After
-  public void finish() {
+  @AfterEach public void finish() {
     execute(new DropDB(NAME));
   }
 
   /**
    * Adds an empty CSV file.
    */
-  @Test
-  public void empty() {
+  @Test public void empty() {
     write(new IOFile(TEMP), "");
     execute(new CreateDB(NAME, TEMP));
     assertEquals("<csv/>", query("."));
@@ -74,8 +69,7 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Adds the sample CSV file.
    */
-  @Test
-  public void one() {
+  @Test public void one() {
     copts.set(CsvOptions.HEADER, true);
     execute(new CreateDB(NAME, FILE));
     assertEquals("3", query("count(//Name)"));
@@ -89,8 +83,7 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Adds the sample CSV file, using different separators.
    */
-  @Test
-  public void separator() {
+  @Test public void separator() {
     copts.set(CsvOptions.HEADER, true);
 
     copts.set(CsvOptions.SEPARATOR, "tab");
@@ -105,8 +98,7 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Checks the quotes flag.
    */
-  @Test
-  public void quotes() {
+  @Test public void quotes() {
     copts.set(CsvOptions.HEADER, true);
 
     copts.set(CsvOptions.QUOTES, false);
@@ -121,8 +113,7 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Checks the backslash flag.
    */
-  @Test
-  public void backslash() {
+  @Test public void backslash() {
     copts.set(CsvOptions.HEADER, true);
 
     // "H \n""U\",a@b.c....
@@ -140,8 +131,7 @@ public final class CsvParserTest extends SandboxTest {
   /**
    * Adds the sample CSV file, using different separators.
    */
-  @Test
-  public void atts() {
+  @Test public void atts() {
     copts.set(CsvOptions.HEADER, true);
     copts.set(CsvOptions.FORMAT, CsvFormat.ATTRIBUTES);
     execute(new CreateDB(NAME, FILE));

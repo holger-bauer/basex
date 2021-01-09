@@ -6,12 +6,13 @@ import java.io.*;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ClientClose extends ClientFn {
@@ -20,9 +21,9 @@ public final class ClientClose extends ClientFn {
     checkCreate(qc);
     try {
       session(qc, true).close();
-      return null;
+      return Empty.VALUE;
     } catch(final IOException ex) {
-      throw BXCL_COMMAND_X.get(info, ex);
+      throw CLIENT_COMMAND_X.get(info, ex);
     }
   }
 }

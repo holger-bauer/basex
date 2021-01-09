@@ -2,19 +2,19 @@ package org.basex.query.func.bin;
 
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BinBin extends BinFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] bytes = str(0, qc);
-    if(bytes == null) return null;
-    return new B64(binary2bytes(bytes));
+    final byte[] token = token(0, qc);
+    return token == null ? Empty.VALUE : B64.get(binary2bytes(token));
   }
 }

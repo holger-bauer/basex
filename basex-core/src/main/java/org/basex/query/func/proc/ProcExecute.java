@@ -10,27 +10,22 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ProcExecute extends ProcFn {
-  /** Name: result. */
-  private static final String RESULT = "result";
-  /** Name: standard output. */
-  private static final String OUTPUT = "output";
-  /** Name: standard error. */
-  private static final String ERROR = "error";
-  /** Name: code. */
-  private static final String CODE = "code";
-
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Result result = exec(qc);
+    final ProcResult result = exec(qc, false);
+    final boolean ex = result.exception != null;
+    if(ex) result.error.add(result.exception.getMessage());
+    final byte[] output = result.output.normalize().finish();
+    final byte[] error = result.error.normalize().finish();
 
     final FElem root = new FElem(RESULT);
-    root.add(new FElem(OUTPUT).add(result.output.normalize().finish()));
-    root.add(new FElem(ERROR).add(result.error.normalize().finish()));
-    root.add(new FElem(CODE).add(token(result.code)));
+    if(output.length != 0) root.add(new FElem(OUTPUT).add(output));
+    if(error.length != 0) root.add(new FElem(ERROR).add(error));
+    if(!ex) root.add(new FElem(CODE).add(token(result.code)));
     return root;
   }
 }

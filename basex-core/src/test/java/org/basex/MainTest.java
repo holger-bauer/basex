@@ -1,6 +1,6 @@
 package org.basex;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
@@ -10,12 +10,12 @@ import org.basex.util.*;
 /**
  * Tests the command-line arguments of the starter classes.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class MainTest extends SandboxTest {
   /** Input file. */
-  static final IOFile INPUT = new IOFile(Prop.TMP + NAME + ".in");
+  static final IOFile INPUT = new IOFile(Prop.TEMPDIR + NAME + ".in");
 
   /**
    * Runs a request with the specified arguments.
@@ -27,23 +27,23 @@ abstract class MainTest extends SandboxTest {
 
   /**
    * Runs a request and compares the result with the expected result.
-   * @param exp expected result
+   * @param expected expected result
    * @param args command-line arguments
    * @throws IOException I/O exception
    */
-  final void equals(final String exp, final String... args) throws IOException {
-    assertEquals(exp, run(args));
+  final void equals(final String expected, final String... args) throws IOException {
+    assertEquals(expected, run(args));
   }
 
   /**
    * Runs a request and checks if the expected string is contained in the
    * result.
-   * @param exp expected result
+   * @param expected expected result
    * @param args command-line arguments
    * @throws IOException I/O exception
    */
-  final void contains(final String exp, final String... args) throws IOException {
+  final void contains(final String expected, final String... args) throws IOException {
     final String result = run(args);
-    if(!result.contains(exp)) fail('\'' + exp + "' not contained in '" + result + "'.");
+    if(!result.contains(expected)) fail('\'' + expected + "' not contained in '" + result + "'.");
   }
 }

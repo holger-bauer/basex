@@ -13,7 +13,7 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash set for storing tokens.
  * The first entry of the token set (offset 0) is always empty.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class TokenSet extends ASet implements Iterable<byte[]> {
@@ -24,8 +24,8 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * Default constructor.
    */
   public TokenSet() {
-    super(Array.CAPACITY);
-    keys = new byte[Array.CAPACITY][];
+    super(Array.INITIAL_CAPACITY);
+    keys = new byte[capacity()][];
   }
 
   /**
@@ -51,7 +51,7 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * @param in input stream
    * @throws IOException I/O exception
    */
-  protected void read(final DataInput in) throws IOException {
+  public void read(final DataInput in) throws IOException {
     keys = in.readTokens();
     next = in.readNums();
     buckets = in.readNums();
@@ -84,7 +84,7 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * @param key string to be added
    * @return {@code true} if the key did not exist yet and was stored
    */
-  public boolean add(final String key) {
+  public final boolean add(final String key) {
     return add(token(key));
   }
 
@@ -94,8 +94,8 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * @return unique id of stored key (larger than zero)
    */
   public final int put(final byte[] key) {
-    final int i = index(key);
-    return Math.abs(i);
+    final int id = index(key);
+    return Math.abs(id);
   }
 
   /**
@@ -113,8 +113,10 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * @return id, or {@code 0} if key does not exist
    */
   public final int id(final byte[] key) {
-    final int p = Token.hash(key) & buckets.length - 1;
-    for(int i = buckets[p]; i != 0; i = next[i]) if(eq(key, keys[i])) return i;
+    final int b = Token.hash(key) & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(eq(key, keys[id])) return id;
+    }
     return 0;
   }
 
@@ -129,20 +131,20 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
   }
 
   /**
-   * Deletes the specified key.
+   * Removes the entry with the specified key.
    * The deletion of keys will lead to empty entries. If {@link #size} is called after
    * deletions, the original number of entries will be returned.
    * @param key key
    * @return id of the deleted key, or {@code 0} if the key did not exist
    */
-  public int delete(final byte[] key) {
-    final int b = Token.hash(key) & buckets.length - 1;
-    for(int p = 0, i = buckets[b]; i != 0; p = i, i = next[i]) {
-      if(!eq(key, keys[i])) continue;
-      if(p == 0) buckets[b] = next[i];
-      else next[p] = next[next[i]];
-      keys[i] = null;
-      return i;
+  public int remove(final byte[] key) {
+    final int b = Token.hash(key) & capacity() - 1;
+    for(int p = 0, id = buckets[b]; id != 0; p = id, id = next[id]) {
+      if(!eq(key, keys[id])) continue;
+      if(p == 0) buckets[b] = next[id];
+      else next[p] = next[next[p]];
+      keys[id] = null;
+      return id;
     }
     return 0;
   }
@@ -155,12 +157,15 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    */
   private int index(final byte[] key) {
     checkSize();
-    final int b = Token.hash(key) & buckets.length - 1;
-    for(int r = buckets[b]; r != 0; r = next[r]) if(eq(key, keys[r])) return -r;
-    next[size] = buckets[b];
-    keys[size] = key;
-    buckets[b] = size;
-    return size++;
+    final int b = Token.hash(key) & capacity() - 1;
+    for(int id = buckets[b]; id != 0; id = next[id]) {
+      if(eq(key, keys[id])) return -id;
+    }
+    final int s = size++;
+    next[s] = buckets[b];
+    keys[s] = key;
+    buckets[b] = s;
+    return s;
   }
 
   @Override
@@ -186,12 +191,6 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
 
   @Override
   public String toString() {
-    final TokenBuilder tb = new TokenBuilder();
-    for(final byte[] key : this) {
-      if(!tb.isEmpty()) tb.add(", ");
-      if(key != null) tb.add(key);
-    }
-    return new TokenBuilder(Util.className(getClass())).add('[').add(tb.finish()).
-        add(']').toString();
+    return toString(keys);
   }
 }

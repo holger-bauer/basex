@@ -6,12 +6,13 @@ import org.basex.core.jobs.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JobsWait extends StandardFunc {
@@ -27,6 +28,6 @@ public final class JobsWait extends StandardFunc {
       Performance.sleep(1);
       qc.checkStop();
     }
-    return null;
+    return Empty.VALUE;
   }
 }

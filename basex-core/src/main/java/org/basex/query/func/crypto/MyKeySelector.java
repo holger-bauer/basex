@@ -12,14 +12,14 @@ import javax.xml.crypto.dsig.keyinfo.*;
 /**
  * Extracts a key from a given {@link KeyInfo} object.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
 final class MyKeySelector extends KeySelector {
   /**
    * Wrapper for KeySelector results.
    *
-   * @author BaseX Team 2005-17, BSD License
+   * @author BaseX Team 2005-20, BSD License
    * @author Lukas Kircher
    */
   private static class MyKeySelectorResult implements KeySelectorResult {
@@ -47,8 +47,7 @@ final class MyKeySelector extends KeySelector {
     if(ki == null) throw new KeySelectorException("KeyInfo is null");
 
     final SignatureMethod sm = (SignatureMethod) m;
-    @SuppressWarnings("unchecked")
-    final List<Object> list = ki.getContent();
+    final List<?> list = ki.getContent();
 
     for(final Object l : list) {
       final XMLStructure s = (XMLStructure) l;

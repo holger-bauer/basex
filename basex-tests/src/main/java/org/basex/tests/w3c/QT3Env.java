@@ -10,13 +10,12 @@ import org.basex.core.*;
 import org.basex.query.value.item.*;
 import org.basex.tests.bxapi.*;
 import org.basex.tests.bxapi.xdm.*;
-import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Driver environment for the {@link QT3TS} test suite driver.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class QT3Env {
@@ -79,16 +78,16 @@ final class QT3Env {
       collSources.add(iatt.getString());
 
     decFormats = new HashMap<>();
-    for(final XdmItem it : new XQuery("*:decimal-format", ctx).context(env)) {
-      final XdmValue it1 = new XQuery(
+    for(final XdmItem item : new XQuery("*:decimal-format", ctx).context(env)) {
+      final XdmValue value = new XQuery(
         "for $n in @name " +
         "let $b := substring-before($n, ':') " +
         "return QName(if($b) then namespace-uri-for-prefix($b, .) else '', $n)",
-        ctx).context(it).value();
+        ctx).context(item).value();
       final HashMap<String, String> hm = new HashMap<>();
-      final QNm qnm = it1.size() != 0 ? (QNm) it1.internal() : new QNm(Token.EMPTY);
+      final QNm qnm = value.size() != 0 ? (QNm) value.internal() : QNm.EMPTY;
       decFormats.put(qnm.toJava(), hm);
-      for(final XdmItem it2 : new XQuery("@*[name() != 'name']", ctx).context(it)) {
+      for(final XdmItem it2 : new XQuery("@*[name() != 'name']", ctx).context(item)) {
         hm.put(it2.getName().getLocalPart(), it2.getString());
       }
     }
@@ -108,8 +107,8 @@ final class QT3Env {
       final String elem) {
 
     final ArrayList<HashMap<String, String>> list = new ArrayList<>();
-    for(final XdmItem it : new XQuery("*:" + elem, ctx).context(env)) {
-      list.add(map(ctx, it));
+    for(final XdmItem item : new XQuery("*:" + elem, ctx).context(env)) {
+      list.add(map(ctx, item));
     }
     return list;
   }
@@ -122,8 +121,8 @@ final class QT3Env {
    */
   static HashMap<String, String> map(final Context ctx, final XdmValue env) {
     final HashMap<String, String> map = new HashMap<>();
-    for(final XdmItem it : new XQuery("@*", ctx).context(env))
-      map.put(it.getName().getLocalPart(), it.getString());
+    for(final XdmItem item : new XQuery("@*", ctx).context(env))
+      map.put(item.getName().getLocalPart(), item.getString());
     return map;
   }
 
@@ -135,8 +134,8 @@ final class QT3Env {
    * @return map
    */
   static String string(final String elm, final Context ctx, final XdmValue env) {
-    final XdmItem it = new XQuery("*:" + elm, ctx).context(env).next();
-    return it == null ? null :
-      new XQuery("string(@*)", ctx).context(it).next().getString();
+    final XdmItem item = new XQuery("*:" + elm, ctx).context(env).next();
+    return item == null ? null :
+      new XQuery("string(@*)", ctx).context(item).next().getString();
   }
 }

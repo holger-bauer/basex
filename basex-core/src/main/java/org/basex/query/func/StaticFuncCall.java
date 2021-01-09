@@ -9,7 +9,6 @@ import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -17,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * Function call for user-defined functions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class StaticFuncCall extends FuncCall {
@@ -30,10 +29,10 @@ public final class StaticFuncCall extends FuncCall {
 
   /**
    * Function call constructor.
-   * @param info input info
    * @param name function name
    * @param args arguments
    * @param sc static context
+   * @param info input info
    */
   public StaticFuncCall(final QNm name, final Expr[] args, final StaticContext sc,
       final InputInfo info) {
@@ -42,11 +41,11 @@ public final class StaticFuncCall extends FuncCall {
 
   /**
    * Copy constructor.
-   * @param info input info
    * @param name function name
    * @param args arguments
    * @param sc static context
-   * @param func referenced function
+   * @param func referenced function (can be {@code null})
+   * @param info input info
    */
   private StaticFuncCall(final QNm name, final Expr[] args, final StaticContext sc,
       final StaticFunc func, final InputInfo info) {
@@ -59,19 +58,16 @@ public final class StaticFuncCall extends FuncCall {
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
     super.compile(cc);
-
-    // disallow call of private functions from module with different uri
-    if(func.anns.contains(Annotation.PRIVATE) && !func.sc.baseURI().eq(sc.baseURI()))
-      throw FUNCPRIVATE_X.get(info, name.string());
+    checkVisible();
 
     // compile mutually recursive functions
     func.comp(cc);
 
     // try to inline the function
-    final Expr inl = func.inlineExpr(exprs, cc, info);
-    if(inl != null) return inl;
+    final Expr inlined = func.inline(exprs, cc);
+    if(inlined != null) return inlined;
 
-    seqType = func.seqType();
+    exprType.assign(func.seqType());
     return this;
   }
 
@@ -83,11 +79,7 @@ public final class StaticFuncCall extends FuncCall {
 
   @Override
   public StaticFuncCall copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final Expr[] args = Arr.copyAll(cc, vm, exprs);
-    final StaticFuncCall call = new StaticFuncCall(name, args, sc, func, info);
-    call.seqType = seqType;
-    call.size = size;
-    return call;
+    return copyType(new StaticFuncCall(name, Arr.copyAll(cc, vm, exprs), sc, func, info));
   }
 
   /**
@@ -98,47 +90,44 @@ public final class StaticFuncCall extends FuncCall {
    */
   public StaticFuncCall init(final StaticFunc sf) throws QueryException {
     func = sf;
-    if(sf.anns.contains(Annotation.PRIVATE) && !sc.baseURI().eq(sf.sc.baseURI()))
-      throw FUNCPRIVATE_X.get(info, sf.name.string());
+    checkVisible();
     return this;
   }
 
   /**
-   * Returns the called function if already known, {@code null} otherwise.
-   * @return the function
+   * Checks if the called function is visible
+   * (i.e., has no private annotation or is in the same namespace).
+   * @throws QueryException query exception
+   */
+  private void checkVisible() throws QueryException {
+    if(func.anns.contains(Annotation.PRIVATE) && !func.sc.baseURI().eq(sc.baseURI()))
+      throw FUNCPRIVATE_X.get(info, name.string());
+  }
+
+  /**
+   * Returns the called function if already known.
+   * @return the function or {@code null}
    */
   public StaticFunc func() {
     return func;
   }
 
   @Override
-  public boolean isVacuous() {
-    return func.isVacuous();
+  public boolean vacuous() {
+    return func.vacuousBody();
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    // check arguments, which will be evaluated before running the function code
-    if(super.has(flag)) return true;
+  public boolean has(final Flag... flags) {
+    // check arguments, which will be evaluated previous to the function body
+    if(super.has(flags)) return true;
     // function code: position or context references of expression body have no effect
-    if(flag == Flag.POS || flag == Flag.CTX) return false;
-    // pass on check to function code
-    return flag != Flag.UPD ? func.has(flag) : func.updating();
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(NAM, name.string(), TCL, tailCall), exprs);
-  }
-
-  @Override
-  public String description() {
-    return FUNC;
-  }
-
-  @Override
-  public String toString() {
-    return new TokenBuilder(name.prefixId()).add(toString(SEP)).toString();
+    if(Flag.POS.in(flags) || Flag.CTX.in(flags)) return false;
+    // function code: check for updates
+    if(Flag.UPD.in(flags) && func.updating()) return true;
+    // check remaining flags
+    final Flag[] flgs = Flag.UPD.remove(flags);
+    return flgs.length != 0 && func.has(flgs);
   }
 
   @Override
@@ -155,7 +144,30 @@ public final class StaticFuncCall extends FuncCall {
   Value[] evalArgs(final QueryContext qc) throws QueryException {
     final int al = exprs.length;
     final Value[] args = new Value[al];
-    for(int a = 0; a < al; ++a) args[a] = qc.value(exprs[a]);
+    for(int a = 0; a < al; ++a) args[a] = exprs[a].value(qc);
     return args;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof StaticFuncCall)) return false;
+    final StaticFuncCall s = (StaticFuncCall) obj;
+    return name.eq(s.name) && func == s.func && super.equals(obj);
+  }
+
+  @Override
+  public String description() {
+    return "function";
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, NAME, name.string(), TAILCALL, tco), exprs);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(name.prefixId()).params(exprs);
   }
 }

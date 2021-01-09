@@ -17,7 +17,7 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ArchiveCreateFrom extends ArchiveCreate {
@@ -26,36 +26,45 @@ public class ArchiveCreateFrom extends ArchiveCreate {
     checkCreate(qc);
 
     final IOFile root = new IOFile(toPath(0, qc).toString());
-    final ArchOptions opts = toOptions(1, new ArchOptions(), qc);
+    final CreateFromOptions opts = toOptions(1, new CreateFromOptions(), qc);
+    final boolean recursive = opts.get(CreateFromOptions.RECURSIVE);
+    final boolean rootDir = opts.get(CreateFromOptions.ROOT_DIR);
+    if(!root.isDir()) throw FILE_NO_DIR_X.get(info, root);
+
     final Iter entries;
     if(exprs.length > 2) {
-      entries = qc.iter(exprs[2]);
+      entries = exprs[2].iter(qc);
     } else {
       final TokenList tl = new TokenList();
-      for(final String file : root.descendants()) tl.add(file);
+      if(recursive) {
+        for(final String file : root.descendants()) tl.add(file);
+      } else {
+        for(final IOFile file : root.children()) {
+          if(!file.isDir()) tl.add(file.name());
+        }
+      }
       entries = StrSeq.get(tl).iter();
     }
 
-    final String format = opts.get(ArchOptions.FORMAT);
     final int level = level(opts);
-    if(!root.isDir()) throw FILE_NO_DIR_X.get(info, root);
+    final String format = opts.get(CreateOptions.FORMAT);
+    final String dir = rootDir && root.parent() != null ? root.name() + '/' : "";
 
     try(ArchiveOut out = ArchiveOut.get(format.toLowerCase(Locale.ENGLISH), info)) {
       out.level(level);
       try {
         while(true) {
-          Item en = entries.next();
+          final Item en = qc.next(entries);
           if(en == null) break;
-          en = checkElemToken(en);
-          final IOFile file = new IOFile(root, string(en.string(info)));
+          final IOFile file = new IOFile(root, string(checkElemToken(en).string(info)));
           if(!file.exists()) throw FILE_NOT_FOUND_X.get(info, file);
           if(file.isDir()) throw FILE_IS_DIR_X.get(info, file);
-          add(en, new B64(file.read()), out, level, qc);
+          add(new Item[] { en, B64.get(file.read()) }, out, level, dir, qc);
         }
       } catch(final IOException ex) {
-        throw ARCH_FAIL_X.get(info, ex);
+        throw ARCHIVE_ERROR_X.get(info, ex);
       }
-      return new B64(out.finish());
+      return B64.get(out.finish());
     }
   }
 }

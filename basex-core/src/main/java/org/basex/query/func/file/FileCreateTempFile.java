@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class FileCreateTempFile extends FileFn {
@@ -41,7 +41,7 @@ public class FileCreateTempFile extends FileFn {
       root = toPath(2, qc);
       if(Files.isRegularFile(root)) throw FILE_NO_DIR_X.get(info, root);
     } else {
-      root = Paths.get(Prop.TMP);
+      root = Paths.get(Prop.TEMPDIR);
     }
 
     // choose non-existing file path

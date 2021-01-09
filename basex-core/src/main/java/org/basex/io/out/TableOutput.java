@@ -8,7 +8,7 @@ import org.basex.io.*;
 /**
  * This class allows a blockwise output of the database table.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Tim Petrowsky
  */
@@ -23,7 +23,7 @@ public final class TableOutput extends OutputStream {
   /** Current filename. */
   private final String file;
 
-  /** Position inside buffer. */
+  /** Current buffer position. */
   private int pos;
   /** Number of pages. */
   private int pages;
@@ -36,20 +36,22 @@ public final class TableOutput extends OutputStream {
    * @throws IOException I/O exception
    */
   public TableOutput(final MetaData md, final String fn) throws IOException {
-    os = new FileOutputStream(md.dbfile(fn).file());
+    os = md.dbFile(fn).outputStream();
     meta = md;
     file = fn;
   }
 
   @Override
   public void write(final int b) throws IOException {
-    if(pos == IO.BLOCKSIZE) flush();
+    if(pos == IO.BLOCKSIZE) writeBuffer();
     buffer[pos++] = (byte) b;
   }
 
-  @Override
-  public void flush() throws IOException {
-    if(pos == 0) return;
+  /**
+   * Writes a page to disk.
+   * @throws IOException I/O exception
+   */
+  private void writeBuffer() throws IOException {
     os.write(buffer);
     pages++;
     pos = 0;
@@ -57,16 +59,16 @@ public final class TableOutput extends OutputStream {
 
   @Override
   public void close() throws IOException {
-    // store at least one page on disk
+    // write last entries, or single empty page, to disk
     final boolean empty = pages == 0 && pos == 0;
-    if(empty) pos++;
-    flush();
+    if(pos > 0 || empty) writeBuffer();
     os.close();
 
     // create table info file
-    try(DataOutput out = new DataOutput(meta.dbfile(file + 'i'))) {
+    try(DataOutput out = new DataOutput(meta.dbFile(file + 'i'))) {
+      // total number of pages
       out.writeNum(pages);
-      // max value indicates that regular page table is not stored on disk
+      // number of used pages (0: empty table; MAX: no mapping)
       out.writeNum(empty ? 0 : Integer.MAX_VALUE);
     }
   }

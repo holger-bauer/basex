@@ -1,11 +1,12 @@
 package org.basex.io.in;
 
+import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Representation of a single TAR entry.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class TarEntry {
@@ -75,7 +76,7 @@ public final class TarEntry {
    * @return result of check
    */
   public boolean isDirectory() {
-    return type == '5' || name.endsWith("/");
+    return type == '5' || Strings.endsWith(name, '/');
   }
 
   /**
@@ -96,7 +97,13 @@ public final class TarEntry {
       return new String(result.toArray());
     } catch(final Exception ex) {
       // fallback: UTF8
+      Util.debug(ex);
       return result.toString();
     }
+  }
+
+  @Override
+  public String toString() {
+    return Util.className(this) + '[' + name + ", " + size + " bytes]";
   }
 }

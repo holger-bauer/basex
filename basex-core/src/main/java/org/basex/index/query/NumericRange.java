@@ -6,10 +6,10 @@ import org.basex.util.*;
 /**
  * This class stores a numeric range for index access.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class NumericRange implements IndexToken {
+public final class NumericRange implements IndexSearch {
   /** Index type. */
   private final IndexType type;
   /** Minimum value. */
@@ -35,7 +35,7 @@ public final class NumericRange implements IndexToken {
   }
 
   @Override
-  public byte[] get() {
+  public byte[] token() {
     return Token.EMPTY;
   }
 }

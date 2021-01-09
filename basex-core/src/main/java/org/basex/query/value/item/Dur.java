@@ -2,6 +2,7 @@ package org.basex.query.value.item;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
+import static org.basex.query.value.item.Dec.*;
 
 import java.math.*;
 import java.util.regex.*;
@@ -16,7 +17,7 @@ import org.basex.util.*;
 /**
  * Duration item ({@code xs:duration}).
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class Dur extends ADateDur {
@@ -42,7 +43,7 @@ public class Dur extends ADateDur {
    * @throws QueryException query exception
    */
   public Dur(final byte[] value, final InputInfo ii) throws QueryException {
-    this(value, AtomType.DUR, ii);
+    this(value, AtomType.DURATION, ii);
   }
 
   /**
@@ -58,7 +59,7 @@ public class Dur extends ADateDur {
    * @param dur duration
    */
   public Dur(final Dur dur) {
-    this(dur, AtomType.DUR);
+    this(dur, AtomType.DURATION);
   }
 
   /**
@@ -83,7 +84,8 @@ public class Dur extends ADateDur {
     this(type);
     final String val = Token.string(value).trim();
     final Matcher mt = DUR.matcher(val);
-    if(!mt.matches() || val.endsWith("P") || val.endsWith("T")) throw dateError(value, XDURR, ii);
+    if(!mt.matches() || Strings.endsWith(val, 'P') || Strings.endsWith(val, 'T'))
+      throw dateError(value, XDURR, ii);
     yearMonth(value, mt, ii);
     dayTime(value, mt, 6, ii);
   }
@@ -109,26 +111,26 @@ public class Dur extends ADateDur {
 
   /**
    * Initializes the dayTime component.
-   * @param vl value
-   * @param mt matcher
-   * @param p first matching position
+   * @param value value
+   * @param match matcher
+   * @param pos first matching position
    * @param ii input info
    * @throws QueryException query exception
    */
-  void dayTime(final byte[] vl, final Matcher mt, final int p, final InputInfo ii)
+  void dayTime(final byte[] value, final Matcher match, final int pos, final InputInfo ii)
       throws QueryException {
 
-    final long d = mt.group(p) != null ? toLong(mt.group(p + 1), true, ii) : 0;
-    final long h = mt.group(p + 3) != null ? toLong(mt.group(p + 4), true, ii) : 0;
-    final long m = mt.group(p + 5) != null ? toLong(mt.group(p + 6), true, ii) : 0;
-    final BigDecimal s = mt.group(p + 7) != null ? toDecimal(mt.group(p + 8), true, ii) :
-      BigDecimal.ZERO;
-    sec = s.add(BigDecimal.valueOf(d).multiply(DAYSECONDS)).
-        add(BigDecimal.valueOf(h).multiply(BD3600)).
-        add(BigDecimal.valueOf(m).multiply(BD60));
-    if(!mt.group(1).isEmpty()) sec = sec.negate();
+    final long d = match.group(pos) != null ? toLong(match.group(pos + 1), true, ii) : 0;
+    final long h = match.group(pos + 3) != null ? toLong(match.group(pos + 4), true, ii) : 0;
+    final long m = match.group(pos + 5) != null ? toLong(match.group(pos + 6), true, ii) : 0;
+    final BigDecimal s = match.group(pos + 7) != null ?
+      toDecimal(match.group(pos + 8), true, ii) : BigDecimal.ZERO;
+    sec = s.add(BigDecimal.valueOf(d).multiply(BD_864000)).
+        add(BigDecimal.valueOf(h).multiply(BD_3600)).
+        add(BigDecimal.valueOf(m).multiply(BD_60));
+    if(!match.group(1).isEmpty()) sec = sec.negate();
     final double v = sec.doubleValue();
-    if(v <= Long.MIN_VALUE || v >= Long.MAX_VALUE) throw DURRANGE_X_X.get(ii, type, vl);
+    if(v <= Long.MIN_VALUE || v >= Long.MAX_VALUE) throw DURRANGE_X_X.get(ii, type, value);
   }
 
   @Override
@@ -143,7 +145,7 @@ public class Dur extends ADateDur {
 
   @Override
   public final long day() {
-    return sec.divideToIntegralValue(DAYSECONDS).longValue();
+    return sec.divideToIntegralValue(BD_864000).longValue();
   }
 
   @Override
@@ -158,7 +160,7 @@ public class Dur extends ADateDur {
 
   @Override
   public final BigDecimal sec() {
-    return sec.remainder(BD60);
+    return sec.remainder(BD_60);
   }
 
   /**
@@ -166,7 +168,7 @@ public class Dur extends ADateDur {
    * @return time
    */
   private long tim() {
-    return sec.remainder(DAYSECONDS).longValue();
+    return sec.remainder(BD_864000).longValue();
   }
 
   @Override
@@ -199,7 +201,7 @@ public class Dur extends ADateDur {
    * @param tb token builder
    */
   final void time(final TokenBuilder tb) {
-    if(sec.remainder(DAYSECONDS).signum() == 0) return;
+    if(sec.remainder(BD_864000).signum() == 0) return;
     tb.add('T');
     final long h = hour();
     if(h != 0) { tb.addLong(Math.abs(h)); tb.add('H'); }
@@ -211,17 +213,17 @@ public class Dur extends ADateDur {
   }
 
   @Override
-  public final boolean eq(final Item it, final Collation coll, final StaticContext sc,
+  public final boolean eq(final Item item, final Collation coll, final StaticContext sc,
       final InputInfo ii) throws QueryException {
-    final Dur d = (Dur) (it instanceof Dur ? it : type.cast(it, null, null, ii));
-    final BigDecimal s1 = sec == null ? BigDecimal.ZERO : sec;
-    final BigDecimal s2 = d.sec == null ? BigDecimal.ZERO : d.sec;
-    return mon == d.mon && s1.compareTo(s2) == 0;
+    final Dur dur = (Dur) (item instanceof Dur ? item : type.cast(item, null, null, ii));
+    final BigDecimal dec1 = sec == null ? BigDecimal.ZERO : sec;
+    final BigDecimal dec2 = dur.sec == null ? BigDecimal.ZERO : dur.sec;
+    return mon == dur.mon && dec1.compareTo(dec2) == 0;
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    throw diffError(it, this, ii);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    throw diffError(item, this, ii);
   }
 
   @Override
@@ -235,7 +237,16 @@ public class Dur extends ADateDur {
   }
 
   @Override
-  public final String toString() {
-    return Util.info("\"%\"", string(null));
+  public final boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Dur)) return false;
+    final Dur dur = (Dur) obj;
+    return type.eq(dur.type) && mon == dur.mon &&
+        (sec == null ? dur.sec == null : sec.compareTo(dur.sec) == 0);
+  }
+
+  @Override
+  public final void plan(final QueryString qs) {
+    qs.quoted(string(null));
   }
 }

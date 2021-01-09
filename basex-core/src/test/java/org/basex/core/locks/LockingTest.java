@@ -1,24 +1,20 @@
 package org.basex.core.locks;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 import java.util.concurrent.*;
 
 import org.basex.*;
 import org.basex.core.*;
-import org.junit.*;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
+import org.junit.jupiter.api.*;
 
 /**
  * Locking tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Jens Erat
  */
-@RunWith(Parameterized.class)
 public final class LockingTest extends SandboxTest {
   /** How often should tests be repeated? */
   private static final int REPEAT = 1;
@@ -31,19 +27,6 @@ public final class LockingTest extends SandboxTest {
   /** How long each lock should be hold before releasing it and fetching the next. */
   private static final int HOLD_TIME = 10;
 
-  /**
-   * Enable repeated running of test to track down synchronization issues.
-   * @return Collection of empty object arrays
-   */
-  @Parameters
-  public static Collection<Object[]> generateParams() {
-    final List<Object[]> params = new ArrayList<>();
-    for(int i = 1; i <= REPEAT; i++) {
-      params.add(new Object[0]);
-    }
-    return params;
-  }
-
   /** Locking instance used for testing. */
   private final Locking locking = new Locking(context.soptions);
   /** Objects used for locking. */
@@ -55,14 +38,14 @@ public final class LockingTest extends SandboxTest {
    * Single thread acquires both global read lock and a single write lock.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void singleThreadGlobalReadLocalWriteTest() throws InterruptedException {
     final CountDownLatch test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, null, objects, test);
 
     th1.start();
-    assertTrue("Thread should be able to acquire lock.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread should be able to acquire lock.");
     th1.release();
   }
 
@@ -70,7 +53,7 @@ public final class LockingTest extends SandboxTest {
    * Test for concurrent writes.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void writeWriteTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, NONE, objects, sync);
@@ -78,11 +61,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -90,7 +73,7 @@ public final class LockingTest extends SandboxTest {
    * Fetch write lock, then read lock.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void writeReadTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, NONE, objects, sync);
@@ -98,11 +81,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -110,7 +93,7 @@ public final class LockingTest extends SandboxTest {
    * Fetch read lock, then write lock.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void readWriteTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, objects, NONE, sync);
@@ -118,11 +101,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -130,7 +113,7 @@ public final class LockingTest extends SandboxTest {
    * Fetch two read locks.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void readReadTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, objects, NONE, sync);
@@ -138,8 +121,8 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertTrue("Thread 2 should be able to acquire lock.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock.");
     th1.release();
     th2.release();
   }
@@ -148,7 +131,7 @@ public final class LockingTest extends SandboxTest {
    * Test parallel transaction limit.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void parallelTransactionLimitTest() throws InterruptedException {
     final CountDownLatch latch =
         new CountDownLatch(Math.max(context.soptions.get(StaticOptions.PARALLEL), 1));
@@ -161,20 +144,20 @@ public final class LockingTest extends SandboxTest {
       testers[t] = new LockTester(null, objects, NONE, latch);
       testers[t].start();
     }
-    assertTrue("Couldn't start maximum allowed number of parallel transactions!",
-        latch.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(latch.await(WAIT, TimeUnit.MILLISECONDS),
+      "Couldn't start maximum allowed number of parallel transactions!");
 
     // Start one more transaction
     final CountDownLatch latch2 = new CountDownLatch(1);
     testers[tl - 1] = new LockTester(null, objects, NONE, latch2);
     testers[tl - 1].start();
-    assertFalse("Shouldn't be able to start another parallel transaction yet!",
-        latch2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(latch2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Shouldn't be able to start another parallel transaction yet!");
 
     // Stop first transaction
     testers[0].release();
-    assertTrue("New transaction should have started!",
-        latch2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(latch2.await(WAIT, TimeUnit.MILLISECONDS),
+      "New transaction should have started!");
 
     // Stop all other transactions
     for(int t = 1; t < tl; t++) testers[t].release();
@@ -184,7 +167,7 @@ public final class LockingTest extends SandboxTest {
    * Global locking test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void globalWriteLocalWriteLockingTest() throws InterruptedException {
     final CountDownLatch sync1 = new CountDownLatch(1), sync2 = new CountDownLatch(1),
         test = new CountDownLatch(1);
@@ -194,17 +177,17 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th3.start();
-    assertFalse("Thread 3 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 shouldn't be able to acquire lock yet.");
     th2.release();
-    assertTrue("Thread 3 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 should be able to acquire lock now.");
     th3.release();
   }
 
@@ -212,7 +195,7 @@ public final class LockingTest extends SandboxTest {
    * Global locking test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void globalWriteLocalReadLockingTest() throws InterruptedException {
     final CountDownLatch sync1 = new CountDownLatch(1), sync2 = new CountDownLatch(1),
         test = new CountDownLatch(1);
@@ -222,17 +205,17 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th3.start();
-    assertFalse("Thread 3 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 shouldn't be able to acquire lock yet.");
     th2.release();
-    assertTrue("Thread 3 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 should be able to acquire lock now.");
     th3.release();
   }
 
@@ -240,7 +223,7 @@ public final class LockingTest extends SandboxTest {
    * Global locking test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void globalReadLocalWriteLockingTest() throws InterruptedException {
     final CountDownLatch sync1 = new CountDownLatch(1), sync2 = new CountDownLatch(1),
         test = new CountDownLatch(1);
@@ -250,17 +233,17 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th3.start();
-    assertFalse("Thread 3 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 shouldn't be able to acquire lock yet.");
     th2.release();
-    assertTrue("Thread 3 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 should be able to acquire lock now.");
     th3.release();
   }
 
@@ -268,7 +251,7 @@ public final class LockingTest extends SandboxTest {
    * Global locking test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void globalReadLocalReadLockingTest() throws InterruptedException {
     final CountDownLatch sync1 = new CountDownLatch(1), sync2 = new CountDownLatch(1),
         test = new CountDownLatch(1);
@@ -278,11 +261,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertTrue("Thread 2 should be able to acquire lock.",
-        sync2.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(sync2.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock.");
     th3.start();
-    assertTrue("Thread 3 should be able to acquire lock.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 3 should be able to acquire lock.");
     th1.release();
     th2.release();
     th3.release();
@@ -292,7 +275,7 @@ public final class LockingTest extends SandboxTest {
    * Simultaneous read/write lock test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void simultaneousReadWriteTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, objects, objects, sync);
@@ -302,11 +285,11 @@ public final class LockingTest extends SandboxTest {
     th1.start();
     th2.start();
     th3.start();
-    assertFalse("Threads 2 & 3 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Threads 2 & 3 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Threads 2 & 3 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Threads 2 & 3 should be able to acquire lock now.");
     th2.release();
     th3.release();
   }
@@ -315,7 +298,7 @@ public final class LockingTest extends SandboxTest {
    * Another simultaneous read/write lock test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void simultaneousReadWriteTestSingleReadFirst() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, objects, NONE, sync);
@@ -323,11 +306,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -335,7 +318,7 @@ public final class LockingTest extends SandboxTest {
    * Another simultaneous read/write lock test.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void simultaneousReadWriteTestSingleWriteFirst() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
     final LockTester th1 = new LockTester(null, NONE, objects, sync);
@@ -343,11 +326,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -355,11 +338,11 @@ public final class LockingTest extends SandboxTest {
    * Locks downgrading, the other thread is reader.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void downgradeOtherReadTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
 
-    assertTrue("Increase {@code objects.length}!", objects.length > 1);
+    assertTrue(objects.length > 1, "Increase {@code objects.length}!");
     final String[] release = Arrays.copyOf(objects, 1);
 
     final LockTester th1 = new LockTester(null, NONE, objects, sync);
@@ -367,8 +350,8 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
     th2.release();
   }
@@ -377,11 +360,11 @@ public final class LockingTest extends SandboxTest {
    * Locks downgrading, the other thread is writer.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void downgradeOtherWriteTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
 
-    assertTrue("Increase {@code objects.length}!", objects.length > 1);
+    assertTrue(objects.length > 1, "Increase {@code objects.length}!");
     final String[] release = Arrays.copyOf(objects, 1);
 
     final LockTester th1 = new LockTester(null, NONE, objects, sync);
@@ -389,11 +372,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -401,7 +384,7 @@ public final class LockingTest extends SandboxTest {
    * Downgrades from global write lock, other fetches local writes locks.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void downgradeGlobalWriteLockTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
 
@@ -410,11 +393,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -422,7 +405,7 @@ public final class LockingTest extends SandboxTest {
    * Downgrades from global write lock, other fetches local writes locks.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void downgradeToNoWriteLocksTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
 
@@ -431,8 +414,8 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
     th2.release();
   }
@@ -441,11 +424,11 @@ public final class LockingTest extends SandboxTest {
    * Locks downgrading holding read locks.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void downgradeHoldingReadLocksTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test = new CountDownLatch(1);
 
-    assertTrue("Increase {@code objects.length}!", objects.length > 1);
+    assertTrue(objects.length > 1, "Increase {@code objects.length}!");
     final String[] release = Arrays.copyOf(objects, 1);
     final String[] keep = Arrays.copyOfRange(objects, 1, objects.length);
 
@@ -454,11 +437,11 @@ public final class LockingTest extends SandboxTest {
 
     th1.start();
     th2.start();
-    assertFalse("Thread 2 shouldn't be able to acquire lock yet.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertFalse(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 shouldn't be able to acquire lock yet.");
     th1.release();
-    assertTrue("Thread 2 should be able to acquire lock now.",
-        test.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test.await(WAIT, TimeUnit.MILLISECONDS),
+      "Thread 2 should be able to acquire lock now.");
     th2.release();
   }
 
@@ -466,7 +449,7 @@ public final class LockingTest extends SandboxTest {
    * Forces a deadlock.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void deadlockTest() throws InterruptedException {
     final CountDownLatch sync = new CountDownLatch(1), test2 = new CountDownLatch(1),
         test3 = new CountDownLatch(1);
@@ -483,19 +466,17 @@ public final class LockingTest extends SandboxTest {
     th2.start();
     th3.start();
     th1.release();
-    assertTrue(
-        "One of the threads should be able to aquire its locks now.",
-        test2.await(WAIT, TimeUnit.MILLISECONDS)
-            || test3.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test2.await(WAIT, TimeUnit.MILLISECONDS)
+        || test3.await(WAIT, TimeUnit.MILLISECONDS),
+      "One of the threads should be able to acquire its locks now.");
     boolean which = false;
     if(test2.getCount() == 0) {
       th2.release();
       which = true;
     } else th3.release();
-    assertTrue(
-        "The other thread should be able to acquire its locks now.",
-        test2.await(WAIT, TimeUnit.MILLISECONDS)
-            && test3.await(WAIT, TimeUnit.MILLISECONDS));
+    assertTrue(test2.await(WAIT, TimeUnit.MILLISECONDS)
+        && test3.await(WAIT, TimeUnit.MILLISECONDS),
+      "The other thread should be able to acquire its locks now.");
     if(which) th3.release();
     else th2.release();
   }
@@ -505,9 +486,9 @@ public final class LockingTest extends SandboxTest {
    * random locks, hold them for a while, release them and fetch the next one.
    * @throws InterruptedException Got interrupted.
    */
-  @Test
+  @RepeatedTest(REPEAT)
   public void fuzzingTest() throws InterruptedException {
-    assertTrue("Increase {@code objects.length}!", objects.length > 1);
+    assertTrue(objects.length > 1, "Increase {@code objects.length}!");
 
     final Thread[] threads = new Thread[FUZZING_THREADS];
     final CountDownLatch allDone = new CountDownLatch(FUZZING_THREADS * FUZZING_REPEATS);
@@ -543,9 +524,9 @@ public final class LockingTest extends SandboxTest {
       };
       threads[i].start();
     }
-    assertTrue("Looks like thread is stuck in a deadlock.",
-        allDone.await(FUZZING_THREADS * FUZZING_REPEATS * HOLD_TIME,
-            TimeUnit.MILLISECONDS));
+    assertTrue(
+      allDone.await(FUZZING_THREADS * FUZZING_REPEATS * HOLD_TIME, TimeUnit.MILLISECONDS),
+      "Looks like thread is stuck in a deadlock.");
   }
 
   /**

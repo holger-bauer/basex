@@ -6,7 +6,7 @@ import org.basex.query.util.ft.*;
 /**
  * View rectangle.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class MapRect extends ViewRect implements Comparable<MapRect> {
@@ -71,8 +71,8 @@ final class MapRect extends ViewRect implements Comparable<MapRect> {
   }
 
   @Override
-  public boolean equals(final Object o) {
-    return o instanceof MapRect && ((ViewRect) o).pre == pre;
+  public boolean equals(final Object obj) {
+    return obj instanceof MapRect && ((ViewRect) obj).pre == pre;
   }
 
   @Override

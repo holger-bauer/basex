@@ -2,13 +2,14 @@ package org.basex.query.ann;
 
 import static org.basex.query.QueryText.*;
 
+import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
 
 /**
  * Annotation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Ann {
@@ -48,26 +49,11 @@ public final class Ann {
   }
 
   /**
-   * Compares two annotations.
-   * @param ann annotation to be compared
-   * @return result of check
-   */
-  public boolean eq(final Ann ann) {
-    final long as = args.length;
-    if(sig != null ? (sig != ann.sig) : (ann.name == null || !name.eq(ann.name))) return false;
-    if(as != ann.args.length) return false;
-    for(int a = 0; a < as; a++) {
-      if(!args[a].sameAs(ann.args[a])) return false;
-    }
-    return true;
-  }
-
-  /**
    * Returns the name of the annotation.
    * @return name
    */
   public QNm name() {
-    return name != null ? name : sig.qname();
+    return sig != null ? sig.qname() : name;
   }
 
   /**
@@ -79,10 +65,20 @@ public final class Ann {
   }
 
   @Override
-  public String toString() {
-    final TokenBuilder tb = new TokenBuilder().add('%');
-    tb.add(sig != null ? sig.id() : name.prefixId(XQ_URI));
-    if(args.length != 0) tb.add('(').addSep(args, SEP).add(')');
-    return tb.add(' ').toString();
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Ann)) return false;
+    final Ann ann = (Ann) obj;
+    return (name != null ? ann.name != null && name.eq(ann.name) : sig == ann.sig) &&
+        Array.equals(args, ann.args);
+  }
+
+  /**
+   * Adds the annotation to a query string.
+   * @param qs query string builder
+   */
+  public void plan(final QueryString qs) {
+    qs.concat("%", sig != null ? sig.id() : name.prefixId(XQ_URI));
+    if(args.length != 0) qs.params(args);
   }
 }

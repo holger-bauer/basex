@@ -6,17 +6,17 @@ import org.basex.util.*;
 /**
  * Single leaf node.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class ProjectFile extends ProjectNode {
   /**
    * Constructor.
-   * @param io file
-   * @param proj project view
+   * @param file file ({@code null} for dummy)
+   * @param view project view
    */
-  ProjectFile(final IOFile io, final ProjectView proj) {
-    super(io, proj);
+  ProjectFile(final IOFile file, final ProjectView view) {
+    super(file, view);
   }
 
   @Override
@@ -24,6 +24,11 @@ final class ProjectFile extends ProjectNode {
 
   @Override
   void collapse() { }
+
+  @Override
+  void refresh() {
+    view.refreshHighlight(this);
+  }
 
   @Override
   public String toString() {
@@ -40,7 +45,7 @@ final class ProjectFile extends ProjectNode {
     final StringBuilder sb = new StringBuilder();
     if(file != null) {
       sb.append(full ? file.path() : file.name());
-      if(file.exists()) sb.append(" (").append(Performance.format(file.length(), true)).append(')');
+      if(file.exists()) sb.append(" (").append(Performance.format(file.length())).append(')');
     }
     return sb.toString();
   }

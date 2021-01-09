@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class WebEncodeUrl extends WebFn {
@@ -19,8 +19,8 @@ public final class WebEncodeUrl extends WebFn {
     try {
       return Str.get(URLEncoder.encode(Token.string(toToken(exprs[0], qc)), Strings.UTF8));
     } catch(final UnsupportedEncodingException ex) {
-      /* UTF8 is always supported */
-      throw Util.notExpected();
+      // no error should be raised (UTF8 is always supported)
+      throw Util.notExpected(ex);
     }
   }
 }

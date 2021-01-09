@@ -1,41 +1,35 @@
 package org.basex.query.func.fn;
 
-import org.basex.core.locks.*;
 import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
-import org.basex.query.util.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class FnDocumentUri extends StandardFunc {
+public final class FnDocumentUri extends ContextFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toEmptyNode(ctxArg(0, qc), qc);
-    if(node == null || node.type != NodeType.DOC) return null;
+    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    if(node == null || node.type != NodeType.DOCUMENT_NODE) return Empty.VALUE;
     // return empty sequence for documents constructed via parse-xml
     final Data data = node.data();
-    if(data != null && data.meta.name.isEmpty()) return null;
+    if(data != null && data.meta.name.isEmpty()) return Empty.VALUE;
 
     final byte[] uri = node.baseURI();
-    return uri.length == 0 ? null : Uri.uri(uri, false);
+    return uri.length == 0 ? Empty.VALUE : Uri.uri(uri, false);
   }
 
   @Override
-  public boolean has(final Flag flag) {
-    return exprs.length == 0 && flag == Flag.CTX || super.has(flag);
-  }
-
-  @Override
-  public boolean accept(final ASTVisitor visitor) {
-    return (exprs.length != 0 || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
+  protected Expr opt(final CompileContext cc) {
+    return optFirst(false, false, cc.qc.focus.value);
   }
 }

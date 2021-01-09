@@ -1,6 +1,5 @@
 package org.basex.gui.view.map;
 
-import static org.basex.core.Text.*;
 import static org.basex.gui.GUIConstants.*;
 import static org.basex.gui.layout.BaseXKeys.*;
 
@@ -22,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * This view is a TreeMap implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Joerg Hauser
  * @author Bastian Lemke
@@ -77,10 +76,10 @@ public final class MapView extends View {
 
   /**
    * Default constructor.
-   * @param man view manager
+   * @param notifier view notifier
    */
-  public MapView(final ViewNotifier man) {
-    super(MAPVIEW, man);
+  public MapView(final ViewNotifier notifier) {
+    super(MAPVIEW, notifier);
     new BaseXPopup(this, POPUP);
   }
 
@@ -104,7 +103,7 @@ public final class MapView extends View {
     final Data data = gui.context.data();
     final GUIOptions gopts = gui.gopts;
     if(data != null && visible()) {
-      painter = new MapDefault(this, gopts);
+      painter = new MapPainter(this, gopts);
       mainMap = createImage();
       zoomMap = createImage();
       refreshLayout();
@@ -130,7 +129,7 @@ public final class MapView extends View {
 
   @Override
   public void refreshMark() {
-    drawMap(mainMap, mainRects, 1.0f);
+    drawMap(mainMap, mainRects);
     repaint();
   }
 
@@ -218,27 +217,24 @@ public final class MapView extends View {
       repaint();
     } else {
       zoomStep = ZOOMSIZE;
-      new Thread() {
-        @Override
-        public void run() {
-          focused = null;
+      new Thread(() -> {
+        focused = null;
 
-          // run zooming
-          while(zoomStep > 1) {
-            Performance.sleep(zoomSpeed);
-            --zoomStep;
-            repaint();
-          }
-          // wait until current painting is finished
-          while(gui.painting) Performance.sleep(zoomSpeed);
-
-          // remove old rectangle and repaint map
-          zoomStep = 0;
-          gui.updating = false;
-          focus();
+        // run zooming
+        while(zoomStep > 1) {
+          Performance.sleep(zoomSpeed);
+          --zoomStep;
           repaint();
         }
-      }.start();
+        // wait until current painting is finished
+        while(gui.painting) Performance.sleep(zoomSpeed);
+
+        // remove old rectangle and repaint map
+        zoomStep = 0;
+        gui.updating = false;
+        focus();
+        repaint();
+      }).start();
     }
   }
 
@@ -286,7 +282,7 @@ public final class MapView extends View {
     // rectangles are copied to avoid synchronization issues
     mainRects = layout.rectangles.copy();
 
-    drawMap(map, mainRects, 1.0f);
+    drawMap(map, mainRects);
     focus();
     gui.cursor(CURSORARROW, true);
   }
@@ -306,6 +302,7 @@ public final class MapView extends View {
     gui.painting = true;
 
     // paint map
+    final MapRenderer renderer = new MapRenderer(g);
     final boolean in = zoomStep > 0 && zoomIn;
     final Image img1 = in ? zoomMap : mainMap;
     final Image img2 = in ? mainMap : zoomMap;
@@ -351,10 +348,7 @@ public final class MapView extends View {
       g.drawRect(selBox.x - 1, selBox.y - 1, selBox.w + 2, selBox.h + 2);
     } else {
       // paint focused rectangle
-      final int x = f.x;
-      final int y = f.y;
-      final int w = f.w;
-      final int h = f.h;
+      final int x = f.x, y = f.y, w = f.w, h = f.h;
       g.setColor(color4);
       g.drawRect(x, y, w, h);
       g.drawRect(x + 1, y + 1, w - 2, h - 2);
@@ -362,24 +356,21 @@ public final class MapView extends View {
       // draw element label
       g.setFont(font);
       BaseXLayout.antiAlias(g);
-      if(data.kind(f.pre) == Data.ELEM) {
-        String tt = Token.string(ViewData.name(gopts, data, f.pre));
-        if(tt.length() > 32) tt = tt.substring(0, 30) + DOTS;
-        BaseXLayout.drawTooltip(g, tt, x, y, getWidth(), f.level + 5);
-      }
+      if(data.kind(f.pre) == Data.ELEM) BaseXLayout.drawTooltip(g,
+          Token.string(ViewData.namedText(gopts, data, f.pre)), x, y, getWidth(), f.level + 5);
 
       if(f.thumb) {
         // draw tooltip for thumbnail
         f.x += 3;
         f.w -= 3;
         // read content from disk
-        final byte[] text = MapPainter.content(data, f);
+        final byte[] text = MapPainter.text(data, f);
         // calculate tooltip
         final int[][] info = new FTLexer().init(text).info();
-        final TokenList tl = MapRenderer.calculateToolTip(f, info, mouseX, mouseY, getWidth(), g);
+        final TokenList tl = renderer.computeToolTip(f, info, mouseX, mouseY, getWidth());
         final MapRect mr = new MapRect(getX(), getY(), getWidth(), getHeight());
         // draw calculated tooltip
-        MapRenderer.drawToolTip(g, mouseX, mouseY, mr, tl, fontSize);
+        renderer.drawToolTip(mr, mouseX, mouseY, tl);
         f.x -= 3;
         f.w += 3;
       }
@@ -437,14 +428,13 @@ public final class MapView extends View {
 
   /**
    * Creates a buffered image for the treemap.
-   * @param map Image to draw the map on
-   * @param rects calculated rectangles
-   * @param sc scale the rectangles
+   * @param map image to draw the map on
+   * @param rects rectangles to be drawn
    */
-  private void drawMap(final BufferedImage map, final MapRects rects, final float sc) {
+  private void drawMap(final BufferedImage map, final MapRects rects) {
     final Graphics g = map.getGraphics();
     BaseXLayout.antiAlias(g);
-    painter.drawRectangles(g, rects, sc);
+    painter.drawRectangles(g, rects);
   }
 
   @Override

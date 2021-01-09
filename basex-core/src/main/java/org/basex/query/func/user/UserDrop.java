@@ -6,23 +6,24 @@ import org.basex.core.users.*;
 import org.basex.query.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class UserDrop extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final User user = toSafeUser(0, qc);
+    final User user = toInactiveUser(0, qc);
     final StringList patterns = toPatterns(1, qc);
     if(user.name().equals(UserText.ADMIN)) throw USER_ADMIN.get(info);
     qc.updates().add(new Drop(user, patterns, qc, info), qc);
-    return null;
+    return Empty.VALUE;
   }
 
   /** Update primitive. */
@@ -52,6 +53,8 @@ public final class UserDrop extends UserFn {
     }
 
     @Override
-    public String operation() { return "dropped"; }
+    public String operation() {
+      return "dropped";
+    }
   }
 }

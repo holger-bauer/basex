@@ -1,9 +1,11 @@
 package org.basex.query.util.fingertree;
 
+import org.basex.query.*;
+
 /**
  * A tree consisting of a single value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -63,25 +65,23 @@ final class SingletonTree<N, E> extends FingerTree<N, E> {
   }
 
   @Override
-  public FingerTree<N, E> concat(final Node<N, E>[] mid, final long sz,
+  public FingerTree<N, E> concat(final Node<N, E>[] mid, final long size,
       final FingerTree<N, E> other) {
-    return other.isEmpty() ? addAll(mid, sz, false) : other.addAll(mid, sz, true).cons(elem);
+    return other.isEmpty() ? addAll(mid, size, false) : other.addAll(mid, size, true).cons(elem);
   }
 
   @Override
-  public FingerTree<N, E> reverse() {
+  public FingerTree<N, E> reverse(final QueryContext qc) {
     return new SingletonTree<>(elem.reverse());
   }
 
   @Override
   public FingerTree<N, E> set(final long pos, final E val) {
-    final long size = elem.size();
-    if(pos < 0 || pos >= size) throw new IndexOutOfBoundsException(pos + ", size = " + size);
     return new SingletonTree<>(elem.set(pos, val));
   }
 
   @Override
-  public FingerTree<N, E> insert(final long pos, final E val) {
+  public FingerTree<N, E> insert(final long pos, final E val, final QueryContext qc) {
     @SuppressWarnings("unchecked")
     final Node<N, E>[] siblings = new Node[4];
     if(!elem.insert(siblings, pos, val)) {
@@ -96,7 +96,7 @@ final class SingletonTree<N, E> extends FingerTree<N, E> {
   }
 
   @Override
-  public TreeSlice<N, E> remove(final long pos) {
+  public TreeSlice<N, E> remove(final long pos, final QueryContext qc) {
     final NodeLike<N, E>[] removed = elem.remove(null, null, pos);
     return new TreeSlice<>(removed[1]);
   }
@@ -108,7 +108,7 @@ final class SingletonTree<N, E> extends FingerTree<N, E> {
   }
 
   @Override
-  FingerTree<N, E> addAll(final Node<N, E>[] nodes, final long sz, final boolean left) {
+  FingerTree<N, E> addAll(final Node<N, E>[] nodes, final long size, final boolean left) {
     if(nodes.length == 0) return this;
     if(nodes.length <= MAX_DIGIT) {
       @SuppressWarnings("unchecked")
@@ -116,7 +116,7 @@ final class SingletonTree<N, E> extends FingerTree<N, E> {
       return left ? DeepTree.get(nodes, arr) : DeepTree.get(arr, nodes);
     }
 
-    final FingerTree<N, E> tree = buildTree(nodes, nodes.length, sz);
+    final FingerTree<N, E> tree = buildTree(nodes, nodes.length, size);
     return left ? tree.snoc(elem) : tree.cons(elem);
   }
 

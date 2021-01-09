@@ -1,6 +1,7 @@
 package org.basex.query.func;
 
 import static org.basex.query.QueryError.*;
+import static org.basex.query.QueryError.normalize;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
@@ -17,15 +18,17 @@ import org.basex.io.*;
 import org.basex.io.out.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
-import org.basex.query.ann.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
+import org.basex.query.func.xquery.XQueryEval.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.map.Map;
+import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -35,51 +38,81 @@ import org.basex.util.options.*;
 /**
  * Built-in functions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class StandardFunc extends Arr {
-  /** Function signature. */
-  public Function sig;
+  /** Minimum size of a loop that should not be unrolled. */
+  public static final int UNROLL_LIMIT = 5;
+
+  /** Function definition. */
+  public FuncDefinition definition;
   /** Static context. */
   public StaticContext sc;
+
+  /** Data reference (can be {@code null}). */
+  private Data data;
 
   /**
    * Constructor.
    */
   protected StandardFunc() {
-    super(null);
+    super(null, SeqType.ITEM_ZM);
   }
 
   /**
-   * Constructor. Invoked by {@link Function#get(StaticContext, InputInfo, Expr...)}.
+   * Initializes the function.
    * @param ii input info
    * @param sctx static context
-   * @param f function definition
+   * @param df function definition
    * @param args function arguments
-   * @return self reference
    */
-  final StandardFunc init(final StaticContext sctx, final InputInfo ii, final Function f,
+  final void init(final StaticContext sctx, final InputInfo ii, final FuncDefinition df,
       final Expr[] args) {
     sc = sctx;
-    sig = f;
     info = ii;
+    definition = df;
     exprs = args;
-    seqType = f.type;
-    return this;
+    exprType.assign(df.seqType);
   }
 
   @Override
   public final Expr optimize(final CompileContext cc) throws QueryException {
-    // skip context-based or non-deterministic functions, and non-values
-    return optPre(has(Flag.CTX) || has(Flag.NDT) || has(Flag.HOF) || has(Flag.UPD) ||
-        !allAreValues() ? opt(cc) : sig.type.zeroOrOne() ? item(cc.qc, info) : value(cc.qc), cc);
+    simplifyArgs(cc);
+
+    final Expr expr = opt(cc);
+    return
+      // return optimized expression
+      expr != this ? cc.replaceWith(this, expr) :
+      // pre-evaluate function
+      allAreValues(definition.seqType.occ.max > 1) && isSimple() ? cc.preEval(this) :
+      // return original function
+      this;
+  }
+
+  /**
+   * Simplifies the types of all arguments. This function is overwritten by functions that
+   * rely on the original argument type.
+   * @param cc compilation context
+   * @throws QueryException query exception
+   */
+  protected void simplifyArgs(final CompileContext cc) throws QueryException {
+    final int el = exprs.length;
+    for(int e = 0; e < el; e++) {
+      // consider variable-size parameters
+      final int p = Math.min(e, definition.params.length - 1);
+      final Type type = definition.params[p].type;
+      if(type.instanceOf(AtomType.ANY_ATOMIC_TYPE)) {
+        final Simplify mode = type.instanceOf(AtomType.NUMERIC) ? Simplify.NUMBER : Simplify.STRING;
+        exprs[e] = exprs[e].simplifyFor(mode, cc);
+      }
+    }
   }
 
   /**
    * Performs function specific optimizations.
    * @param cc compilation context
-   * @return evaluated item
+   * @return optimized or original expression
    * @throws QueryException query exception
    */
   @SuppressWarnings("unused")
@@ -89,29 +122,62 @@ public abstract class StandardFunc extends Arr {
 
   @Override
   public final StandardFunc copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final int es = exprs.length;
-    final Expr[] arg = new Expr[es];
-    for(int e = 0; e < es; e++) arg[e] = exprs[e].copy(cc, vm);
-    return copyType(sig.get(sc, info, arg));
+    final int el = exprs.length;
+    final Expr[] arg = new Expr[el];
+    for(int e = 0; e < el; e++) arg[e] = exprs[e].copy(cc, vm);
+    return copyType(definition.get(sc, info, arg));
+  }
+
+  /**
+   * Optimizes a function that returns an empty sequence when the first atomized argument is empty,
+   * and adjusts the occurrence indicator if the argument will always yield one item.
+   * @return original expression or function argument
+   */
+  protected final Expr optFirst() {
+    return optFirst(true, true, null);
+  }
+
+  /**
+   * Optimizes a function that returns an empty sequence when the first argument or the
+   * context value is empty.
+   * <ul>
+   *   <li> Returns the first argument (or the context) if it yields an empty sequence.</li>
+   *   <li> Sets the occurrence indicator to 1 if the argument returns at least one item.</li>
+   * </ul>
+   * @param occ assign occurrence indicator
+   *   ({@code true} if function will always yield a result if first argument is non-empty)
+   * @param atom argument will be atomized
+   * @param value context value (ignored if {@code null})
+   * @return original expression or function argument
+   */
+  protected final Expr optFirst(final boolean occ, final boolean atom, final Value value) {
+    final Expr expr = exprs.length > 0 ? exprs[0] : value;
+    if(expr != null) {
+      final SeqType st = expr.seqType();
+      if(st.zero()) return expr;
+      if(occ && st.oneOrMore() && !(atom && st.mayBeArray())) exprType.assign(Occ.EXACTLY_ONE);
+    }
+    return this;
   }
 
   /**
    * Serializes the data from the specified iterator.
-   * @param ir data to serialize
+   * @param iter data to serialize
    * @param opts serialization parameters
    * @param err error code
+   * @param qc query context
    * @return result
    * @throws QueryException query exception
    */
-  protected final byte[] serialize(final Iter ir, final SerializerOptions opts,
-      final QueryError err) throws QueryException {
+  protected final byte[] serialize(final Iter iter, final SerializerOptions opts,
+      final QueryError err, final QueryContext qc) throws QueryException {
 
     try {
       final ArrayOutput ao = new ArrayOutput();
       try(Serializer ser = Serializer.get(ao, opts)) {
-        for(Item it; (it = ir.next()) != null;) ser.serialize(it);
+        for(Item item; (item = qc.next(iter)) != null;) ser.serialize(item);
       }
-      return ao.normalize().finish();
+      return new TokenBuilder(ao.finish()).normalize().finish();
     } catch(final QueryIOException ex) {
       throw ex.getCause(info);
     } catch(final IOException ex) {
@@ -120,66 +186,109 @@ public abstract class StandardFunc extends Arr {
   }
 
   @Override
-  public boolean has(final Flag flag) {
+  public boolean has(final Flag... flags) {
     // check signature flags
-    return sig.has(flag) ||
-      // update, mix updates: check if function invokes another function
-      flag == Flag.UPD && sc.mixUpdates && sig.has(Flag.HOF) ||
-      // otherwise, check arguments (function invocation only applies to function itself)
-      flag != Flag.HOF && super.has(flag);
+    for(final Flag flag : flags) {
+      if(definition.has(flag)) return true;
+    }
+    // mix updates: higher-order function may be updating
+    if(Flag.UPD.in(flags) && sc.mixUpdates && definition.has(Flag.HOF)) return true;
+    // check arguments (without function invocation; it only applies to function itself)
+    final Flag[] flgs = Flag.HOF.remove(flags);
+    return flgs.length != 0 && super.has(flgs);
   }
 
   @Override
-  public final boolean isFunction(final Function f) {
-    return sig == f;
-  }
-
-  @Override
-  public boolean isVacuous() {
-    return !has(Flag.UPD) && seqType.eq(SeqType.EMP);
-  }
-
-  @Override
-  public final String description() {
-    return sig.toString();
-  }
-
-  @Override
-  public final void plan(final FElem plan) {
-    addPlan(plan, planElem(NAM, sig.desc), exprs);
-  }
-
-  @Override
-  public final String toString() {
-    return new TokenBuilder(sig.id()).add('(').addSep(exprs, SEP).add(')').toString();
+  public boolean vacuous() {
+    return size() == 0 && !has(Flag.UPD);
   }
 
   /**
-   * Returns the specified argument, or the context value if it does not exist.
-   * @param index argument index
-   * @param qc query context
-   * @return expression
+   * Refines the type of a function item argument.
+   * @param expr expression
+   * @param cc compilation context
+   * @param declType declared return type
+   * @param argTypes argument types
+   * @return old or new expression
+   * @throws QueryException query context
+   */
+  public final Expr coerceFunc(final Expr expr, final CompileContext cc, final SeqType declType,
+      final SeqType... argTypes) throws QueryException {
+
+    // check if argument is function item
+    if(!(expr instanceof FuncItem)) return expr;
+
+    // check number of arguments
+    final FuncItem func = (FuncItem) expr;
+    final int al = argTypes.length, fargs = func.arity();
+    if(fargs != al) return expr;
+
+    // select most specific argument and return types
+    final FuncType oldType = func.funcType();
+    final SeqType[] oldArgs = oldType.argTypes, newArgs = new SeqType[al];
+    for(int a = 0; a < al; a++) {
+      newArgs[a] = argTypes[a].instanceOf(oldArgs[a]) ? argTypes[a] : oldArgs[a];
+    }
+    final SeqType newDecl = declType.instanceOf(oldType.declType) ? declType : oldType.declType;
+    final FuncType newType = FuncType.get(newDecl, newArgs);
+
+    // new type is more specific: coerce to new function type
+    return !newType.eq(oldType) ? func.coerceTo(newType, cc.qc, info, true) : expr;
+  }
+
+  /**
+   * Opens a database at compile time.
+   * @param cc compilation context
+   * @return self reference
    * @throws QueryException query exception
    */
-  protected final Expr ctxArg(final int index, final QueryContext qc) throws QueryException {
-    return exprs.length == index ? ctxValue(qc) : exprs[index];
+  protected final Expr compileData(final CompileContext cc) throws QueryException {
+    if(exprs.length > 0 && exprs[0] instanceof Value) {
+      data = checkData(cc.qc);
+      cc.info(OPTOPEN_X, data.meta.name);
+    }
+    return this;
+  }
+
+  @Override
+  public final Data data() {
+    return data;
+  }
+
+  @Override
+  public final void data(final Data dt) {
+    data = dt;
+  }
+
+  /**
+   * Checks if the specified item has the specified Date type.
+   * If it is item, the specified Date is returned.
+   * @param item item to be checked
+   * @param type target type
+   * @param qc query context
+   * @return date
+   * @throws QueryException query exception
+   */
+  protected final ADate toDate(final Item item, final AtomType type, final QueryContext qc)
+      throws QueryException {
+    return (ADate) (item.type.isUntyped() ? type.cast(item, qc, sc, info) : checkType(item, type));
   }
 
   /**
    * Checks if the specified expression is a database node.
    * Returns the node or an exception.
-   * @param it item to be checked
+   * @param item item to be checked
    * @return item
    * @throws QueryException query exception
    */
-  protected final DBNode toDBNode(final Item it) throws QueryException {
-    if(checkNoEmpty(it, NodeType.NOD) instanceof DBNode) return (DBNode) it;
-    throw BXDB_NODB_X_X.get(info, it.type, it);
+  protected final DBNode toDBNode(final Item item) throws QueryException {
+    if(checkNoEmpty(item, NodeType.NODE) instanceof DBNode) return (DBNode) item;
+    throw DB_NODE_X.get(info, item);
   }
 
   /**
    * Checks if the specified collation is supported.
-   * @param i argument index
+   * @param i index of argument
    * @param qc query context
    * @return collator or {@code null} (default collation)
    * @throws QueryException query exception
@@ -191,13 +300,13 @@ public abstract class StandardFunc extends Arr {
 
   /**
    * Converts the specified argument to a file path.
-   * @param i argument index
+   * @param i index of argument
    * @param qc query context
    * @return file instance
    * @throws QueryException query exception
    */
   protected final Path toPath(final int i, final QueryContext qc) throws QueryException {
-    return i < exprs.length ? toPath(toToken(exprs[i], qc)) : null;
+    return toPath(toToken(exprs[i], qc));
   }
 
   /**
@@ -211,7 +320,8 @@ public abstract class StandardFunc extends Arr {
       final String p = string(path);
       return p.startsWith(IO.FILEPREF) ? Paths.get(new URI(p)) : Paths.get(p);
     } catch(final InvalidPathException | URISyntaxException ex) {
-      throw FILE_INVALID_PATH_X.get(info, path);
+      Util.debug(ex);
+      throw FILE_INVALID_PATH_X.get(info, normalize(path, info));
     }
   }
 
@@ -237,7 +347,48 @@ public abstract class StandardFunc extends Arr {
   protected final IO checkPath(final byte[] uri) throws QueryException {
     final QueryInput qi = new QueryInput(string(uri), sc);
     if(qi.io.exists()) return qi.io;
-    throw WHICHRES_X.get(info, uri);
+    throw WHICHRES_X.get(info, normalize(uri, info));
+  }
+
+  /**
+   * Evaluates the specified URI.
+   * @param i index of input argument
+   * @param qc query context
+   * @return query contents and URL
+   * @throws QueryException query exception
+   */
+  protected final IOContent toQuery(final int i, final QueryContext qc) throws QueryException {
+    final Item item = toItem(exprs[i], qc);
+    return item instanceof Uri ? toQuery(item.string(info), qc) : new IOContent(toToken(item));
+  }
+
+  /**
+   * Evaluates the specified URI.
+   * @param uri uri
+   * @param qc query context
+   * @return query contents and URL
+   * @throws QueryException query exception
+   */
+  protected final IOContent toQuery(final byte[] uri, final QueryContext qc) throws QueryException {
+    checkAdmin(qc);
+    final IO io = checkPath(uri);
+    try {
+      return new IOContent(io.read(), io.url());
+    } catch(final IOException ex) {
+      throw IOERR_X.get(info, ex);
+    }
+  }
+
+  /**
+   * Evaluates the specified URI.
+   * @param path custom path
+   * @param options options with base-uri property
+   * @return base URI
+   */
+  protected final String toBaseUri(final String path, final Options options) {
+    final String base = options.get(XQueryOptions.BASE_URI);
+    return base != null && !base.isEmpty() ? base :
+      path != null && !path.isEmpty() ? path : string(sc.baseURI().string());
   }
 
   /**
@@ -245,26 +396,39 @@ public abstract class StandardFunc extends Arr {
    * @param i index of encoding argument
    * @param err error for invalid encoding
    * @param qc query context
-   * @return text entry
+   * @return string or {@code null}
    * @throws QueryException query exception
    */
-  protected final String toEncoding(final int i, final QueryError err, final QueryContext qc)
+  protected final String toEncodingOrNull(final int i, final QueryError err, final QueryContext qc)
       throws QueryException {
 
     if(i >= exprs.length) return null;
-    final String enc = string(toToken(exprs[i], qc));
+    final String encoding = string(toToken(exprs[i], qc));
     try {
-      if(Charset.isSupported(enc)) return Strings.normEncoding(enc);
+      if(Charset.isSupported(encoding)) return Strings.normEncoding(encoding);
     } catch(final IllegalArgumentException ignored) {
       /* character set is invalid or unknown (e.g. empty string) */
     }
-    throw err.get(info, enc);
+    throw err.get(info, encoding);
+  }
+
+  /**
+   * Returns the expression at the specified index as node or atomized item.
+   * Returns the item or throws an exception.
+   * @param i index of argument
+   * @param qc query context
+   * @return node or atomized item
+   * @throws QueryException query exception
+   */
+  protected final Item toNodeOrAtomItem(final int i, final QueryContext qc) throws QueryException {
+    final Item item = toItem(exprs[i], qc);
+    return item instanceof ANode ? item : item.atomItem(qc, info);
   }
 
   /**
    * Parses the options at the specified index.
    * @param <E> options type
-   * @param i index of options argument
+   * @param i index of argument (can exceed length of argument, or may yield an empty sequence)
    * @param opts options
    * @param qc query context
    * @return passed on options
@@ -286,10 +450,10 @@ public abstract class StandardFunc extends Arr {
       throws QueryException {
 
     final HashMap<String, Value> hm = new HashMap<>();
-    final int es = exprs.length;
-    if(i < es) {
+    final int el = exprs.length;
+    if(i < el) {
       final Item item = exprs[i].item(qc, info);
-      final Map map = item == null ? Map.EMPTY : toMap(exprs[i], qc);
+      final XQMap map = item == Empty.VALUE ? XQMap.EMPTY : toMap(item);
       for(final Item it : map.keys()) {
         final byte[] key;
         if(it.type.isStringOrUntyped()) {
@@ -314,6 +478,7 @@ public abstract class StandardFunc extends Arr {
    * @throws QueryException query exception
    */
   protected final Data checkData(final QueryContext qc) throws QueryException {
+    if(data != null) return data;
     final String name = string(toToken(exprs[0], qc));
     if(!Databases.validName(name)) throw INVDB_X.get(info, name);
     return qc.resources.database(name, info);
@@ -342,11 +507,11 @@ public abstract class StandardFunc extends Arr {
    * Checks if the current user has given permissions. If negative, an
    * exception is thrown.
    * @param qc query context
-   * @param p permission
+   * @param perm permission
    * @throws QueryException query exception
    */
-  private void checkPerm(final QueryContext qc, final Perm p) throws QueryException {
-    if(!qc.context.user().has(p)) throw BASX_PERM_X.get(info, p);
+  private void checkPerm(final QueryContext qc, final Perm perm) throws QueryException {
+    if(!qc.context.user().has(perm)) throw BASEX_PERMISSION_X_X.get(info, perm, this);
   }
 
   /**
@@ -359,25 +524,36 @@ public abstract class StandardFunc extends Arr {
    */
   protected final FItem checkArity(final Expr expr, final int nargs, final QueryContext qc)
       throws QueryException {
+    return checkArity(expr, nargs, false, qc);
+  }
 
-    final FItem fun = toFunc(expr, qc);
-    if(!sc.mixUpdates && fun.annotations().contains(Annotation.UPDATING))
-      throw FUNCUP_X.get(info, fun);
+  /**
+   * Casts and checks the function item for its arity.
+   * @param expr expression
+   * @param nargs number of arguments (arity)
+   * @param qc query context
+   * @param updating updating flag
+   * @return function item
+   * @throws QueryException query exception
+   */
+  protected final FItem checkArity(final Expr expr, final int nargs, final boolean updating,
+      final QueryContext qc) throws QueryException {
 
-    if(fun.arity() == nargs) return fun;
-    final int fargs = fun.arity();
+    final FItem func = checkUp(toFunc(expr, qc), updating, sc);
+    final int fargs = func.arity();
+    if(fargs == nargs) return func;
     throw FUNARITY_X_X.get(info, arguments(fargs), nargs);
   }
 
   /**
    * Converts the specified dateTime to milliseconds.
-   * @param ex expression
+   * @param expr expression
    * @param qc query context
    * @return resulting value
    * @throws QueryException query exception
    */
-  protected final long dateTimeToMs(final Expr ex, final QueryContext qc) throws QueryException {
-    final Dtm dtm = (Dtm) checkAtomic(ex, qc, AtomType.DTM);
+  protected final long dateTimeToMs(final Expr expr, final QueryContext qc) throws QueryException {
+    final Dtm dtm = (Dtm) checkType(expr, qc, AtomType.DATE_TIME);
     if(dtm.yea() > 292278993) throw INTRANGE_X.get(info, dtm.yea());
     return dtm.toJava().toGregorianCalendar().getTimeInMillis();
   }
@@ -385,25 +561,32 @@ public abstract class StandardFunc extends Arr {
   /**
    * Tries to mark the specified argument for locking.
    * @param visitor visitor
-   * @param i index of argument
-   * @return success flag
+   * @param i index of database argument
+   * @return result of check
    */
   protected final boolean dataLock(final ASTVisitor visitor, final int i) {
-    return visitor.lock(exprs[i] instanceof Str ? string(((Str) exprs[i]).string()) : null);
+    final String db = exprs[i] instanceof Str ? string(((Str) exprs[i]).string()) : null;
+    return visitor.lock(db, false);
   }
 
   @Override
-  public final boolean sameAs(final Expr cmp) {
-    if(cmp instanceof StandardFunc) {
-      final StandardFunc sf = (StandardFunc) cmp;
-      final int el = exprs.length;
-      if(sig == sf.sig && el == sf.exprs.length) {
-        for(int e = 0; e < el; e++) {
-          if(!exprs[e].sameAs(sf.exprs[e])) return false;
-        }
-        return true;
-      }
-    }
-    return false;
+  public final boolean equals(final Object obj) {
+    return this == obj || obj instanceof StandardFunc &&
+        definition == ((StandardFunc) obj).definition && super.equals(obj);
+  }
+
+  @Override
+  public final String description() {
+    return definition.toString();
+  }
+
+  @Override
+  public final void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, NAME, definition.id()), exprs);
+  }
+
+  @Override
+  public final void plan(final QueryString qs) {
+    qs.token(definition.id()).params(exprs);
   }
 }

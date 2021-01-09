@@ -3,90 +3,113 @@ package org.basex.query.func;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 
-import org.basex.query.*;
+import org.basex.*;
 import org.basex.util.http.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the Web Module.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-public final class WebModuleTest extends AdvancedQueryTest {
+public final class WebModuleTest extends SandboxTest {
   /** Test method. */
-  @Test
-  public void contentType() {
-    query(_WEB_CONTENT_TYPE.args("sample.mp3"), new MediaType("audio/mpeg").toString());
-    query(_WEB_CONTENT_TYPE.args("a/b/input.xml"), MediaType.APPLICATION_XML.toString());
-    query(_WEB_CONTENT_TYPE.args("a.xxxx"), MediaType.APPLICATION_OCTET_STREAM.toString());
+  @Test public void contentType() {
+    final Function func = _WEB_CONTENT_TYPE;
+    query(func.args("sample.mp3"), new MediaType("audio/mpeg").toString());
+    query(func.args("a/b/input.xml"), MediaType.APPLICATION_XML.toString());
+    query(func.args("a.xxxx"), MediaType.APPLICATION_OCTET_STREAM.toString());
   }
 
   /** Test method. */
-  @Test
-  public void createUrl() {
-    query(_WEB_CREATE_URL.args("http://x.com", " map {}"), "http://x.com");
-    query(_WEB_CREATE_URL.args("url", " map { 'a':'b' }"), "url?a=b");
-    query(_WEB_CREATE_URL.args("url", " map { 'a':('b','c') }"), "url?a=b&a=c");
-    query(_WEB_CREATE_URL.args("url", " map { 12:true() }"), "url?12=true");
+  @Test public void createUrl() {
+    final Function func = _WEB_CREATE_URL;
+    query(func.args("http://x.com", " map {}"), "http://x.com");
+    query(func.args("url", " map { 'a': 'b' }"), "url?a=b");
+    query(func.args("url", " map { 'a': ('b','c') }"), "url?a=b&a=c");
+    query(func.args("url", " map { 12: true() }"), "url?12=true");
 
-    error(_WEB_CREATE_URL.args("url", " map { ():'a' }"), SEQFOUND_X);
-    error(_WEB_CREATE_URL.args("url", " map { ('a','b'):() }"), SEQFOUND_X);
-    error(_WEB_CREATE_URL.args("url", " map { 'a':true#0 }"), FIATOM_X);
+    query(func.args("url", " map { }", "a"), "url#a");
+
+    error(func.args("url", " map { (): 'a' }"), EMPTYFOUND);
+    error(func.args("url", " map { ('a','b'): () }"), SEQFOUND_X);
+    error(func.args("url", " map { 'a': true#0 }"), FIATOM_X);
   }
 
   /** Test method. */
-  @Test
-  public void redirect() {
-    query(_WEB_REDIRECT.args("a/b") + "/*:response/*:header/@value = 'a/b'", "true");
-    query(_WEB_REDIRECT.args("a/b") + "/*:response/*:header/@name = 'location'", "true");
-    query(_WEB_REDIRECT.args("a/b") + "/*:response/@status = 302", "true");
-
-    query(_WEB_REDIRECT.args("a/b", " map { 'a':'b' }") +
-        "/*:response/*:header[@name = 'location']/@value/string()", "a/b?a=b");
-  }
-
-  /** Test method. */
-  @Test
-  public void responseHeader() {
-    query(_WEB_RESPONSE_HEADER.args() +
-        "/*:response/*:header[@name = 'Cache-Control']/@value/string()", "max-age=3600,public");
-    query(_WEB_RESPONSE_HEADER.args() +
-        "/*:serialization-parameters/*:media-type/@value/string()", "application/octet-stream");
-
-    // overwrite header
-    query(_WEB_RESPONSE_HEADER.args(" map { 'media-type': 'X' }") +
-        "/*:serialization-parameters/*:media-type/@value/string()", "X");
-    // header is not generated if value is empty
-    query(_WEB_RESPONSE_HEADER.args(" map { 'media-type': '' }") +
-        "/*:serialization-parameters/*:media-type", "");
-
-    // overwrite header
-    query(_WEB_RESPONSE_HEADER.args(" map { }", " map { 'Cache-Control': 'X' }") +
-        "/*:response/*:header[@name = 'Cache-Control']/@value/string()", "X");
-    // header is not generated if value is empty
-    query(_WEB_RESPONSE_HEADER.args(" map { }", " map { 'Cache-Control': '' }") +
-        "/*:response/*:header[@name = 'Cache-Control']", "");
-    // HTTP response is not generated if no value are specified
-    query(_WEB_RESPONSE_HEADER.args(" map { }", " map { 'Cache-Control': '' }") +
-        "/*:response/*:header", "");
-  }
-
-  /** Test method. */
-  @Test
-  public void encodeUrl() {
-    query(_WEB_ENCODE_URL.args("a&#xd; *-._"), "a%0D+*-._");
-  }
-
-  /** Test method. */
-  @Test
-  public void decodeUrl() {
-    query(_WEB_DECODE_URL.args("a+-._*"), "a -._*");
+  @Test public void decodeUrl() {
+    final Function func = _WEB_DECODE_URL;
+    query(func.args("a+-._*"), "a -._*");
     query("let $s := codepoints-to-string((9, 10, 13, 32 to 55295, 57344 to 65533, 65536)) " +
-        "return $s = web:decode-url(web:encode-url($s))", "true");
+        "return $s = web:decode-url(web:encode-url($s))", true);
 
-    error(_WEB_DECODE_URL.args("%1"), BXWE_INVALID_X);
-    error(_WEB_DECODE_URL.args("%1F"), BXWE_CODES_X);
-    error(_WEB_DECODE_URL.args("%D8%00"), BXWE_CODES_X);
+    error(func.args("%1"), WEB_INVALID2_X);
+    error(func.args("%1F"), WEB_INVALID1_X);
+    error(func.args("%D8%00"), WEB_INVALID1_X);
+  }
+
+  /** Test method. */
+  @Test public void encodeUrl() {
+    final Function func = _WEB_ENCODE_URL;
+    query(func.args("a&#xd; *-._"), "a%0D+*-._");
+  }
+
+  /** Test method. */
+  @Test public void error() {
+    final Function func = _WEB_ERROR;
+    query("try { " + func.args(400, "x") + " } catch rest:error { 'x' }", "x");
+    error(func.args(-1, "x"), WEB_STATUS_X);
+  }
+
+  /** Test method. */
+  @Test public void forward() {
+    final Function func = _WEB_FORWARD;
+    query(func.args("a/b") + "/text() = 'a/b'", true);
+    query(func.args("a/b", " map { 'c': 'd' }") + "/text() = 'a/b?c=d'", true);
+  }
+
+  /** Test method. */
+  @Test public void redirect() {
+    final Function func = _WEB_REDIRECT;
+    query(func.args("a/b") + "/*:response/*:header/@value = 'a/b'", true);
+    query(func.args("a/b") + "/*:response/*:header/@name = 'Location'", true);
+    query(func.args("a/b") + "/*:response/@status = 302", true);
+    query(func.args("a/b", " map { }", "a") + "/*:response/*:header/@value = 'a/b#a'", true);
+
+    query(func.args("a/b", " map { 'a':'b' }") +
+        "/*:response/*:header[@name = 'Location']/@value/string()", "a/b?a=b");
+
+    // GH-1585
+    query("count((" + func.args("a") + " update {})/http:response)", 1);
+  }
+
+  /** Test method. */
+  @Test public void responseHeader() {
+    final Function func = _WEB_RESPONSE_HEADER;
+    query(func.args() + "/http:response/http:header", "");
+    query(func.args() + "/output:serialization-parameters/output:media-type", "");
+
+    // overwrite header
+    query(func.args(" map { 'media-type': 'X' }") +
+        "/output:serialization-parameters/output:media-type/@value/string()", "X");
+    // header is not generated if value is empty
+    query("count(" + func.args(" map { 'media-type': '' }") +
+        "/output:serialization-parameters/*)", 0);
+
+    // overwrite header
+    query(func.args(" map {}", " map { 'Cache-Control': 'X' }") +
+        "/http:response/http:header[@name = 'Cache-Control']/@value/string()", "X");
+    // header is not generated if value is empty
+    query("count(" + func.args(" map {}", " map { 'Cache-Control': '' }") +
+        "/http:response/*)", 0);
+
+    // status/message arguments
+    query(func.args(" map {}", " map {}", " map { 'status': 200, 'message': 'OK' }") +
+        "/http:response ! (@status, @message) ! string()", "200\nOK");
+
+    // GH-1585
+    query("count((" + func.args() + " update {})/http:response)", 1);
+    query("count((" + func.args() + " update {})/output:*)", 1);
   }
 }

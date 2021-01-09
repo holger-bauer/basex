@@ -9,7 +9,7 @@ import org.basex.util.list.*;
 /**
  * Serializes the database table to a string representation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DataPrinter {
@@ -71,8 +71,7 @@ public final class DataPrinter {
     if(k == Data.ELEM) {
       cont = data.name(pre, Data.ELEM);
     } else if(k == Data.ATTR) {
-      cont = new TokenBuilder(data.name(pre, Data.ATTR)).add(ATT1).add(data.text(pre, false)).
-          add(ATT2).finish();
+      cont = Token.concat(data.name(pre, Data.ATTR), ATT1, data.text(pre, false), ATT2);
     } else {
       cont = data.text(pre, true);
     }

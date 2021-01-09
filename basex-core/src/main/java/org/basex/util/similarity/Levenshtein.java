@@ -1,14 +1,18 @@
 package org.basex.util.similarity;
 
-import static org.basex.util.Token.*;
 import static org.basex.util.FTToken.*;
+import static org.basex.util.Token.*;
+
+import java.util.function.*;
+
+import org.basex.util.list.*;
 
 /**
  * <p>Damerau-Levenshtein algorithm. Based on the publications from Levenshtein (1965):
  * "Binary codes capable of correcting spurious insertions and deletions of ones", and
  * Damerau (1964): "A technique for computer detection and correction of spelling errors.".</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Levenshtein {
@@ -33,6 +37,24 @@ public final class Levenshtein {
    */
   public Levenshtein(final int error) {
     this.error = error;
+  }
+
+  /**
+   * Returns the first similar entry.
+   * @param token token to be compared
+   * @param tokens tokens to be compared
+   * @return similar token or {@code null}
+   */
+  public static byte[] similar(final byte[] token, final Consumer<TokenList> tokens) {
+    final TokenList list = new TokenList();
+    tokens.accept(list);
+
+    final Levenshtein ls = new Levenshtein();
+    final byte[] t = lc(token);
+    for(final byte[] sub : list) {
+      if(ls.similar(t, lc(sub))) return sub;
+    }
+    return null;
   }
 
   /**
@@ -138,7 +160,6 @@ public final class Levenshtein {
     return (double) (lMax - m[lMax][lMax]) / lMax;
   }
 
-
   /**
    * Gets the minimum of three values.
    * @param a 1st value
@@ -147,8 +168,7 @@ public final class Levenshtein {
    * @return minimum
    */
   private static int m(final int a, final int b, final int c) {
-    final int d = a < b ? a : b;
-    return d < c ? d : c;
+    return Math.min(Math.min(a, b), c);
   }
 
   /**

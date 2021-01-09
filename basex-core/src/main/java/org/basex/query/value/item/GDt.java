@@ -2,6 +2,7 @@ package org.basex.query.value.item;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
+import static org.basex.query.value.type.AtomType.*;
 
 import java.util.regex.*;
 
@@ -14,14 +15,12 @@ import org.basex.util.*;
  * Simple date item, used for {@code xs:gYearMonth}, {@code xs:gYear},
  * {@code xs:gMonthDay}, {@code xs:gDay} and {@code xs:gMonth}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class GDt extends ADate {
   /** Date pattern. */
-  private static final Type[] TYPES = {
-    AtomType.YEA, AtomType.YMO, AtomType.MON, AtomType.MDA, AtomType.DAY,
-  };
+  private static final Type[] TYPES = { G_YEAR, G_YEAR_MONTH, G_MONTH, G_MONTH_DAY, G_DAY };
   /** Date patterns. */
   private static final Pattern[] PATTERNS = {
     Pattern.compile(YEAR + ZONE),
@@ -42,9 +41,9 @@ public final class GDt extends ADate {
    */
   public GDt(final ADate date, final Type type) {
     super(type, date);
-    if(type != AtomType.YEA && type != AtomType.YMO) yea = Long.MAX_VALUE;
-    if(type != AtomType.MON && type != AtomType.YMO && type != AtomType.MDA) mon = -1;
-    if(type != AtomType.DAY && type != AtomType.MDA) day = -1;
+    if(type != G_YEAR && type != G_YEAR_MONTH) yea = Long.MAX_VALUE;
+    if(type != G_MONTH && type != G_YEAR_MONTH && type != G_MONTH_DAY) mon = -1;
+    if(type != G_DAY && type != G_MONTH_DAY) day = -1;
     hou = -1;
     min = -1;
     sec = null;
@@ -69,7 +68,8 @@ public final class GDt extends ADate {
       yea = toLong(mt.group(1), false, ii);
       // +1 is added to BC values to simplify computations
       if(yea < 0) yea++;
-      if(yea < MIN_YEAR || yea >= MAX_YEAR) throw DATERANGE_X_X.get(ii, type, chop(date, ii));
+      if(yea < MIN_YEAR || yea >= MAX_YEAR)
+        throw DATERANGE_X_X.get(ii, type, normalize(date, ii));
     }
     if(i > 0 && i < 4) {
       mon = (byte) (Strings.toLong(mt.group(i == 1 ? 3 : 1)) - 1);
@@ -90,7 +90,9 @@ public final class GDt extends ADate {
    */
   private static int type(final Type type) {
     final int tl = TYPES.length;
-    for(int t = 0; t < tl; t++) if(TYPES[t] == type) return t;
+    for(int t = 0; t < tl; t++) {
+      if(TYPES[t] == type) return t;
+    }
     throw Util.notExpected();
   }
 
@@ -100,8 +102,8 @@ public final class GDt extends ADate {
   }
 
   @Override
-  public int diff(final Item it, final Collation coll, final InputInfo ii) throws QueryException {
-    throw diffError(it, this, ii);
+  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
+    throw diffError(item, this, ii);
   }
 
   @Override

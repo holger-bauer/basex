@@ -1,6 +1,7 @@
 package org.basex.http.restxq;
 
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.query.expr.path.*;
 import org.basex.query.value.item.*;
@@ -8,12 +9,15 @@ import org.basex.query.value.item.*;
 /**
  * This class catches RESTXQ errors with the same priority.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class RestXqError implements Comparable<RestXqError> {
   /** Error tests. */
   private final ArrayList<NameTest> tests = new ArrayList<>(1);
+  /** Function for comparing tests. */
+  private static final Function<NameTest, Integer> COMPARE =
+      test -> test == null ? -1 : test.part().ordinal();
 
   /**
    * Adds a test if it has not been specified before.
@@ -21,7 +25,9 @@ final class RestXqError implements Comparable<RestXqError> {
    * @return success flag
    */
   boolean add(final NameTest test) {
-    for(final NameTest t : tests) if(t.eq(test)) return false;
+    for(final NameTest nt : tests) {
+      if(Objects.equals(nt, test)) return false;
+    }
     tests.add(test);
     return true;
   }
@@ -36,19 +42,28 @@ final class RestXqError implements Comparable<RestXqError> {
   }
 
   /**
+   * Tests whether the error has no tests.
+   * @return result of check
+   */
+  public boolean isEmpty() {
+    return tests.isEmpty();
+  }
+
+  /**
    * Checks if the specified name matches the test.
    * @param name name
    * @return result of check
    */
   boolean matches(final QNm name) {
-    for(final NameTest test : tests) if(test.eq(name)) return true;
+    for(final NameTest nt : tests) {
+      if(nt == null || nt.matches(name)) return true;
+    }
     return false;
   }
 
   @Override
   public int compareTo(final RestXqError error) {
-    final NameTest nt1 = tests.get(0), nt2 = error.tests.get(0);
-    return nt1 == null || nt2 == null ? 0 : nt2.kind.ordinal() - nt1.kind.ordinal();
+    return COMPARE.apply(error.tests.get(0)) - COMPARE.apply(tests.get(0));
   }
 
   @Override
@@ -56,7 +71,7 @@ final class RestXqError implements Comparable<RestXqError> {
     final StringBuilder sb = new StringBuilder();
     for(final NameTest test : tests) {
       if(sb.length() != 0) sb.append(", ");
-      sb.append(test);
+      sb.append(test != null ? test : "*");
     }
     return sb.toString();
   }

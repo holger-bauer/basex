@@ -8,12 +8,19 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing tokens.
  * It extends the {@link TokenSet} class.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class TokenMap extends TokenSet {
   /** Hash values. */
-  private byte[][] values = new byte[Array.CAPACITY][];
+  private byte[][] values;
+
+  /**
+   * Default constructor.
+   */
+  public TokenMap() {
+    values = new byte[capacity()][];
+  }
 
   /**
    * Stores the specified key and value.
@@ -39,15 +46,15 @@ public class TokenMap extends TokenSet {
   /**
    * Returns the value for the specified key.
    * @param key key to be looked up
-   * @return value or {@code null} if nothing was found
+   * @return value, or {@code null} if nothing was found
    */
   public final byte[] get(final byte[] key) {
     return key != null ? values[id(key)] : null;
   }
 
   @Override
-  public int delete(final byte[] key) {
-    final int i = super.delete(key);
+  public int remove(final byte[] key) {
+    final int i = super.remove(key);
     values[i] = null;
     return i;
   }
@@ -67,19 +74,13 @@ public class TokenMap extends TokenSet {
   }
 
   @Override
-  protected final void rehash(final int sz) {
-    super.rehash(sz);
-    values = Array.copyOf(values, sz);
+  protected final void rehash(final int newSize) {
+    super.rehash(newSize);
+    values = Array.copyOf(values, newSize);
   }
 
   @Override
-  public final String toString() {
-    final TokenBuilder tb = new TokenBuilder();
-    for(int i = 1; i < size; i++) {
-      if(!tb.isEmpty()) tb.add(", ");
-      if(keys[i] != null) tb.add(keys[i]).add(" = ").add(values[i]);
-    }
-    return new TokenBuilder(Util.className(getClass())).add('[').add(tb.finish()).
-        add(']').toString();
+  public String toString() {
+    return toString(keys, values);
   }
 }

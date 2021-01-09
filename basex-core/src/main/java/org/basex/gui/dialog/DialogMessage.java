@@ -14,7 +14,7 @@ import org.basex.gui.text.*;
 /**
  * Dialog window for messages.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DialogMessage extends BaseXDialog {
@@ -23,24 +23,25 @@ public final class DialogMessage extends BaseXDialog {
 
   /**
    * Default constructor.
-   * @param main reference to the main window
+   * @param gui reference to the main window
    * @param txt message text
    * @param ic message type
    * @param buttons additional buttons
    */
-  public DialogMessage(final GUI main, final String txt, final Msg ic, final String... buttons) {
-    super(main, ic == Msg.ERROR ? Text.ERROR : Text.INFORMATION);
+  public DialogMessage(final GUI gui, final String txt, final Msg ic, final String... buttons) {
+    super(gui, ic == Msg.ERROR ? Text.ERROR : Text.INFORMATION);
 
     panel.setLayout(new BorderLayout());
 
-    final BaseXBack back = new BaseXBack(new TableLayout(1, 2, 12, 0));
+    final BaseXBack back = new BaseXBack(new ColumnLayout(12));
     final BaseXLabel label = new BaseXLabel();
     label.setIcon(ic.large);
     back.add(label);
 
-    final TextPanel text = new TextPanel(txt, false, this);
-    text.setFont(label.getFont());
-    back.add(text);
+    // break longer texts
+    final TextPanel tp = new TextPanel(this, txt.replaceAll("(.{1,160})", "$1").trim(), false);
+    tp.setFont(label.getFont());
+    back.add(tp);
 
     set(back, BorderLayout.NORTH);
 
@@ -54,15 +55,11 @@ public final class DialogMessage extends BaseXDialog {
       Collections.addAll(list, buttons);
       list.add(Text.B_OK);
     }
-    final BaseXBack bttns = newButtons(list.toArray(new Object[list.size()]));
+    final BaseXBack bttns = newButtons(list.toArray(new Object[0]));
     set(bttns, BorderLayout.SOUTH);
 
-    SwingUtilities.invokeLater(new Runnable() {
-      @Override
-      public void run() {
-        ((Container) bttns.getComponent(0)).getComponent(0).requestFocusInWindow();
-      }
-    });
+    SwingUtilities.invokeLater(((Container) bttns.getComponent(0)).getComponent(0)::
+      requestFocusInWindow);
     finish();
   }
 

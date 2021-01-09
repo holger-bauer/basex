@@ -5,7 +5,6 @@ import static org.basex.core.Text.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 import org.basex.io.*;
 import org.basex.query.*;
@@ -16,7 +15,7 @@ import org.basex.util.list.*;
  * The methods are used for dumping error output, debugging information,
  * getting the application path, etc.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Util {
@@ -32,9 +31,9 @@ public final class Util {
    * @return dummy object
    */
   public static String bug(final Throwable throwable) {
-    final TokenBuilder tb = new TokenBuilder(S_BUGINFO);
-    tb.add(NL).add("Contact: ").add(Prop.MAILING_LIST);
-    tb.add(NL).add("Version: ").add(Prop.TITLE);
+    final TokenBuilder tb = new TokenBuilder().add(S_BUGINFO);
+    tb.add(NL).add("Contact: ").add(MAILING_LIST);
+    tb.add(NL).add("Version: ").add(TITLE);
     tb.add(NL).add("Java: ").add(System.getProperty("java.vendor"));
     tb.add(", ").add(System.getProperty("java.version"));
     tb.add(NL).add("OS: ").add(System.getProperty("os.name"));
@@ -134,9 +133,9 @@ public final class Util {
   public static Throwable rootException(final Throwable throwable) {
     Throwable th = throwable;
     while(true) {
+      debug(th);
       final Throwable ca = th.getCause();
       if(ca == null || th instanceof QueryException && !(ca instanceof QueryException)) return th;
-      debug(th);
       th = ca;
     }
   }
@@ -170,11 +169,17 @@ public final class Util {
     if(throwable instanceof ConnectException) return CONNECTION_ERROR;
     if(throwable instanceof SocketTimeoutException) return TIMEOUT_EXCEEDED;
     if(throwable instanceof SocketException) return CONNECTION_ERROR;
+
     String msg = throwable.getMessage();
     if(msg == null || msg.isEmpty() || throwable instanceof RuntimeException)
       msg = throwable.toString();
     if(throwable instanceof FileNotFoundException) return info(RES_NOT_FOUND_X, msg);
     if(throwable instanceof UnknownHostException) return info(UNKNOWN_HOST_X, msg);
+
+    // chop long error messages. // example: doc("http://google.com/sdffds")
+    if(throwable.getClass() == IOException.class && msg.length() > 200) {
+      msg = msg.substring(0, 200) + DOTS;
+    }
     return msg;
   }
 
@@ -268,7 +273,8 @@ public final class Util {
   }
 
   /**
-   * Starts the specified class in a separate process.
+   * Starts the specified class in a separate process. A -D (daemon) flag will be added to the
+   * command-line options.
    * @param clazz class to start
    * @param args command-line arguments
    * @return reference to a {@link Process} instance representing the started process
@@ -278,10 +284,9 @@ public final class Util {
         "-cp", System.getProperty("java.class.path") };
     final StringList sl = new StringList().add(largs);
 
-    for(final Entry<Object, Object> o : System.getProperties().entrySet()) {
-      final String k = o.getKey().toString();
-      if(k.startsWith(Prop.DBPREFIX)) sl.add("-D" + k + '=' + o.getValue());
-    }
+    System.getProperties().forEach((key, value) -> {
+      if(key.toString().startsWith(Prop.DBPREFIX)) sl.add("-D" + key + '=' + value);
+    });
     sl.add(clazz.getName()).add("-D").add(args);
 
     try {
@@ -295,7 +300,7 @@ public final class Util {
    * Returns the error message of a process.
    * @param process process
    * @param timeout time out in milliseconds
-   * @return error message, or {@code null}
+   * @return error message or {@code null}
    */
   public static String error(final Process process, final int timeout) {
     final int wait = 200, to = Math.max(timeout / wait, 1);
@@ -305,6 +310,7 @@ public final class Util {
         if(exit == 1) return Token.string(new IOStream(process.getErrorStream()).read());
         break;
       } catch(final IllegalThreadStateException ex) {
+        debug(ex);
         // process is still running
         Performance.sleep(wait);
       } catch(final IOException ex) {

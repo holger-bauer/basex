@@ -1,7 +1,5 @@
 package org.basex.util.ft;
 
-import java.util.Map.Entry;
-
 import static org.basex.util.ft.FTFlag.*;
 
 import java.util.*;
@@ -16,12 +14,12 @@ import org.basex.util.list.*;
  * Performs full-text lexing on token. Calls tokenizers, stemmers matching to full-text options
  * to achieve this.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Jens Erat
  */
-public final class FTLexer extends FTIterator implements IndexToken {
+public final class FTLexer extends FTIterator implements IndexSearch {
   /** Tokenizer. */
-  private final Tokenizer tok;
+  private final Tokenizer tokens;
   /** Full-text options. */
   private final FTOpt ftOpt;
   /** Text to be tokenized. */
@@ -47,7 +45,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
 
   /**
    * Default constructor.
-   * @param ftOpt full-text options
+   * @param ftOpt full-text options (can be {@code null})
    */
   public FTLexer(final FTOpt ftOpt) {
     this.ftOpt = ftOpt;
@@ -57,15 +55,15 @@ public final class FTLexer extends FTIterator implements IndexToken {
     if(lang == null) lang = Language.def();
 
     // use default tokenizer if specific tokenizer is not available.
-    Tokenizer tk = Tokenizer.IMPL.get(0);
-    for(final Tokenizer t : Tokenizer.IMPL) {
-      if(t.supports(lang)) {
-        tk = t;
+    Tokenizer tkns = Tokenizer.IMPL.get(0);
+    for(final Tokenizer tknzr : Tokenizer.IMPL) {
+      if(tknzr.supports(lang)) {
+        tkns = tknzr;
         break;
       }
     }
-    tok = tk.get(ftOpt);
-    iter = tok;
+    tokens = tkns.get(ftOpt);
+    iter = tokens;
 
     // wrap original iterator
     if(ftOpt != null && ftOpt.is(ST)) {
@@ -90,7 +88,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
    * @return self reference
    */
   public FTLexer original() {
-    tok.original = true;
+    tokens.original = true;
     return all();
   }
 
@@ -99,7 +97,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
    * @return self reference
    */
   public FTLexer all() {
-    tok.all = true;
+    tokens.all = true;
     return this;
   }
 
@@ -175,12 +173,12 @@ public final class FTLexer extends FTIterator implements IndexToken {
   }
 
   /**
-   * Returns the original token. Inherited from {@link IndexToken};
+   * Returns the original token. Inherited from {@link IndexSearch};
    * use {@link #next} or {@link #nextToken} if not using this interface.
-   * @return current token.
+   * @return current token
    */
   @Override
-  public byte[] get() {
+  public byte[] token() {
     return ctxt != null ? ctxt : curr.text;
   }
 
@@ -193,21 +191,13 @@ public final class FTLexer extends FTIterator implements IndexToken {
   }
 
   /**
-   * Returns the text to be processed.
-   * @return text
-   */
-  public byte[] text() {
-    return text;
-  }
-
-  /**
    * Returns if the current token starts a new paragraph. Needed for visualizations.
    * Does not have to be implemented by all tokenizers.
    * Returns false if not implemented.
    * @return boolean
    */
   public boolean paragraph() {
-    return tok.paragraph();
+    return tokens.paragraph();
   }
 
   /**
@@ -218,7 +208,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
    * @return new position ({@code 0} if not implemented)
    */
   public int pos(final int word, final FTUnit unit) {
-    return tok.pos(word, unit);
+    return tokens.pos(word, unit);
   }
 
   /**
@@ -227,7 +217,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
    * @return int arrays or empty array if not implemented
    */
   public int[][] info() {
-    return tok.info();
+    return tokens.info();
   }
 
   /**
@@ -246,7 +236,7 @@ public final class FTLexer extends FTIterator implements IndexToken {
     // only change case in insensitive mode
     to.cs = opt.cs != null && opt.cs != FTCase.INSENSITIVE ? FTCase.SENSITIVE :
       FTCase.INSENSITIVE;
-    return new FTLexer(to).init(text());
+    return new FTLexer(to).init(text);
   }
 
   /**
@@ -258,15 +248,13 @@ public final class FTLexer extends FTIterator implements IndexToken {
     for(final Stemmer stem : Stemmer.IMPL) {
       for(final Language l : stem.languages()) {
         if(langs.containsKey(l)) continue;
-        for(final Tokenizer t : Tokenizer.IMPL) {
-          if(t.languages().contains(l)) langs.put(l, stem);
+        for(final Tokenizer tknzr : Tokenizer.IMPL) {
+          if(tknzr.languages().contains(l)) langs.put(l, stem);
         }
       }
     }
     final StringList sl = new StringList();
-    for(final Entry<Language, Stemmer> l : langs.entrySet()) {
-      sl.add(l.getKey() + " (" + l.getValue() + ')');
-    }
+    langs.forEach((key, value) -> sl.add(key + " (" + value + ')'));
     return sl.sort();
   }
 }

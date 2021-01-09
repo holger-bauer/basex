@@ -14,18 +14,20 @@ import org.basex.util.list.*;
 /**
  * This class serializes items as CSV.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 abstract class CsvSerializer extends StandardSerializer {
   /** CSV options. */
   final CsvOptions copts;
   /** Separator. */
-  private final int separator;
+  final int separator;
   /** Generate quotes. */
-  private final boolean quotes;
+  final boolean quotes;
   /** Generate backslashes. */
-  private final boolean backslashes;
+  final boolean backslashes;
+  /** Header flag. */
+  boolean header;
 
   /**
    * Constructor.
@@ -38,19 +40,20 @@ abstract class CsvSerializer extends StandardSerializer {
     copts = opts.get(SerializerOptions.CSV);
     quotes = copts.get(CsvOptions.QUOTES);
     backslashes = copts.get(CsvOptions.BACKSLASHES);
+    header = copts.get(CsvOptions.HEADER);
     separator = copts.separator();
   }
 
   /**
-   * Prints a record with the specified fields.
-   * @param fields fields to be printed
+   * Prints a record with the specified entries.
+   * @param entries record entries to be printed (will be reset after serialization)
    * @throws IOException I/O exception
    */
-  final void record(final TokenList fields) throws IOException {
+  final void record(final TokenList entries) throws IOException {
     // print fields, skip trailing empty contents
-    final int fs = fields.size();
+    final int fs = entries.size();
     for(int i = 0; i < fs; i++) {
-      final byte[] v = fields.get(i);
+      final byte[] v = entries.get(i);
       if(i != 0) out.print(separator);
 
       byte[] txt = v == null ? EMPTY : v;
@@ -58,8 +61,8 @@ abstract class CsvSerializer extends StandardSerializer {
       final boolean special = contains(txt, '\r') || contains(txt, '\t') || contains(txt, '"');
       if(delim || special || backslashes && contains(txt, '\\')) {
         final TokenBuilder tb = new TokenBuilder();
-        if(delim && !backslashes && !quotes) throw BXCS_SERIAL_X.getIO(
-            Util.info("Output must be put into quotes: %", chop(txt, null)));
+        if(delim && !backslashes && !quotes) throw CSV_SERIALIZE_X.getIO(
+            Util.info("Output must be put into quotes: %", normalize(txt, null)));
 
         if(quotes && (delim || special)) tb.add('"');
         final int len = txt.length;
@@ -84,10 +87,11 @@ abstract class CsvSerializer extends StandardSerializer {
       out.print(txt);
     }
     out.print('\n');
+    entries.reset();
   }
 
   @Override
   protected void atomic(final Item value) throws IOException {
-    throw BXCS_SERIAL_X.getIO("Atomic values cannot be serialized");
+    throw CSV_SERIALIZE_X.getIO("Atomic values cannot be serialized");
   }
 }

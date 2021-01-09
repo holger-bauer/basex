@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Parsing options dialog.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class DialogParsing extends BaseXBack {
@@ -35,18 +35,19 @@ final class DialogParsing extends BaseXBack {
 
   /**
    * Default constructor.
-   * @param d dialog reference
-   * @param t tabs
+   * @param dialog dialog reference
+   * @param tabs tabs
    */
-  DialogParsing(final BaseXDialog d, final BaseXTabs t) {
+  DialogParsing(final BaseXDialog dialog, final BaseXTabs tabs) {
     border(8);
-    gui = d.gui;
-    tabs = t;
+    gui = dialog.gui;
+    this.tabs = tabs;
     label = new BaseXLabel().border(0, 0, 8, 0).large();
 
     final MainOptions opts = gui.context.options;
-    parsers = new DialogParser[] { new DialogXmlParser(d, opts), new DialogHtmlParser(d, opts),
-      new DialogJsonParser(d, opts), new DialogCsvParser(d, opts), new DialogTextParser(d, opts)
+    parsers = new DialogParser[] { new DialogXmlParser(dialog, opts),
+        new DialogHtmlParser(dialog, opts), new DialogJsonParser(dialog, opts),
+        new DialogCsvParser(dialog, opts), new DialogTextParser(dialog, opts)
     };
 
     setLayout(new BorderLayout());
@@ -75,7 +76,9 @@ final class DialogParsing extends BaseXBack {
       tabs.setEnabledAt(1, true);
       final MainParser[] mps = MainParser.values();
       final int ml = mps.length;
-      for(int t = 0; t < ml; t++) if(mps[t] == mp) panel = parsers[t];
+      for(int t = 0; t < ml; t++) {
+        if(mps[t] == mp) panel = parsers[t];
+      }
     }
   }
 

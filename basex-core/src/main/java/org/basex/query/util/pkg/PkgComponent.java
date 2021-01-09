@@ -5,7 +5,7 @@ import java.io.*;
 /**
  * Package component.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Rositsa Shadura
  */
 final class PkgComponent {
@@ -19,7 +19,6 @@ final class PkgComponent {
    * @return name
    */
   String name() {
-    final int i = file.lastIndexOf(File.separator);
-    return i == -1 ? file : file.substring(i + 1, file.length());
+    return file.substring(file.lastIndexOf(File.separator) + 1);
   }
 }

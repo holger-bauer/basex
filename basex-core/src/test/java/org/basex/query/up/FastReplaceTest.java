@@ -1,28 +1,27 @@
 package org.basex.query.up;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
+import org.basex.*;
 import org.basex.core.cmd.*;
-import org.basex.query.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * Stress Testing the fast replace feature where blocks on disk are directly
  * overwritten.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Lukas Kircher
  */
-public final class FastReplaceTest extends AdvancedQueryTest {
+public final class FastReplaceTest extends SandboxTest {
   /** Test document. */
   private static final String DOC = "src/test/resources/xmark.xml";
 
   /**
    * Creates the db based on xmark.xml.
    */
-  @Before
-  public void setUp() {
+  @BeforeEach public void setUp() {
     execute(new CreateDB(NAME, DOC));
     query("let $items := /site/regions//item " +
       "for $i in 1 to 10 " +
@@ -34,19 +33,17 @@ public final class FastReplaceTest extends AdvancedQueryTest {
   /**
    * Replaces blocks of equal size distributed over the document.
    */
-  @Test
-  public void replaceEqualBlocks() {
+  @Test public void replaceEqualBlocks() {
     query("for $i in //item/location/text() return replace node $i with $i");
-    query("count(//item)", "186");
+    query("count(//item)", 186);
   }
 
   /**
    * Replaces blocks of equal size distributed over the document.
    */
-  @Test
-  public void replaceEqualBlocks2() {
+  @Test public void replaceEqualBlocks2() {
     query("for $i in //item return replace node $i with $i");
-    query("count(//item)", "186");
+    query("count(//item)", 186);
   }
 
   /**
@@ -54,8 +51,7 @@ public final class FastReplaceTest extends AdvancedQueryTest {
    * the smallest //item node in the database and replace each //item with
    * this.
    */
-  @Test
-  public void replaceWithSmallerTree() {
+  @Test public void replaceWithSmallerTree() {
     final String id =
       query("let $newitem := (let $c := min(for $i in //item " +
         "return count($i/descendant-or-self::node())) " +
@@ -76,15 +72,14 @@ public final class FastReplaceTest extends AdvancedQueryTest {
    * the biggest //item node in the database and replace each //item with
    * this.
    */
-  @Test
-  public void replaceWithBiggerTree() {
+  @Test public void replaceWithBiggerTree() {
     query("let $newitem := (let $c := max(for $i in //item " +
       "return count($i/descendant-or-self::node())) " +
       "return for $i in //item where " +
       "(count($i/descendant-or-self::node()) = $c) " +
       "return $i)[1] return for $i in //item " +
       "return replace node $i with $newitem");
-    query("count(//item)", "186");
+    query("count(//item)", 186);
   }
 
   /**
@@ -92,14 +87,13 @@ public final class FastReplaceTest extends AdvancedQueryTest {
    * the biggest //item node in the database and replace the last item in the
    * database with this.
    */
-  @Test
-  public void replaceSingleWithBiggerTree() {
+  @Test public void replaceSingleWithBiggerTree() {
     query("let $newitem := (let $c := max(for $i in //item " +
       "return count($i/descendant-or-self::node())) " +
       "return for $i in //item where " +
       "(count($i/descendant-or-self::node()) = $c) " +
       "return $i)[1] return replace node (//item)[last()] with $newitem");
-    query("count(//item)", "186");
+    query("count(//item)", 186);
   }
 
   /**
@@ -107,8 +101,7 @@ public final class FastReplaceTest extends AdvancedQueryTest {
    * the biggest //item node in the database and replace the last item in the
    * database with this.
    */
-  @Test
-  public void replaceSingleWithSmallerTree() {
+  @Test public void replaceSingleWithSmallerTree() {
     final String id =
       query("let $newitem := (let $c := min(for $i in //item " +
         "return count($i/descendant-or-self::node())) " +
@@ -116,15 +109,14 @@ public final class FastReplaceTest extends AdvancedQueryTest {
         "(count($i/descendant-or-self::node()) = $c) " +
         "return $i)[1] return $newitem/@id/data()");
     query("replace node (//item)[last()] with (//item[@id='" + id + "'])[1]");
-    query("count(//item)", "186");
+    query("count(//item)", 186);
   }
 
   /**
    * Replaces a single attribute with two attributes. Checks for correct
    * updating of the parent's attribute size.
    */
-  @Test
-  public void replaceAttribute() {
+  @Test public void replaceAttribute() {
     query("replace node (//item)[1]/attribute() with " +
       "(attribute att1 {'0'}, attribute att2 {'1'})");
     query("(//item)[1]/attribute()/string()", "0\n1");
@@ -134,8 +126,7 @@ public final class FastReplaceTest extends AdvancedQueryTest {
    * Replaces a single attribute with two attributes for each item. Checks for
    * correct updating of the parent's attribute size.
    */
-  @Test
-  public void replaceAttribute2() {
+  @Test public void replaceAttribute2() {
     query("for $i in //item return replace node $i/attribute() with " +
         "(attribute att1 {'0'}, attribute att2 {'1'})");
     query("//item/attribute()/string()");

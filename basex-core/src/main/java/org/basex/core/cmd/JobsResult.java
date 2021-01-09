@@ -19,7 +19,7 @@ import org.basex.util.*;
 /**
  * Evaluates the 'jobs stop' command.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JobsResult extends Command {
@@ -35,18 +35,18 @@ public final class JobsResult extends Command {
   protected boolean run() {
     final String id = args[0];
     final JobPool jobs = context.jobs;
-    final Map<String, JobResult> results = jobs.results;
-    final JobResult result = results.get(id);
-    if(result == null) return error(JOBS_UNKNOWN_X.desc, id);
-    if(!result.cached()) error(JOBS_RUNNING_X.desc, id);
+    final Map<String, QueryJobResult> results = jobs.results;
+    final QueryJobResult result = results.get(id);
+    if(result == null) return error(JOBS_UNKNOWN_X.message, id);
+    if(!result.cached()) error(JOBS_RUNNING_X.message, id);
 
     try {
       if(result.value == null) throw result.exception;
 
       final Serializer ser = Serializer.get(out);
-      final Iter ir = result.value.iter();
-      for(Item it; (it = ir.next()) != null;) {
-        ser.serialize(it);
+      final Iter iter = result.value.iter();
+      for(Item item; (item = iter.next()) != null;) {
+        ser.serialize(item);
         checkStop();
       }
       return true;

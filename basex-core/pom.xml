@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.basex</groupId>
     <artifactId>basex-parent</artifactId>
-    <version>8.6.1-SNAPSHOT</version>
+    <version>9.4.7-SNAPSHOT</version>
     <relativePath>..</relativePath>
   </parent>
 
@@ -15,8 +15,16 @@
 
   <dependencies>
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
     </dependency>
     <dependency>
       <groupId>jp.sourceforge.igo</groupId>
@@ -44,7 +52,7 @@
       <optional>true</optional>
     </dependency>
     <dependency>
-      <groupId>com.thaiopensource</groupId>
+      <groupId>org.relaxng</groupId>
       <artifactId>jing</artifactId>
       <optional>true</optional>
     </dependency>
@@ -77,9 +85,6 @@
               <mainClass>org.basex.BaseXGUI</mainClass>
               <packageName>org.basex</packageName>
             </manifest>
-            <manifestEntries>
-              <SplashScreen-Image>img/start.png</SplashScreen-Image>
-            </manifestEntries>
           </archive>
         </configuration>
       </plugin>
@@ -106,18 +111,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-deploy-plugin</artifactId>
       </plugin>
-      <!--<plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
-      </plugin>-->
-      <!-- Temporarily removed (takes some time)
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-checkstyle-plugin</artifactId>
-        <configuration>
-          <excludes>org/basex/query/util/regex/parse/**.java</excludes>
-        </configuration>
-      </plugin>-->
     </plugins>
   </build>
 </project>

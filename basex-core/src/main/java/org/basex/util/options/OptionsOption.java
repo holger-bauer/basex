@@ -5,7 +5,7 @@ import org.basex.util.*;
 /**
  * Option containing another {@link Options} value.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <O> options value
  */
@@ -61,7 +61,7 @@ public final class OptionsOption<O extends Options> extends Option<O> {
    */
   public O newInstance() {
     try {
-      return clazz.newInstance();
+      return clazz.getDeclaredConstructor().newInstance();
     } catch(final Exception ex) {
       throw Util.notExpected(ex);
     }

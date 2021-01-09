@@ -17,12 +17,10 @@ import org.basex.util.list.*;
  * Next, the instance of this class will be passed on to all operations, as it organizes concurrent
  * data access, ensuring that no job will concurrently write to the same data instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Context {
-  /** Client info. Set to {@code null} in standalone/server mode. */
-  public final ClientInfo client;
   /** Blocked clients. */
   public final ClientBlocker blocker;
   /** Job pool. */
@@ -46,18 +44,22 @@ public final class Context {
   /** Locking. */
   public final Locking locking;
 
-  /** Current node context. Set if it does not contain all documents of the current database. */
+  /** Client info. Set to {@code null} in standalone/server mode. */
+  private final ClientInfo client;
+  /** Current node context. {@code null} if all documents of the current database are referenced. */
   private DBNodes current;
   /** User reference. */
   private User user;
-  /** Data reference. */
+  /** Currently opened database. */
   private Data data;
+  /** Indicates if the class has been closed/finalized. */
+  private boolean closed;
 
   // GUI references
 
-  /** Marked nodes. */
+  /** Marked nodes. {@code null} if database is closed. */
   public DBNodes marked;
-  /** Copied nodes. */
+  /** Copied nodes {@code null} if database is closed.. */
   public DBNodes copied;
   /** Focused node. */
   public int focused = -1;
@@ -79,7 +81,7 @@ public final class Context {
 
   /**
    * Constructor, called by clients, and adopting the variables of the specified context.
-   * The {@link #user} reference must be set after calling this method.
+   * The {@link #user} must be set after calling this method.
    * @param ctx main context
    */
   public Context(final Context ctx) {
@@ -88,9 +90,9 @@ public final class Context {
 
   /**
    * Constructor, called by clients, and adopting the variables of the main context.
-   * The {@link #user} reference must be set after calling this method.
+   * The {@link #user} must be set after calling this method.
    * @param ctx main context
-   * @param client client info
+   * @param client client info (can be {@code null})
    */
   public Context(final Context ctx, final ClientInfo client) {
     this.client = client;
@@ -111,7 +113,7 @@ public final class Context {
    * Private constructor.
    * @param soptions static options
    */
-  private Context(final StaticOptions soptions) {
+  public Context(final StaticOptions soptions) {
     this.soptions = soptions;
     options = new MainOptions();
     datas = new Datas();
@@ -129,7 +131,7 @@ public final class Context {
 
   /**
    * Returns the user of this context.
-   * @return user
+   * @return user (can be {@code null} if it has not yet been assigned
    */
   public User user() {
     return user;
@@ -149,10 +151,13 @@ public final class Context {
    * and not on client instances.
    */
   public synchronized void close() {
+    if(closed) return;
+    closed = true;
     jobs.close();
     sessions.close();
     datas.close();
     log.close();
+    closeDB();
   }
 
   /**
@@ -174,7 +179,7 @@ public final class Context {
 
   /**
    * Returns the current node context.
-   * @return node set
+   * @return node set, or {@code null} if no database is opened
    */
   public DBNodes current() {
     if(data == null) return null;
@@ -240,7 +245,7 @@ public final class Context {
   /**
    * Checks if the current user has the specified permission.
    * @param perm requested permission
-   * @param db database (can be {@code null})
+   * @param db database pattern (can be {@code null})
    * @return result of check
    */
   public boolean perm(final Perm perm, final String db) {
@@ -248,14 +253,39 @@ public final class Context {
   }
 
   /**
-   * Filters databases to the ones that have the specified permission.
-   * @param perm requested permission
-   * @param dbs list of databases
+   * Returns the host and port of a client.
+   * @return address (or {@code null})
+   */
+  public String clientAddress() {
+    return client != null ? client.clientAddress() : null;
+  }
+
+  /**
+   * Returns the name of the current client or user.
+   * @return user name (or {@code null})
+   */
+  public String clientName() {
+    return client != null ? client.clientName() : user != null ? user.name() : null;
+  }
+
+  /**
+   * Returns all databases for which the current user has read access.
    * @return resulting list
    */
-  public StringList filter(final Perm perm, final StringList dbs) {
-    final StringList sl = new StringList(dbs.size());
-    for(final String db : dbs) if(perm(perm, db)) sl.add(db);
+  public StringList listDBs() {
+    return listDBs(null);
+  }
+
+  /**
+   * Returns all databases for which the current user has read access.
+   * @param pattern database pattern (can be {@code null})
+   * @return resulting list
+   */
+  public StringList listDBs(final String pattern) {
+    final StringList dbs = databases.listDBs(pattern), sl = new StringList(dbs.size());
+    for(final String db : dbs) {
+      if(perm(Perm.READ, db)) sl.add(db);
+    }
     return sl;
   }
 }

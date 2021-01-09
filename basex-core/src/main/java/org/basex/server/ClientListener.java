@@ -21,11 +21,14 @@ import org.basex.util.list.*;
 /**
  * Server-side client session in the client-server architecture.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Andreas Weiler
  * @author Christian Gruen
  */
 public final class ClientListener extends Thread implements ClientInfo {
+  /** Prints trace output to the evaluation info. */
+  private static final QueryTracer PASS = info -> true;
+
   /** Timer for authentication time out. */
   public final Timer timeout = new Timer();
   /** Timestamp of last interaction. */
@@ -87,7 +90,7 @@ public final class ClientListener extends Thread implements ClientInfo {
           }
 
           last = System.currentTimeMillis();
-          perf.time();
+          perf.ns();
           sc = ServerCmd.get(b);
           cmd = null;
           if(sc == ServerCmd.CREATE) {
@@ -106,6 +109,7 @@ public final class ClientListener extends Thread implements ClientInfo {
           }
         } catch(final IOException ex) {
           // this exception may be thrown if a session is stopped
+          Util.debug(ex);
           close();
           break;
         }
@@ -114,7 +118,7 @@ public final class ClientListener extends Thread implements ClientInfo {
         // parse input and create command instance
         try {
           command = CommandParser.get(cmd, context).parseSingle();
-          command.jc().tracer = QueryTracer.EVALINFO;
+          command.jc().tracer = PASS;
           log(LogType.REQUEST, command.toString(true));
         } catch(final QueryException ex) {
           // log invalid command
@@ -139,6 +143,7 @@ public final class ClientListener extends Thread implements ClientInfo {
           command.execute(context, new ServerOutput(out));
           info = command.info();
         } catch(final BaseXException ex) {
+          Util.debug(ex);
           ok = false;
           info = ex.getMessage();
         }
@@ -178,7 +183,7 @@ public final class ClientListener extends Thread implements ClientInfo {
       send(true);
 
       // evaluate login data
-      in = new BufferInput(socket.getInputStream());
+      in = BufferInput.get(socket.getInputStream());
       // receive {USER}0{DIGEST-HASH}0
       final String name = in.readString(), hash = in.readString();
       final User user = context.users.get(name);
@@ -193,7 +198,7 @@ public final class ClientListener extends Thread implements ClientInfo {
         context.blocker.remove(address);
         context.sessions.add(this);
       } else {
-        if(!name.isEmpty()) log(LogType.ERROR, ACCESS_DENIED);
+        if(!name.isEmpty()) log(LogType.ERROR, Util.info(ACCESS_DENIED_X, name));
         // delay users with wrong passwords
         context.blocker.delay(address);
         send(false);
@@ -227,7 +232,7 @@ public final class ClientListener extends Thread implements ClientInfo {
     context.sessions.remove(this);
 
     try {
-      new Close().run(context);
+      if(context.user() != null) Close.close(context);
       socket.close();
     } catch(final Throwable ex) {
       log(LogType.ERROR, Util.message(ex));
@@ -244,23 +249,24 @@ public final class ClientListener extends Thread implements ClientInfo {
   }
 
   @Override
-  public String user() {
-    return context.user().name();
+  public String clientName() {
+    final User user = context.user();
+    return user != null ? user.name() : null;
   }
 
   @Override
-  public String address() {
+  public String clientAddress() {
     return socket.getInetAddress().getHostAddress() + ':' + socket.getPort();
   }
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("[").append(address()).append(']');
+    final StringBuilder sb = new StringBuilder("[").append(clientAddress()).append(']');
     if(context.data() != null) sb.append(COLS).append(context.data().meta.name);
     return sb.toString();
   }
 
-  // PRIVATE METHODS ==========================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Returns error feedback.
@@ -361,7 +367,7 @@ public final class ClientListener extends Thread implements ClientInfo {
       if(sc == ServerCmd.QUERY) {
         final String query = arg;
         qp = new ServerQuery(query, context);
-        qp.jc().tracer = QueryTracer.EVALINFO;
+        qp.jc().tracer = PASS;
         arg = Integer.toString(id++);
         queries.put(arg, qp);
         // send {ID}0
@@ -415,7 +421,7 @@ public final class ClientListener extends Thread implements ClientInfo {
 
     } catch(final Throwable ex) {
       // log exception (static or runtime)
-      error = Util.message(ex);
+      error = ex instanceof RuntimeException ? Util.bug(ex) : Util.message(ex);
       log(LogType.REQUEST, sc + "[" + arg + ']');
       log(LogType.ERROR, error);
       queries.remove(arg);
@@ -446,7 +452,6 @@ public final class ClientListener extends Thread implements ClientInfo {
    * @param info message info
    */
   private void log(final LogType type, final String info) {
-    final User user = context.user();
-    context.log.write(address(), user != null ? user.name() : null, type, info, perf);
+    context.log.write(type, info, perf, context);
   }
 }

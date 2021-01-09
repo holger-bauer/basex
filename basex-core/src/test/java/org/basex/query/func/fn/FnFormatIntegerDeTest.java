@@ -5,11 +5,10 @@ import org.basex.query.*;
 /**
  * XQuery functions tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFormatIntegerDeTest extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
       { "de0", strings("null"), "format-integer(0, 'w', 'de')" },

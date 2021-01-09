@@ -3,64 +3,68 @@ package org.basex.query.expr.path;
 import org.basex.query.iter.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
 
 /**
- * Document kind test.
+ * Document with child test.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DocTest extends Test {
   /** Child test. */
-  private final Test test;
+  private final Test child;
 
   /**
    * Constructor.
-   * @param test child test
+   * @param child child element test
    */
-  public DocTest(final Test test) {
-    super(NodeType.DOC);
-    this.test = test;
+  public DocTest(final Test child) {
+    super(NodeType.DOCUMENT_NODE);
+    this.child = child;
   }
 
   @Override
   public Test copy() {
-    return new DocTest(test);
+    return new DocTest(child);
   }
 
   @Override
-  public boolean eq(final ANode node) {
-    if(node.type != NodeType.DOC) return false;
-    final BasicNodeIter iter = node.children();
+  public boolean matches(final ANode node) {
+    if(node.type != NodeType.DOCUMENT_NODE) return false;
+    final BasicNodeIter iter = node.childIter();
     boolean found = false;
     for(ANode n; (n = iter.next()) != null;) {
-      if(n.type == NodeType.COM || n.type == NodeType.PI) continue;
-      if(found || !test.eq(n)) return false;
+      if(n.type == NodeType.COMMENT || n.type == NodeType.PROCESSING_INSTRUCTION) continue;
+      if(found || !child.matches(n)) return false;
       found = true;
     }
     return true;
   }
 
   @Override
-  public boolean nsSensitive() {
-    return test != null && test.nsSensitive();
-  }
-
-  @Override
-  public Test intersect(final Test other) {
-    if(other instanceof DocTest) {
-      final DocTest o = (DocTest) other;
-      if(test == null || o.test == null || test.sameAs(o.test)) return test != null ? this : other;
-      final Test t = test.intersect(o.test);
-      return t == null ? null : new DocTest(t);
+  public Test intersect(final Test test) {
+    if(test instanceof DocTest) {
+      final DocTest dt = (DocTest) test;
+      if(child == null || dt.child == null || child.equals(dt.child))
+        return child != null ? this : test;
+      final Test tp = child.intersect(dt.child);
+      return tp == null ? null : new DocTest(tp);
     }
-    if(other instanceof KindTest) return NodeType.DOC.instanceOf(other.type) ? this : null;
-    if(other instanceof InvDocTest) return this;
+    if(test instanceof KindTest) return type.instanceOf(test.type) ? this : null;
+    if(test instanceof UnionTest) return test.intersect(this);
+    if(test instanceof InvDocTest) return this;
+    // NameTest
     return null;
   }
 
   @Override
-  public String toString() {
-    return test.toString();
+  public boolean equals(final Object obj) {
+    return obj instanceof DocTest && obj.equals(((DocTest) obj).child);
+  }
+
+  @Override
+  public String toString(final boolean full) {
+    return Strings.concat(type.name, "(", child, ")");
   }
 }

@@ -3,6 +3,7 @@ package org.basex.query.value.type;
 import static org.basex.query.QueryError.*;
 
 import java.io.*;
+import java.util.*;
 import java.util.regex.*;
 
 import org.basex.api.dom.*;
@@ -21,15 +22,15 @@ import org.w3c.dom.Text;
 /**
  * XQuery node types.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public enum NodeType implements Type {
   /** Node type. */
-  NOD("node", AtomType.ITEM, ID.NOD),
+  NODE("node", AtomType.ITEM, ID.NOD),
 
   /** Text type. */
-  TXT("text", NOD, ID.TXT) {
+  TEXT("text", NODE, ID.TXT) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) {
@@ -40,7 +41,7 @@ public enum NodeType implements Type {
   },
 
   /** PI type. */
-  PI("processing-instruction", NOD, ID.PI) {
+  PROCESSING_INSTRUCTION("processing-instruction", NODE, ID.PI) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
@@ -48,19 +49,19 @@ public enum NodeType implements Type {
       if(value instanceof ProcessingInstruction) return new FPI((ProcessingInstruction) value);
       final Matcher m = Pattern.compile("<\\?(.*?) (.*)\\?>").matcher(value.toString());
       if(m.find()) return new FPI(m.group(1), m.group(2));
-      throw NODEERR_X_X.get(ii, this, chop(value, ii));
+      throw NODEERR_X_X.get(ii, this, normalize(value, ii));
     }
   },
 
   /** Element type. */
-  ELM("element", NOD, ID.ELM) {
+  ELEMENT("element", NODE, ID.ELM) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
       if(value instanceof BXElem)  return ((BXNode) value).getNode();
       if(value instanceof Element) return new FElem((Element) value, null, new TokenMap());
       try {
-        return new DBNode(new IOContent(value.toString())).children().next();
+        return new DBNode(new IOContent(value.toString())).childIter().next();
       } catch(final IOException ex) {
         throw NODEERR_X_X.get(ii, this, ex);
       }
@@ -68,7 +69,7 @@ public enum NodeType implements Type {
   },
 
   /** Document type. */
-  DOC("document-node", NOD, ID.DOC) {
+  DOCUMENT_NODE("document-node", NODE, ID.DOC) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
@@ -85,7 +86,7 @@ public enum NodeType implements Type {
           return new FDoc(df, bu != null ? Token.token(bu) : Token.EMPTY);
         }
         final String string = value.toString();
-        if(string.startsWith("<")) return new DBNode(new IOContent(string));
+        if(Strings.startsWith(string, '<')) return new DBNode(new IOContent(string));
         return new FDoc().add(new FTxt(string));
       } catch(final IOException ex) {
         throw NODEERR_X_X.get(ii, this, ex);
@@ -94,16 +95,16 @@ public enum NodeType implements Type {
   },
 
   /** Document element type. */
-  DEL("document-node(element())", NOD, ID.DEL) {
+  DOCUMENT_NODE_ELEMENT("document-node(element())", DOCUMENT_NODE, ID.DEL) {
     @Override
     public Item cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
-      return DOC.cast(value, qc, sc, ii);
+      return DOCUMENT_NODE.cast(value, qc, sc, ii);
     }
   },
 
   /** Attribute type. */
-  ATT("attribute", NOD, ID.ATT) {
+  ATTRIBUTE("attribute", NODE, ID.ATT) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
@@ -111,12 +112,12 @@ public enum NodeType implements Type {
       if(value instanceof Attr) return new FAttr((Attr) value);
       final Matcher m = Pattern.compile(" (.*?)=\"(.*)\"").matcher(value.toString());
       if(m.find()) return new FAttr(m.group(1), m.group(2));
-      throw NODEERR_X_X.get(ii, this, chop(value, ii));
+      throw NODEERR_X_X.get(ii, this, normalize(value, ii));
     }
   },
 
   /** Comment type. */
-  COM("comment", NOD, ID.COM) {
+  COMMENT("comment", NODE, ID.COM) {
     @Override
     public ANode cast(final Object value, final QueryContext qc, final StaticContext sc,
         final InputInfo ii) throws QueryException {
@@ -124,30 +125,35 @@ public enum NodeType implements Type {
       if(value instanceof Comment) return new FComm((Comment) value);
       final Matcher m = Pattern.compile("<!--(.*?)-->").matcher(value.toString());
       if(m.find()) return new FComm(m.group(1));
-      throw NODEERR_X_X.get(ii, this, chop(value, ii));
+      throw NODEERR_X_X.get(ii, this, normalize(value, ii));
     }
   },
 
   /** Namespace type. */
-  NSP("namespace-node", NOD, ID.NSP),
+  NAMESPACE_NODE("namespace-node", NODE, ID.NSP),
 
   /** Schema-element. */
-  SCE("schema-element", NOD, ID.SCE),
+  SCHEMA_ELEMENT("schema-element", NODE, ID.SCE),
 
   /** Schema-attribute. */
-  SCA("schema-attribute", NOD, ID.SCA);
+  SCHEMA_ATTRIBUTE("schema-attribute", NODE, ID.SCA);
 
   /** Cached enums (faster). */
   private static final NodeType[] VALUES = values();
+  /** Leaf node types. */
+  public static final NodeType[] LEAVE_TYPES = {
+    ATTRIBUTE, COMMENT, NAMESPACE_NODE, PROCESSING_INSTRUCTION, TEXT
+  };
+
   /** Name. */
-  private final byte[] name;
+  public final byte[] name;
   /** Parent type. */
   private final Type parent;
   /** Type id . */
   private final ID id;
 
-  /** Sequence type (lazy instantiation). */
-  private SeqType seq;
+  /** Sequence types (lazy instantiation). */
+  private EnumMap<Occ, SeqType> seqTypes;
 
   /**
    * Constructor.
@@ -182,6 +188,11 @@ public enum NodeType implements Type {
   }
 
   @Override
+  public final boolean isSortable() {
+    return true;
+  }
+
+  @Override
   public final Item cast(final Item item, final QueryContext qc, final StaticContext sc,
       final InputInfo ii) throws QueryException {
     return item.type == this ? item : error(item, ii);
@@ -200,31 +211,37 @@ public enum NodeType implements Type {
   }
 
   @Override
-  public final SeqType seqType() {
-    // cannot be statically instantiated due to circular dependency
-    if(seq == null) seq = new SeqType(this);
-    return seq;
+  public final SeqType seqType(final Occ occ) {
+    // cannot statically be instantiated due to circular dependencies
+    if(seqTypes == null) seqTypes = new EnumMap<>(Occ.class);
+    return seqTypes.computeIfAbsent(occ, o -> new SeqType(this, o));
   }
 
   @Override
-  public final boolean eq(final Type t) {
-    return this == t;
+  public final boolean eq(final Type type) {
+    return this == type;
   }
 
   @Override
-  public final boolean instanceOf(final Type t) {
-    return this == t || parent.instanceOf(t);
+  public final boolean instanceOf(final Type type) {
+    return this == type || type == AtomType.ITEM ||
+        type instanceof NodeType && parent.instanceOf(type);
   }
 
   @Override
-  public final Type union(final Type t) {
-    return t instanceof NodeType ? this == t ? this : NOD : AtomType.ITEM;
+  public final Type union(final Type type) {
+    return this == type ? this : type instanceof NodeType ? NODE : AtomType.ITEM;
   }
 
   @Override
-  public final NodeType intersect(final Type t) {
-    if(!(t instanceof NodeType)) return instanceOf(t) ? this : null;
-    return this == t ? this : this == NOD ? (NodeType) t : t == NOD ? this : null;
+  public final Type intersect(final Type type) {
+    return instanceOf(type) ? this : type.instanceOf(this) ? type : null;
+  }
+
+  @Override
+  public final AtomType atomic() {
+    return this == PROCESSING_INSTRUCTION || this == COMMENT ? AtomType.STRING :
+      AtomType.UNTYPED_ATOMIC;
   }
 
   @Override
@@ -232,25 +249,15 @@ public enum NodeType implements Type {
     return id;
   }
 
-  @Override
-  public final byte[] string() {
-    return name;
-  }
-
-  @Override
-  public final String toString() {
-    return new TokenBuilder(name).add("()").toString();
-  }
-
   /**
    * Throws a casting exception.
-   * @param it item to be included in the error message
+   * @param item item to be included in the error message
    * @param ii input info
    * @return dummy item
    * @throws QueryException query exception
    */
-  final Item error(final Item it, final InputInfo ii) throws QueryException {
-    throw castError(it, this, ii);
+  final Item error(final Item item, final InputInfo ii) throws QueryException {
+    throw typeError(item, this, ii);
   }
 
   @Override
@@ -258,16 +265,21 @@ public enum NodeType implements Type {
     return false;
   }
 
+  @Override
+  public final String toString() {
+    return Token.string(name) + "()";
+  }
+
   /**
    * Finds and returns the specified node type.
-   * @param type type
+   * @param name name of type
    * @return type or {@code null}
    */
-  public static NodeType find(final QNm type) {
-    if(type.uri().length == 0) {
-      final byte[] ln = type.local();
-      for(final NodeType t : VALUES) {
-        if(Token.eq(ln, t.name)) return t;
+  public static NodeType find(final QNm name) {
+    if(name.uri().length == 0) {
+      final byte[] ln = name.local();
+      for(final NodeType type : VALUES) {
+        if(Token.eq(ln, type.name)) return type;
       }
     }
     return null;
@@ -279,7 +291,9 @@ public enum NodeType implements Type {
    * @return corresponding type if found, {@code null} otherwise
    */
   static Type getType(final ID id) {
-    for(final NodeType t : VALUES) if(t.id == id) return t;
+    for(final NodeType type : VALUES) {
+      if(type.id == id) return type;
+    }
     return null;
   }
 }

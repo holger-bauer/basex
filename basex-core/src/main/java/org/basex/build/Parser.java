@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * This class defines a parser, which is used to create new databases instances.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class Parser extends Job {
@@ -82,7 +82,7 @@ public abstract class Parser extends Job {
     return this;
   }
 
-  // STATIC METHODS ===========================================================
+  // STATIC METHODS ===============================================================================
 
   /**
    * Returns a parser instance for creating empty databases.

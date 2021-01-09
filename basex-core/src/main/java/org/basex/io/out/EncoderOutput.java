@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This class is a wrapper for outputting texts with specific encodings.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class EncoderOutput extends PrintOutput {
@@ -43,6 +43,7 @@ public final class EncoderOutput extends PrintOutput {
       final ByteBuffer bb = encoder.encode(CharBuffer.wrap(encbuffer.add(ch).toString()));
       write(bb.array(), 0, bb.limit());
     } catch(final UnmappableCharacterException ex) {
+      Util.debug(ex);
       throw SERENC_X_X.getIO(Integer.toHexString(ch), encoding);
     }
   }

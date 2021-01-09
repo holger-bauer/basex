@@ -3,7 +3,7 @@ package org.basex.http;
 import static org.basex.core.users.UserText.*;
 import static org.basex.util.Token.*;
 import static org.basex.util.http.HttpMethod.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.net.*;
@@ -11,29 +11,28 @@ import java.util.*;
 
 import org.basex.*;
 import org.basex.core.*;
-import org.basex.core.StaticOptions.AuthMethod;
+import org.basex.core.StaticOptions.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.util.*;
+import org.basex.util.Base64;
 import org.basex.util.http.*;
 import org.basex.util.list.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class contains common methods for the HTTP services.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class HTTPTest extends SandboxTest {
-  /** Database context. */
-  private static final Context CONTEXT = HTTPContext.context();
   /** HTTP server. */
   private static BaseXHTTP http;
   /** Root path. */
   private static String rootUrl;
 
-  // INITIALIZATION =====================================================================
+  // INITIALIZATION ===============================================================================
 
   /**
    * Initializes the test.
@@ -55,22 +54,22 @@ public abstract class HTTPTest extends SandboxTest {
   protected static void init(final String url, final boolean local, final boolean auth)
       throws Exception {
 
-    assertTrue(new IOFile(CONTEXT.soptions.get(StaticOptions.WEBPATH)).md());
-    rootUrl = url;
-
     final StringList sl = new StringList();
     sl.add("-p" + DB_PORT, "-h" + HTTP_PORT, "-s" + STOP_PORT, "-z", "-q");
     if(local) sl.add("-l");
     if(!auth) sl.add("-U" + ADMIN);
     http = new BaseXHTTP(sl.toArray());
+    rootUrl = url;
+
+    final StaticOptions sopts = HTTPContext.get().context().soptions;
+    assertTrue(new IOFile(sopts.get(StaticOptions.WEBPATH)).md());
   }
 
   /**
-   * Finish test.
-   * @throws Exception exception
+   * Finishes the test.
+   * @throws IOException I/O exception
    */
-  @AfterClass
-  public static void stop() throws Exception {
+  @AfterAll public static void stop() throws IOException {
     http.stop();
 
     // cleanup: remove project specific system properties
@@ -83,12 +82,12 @@ public abstract class HTTPTest extends SandboxTest {
     for(final String key : keys) props.remove(key);
   }
 
-  // PROTECTED METHODS ==================================================================
+  // PROTECTED METHODS ============================================================================
 
   /**
    * Executes the specified GET request and returns the result.
    * @param query request
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   protected static String get(final String query) throws IOException {
@@ -108,7 +107,7 @@ public abstract class HTTPTest extends SandboxTest {
   /**
    * Executes the specified HEAD request and returns the result.
    * @param query request
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   protected static String head(final String query) throws IOException {
@@ -116,10 +115,20 @@ public abstract class HTTPTest extends SandboxTest {
   }
 
   /**
+   * Executes the specified OPTIONS request and returns the result.
+   * @param query request
+   * @return string result, or {@code null} for a failure
+   * @throws IOException I/O exception
+   */
+  protected static String options(final String query) throws IOException {
+    return request(query, OPTIONS);
+  }
+
+  /**
    * Executes the specified HTTP request and returns the result.
    * @param query request
    * @param method HTTP method
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   private static String request(final String query, final HttpMethod method)throws IOException {
@@ -130,7 +139,7 @@ public abstract class HTTPTest extends SandboxTest {
    * Executes the specified HTTP request and returns the result.
    * @param query request
    * @param method HTTP method
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   protected static String request(final String query, final String method) throws IOException {
@@ -142,7 +151,7 @@ public abstract class HTTPTest extends SandboxTest {
    * @param root root URL
    * @param query request
    * @param method HTTP method
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   protected static String request(final String root, final String query, final String method)
@@ -152,7 +161,7 @@ public abstract class HTTPTest extends SandboxTest {
     final HttpURLConnection conn = (HttpURLConnection) url.connection();
     try {
       conn.setRequestMethod(method);
-      return read(new BufferInput(conn.getInputStream()));
+      return read(conn.getInputStream());
     } catch(final IOException ex) {
       throw error(conn, ex);
     } finally {
@@ -165,7 +174,7 @@ public abstract class HTTPTest extends SandboxTest {
    * @param query path
    * @param request request
    * @param type media type
-   * @return string result, or {@code null} for a failure.
+   * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
   protected static String post(final String query, final String request, final MediaType type)
@@ -178,7 +187,7 @@ public abstract class HTTPTest extends SandboxTest {
     conn.setRequestMethod(POST.name());
     conn.setRequestProperty(HttpText.CONTENT_TYPE, type.toString());
     // basic authentication
-    final String encoded = org.basex.util.Base64.encode(ADMIN + ':' + ADMIN);
+    final String encoded = Base64.encode(ADMIN + ':' + ADMIN);
     conn.setRequestProperty(HttpText.AUTHORIZATION, AuthMethod.BASIC + " " + encoded);
     // send query
     try(OutputStream out = conn.getOutputStream()) {
@@ -214,31 +223,31 @@ public abstract class HTTPTest extends SandboxTest {
    * @throws IOException I/O exception
    */
   protected static String read(final InputStream is) throws IOException {
-    return is == null ? "" : string(new BufferInput(is).content());
+    return is == null ? "" : string(BufferInput.get(is).content());
   }
 
   /**
    * Executes the specified PUT request.
-   * @param u url
+   * @param url url
    * @param is input stream
    * @throws IOException I/O exception
    */
-  protected static void put(final String u, final InputStream is) throws IOException {
-    put(u, is, null);
+  protected static void put(final String url, final InputStream is) throws IOException {
+    put(url, is, null);
   }
 
   /**
    * Executes the specified PUT request.
-   * @param u url
+   * @param url url
    * @param is input stream
    * @param type media type (optional, may be {@code null})
    * @throws IOException I/O exception
    */
-  protected static void put(final String u, final InputStream is, final MediaType type)
+  protected static void put(final String url, final InputStream is, final MediaType type)
       throws IOException {
 
-    final IOUrl url = new IOUrl(rootUrl + u);
-    final HttpURLConnection conn = (HttpURLConnection) url.connection();
+    final IOUrl io = new IOUrl(rootUrl + url);
+    final HttpURLConnection conn = (HttpURLConnection) io.connection();
     conn.setDoOutput(true);
     conn.setRequestMethod(PUT.name());
     if(type != null) conn.setRequestProperty(HttpText.CONTENT_TYPE, type.toString());

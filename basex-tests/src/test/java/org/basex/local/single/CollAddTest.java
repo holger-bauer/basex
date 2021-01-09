@@ -3,20 +3,20 @@ package org.basex.local.single;
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.junit.*;
-import org.junit.Test;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class adds and retrieves documents in a collection.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CollAddTest extends SandboxTest {
   /**
    * Initializes the tests.
    */
-  @BeforeClass
+  @BeforeAll
   public static void init() {
     set(MainOptions.INTPARSE, true);
   }
@@ -24,56 +24,49 @@ public final class CollAddTest extends SandboxTest {
   /**
    * Adds 100 documents.
    */
-  @Test
-  public void add100() {
+  @Test public void add100() {
     add(100, false);
   }
 
   /**
    * Adds 1000 documents.
    */
-  @Test
-  public void add1000() {
+  @Test public void add1000() {
     add(1000, false);
   }
 
   /**
    * Adds 10000 documents.
    */
-  @Test
-  public void add10000() {
+  @Test public void add10000() {
     add(10000, false);
   }
 
   /**
    * Adds 100000 documents.
    */
-  @Test
-  public void add100000() {
+  @Test public void add100000() {
     add(100000, false);
   }
 
   /**
    * Adds 1000 documents.
    */
-  @Test
-  public void add100Force() {
+  @Test public void add100Force() {
     add(100, true);
   }
 
   /**
    * Adds 1000 documents.
    */
-  @Test
-  public void add1000Force() {
+  @Test public void add1000Force() {
     add(1000, true);
   }
 
   /**
    * Adds 1000 documents.
    */
-  @Test
-  public void add10000Force() {
+  @Test public void add10000Force() {
     add(10000, true);
   }
 

@@ -1,47 +1,40 @@
 package org.basex.core.locks;
 
 import static org.basex.query.func.Function.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
-import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.util.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * This class checks the execution order of non-locking queries.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class NonLockingTest extends SandboxTest {
   /** Query for returning all jobs except for the current one. */
   private static final String LIST_JOBS = _JOBS_LIST.args() + '[' + _JOBS_CURRENT.args() + "!= .]";
   /** Very slow query. */
-  private static final String SLEEPING_QUERY = _PROF_SLEEP.args(10000);
+  private static final String SLEEP_10_SECONDS = _PROF_SLEEP.args(10000);
 
   /** Test. */
   @Test public void nonLockingBeforeWrite() {
     execute(new CreateDB(NAME));
     try {
       // start slow query
-      new Thread() {
-        @Override
-        public void run() {
-          query(SLEEPING_QUERY);
-        }
-      }.start();
+      new Thread(() -> query(SLEEP_10_SECONDS)).start();
 
       // start sleeping query
       String id;
       do id = query(LIST_JOBS); while(id.isEmpty());
 
       // local locking: add document in parallel
-      query(_DB_ADD.args(NAME, "<a/>", "a.xml"));
+      query(_DB_ADD.args(NAME, " <a/>", "a.xml"));
 
       // global locking: add document in parallel; see GH-1400
-      query("let $db := <a>" + NAME + "</a> return " + _DB_ADD.args("$db", "<a/>", "a.xml"));
+      query("let $db := <a>" + NAME + "</a> return " + _DB_ADD.args(" $db", " <a/>", "a.xml"));
 
       // stop sleeping process, wait for its completion
       query(_JOBS_STOP.args(id));
@@ -53,34 +46,13 @@ public final class NonLockingTest extends SandboxTest {
   }
 
   /** Test. */
-  @Test public void noLimitForNonLocking() {
-    // start more than maximum number of queries
-    final int count = context.soptions.get(StaticOptions.PARALLEL) + 1;
-    for(int c = 0; c < count; c++) {
-      new Thread() {
-        @Override
-        public void run() {
-          query(SLEEPING_QUERY);
-        }
-      }.start();
-    }
-
-    // ensure that all jobs are running
-    Performance.sleep(1000);
-    assertEquals("", query(_JOBS_LIST_DETAILS.args() + "[@state != 'running']"));
-
-    // stop sleeping jobs
-    query(LIST_JOBS + '!' + _JOBS_STOP.args(" ."));
-  }
-
-  /** Test. */
   @Test public void nonLockingAfterLocalWrite() {
     nonLockingAfterWrite(_DB_CREATE.args(NAME));
   }
 
   /** Test. */
   @Test public void nonLockingAfterGlobalWrite() {
-    nonLockingAfterWrite(_DB_CREATE.args("<_>" + NAME + "</_>"));
+    nonLockingAfterWrite(_DB_CREATE.args(" <_>" + NAME + "</_>"));
   }
 
   /**
@@ -90,12 +62,7 @@ public final class NonLockingTest extends SandboxTest {
   private static void nonLockingAfterWrite(final String query) {
     try {
       // start slow query, global write lock
-      new Thread() {
-        @Override
-        public void run() {
-          query(SLEEPING_QUERY + ',' + query);
-        }
-      }.start();
+      new Thread(() -> query(SLEEP_10_SECONDS + ',' + query)).start();
 
       // check if query execution causes a longer delay.
       assertEquals("1", query("1"));

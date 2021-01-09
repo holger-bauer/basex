@@ -9,13 +9,14 @@ import org.basex.query.up.*;
 import org.basex.query.up.primitives.db.*;
 import org.basex.query.up.primitives.node.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbDelete extends DbAccess {
@@ -26,17 +27,17 @@ public final class DbDelete extends DbAccess {
 
     // delete XML resources
     final IntList docs = data.resources.docs(path);
-    final int is = docs.size();
+    final int ds = docs.size();
     final Updates updates = qc.updates();
-    for(int i = 0; i < is; i++) {
-      updates.add(new DeleteNode(docs.get(i), data, info), qc);
+    for(int d = 0; d < ds; d++) {
+      updates.add(new DeleteNode(docs.get(d), data, info), qc);
     }
     // delete raw resources
     if(!data.inMemory()) {
       final IOFile bin = data.meta.binary(path);
-      if(bin == null) throw BXDB_PATH_X.get(info, path);
+      if(bin == null) throw DB_PATH_X.get(info, path);
       updates.add(new DBDelete(data, path, info), qc);
     }
-    return null;
+    return Empty.VALUE;
   }
 }

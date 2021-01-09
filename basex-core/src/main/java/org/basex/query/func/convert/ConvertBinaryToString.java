@@ -11,19 +11,19 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ConvertBinaryToString extends ConvertFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final Bin bin = toBin(exprs[0], qc);
-    final String enc = toEncoding(1, BXCO_ENCODING_X, qc);
-    final boolean val = exprs.length < 3 || !toBoolean(exprs[2], qc);
+    final String encoding = toEncodingOrNull(1, CONVERT_ENCODING_X, qc);
+    final boolean validate = exprs.length < 3 || !toBoolean(exprs[2], qc);
     try {
-      return Str.get(toString(bin.input(info), enc, val));
+      return Str.get(toString(bin.input(info), encoding, validate));
     } catch(final IOException ex) {
-      throw BXCO_STRING_X.get(info, ex);
+      throw CONVERT_STRING_X.get(info, ex);
     }
   }
 }

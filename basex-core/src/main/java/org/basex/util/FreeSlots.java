@@ -8,7 +8,7 @@ import org.basex.util.list.*;
 /**
  * Organizes free slots in heap files.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FreeSlots {
@@ -61,12 +61,7 @@ public final class FreeSlots {
    * @param opt optimize
    */
   private void add(final int size, final long offset, final boolean opt) {
-    LongList ll = free.get(size);
-    if(ll == null) {
-      ll = new LongList();
-      free.put(size, ll);
-    }
-    ll.add(offset);
+    free.computeIfAbsent(size, k -> new LongList()).add(offset);
     slots++;
     if(opt) optimize();
   }
@@ -82,15 +77,13 @@ public final class FreeSlots {
     final int size = slots;
     final LongList offList = new LongList(size);
     final IntList sizeList = new IntList(size);
-    for(final Entry<Integer, LongList> entry : free.entrySet()) {
-      final int slotSize = entry.getKey();
-      final LongList list = entry.getValue();
+    free.forEach((slotSize, list) -> {
       final int ll = list.size();
       for(int l = 0; l < ll; l++) {
         offList.add(list.get(l));
         sizeList.add(slotSize);
       }
-    }
+    });
     if(size != offList.size())
       throw Util.notExpected("Wrong slot count: % vs. %", size, offList.size());
 
@@ -120,9 +113,8 @@ public final class FreeSlots {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FREE SLOTS: " + free.size() + '\n');
-    for(final Entry<Integer, LongList> entry : free.entrySet()) {
-      sb.append("  ").append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
-    }
+    free.forEach((key, value) ->
+      sb.append("  ").append(key).append(": ").append(value).append('\n'));
     return sb.toString();
   }
 }

@@ -12,12 +12,14 @@ import org.basex.io.*;
  * <p>The parser provides some options, which can be specified via the
  * {@link MainOptions#CSVPARSER} option.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class CsvParser extends SingleParser {
   /** CSV Parser options. */
   private final CsvParserOptions copts;
+  /** CSV Builder. */
+  private CsvBuilder csv;
 
   /**
    * Constructor.
@@ -41,10 +43,21 @@ public final class CsvParser extends SingleParser {
 
   @Override
   protected void parse() throws IOException {
+    csv = pushJob(new CsvBuilder(copts, builder));
     try {
-      pushJob(new CsvBuilder(copts, builder)).convert(source);
+      csv.convert(source);
     } finally {
       popJob();
     }
+  }
+
+  @Override
+  public String detailedInfo() {
+    return csv != null ? csv.detailedInfo() : super.detailedInfo();
+  }
+
+  @Override
+  public double progressInfo() {
+    return csv != null ? csv.progressInfo() : super.progressInfo();
   }
 }

@@ -2,7 +2,6 @@ package org.basex.util.http;
 
 import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
 
 import org.basex.io.in.*;
 import org.basex.util.*;
@@ -10,7 +9,7 @@ import org.basex.util.*;
 /**
  * Single Internet media type.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MediaType {
@@ -20,8 +19,14 @@ public final class MediaType {
   private static final String TEXT = "text";
   /** XQuery sub type. */
   private static final String XQUERY = "xquery";
-  /** XML media types' suffix. */
+  /** CSV sub type. */
+  private static final String CSV = "csv";
+  /** CSV sub type. */
+  private static final String COMMA_SEPARATED_VALUES = "comma-separated-values";
+  /** XML media type suffix. */
   private static final String XML_SUFFIX = "+xml";
+  /** JSON media type suffix. */
+  private static final String JSON_SUFFIX = "+json";
 
   /** Media type: wildcards. */
   public static final MediaType ALL_ALL = new MediaType("*/*");
@@ -46,7 +51,7 @@ public final class MediaType {
   public static final MediaType MULTIPART_FORM_DATA = new MediaType("multipart/form-data");
 
   /** Media type: text/comma-separated-values. */
-  public static final MediaType TEXT_CSV = new MediaType("text/comma-separated-values");
+  public static final MediaType TEXT_CSV = new MediaType("text/csv");
   /** Media type: text/html. */
   public static final MediaType TEXT_HTML = new MediaType("text/html");
   /** Media type: text/plain. */
@@ -71,14 +76,21 @@ public final class MediaType {
     final int p = string.indexOf(';');
     final String type = p == -1 ? string : string.substring(0, p);
 
+    // set main and sub type
     final int s = type.indexOf('/');
     main = s == -1 ? type : type.substring(0, s);
     sub  = s == -1 ? "" : type.substring(s + 1);
 
+    // parse parameters (simplified version of RFC 2045; no support for comments, etc.)
     if(p != -1) {
       for(final String param : Strings.split(string.substring(p + 1), ';')) {
         final String[] kv = Strings.split(param, '=', 2);
-        params.put(kv[0].trim(), kv.length < 2 ? "" : kv[1].trim());
+        // attribute: trim whitespaces, convert to lower case
+        final String k = kv[0].trim().toLowerCase(Locale.ENGLISH);
+        // value: trim whitespaces, remove quotes and backslashed characters
+        String v = kv.length < 2 ? "" : kv[1].trim();
+        if(Strings.startsWith(v, '"')) v = v.replaceAll("^\"|\"$", "").replaceAll("\\\\(.)", "$1");
+        params.put(k, v);
       }
     }
   }
@@ -140,12 +152,28 @@ public final class MediaType {
   }
 
   /**
+   * Checks if this is a CSV type.
+   * @return result of check
+   */
+  public boolean isCSV() {
+    return sub.equals(CSV) || sub.equals(COMMA_SEPARATED_VALUES);
+  }
+
+  /**
    * Checks if this is an XML type.
    * @return result of check
    */
   public boolean isXML() {
     return is(TEXT_XML) || is(TEXT_XML_EPE) || is(APPLICATION_XML) || is(APPLICATION_XML_EPE) ||
         sub.endsWith(XML_SUFFIX);
+  }
+
+  /**
+   * Checks if this is a JSON type.
+   * @return result of check
+   */
+  public boolean isJSON() {
+    return is(APPLICATION_JSON) || sub.endsWith(JSON_SUFFIX);
   }
 
   /**
@@ -169,9 +197,7 @@ public final class MediaType {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder(type());
-    for(final Entry<String, String> entry : params.entrySet()) {
-      sb.append("; ").append(entry.getKey()).append('=').append(entry.getValue());
-    }
+    params.forEach((key, value) -> sb.append("; ").append(key).append('=').append(value));
     return sb.toString();
   }
 
@@ -184,14 +210,13 @@ public final class MediaType {
   public static MediaType get(final String path) {
     final int s = path.lastIndexOf('/'), d = path.lastIndexOf('.');
     final String suffix = d <= s ? "" : path.substring(d + 1).toLowerCase(Locale.ENGLISH);
-    final MediaType type = TYPES.get(suffix);
-    return type != null ? type : APPLICATION_OCTET_STREAM;
+    return TYPES.getOrDefault(suffix, APPLICATION_OCTET_STREAM);
   }
 
   /** Hash map containing all assignments. */
   private static final HashMap<String, MediaType> TYPES = new HashMap<>();
 
-  /** Reads in the media-types. */
+  /* Reads in the media-types. */
   static {
     final HashMap<String, MediaType> cache = new HashMap<>();
     try {
@@ -203,13 +228,9 @@ public final class MediaType {
         try(NewlineInput nli = new NewlineInput(is)) {
           for(String line; (line = nli.readLine()) != null;) {
             final int i = line.indexOf('=');
-            if(i == -1 || line.startsWith("#")) continue;
+            if(i == -1 || Strings.startsWith(line, '#')) continue;
             final String suffix = line.substring(0, i), type = line.substring(i + 1);
-            MediaType mt = cache.get(type);
-            if(mt == null) {
-              mt = new MediaType(type);
-              cache.put(type, mt);
-            }
+            final MediaType mt = cache.computeIfAbsent(type, MediaType::new);
             TYPES.put(suffix, mt);
           }
         }

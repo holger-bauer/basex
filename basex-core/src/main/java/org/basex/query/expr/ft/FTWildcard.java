@@ -7,110 +7,120 @@ import org.basex.util.*;
 /**
  * Wildcard expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Dimitar Popov
  */
 public final class FTWildcard {
   /** Value encoding the wildcard dot. */
   private static final int DOT = -1;
-  /** Original query. */
-  private final byte[] query;
   /** Simple flag: query contains no wildcard characters. */
   private final boolean simple;
-  /** Characters. */
-  private int[] wc;
-  /** Minimum number of occurrence. */
+  /** Validity flag. */
+  private final boolean valid;
+
+  /** Codepoints. */
+  private int[] cps;
+  /** Minimum numbers of occurrences. */
   private int[] min;
-  /** Maximum number of occurrence. */
+  /** Maximum numbers of occurrences. */
   private int[] max;
-  /** Array length. */
+  /** Number of codepoints. */
   private int size;
 
   /**
    * Constructor.
-   * @param query query
+   * @param token query token
    */
-  public FTWildcard(final byte[] query) {
-    this.query = query;
-    simple = !contains(query, '.') && !contains(query, '\\');
+  public FTWildcard(final byte[] token) {
+    simple = !contains(token, '.') && !contains(token, '\\');
+    valid = parse(token);
   }
 
   /**
    * Parses and constructs a new wildcard expression.
+   * @param token query token
    * @return success flag
    */
-  public boolean parse() {
-    final int[] q = cps(query);
-    wc = new int[q.length];
-    min = new int[q.length];
-    max = new int[q.length];
+  private boolean parse(final byte[] token) {
+    final int[] input = cps(token);
+    final int ql = input.length;
+    cps = new int[ql];
+    min = new int[ql];
+    max = new int[ql];
     size = 0;
 
-    final int ql = q.length;
     for(int qi = 0; qi < ql;) {
-      int n = 1;
-      int m = 1;
+      int mn = 1, mx = 1;
       // parse wildcards
-      if(q[qi] == '.') {
-        int c = ++qi < ql ? q[qi] : 0;
+      if(input[qi] == '.') {
+        int c = ++qi < ql ? input[qi] : 0;
         // minimum/maximum number of occurrence
         if(c == '?') { // .?
           ++qi;
-          n = 0;
-          m = 1;
+          mn = 0;
+          mx = 1;
         } else if(c == '*') { // .*
           ++qi;
-          n = 0;
-          m = Integer.MAX_VALUE;
+          mn = 0;
+          mx = Integer.MAX_VALUE;
         } else if(c == '+') { // .+
           ++qi;
-          n = 1;
-          m = Integer.MAX_VALUE;
+          mn = 1;
+          mx = Integer.MAX_VALUE;
         } else if(c == '{') { // .{m,n}
-          n = 0;
-          m = 0;
+          mn = 0;
+          mx = 0;
           boolean f = false;
           while(true) {
-            c = ++qi < ql ? q[qi] : 0;
-            if(digit(c)) n = (n << 3) + (n << 1) + c - '0';
+            c = ++qi < ql ? input[qi] : 0;
+            if(digit(c)) mn = (mn << 3) + (mn << 1) + c - '0';
             else if(f && c == ',') break;
             else return false;
             f = true;
           }
           f = false;
           while(true) {
-            c = ++qi < ql ? q[qi] : 0;
-            if(digit(c)) m = (m << 3) + (m << 1) + c - '0';
+            c = ++qi < ql ? input[qi] : 0;
+            if(digit(c)) mx = (mx << 3) + (mx << 1) + c - '0';
             else if(f && c == '}') break;
             else return false;
             f = true;
           }
           ++qi;
-          if(n > m) return false;
+          if(mn > mx) return false;
         }
-        wc[size] = DOT;
+        cps[size] = DOT;
       } else {
-        if(q[qi] == '\\' && ++qi == ql) return false;
-        wc[size] = q[qi++];
+        if(input[qi] == '\\' && ++qi == ql) return false;
+        cps[size] = input[qi++];
       }
-      min[size] = n;
-      max[size] = m;
+      min[size] = mn;
+      max[size] = mx;
       size++;
     }
     return true;
   }
 
   /**
-   * Returns the maximum length of a potential match.
-   * @return {@code true} if a match is found
+   * Indicates if the wildcard expression was valid.
+   * @return result of check
    */
-  public int max() {
+  public boolean simple() {
+    return simple;
+  }
+
+  /**
+   * Returns the maximum byte length of a potential match in the index.
+   * @param full support full range of Unicode characters
+   * @return maximum length
+   */
+  public int max(final boolean full) {
     int c = 0;
     for(int s = 0; s < size; s++) {
       final int m = max[s];
       if(m == Integer.MAX_VALUE) return Integer.MAX_VALUE;
-      c += m;
+      c += full ? cps[s] == DOT ? 4 : cpLength(cps[s]) : m;
     }
     return c;
   }
@@ -121,48 +131,49 @@ public final class FTWildcard {
    */
   public byte[] prefix() {
     final TokenBuilder tb = new TokenBuilder();
-    for(int s = 0; s < size && wc[s] != DOT; s++) tb.add(wc[s]);
+    for(int s = 0; s < size && cps[s] != DOT; s++) tb.add(cps[s]);
     return tb.finish();
   }
 
   /**
    * Checks if the wildcard can match a sub-string in a string.
-   * @param t token to search for match
+   * @param tok token to search for match
    * @return {@code true} if a match is found
    */
-  public boolean match(final byte[] t) {
-    return match(cps(t), 0, 0);
+  public boolean match(final byte[] tok) {
+    return match(cps(tok), 0, 0);
   }
 
   /**
    * Indicates if the input contains no wildcard characters.
    * @return result of check
    */
-  public boolean simple() {
-    return simple;
+  public boolean valid() {
+    return valid;
   }
 
   /**
    * Checks if the wildcard can match a sub-string in a string.
-   * @param t token to search for match
+   * @param tok token to search for match
    * @param tp input position
    * @param qp query position
    * @return {@code true} if a match is found
    */
-  private boolean match(final int[] t, final int tp, final int qp) {
-    int qi = qp;
-    int ti = tp;
-    final int tl = t.length;
+  private boolean match(final int[] tok, final int tp, final int qp) {
+    final int tl = tok.length;
+    int qi = qp, ti = tp;
     while(qi < size) {
-      if(wc[qi] == DOT) {
+      if(cps[qi] == DOT) {
         int n = min[qi];
         final int m = max[qi++];
         // recursively evaluates wildcards (non-greedy)
-        while(!match(t, ti + n, qi)) if(ti + ++n > tl) return false;
+        while(!match(tok, ti + n, qi)) {
+          if(ti + ++n > tl) return false;
+        }
         if(n > m) return false;
         ti += n;
       } else {
-        if(ti >= tl || t[ti++] != wc[qi++]) return false;
+        if(ti >= tl || tok[ti++] != cps[qi++]) return false;
       }
     }
     return ti == tl;

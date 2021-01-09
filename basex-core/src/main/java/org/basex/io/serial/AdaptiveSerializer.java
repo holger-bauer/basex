@@ -1,12 +1,15 @@
 package org.basex.io.serial;
 
 import static org.basex.io.serial.SerializerOptions.*;
+import static org.basex.query.value.type.AtomType.*;
 
 import java.io.*;
+import java.text.*;
+import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.value.*;
-import org.basex.query.value.array.Array;
+import org.basex.query.value.array.XQArray;
 import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
@@ -16,10 +19,12 @@ import org.basex.util.*;
 /**
  * This class serializes items in adaptive mode.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class AdaptiveSerializer extends OutputSerializer {
+  /** Format for double values. */
+  private static final String DOUBLES = "0.0##########################E0";
   /** Original output stream. */
   private final OutputStream os;
   /** XML serializer (lazy instantiation). */
@@ -51,7 +56,7 @@ public class AdaptiveSerializer extends OutputSerializer {
 
     if(omit) sopts.set(OMIT_XML_DECLARATION, YesNo.YES);
     indent = sopts.yes(INDENT);
-    itemsep("\n");
+    if(itemsep == null) itemsep = Token.token("\n");
   }
 
   @Override
@@ -62,17 +67,17 @@ public class AdaptiveSerializer extends OutputSerializer {
 
   @Override
   public final void serialize(final Item item) throws IOException {
-    if(more) out.print(itemsep);
+    separate();
     super.serialize(item);
   }
 
   @Override
-  protected final void node(final ANode item) throws IOException {
-    final Type type = item.type;
+  protected final void node(final ANode node) throws IOException {
+    final Type type = node.type;
     final XMLSerializer ser = xml();
-    if(type == NodeType.ATT) ser.attribute(item.name(), item.string(), true);
-    else if(type == NodeType.NSP) ser.namespace(item.name(), item.string(), true);
-    else ser.node(item);
+    if(type == NodeType.ATTRIBUTE) ser.attribute(node.name(), node.string(), true);
+    else if(type == NodeType.NAMESPACE_NODE) ser.namespace(node.name(), node.string(), true);
+    else ser.node(node);
     ser.out.flush();
     ser.reset();
   }
@@ -80,13 +85,23 @@ public class AdaptiveSerializer extends OutputSerializer {
   @Override
   protected void atomic(final Item item) throws IOException {
     final TokenBuilder tb = new TokenBuilder();
-    final Type it = item.type;
-    if(it == AtomType.BLN || it == AtomType.STR || it == AtomType.ATM || it == AtomType.ITR ||
-       it == AtomType.DEC || it == AtomType.DBL || it == AtomType.QNM) {
-      tb.add(item.toString());
+    final Type type = item.type;
+    if(type.instanceOf(STRING) || type.instanceOf(DECIMAL) ||
+       type.oneOf(BOOLEAN, UNTYPED_ATOMIC, ANY_URI)) {
+      tb.add(item);
+    } else if(type == QNAME) {
+      tb.add(((QNm) item).eqName());
+    } else if(type == DOUBLE) {
+      final Dbl dbl = (Dbl) item;
+      final double d = dbl.dbl();
+      if(Double.isInfinite(d) || Double.isNaN(d)) tb.add(dbl.string());
+      else tb.add(new DecimalFormat(DOUBLES, Token.LOC).format(d).toLowerCase(Locale.ENGLISH));
+    } else if(type.instanceOf(DURATION)) {
+      final Dur dur = new Dur((Dur) item);
+      tb.add(dur.type).add("(\"").add(dur.string(null)).add("\")");
     } else {
       try {
-        tb.add(it.toString()).add('(').add(Atm.toString(item.string(null))).add(')');
+        tb.add(item.type).add('(').add(value(item.string(null), '"', false)).add(')');
       } catch(final QueryException ex) {
         throw new QueryIOException(ex);
       }
@@ -96,10 +111,10 @@ public class AdaptiveSerializer extends OutputSerializer {
 
   @Override
   protected final void function(final FItem item) throws IOException {
-    if(item instanceof Array) {
-      array((Array) item);
-    } else if(item instanceof Map) {
-      map((Map) item);
+    if(item instanceof XQArray) {
+      array((XQArray) item);
+    } else if(item instanceof XQMap) {
+      map((XQMap) item);
     } else {
       final TokenBuilder tb = new TokenBuilder();
       final QNm fn = item.funcName();
@@ -121,18 +136,18 @@ public class AdaptiveSerializer extends OutputSerializer {
 
   /**
    * Serializes an array.
-   * @param item item
+   * @param array item
    * @throws IOException I/O exception
    */
-  protected void array(final Array item) throws IOException {
+  protected void array(final XQArray array) throws IOException {
     final TokenBuilder tb = new TokenBuilder().add('[');
     int c = 0;
-    for(final Value val : item.members()) {
+    for(final Value value : array.members()) {
       if(c++ > 0) {
         tb.add(',');
         if(indent) tb.add(' ');
       }
-      final long vs = val.size();
+      final long vs = value.size();
       if(vs != 1) tb.add('(');
       for(int i = 0, cc = 0; i < vs; i++, cc++) {
         if(cc > 0) {
@@ -141,7 +156,7 @@ public class AdaptiveSerializer extends OutputSerializer {
         }
         printChars(tb.next());
         more = false;
-        serialize(val.itemAt(i));
+        serialize(value.itemAt(i));
       }
       if(vs != 1) tb.add(')');
     }
@@ -150,16 +165,16 @@ public class AdaptiveSerializer extends OutputSerializer {
 
   /**
    * Serializes a map.
-   * @param item item
+   * @param map item
    * @throws IOException I/O exception
    */
-  protected void map(final Map item) throws IOException {
+  protected void map(final XQMap map) throws IOException {
     final TokenBuilder tb = new TokenBuilder().add("map");
     if(indent) tb.add(' ');
     tb.add('{');
     int c = 0;
     ++level;
-    for(final Item key : item.keys()) {
+    for(final Item key : map.keys()) {
       if(c++ > 0) tb.add(',');
       printChars(tb.next());
       indent();
@@ -168,18 +183,18 @@ public class AdaptiveSerializer extends OutputSerializer {
       tb.add(':');
       if(indent) tb.add(' ');
       try {
-        final Value v = item.get(key, null);
-        final boolean par = v.size() != 1;
+        final Value value = map.get(key, null);
+        final boolean par = value.size() != 1;
         if(par) tb.add('(');
         int cc = 0;
-        for(final Item it : v) {
+        for(final Item item : value) {
           if(cc++ > 0) {
             tb.add(',');
             if(indent) tb.add(' ');
           }
           printChars(tb.next());
           more = false;
-          serialize(it);
+          serialize(item);
         }
         if(par) tb.add(')');
       } catch(final QueryException ex) {

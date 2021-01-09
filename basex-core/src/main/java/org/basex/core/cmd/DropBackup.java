@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'drop backup' command and deletes backups of a database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DropBackup extends ABackup {
@@ -27,20 +27,20 @@ public final class DropBackup extends ABackup {
 
   @Override
   protected boolean run() {
-    final String name = args[0];
-    if(!Databases.validName(name, true)) return error(NAME_INVALID_X, name);
+    final String pattern = args[0];
+    if(!Databases.validPattern(pattern)) return error(NAME_INVALID_X, pattern);
 
     // loop through all databases and collect databases to be dropped
-    final StringList dbs = context.filter(Perm.READ, context.databases.listDBs(name));
+    final StringList dbs = context.listDBs(pattern);
     // if the given argument is not a database name, it could be the name of a backup file
-    if(dbs.isEmpty() && context.perm(Perm.READ, name)) dbs.add(name);
+    if(dbs.isEmpty() && context.perm(Perm.READ, pattern)) dbs.add(pattern);
 
     // drop all backups
     for(final String db : dbs) {
       for(final String backup : context.databases.backups(db)) drop(backup, soptions);
     }
 
-    return info(BACKUP_DROPPED_X, name + '*' + IO.ZIPSUFFIX);
+    return info(BACKUP_DROPPED_X, pattern);
   }
 
   /**
@@ -50,7 +50,7 @@ public final class DropBackup extends ABackup {
    * @return success flag
    */
   public static boolean drop(final String name, final StaticOptions sopts) {
-    return new IOFile(sopts.dbPath(), name + IO.ZIPSUFFIX).delete();
+    return sopts.dbPath(name + IO.ZIPSUFFIX).delete();
   }
 
   @Override

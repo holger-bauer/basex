@@ -1,14 +1,13 @@
 package org.basex.gui.layout;
 
-import java.awt.*;
-import java.awt.event.*;
-
 import javax.swing.*;
+
+import org.basex.gui.listener.*;
 
 /**
  * Project specific password field implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class BaseXPassword extends JPasswordField {
@@ -16,18 +15,14 @@ public final class BaseXPassword extends JPasswordField {
    * Constructor.
    * @param win parent window
    */
-  public BaseXPassword(final Window win) {
+  public BaseXPassword(final BaseXWindow win) {
     BaseXLayout.setWidth(this, BaseXTextField.DWIDTH);
     BaseXLayout.addInteraction(this, win);
 
-    if(!(win instanceof BaseXDialog)) return;
+    final BaseXDialog dialog = win.dialog();
+    if(dialog == null) return;
 
-    addKeyListener(((BaseXDialog) win).keys);
-    addMouseListener(new MouseAdapter() {
-      @Override
-      public void mouseEntered(final MouseEvent e) {
-        BaseXLayout.focus(e.getComponent());
-      }
-    });
+    addKeyListener(dialog.keys);
+    addMouseListener((MouseEnteredListener) e -> BaseXLayout.focus(this));
   }
 }

@@ -9,12 +9,12 @@ import org.basex.util.list.*;
 /**
  * Returns an iterator for the visualized text.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class TextIterator {
   /** Text. */
-  private final byte[] text;
+  final byte[] text;
   /** Text length. */
   private final int length;
   /** Caret position. */
@@ -26,7 +26,7 @@ final class TextIterator {
   /** Start position of an error highlighting. */
   private final int errPos;
   /** Start and end positions of search terms. */
-  private final IntList[] searchPos;
+  private final IntList[] searchResults;
 
   /** Current start position. */
   private int pos;
@@ -48,26 +48,30 @@ final class TextIterator {
     start = et.start;
     end = et.end;
     errPos = et.error;
-    searchPos = et.searchPos;
+    searchResults = et.searchResults;
   }
 
   /**
-   * Checks if the text contains more words.
+   * Checks if the text contains more strings.
+   * @param max maximum number of characters to check (long strings will be chopped later on)
    * @return result of check
    */
-  boolean moreTokens() {
+  boolean moreStrings(final int max) {
+    final int l = length;
     int p = posEnd;
     pos = p;
-    if(p >= length) return false;
+    if(p >= l) return false;
 
     // find next token boundary
-    int ch = cp(text, p);
-    p += cl(text, p);
+    final int e = pos + max;
+    final byte[] txt = text;
+    int ch = cp(txt, p);
+    p += cl(txt, p);
     if(lod(ch)) {
-      while(p < length) {
-        ch = cp(text, p);
+      while(p < l && p < e) {
+        ch = cp(txt, p);
         if(!lod(ch)) break;
-        p += cl(text, p);
+        p += cl(txt, p);
       }
     }
     posEnd = p;
@@ -75,10 +79,10 @@ final class TextIterator {
   }
 
   /**
-   * Returns the token as string.
+   * Returns the current string.
    * @return string
    */
-  String nextString() {
+  String currString() {
     return posEnd <= length ? string(text, pos, posEnd - pos) : "";
   }
 
@@ -120,6 +124,14 @@ final class TextIterator {
   }
 
   /**
+   * Sets the iterator end position.
+   * @param p iterator position
+   */
+  void posEnd(final int p) {
+    posEnd = p;
+  }
+
+  /**
    * Checks if the character position equals the word end.
    * @return result of check
    */
@@ -128,7 +140,7 @@ final class TextIterator {
   }
 
   /**
-   * Moves one character forward.
+   * Returns the current character and moves one character forward.
    * @return current character
    */
   int next() {
@@ -175,12 +187,12 @@ final class TextIterator {
    * @return result of check
    */
   boolean searchStart() {
-    if(searchPos == null) return false;
-    if(searchIndex == searchPos[0].size()) return false;
-    while(pos > searchPos[1].get(searchIndex)) {
-      if(++searchIndex == searchPos[0].size()) return false;
+    if(searchResults == null) return false;
+    if(searchIndex == searchResults[0].size()) return false;
+    while(pos > searchResults[1].get(searchIndex)) {
+      if(++searchIndex == searchResults[0].size()) return false;
     }
-    return posEnd > searchPos[0].get(searchIndex);
+    return posEnd > searchResults[0].get(searchIndex);
   }
 
   /**
@@ -188,8 +200,10 @@ final class TextIterator {
    * @return result of check
    */
   boolean inSearch() {
-    if(searchIndex >= searchPos[0].size() || pos < searchPos[0].get(searchIndex)) return false;
-    final boolean in = pos < searchPos[1].get(searchIndex);
+    final IntList starts = searchResults[0], ends = searchResults[1];
+    final int i = searchIndex;
+    if(i >= starts.size() || pos < starts.get(i)) return false;
+    final boolean in = pos < ends.get(i);
     if(!in) searchIndex++;
     return in;
   }
@@ -220,7 +234,7 @@ final class TextIterator {
 
   /**
    * Retrieves the current hyperlink.
-   * @return link string, or {@code null}
+   * @return link string or {@code null}
    */
   String link() {
     if(!link) return null;

@@ -1,37 +1,33 @@
 package org.basex.query;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.basex.*;
 import org.basex.core.cmd.*;
 import org.basex.io.*;
-import org.basex.query.util.*;
-import org.basex.query.value.item.*;
 import org.basex.util.*;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 /**
  * Module tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  */
 public final class ModuleTest extends SandboxTest {
   /**
    * Imports a built-in module.
    */
-  @Test
-  public void builtIn() {
+  @Test public void builtIn() {
     query("import module namespace xquery = 'http://basex.org/modules/xquery'; 1");
   }
 
   /**
    * Tests the {@link QueryContext#parseLibrary} method.
    */
-  @Test
-  public void module() {
+  @Test public void module() {
     try(QueryContext qc = new QueryContext(context)) {
-      qc.parseLibrary("module namespace m='foo'; declare function m:foo() { m:bar() }; ", "", null);
+      qc.parseLibrary("module namespace m='foo'; declare function m:foo() { m:bar() }; ", "");
       fail("Unknown function 'm:bar()' was not detected.");
     } catch(final QueryException e) {
       assertSame(QueryError.WHICHFUNC_X, e.error());
@@ -42,11 +38,10 @@ public final class ModuleTest extends SandboxTest {
    * Tests the {@link QueryContext#parseLibrary} method.
    * @throws Exception exception
    */
-  @Test
-  public void module2() throws Exception {
+  @Test public void module2() throws Exception {
     final IOFile a = new IOFile("src/test/resources/recmod/a.xqm");
     try(QueryContext qc = new QueryContext(context)) {
-      qc.parseLibrary(Token.string(a.read()), a.path(), null);
+      qc.parseLibrary(Token.string(a.read()), a.path());
     }
   }
 
@@ -54,15 +49,14 @@ public final class ModuleTest extends SandboxTest {
    * Tests a repository import.
    * @throws Exception exception
    */
-  @Test
-  public void repoFile() throws Exception {
+  @Test public void repoFile() throws Exception {
     // repository files
     final IOFile repo = new IOFile(sandbox(), "repo");
     repo.md();
     write(new IOFile(repo, "a.xqm"), "module namespace a='a'; declare function a:a(){()};");
 
     try(QueryContext qc = new QueryContext(context)) {
-      qc.parseMain("import module namespace a='a'; a:a()", null, null);
+      qc.parseMain("import module namespace a='a'; a:a()", null);
     }
   }
 
@@ -70,8 +64,7 @@ public final class ModuleTest extends SandboxTest {
    * Tests circular dependencies.
    * @throws Exception exception
    */
-  @Test
-  public void circularDeps() throws Exception {
+  @Test public void circularDeps() throws Exception {
     // module files in same directory
     final IOFile sandbox = sandbox();
     final IOFile file = new IOFile(sandbox, "x.xq");
@@ -91,7 +84,7 @@ public final class ModuleTest extends SandboxTest {
         + "import module namespace a='a'; declare function b:b(){a:a()};");
 
     try(QueryContext qc = new QueryContext(context)) {
-      qc.parseMain("import module namespace a='a'; ()", null, null);
+      qc.parseMain("import module namespace a='a'; ()", null);
     }
   }
 
@@ -99,16 +92,11 @@ public final class ModuleTest extends SandboxTest {
    * Uses a URI resolver.
    * @throws Exception exception
    */
-  @Test
-  public void uriResolver() throws Exception {
+  @Test public void uriResolver() throws Exception {
     final String query = "import module namespace m='uri' at 'x.xq'; m:f()";
     try(QueryProcessor qp = new QueryProcessor(query, context)) {
-      qp.uriResolver(new UriResolver() {
-        @Override
-        public IO resolve(final String path, final String uri, final Uri base) {
-          return new IOContent("module namespace m='uri'; declare function m:f() { 'OK' };");
-        }
-      });
+      qp.uriResolver((path, uri, base) ->
+        new IOContent("module namespace m='uri'; declare function m:f() { 'OK' };"));
       assertEquals(qp.value().serialize().toString(), "OK");
     }
   }

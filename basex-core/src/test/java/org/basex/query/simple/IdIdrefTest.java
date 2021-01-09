@@ -1,92 +1,93 @@
 package org.basex.query.simple;
 
 import static org.basex.query.func.Function.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.*;
-import java.util.List;
+import java.util.stream.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.core.cmd.Set;
 import org.basex.query.*;
-import org.junit.*;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
+import org.basex.query.value.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.*;
+import org.junit.jupiter.params.provider.*;
 
 /**
  * Tests for {@code id} and {@code idref}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Jens Erat
  */
-@RunWith(Parameterized.class)
 public final class IdIdrefTest extends QueryTest {
-  /** Test parameters. */
-  private final Collection<Set> paramSet;
-
   /**
-   * Runs tests with different parameters, like in-memory or disk databases.
-   * @return collection of parameter sets
+   * Queries to test.
+   * @return argument stream
    */
-  @Parameters
-  public static Collection<Object[]> generateParams() {
-    final List<Object[]> paramsSet = new ArrayList<>();
-    paramsSet.add(paramSet(false, false, false));
-    paramsSet.add(paramSet(false, false, true));
-    paramsSet.add(paramSet(false, true, false));
-    paramsSet.add(paramSet(false, true, true));
-    paramsSet.add(paramSet(true, false, false));
-    paramsSet.add(paramSet(true, false, true));
-    paramsSet.add(paramSet(true, true, false));
-    paramsSet.add(paramSet(true, true, true));
-    return paramsSet;
+  private static Stream<Arguments> testQueries() {
+    return Stream.of(
+      Arguments.of(new int[] { 1 }, _DB_OPEN.args(NAME, "1.xml") + "/id('foo')"),
+      Arguments.of(new int[] { 1 }, _DB_OPEN.args(NAME, "1.xml") + "/id('foo')"),
+      Arguments.of(new int[] { 5 }, _DB_OPEN.args(NAME, "2.xml") + "/id('batz')"),
+      Arguments.of(new int[] { 3 }, _DB_OPEN.args(NAME, "1.xml") + "/idref('bar')"),
+      Arguments.of(new int[] { 7 }, _DB_OPEN.args(NAME, "2.xml") + "/idref('quix')"),
+      Arguments.of(new int[] { 3, 7 }, "collection('" + NAME + "')/idref('quix', .)")
+    );
   }
 
   /**
-   * Return parameter set for parameterized execution.
-   * @param mainmem {@link MainOptions#MAINMEM} option
-   * @param updindex {@link MainOptions#UPDINDEX} option
-   * @param tokenindex {@link MainOptions#TOKENINDEX} option
-   * @return parameter set
+   * Parameters.
+   * @return argument stream
    */
-  private static Object[] paramSet(final boolean mainmem, final boolean updindex,
-      final boolean tokenindex) {
-    final ArrayList<Set> params = new ArrayList<>();
-    params.add(new Set(MainOptions.MAINMEM, mainmem));
-    params.add(new Set(MainOptions.UPDINDEX, updindex));
-    params.add(new Set(MainOptions.TOKENINDEX, tokenindex));
-    final ArrayList<ArrayList<Set>> paramArray = new ArrayList<>();
-    paramArray.add(params);
-    return paramArray.toArray();
+  private static Stream<Arguments> generateParams() {
+    return testQueries().map(Arguments::get).flatMap(q -> Stream.of(
+      Arguments.of(false, false, false, q[0], q[1]),
+      Arguments.of(false, false, true, q[0], q[1]),
+      Arguments.of(false, true, false, q[0], q[1]),
+      Arguments.of(false, true, true, q[0], q[1]),
+      Arguments.of(true, false, false, q[0], q[1]),
+      Arguments.of(true, false, true, q[0], q[1]),
+      Arguments.of(true, true, false, q[0], q[1]),
+      Arguments.of(true, true, true, q[0], q[1])
+    ));
   }
 
   /**
-   * Apply parameter sets.
-   * @param paramSet parameter set for current test run
+   * Prepare test, setting up parameterized environment.
+   * @param mainmem main-memory flag
+   * @param updindex updatable index flag
+   * @param tokenindex token index flag
+   * @param expectedIds expected results
+   * @param query query string
+   * @throws Exception exception
    */
-  public IdIdrefTest(final Collection<Set> paramSet) {
-    this.paramSet = paramSet;
-  }
+  @DisplayName("IdIdrefTest")
+  @ParameterizedTest(name = "[{3}] {4}: mainmem={0}, updindex={1}, tokenindex={2}")
+  @MethodSource("generateParams")
+  public void test(final boolean mainmem, final boolean updindex, final boolean tokenindex,
+      final int[] expectedIds, final String query)
+      throws Exception {
 
-  /**
-   * Prepare test, setting up parametrized environment.
-   */
-  @Before
-  public void setup() {
     // set up environment
-    for(final Set option : paramSet) execute(option);
+    execute(new Set(MainOptions.MAINMEM, mainmem));
+    execute(new Set(MainOptions.UPDINDEX, updindex));
+    execute(new Set(MainOptions.TOKENINDEX, tokenindex));
     execute(new CreateDB(NAME));
     execute(new Add("1.xml", "<root1 id='foo' idref='bar quix' />"));
     execute(new Add("2.xml", "<root2 id='batz' idref2='quix' />"));
 
-    queries = new Object[][] {
-      { "id1", nodes(1), _DB_OPEN.args(NAME, "1.xml") + "/id('foo')" },
-      { "id1", nodes(1), _DB_OPEN.args(NAME, "1.xml") + "/id('foo')" },
-      { "id2", nodes(5), _DB_OPEN.args(NAME, "2.xml") + "/id('batz')" },
-      { "idref1", nodes(3), _DB_OPEN.args(NAME, "1.xml") + "/idref('bar')" },
-      { "idref2", nodes(7), _DB_OPEN.args(NAME, "2.xml") + "/idref('quix')" },
-      { "idref2", nodes(3, 7), "collection('" + NAME + "')/idref('quix', .)" },
-    };
+    final Value expected = nodes(expectedIds);
+    final Value actual = run(query);
+
+    assertTrue(eq(actual, expected), String.format(
+      "[E] %d result(s): %s\n[F] %d result(s): %s",
+      expected.size(), serialize(expected),
+      actual.size(), serialize(actual)));
+  }
+
+  @Override
+  @Test public void test() {
+    // super.test() is not needed since we use @ParameterizedTest with queries as parameters.
   }
 }

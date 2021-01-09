@@ -7,30 +7,43 @@ import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnExactlyOne extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Iter ir = exprs[0].iter(qc);
-    final Item it = ir.next();
-    if(it == null || ir.next() != null) throw EXACTLYONE.get(info);
-    return it;
+    // if possible, retrieve single item
+    final Expr expr = exprs[0];
+    Item item;
+    if(expr.seqType().zeroOrOne()) {
+      item = expr.item(qc, info);
+      if(item != Empty.VALUE) return item;
+    } else {
+      final Iter iter = expr.iter(qc);
+      item = iter.next();
+      if(item != null && iter.next() != null) item = null;
+      if(item != null) return item;
+    }
+    throw EXACTLYONE.get(info);
   }
 
   @Override
-  protected Expr opt(final CompileContext cc) {
-    final Expr e = exprs[0];
-    final SeqType st = e.seqType();
-    if(st.one()) return e;
-    seqType = SeqType.get(st.type, seqType.occ);
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    final Expr expr = exprs[0];
+    final SeqType st = expr.seqType();
+    if(st.one()) return expr;
+    if(st.zero() || expr.size() > 1) throw EXACTLYONE.get(info);
+
+    exprType.assign(st.with(Occ.EXACTLY_ONE));
+    data(expr.data());
     return this;
   }
 }

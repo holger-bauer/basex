@@ -12,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * FTOptions expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FTOptions extends FTExpr {
@@ -37,21 +37,11 @@ public final class FTOptions extends FTExpr {
     qc.ftOpt(opt.assign(tmp));
     final Value value = qc.focus.value;
     try {
-      if(opt.sw != null && value != null && value.data() != null) opt.sw.comp(value.data());
+      if(opt.sw != null && value != null && value.data() != null) opt.sw.compile(value.data());
       return exprs[0].compile(cc);
     } finally {
       qc.ftOpt(tmp);
     }
-  }
-
-  @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(), opt, exprs[0]);
-  }
-
-  @Override
-  public String toString() {
-    return exprs[0].toString() + opt;
   }
 
   @Override
@@ -68,6 +58,22 @@ public final class FTOptions extends FTExpr {
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTOptions(info, exprs[0].copy(cc, vm), new FTOpt().assign(opt));
+    return copyType(new FTOptions(info, exprs[0].copy(cc, vm), new FTOpt().assign(opt)));
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTOptions && opt.equals(((FTOptions) obj).opt) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this), opt, exprs[0]);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(exprs[0]).token(opt);
   }
 }

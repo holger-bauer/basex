@@ -6,6 +6,7 @@ import java.util.*;
 
 import org.basex.core.*;
 import org.basex.data.*;
+import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.DataFTBuilder.DataFTMarker;
 import org.basex.query.util.ft.*;
@@ -18,10 +19,12 @@ import org.basex.util.*;
 /**
  * Data builder. Provides methods for copying XML nodes into a main-memory database instance.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DataBuilder {
+  /** Query context. */
+  private final QueryContext qc;
   /** Target data instance. */
   private final MemData data;
   /** Full-text result builder. */
@@ -30,9 +33,11 @@ public final class DataBuilder {
   /**
    * Constructor.
    * @param data target data
+   * @param qc query context (can be {@code null})
    */
-  public DataBuilder(final MemData data) {
+  public DataBuilder(final MemData data, final QueryContext qc) {
     this.data = data;
+    this.qc = qc;
   }
 
   /**
@@ -52,7 +57,7 @@ public final class DataBuilder {
    * @param node node
    */
   public void build(final ANode node) {
-    build(new ANodeList(node));
+    build(new ANodeList().add(node));
   }
 
   /**
@@ -62,7 +67,7 @@ public final class DataBuilder {
   public void build(final ANodeList nodes) {
     data.meta.update();
     int next = data.meta.size;
-    for(final ANode n : nodes) next = addNode(n, next, -1);
+    for(final ANode node : nodes) next = addNode(node, next, -1);
   }
 
   /**
@@ -73,12 +78,13 @@ public final class DataBuilder {
    * @return pre value of next node
    */
   private int addNode(final ANode node, final int pre, final int par) {
+    if(qc != null) qc.checkStop();
     switch(node.nodeType()) {
-      case DOC: return addDoc(node, pre);
-      case ELM: return addElem(node, pre, par);
-      case TXT: return addText(node, pre, par);
-      case ATT: return addAttr(node, pre, par);
-      case COM: return addComm(node, pre, par);
+      case DOCUMENT_NODE: return addDoc(node, pre);
+      case ELEMENT: return addElem(node, pre, par);
+      case TEXT: return addText(node, pre, par);
+      case ATTRIBUTE: return addAttr(node, pre, par);
+      case COMMENT: return addComm(node, pre, par);
       // will always be processing instruction
       default:  return addPI(node, pre, par);
     }
@@ -96,7 +102,7 @@ public final class DataBuilder {
     final int last = data.meta.size;
     data.insert(last);
     int next = pre + 1;
-    for(final ANode child : node.children()) next = addNode(child, next, pre);
+    for(final ANode child : node.childIter()) next = addNode(child, next, pre);
     if(size != next - pre) data.size(last, Data.DOC, next - pre);
     return next;
   }
@@ -114,7 +120,7 @@ public final class DataBuilder {
     final byte[] prefix = qname.prefix(), uri = qname.uri();
     // create new namespace entry if this is a prefixed and standalone attribute
     final int uriId = uri.length == 0 || eq(prefix, XML) ? 0 :
-      par != -1 ? data.nspaces.uriId(uri) : data.nspaces.add(last, prefix, uri, data);
+      par == -1 ? data.nspaces.add(last, prefix, uri, data) : data.nspaces.uriId(uri);
 
     final int nameId = data.attrNames.put(qname.string());
     data.attr(pre - par, nameId, node.string(), uriId);
@@ -217,8 +223,8 @@ public final class DataBuilder {
 
     // add attributes and child nodes
     int cPre = pre + 1;
-    for(final ANode attr : node.attributes()) cPre = addAttr(attr, cPre, pre);
-    for(final ANode child : node.children()) cPre = addNode(child, cPre, pre);
+    for(final ANode attr : node.attributeIter()) cPre = addAttr(attr, cPre, pre);
+    for(final ANode child : node.childIter()) cPre = addNode(child, cPre, pre);
 
     // finalize namespace structure
     data.nspaces.close(last);
@@ -244,10 +250,10 @@ public final class DataBuilder {
     }
 
     int size = 1;
-    final BasicNodeIter iter = node.attributes();
+    final BasicNodeIter iter = node.attributeIter();
     while(iter.next() != null) ++size;
     if(!att) {
-      for(final ANode child : node.children()) size += size(child, false);
+      for(final ANode child : node.childIter()) size += size(child, false);
     }
     return size;
   }
@@ -260,10 +266,10 @@ public final class DataBuilder {
    * @return new node
    */
   public static ANode stripNS(final ANode node, final byte[] ns, final Context ctx) {
-    if(node.type != NodeType.ELM) return node;
+    if(node.type != NodeType.ELEMENT && node.type != NodeType.DOCUMENT_NODE) return node;
 
     final MemData data = new MemData(ctx.options);
-    final DataBuilder db = new DataBuilder(data);
+    final DataBuilder db = new DataBuilder(data, null);
     db.build(node);
 
     // flag indicating if namespace should be completely removed

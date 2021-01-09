@@ -7,15 +7,18 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.zip.*;
 
+import org.basex.io.*;
+import org.basex.io.out.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class ArchiveExtractTo extends ArchiveFn {
@@ -31,19 +34,21 @@ public class ArchiveExtractTo extends ArchiveFn {
       while(in.more()) {
         final ZipEntry ze = in.entry();
         final String name = ze.getName();
-        if(hs == null || hs.delete(token(name)) != 0) {
+        if(hs == null || hs.remove(token(name)) != 0) {
           final Path file = path.resolve(name);
           if(ze.isDirectory()) {
             Files.createDirectories(file);
           } else {
             Files.createDirectories(file.getParent());
-            Files.write(file, in.read());
+            try(BufferOutput out = new BufferOutput(new IOFile(file.toFile()))) {
+              in.write(out);
+            }
           }
         }
       }
     } catch(final IOException ex) {
-      throw ARCH_FAIL_X.get(info, ex);
+      throw ARCHIVE_ERROR_X.get(info, ex);
     }
-    return null;
+    return Empty.VALUE;
   }
 }

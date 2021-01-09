@@ -2,7 +2,7 @@ package org.basex.query.value.node;
 
 import static org.basex.query.QueryText.*;
 
-import org.basex.core.*;
+import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Namespace node.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FNSpace extends FNode {
@@ -23,7 +23,7 @@ public final class FNSpace extends FNode {
    * @param value value
    */
   public FNSpace(final byte[] name, final byte[] value) {
-    super(NodeType.NSP);
+    super(NodeType.NAMESPACE_NODE);
     this.name = name;
     this.value = value;
   }
@@ -39,19 +39,26 @@ public final class FNSpace extends FNode {
   }
 
   @Override
-  public FNode deepCopy(final MainOptions options) {
-    return new FNSpace(name, value);
+  public FNSpace materialize(final QueryContext qc, final boolean copy) {
+    return copy ? new FNSpace(name, value) : this;
   }
 
   @Override
-  public void plan(final FElem plan) {
-    addPlan(plan, planElem(NAM, name, VAL, value));
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FNSpace && Token.eq(name, ((FNSpace) obj).name) &&
+        super.equals(obj);
   }
 
   @Override
-  public String toString() {
-    final TokenBuilder tb = new TokenBuilder(Token.XMLNS);
+  public void plan(final QueryPlan plan) {
+    plan.add(plan.create(this, NAME, name, VALUEE, value));
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    final TokenBuilder tb = new TokenBuilder().add(Token.XMLNS);
     if(name.length != 0) tb.add(':').add(name);
-    return tb.add('=').add(Atm.toString(value)).toString();
+    tb.add('=').add(QueryString.toQuoted(value));
+    qs.token(tb.finish());
   }
 }

@@ -3,7 +3,6 @@ package org.basex.query.value.node;
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
-import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -12,7 +11,7 @@ import org.w3c.dom.*;
 /**
  * Comment node fragment.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FComm extends FNode {
@@ -32,7 +31,7 @@ public final class FComm extends FNode {
    * @param value text value
    */
   public FComm(final byte[] value) {
-    super(NodeType.COM);
+    super(NodeType.COMMENT);
     this.value = value;
   }
 
@@ -46,13 +45,13 @@ public final class FComm extends FNode {
   }
 
   @Override
-  public FNode deepCopy(final MainOptions options) {
-    return new FComm(value).parent(parent);
+  public FComm materialize(final QueryContext qc, final boolean copy) {
+    return copy ? new FComm(value) : this;
   }
 
   @Override
-  public String toString() {
-    return new TokenBuilder("<!--").add(value).add("-->").toString();
+  public void plan(final QueryString qs) {
+    qs.concat("<!--", QueryString.toValue(value), "-->");
   }
 
   /**

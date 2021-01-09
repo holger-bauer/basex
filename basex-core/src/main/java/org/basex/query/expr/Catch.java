@@ -3,6 +3,9 @@ package org.basex.query.expr;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
+import java.util.*;
+import java.util.function.*;
+
 import org.basex.query.*;
 import org.basex.query.expr.path.*;
 import org.basex.query.util.*;
@@ -17,68 +20,65 @@ import org.basex.util.hash.*;
 /**
  * Catch clause.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class Catch extends Single {
   /** Error QNames. */
   public static final QNm[] NAMES = {
     create(E_CODE), create(E_DESCRIPTION), create(E_VALUE), create(E_MODULE),
-    create(E_LINE_NUMBER), create(E_COLUM_NUMBER), create(E_ADDITIONAL)
+    create(E_LINE_NUMBER), create(E_COLUMN_NUMBER), create(E_ADDITIONAL)
   };
   /** Error types. */
   public static final SeqType[] TYPES = {
-    SeqType.QNM, SeqType.STR_ZO, SeqType.ITEM_ZM, SeqType.STR_ZO,
-    SeqType.ITR_ZO, SeqType.ITR_ZO, SeqType.ITEM_ZM
+    SeqType.QNAME_O, SeqType.STRING_ZO, SeqType.ITEM_ZM, SeqType.STRING_ZO,
+    SeqType.INTEGER_ZO, SeqType.INTEGER_ZO, SeqType.ITEM_ZM
   };
 
+  /** Error tests. */
+  private final ArrayList<NameTest> tests;
   /** Error variables. */
   private final Var[] vars;
-  /** Supported codes. */
-  private final NameTest[] codes;
 
   /**
    * Constructor.
    * @param info input info
-   * @param codes supported error codes
+   * @param tests error tests
    * @param vars variables to be bound
    */
-  public Catch(final InputInfo info, final NameTest[] codes, final Var[] vars) {
-    super(info, null);
+  public Catch(final InputInfo info, final NameTest[] tests, final Var[] vars) {
+    super(info, null, SeqType.ITEM_ZM);
+    this.tests = new ArrayList<>(Arrays.asList(tests));
     this.vars = vars;
-    this.codes = codes;
   }
 
   @Override
   public Catch compile(final CompileContext cc) {
     try {
       expr = expr.compile(cc);
-      seqType = expr.seqType();
     } catch(final QueryException qe) {
       expr = cc.error(qe, expr);
     }
-    return this;
+    return optimize(cc);
+  }
+
+  @Override
+  public Catch optimize(final CompileContext cc) {
+    return (Catch) adoptType(expr);
   }
 
   /**
    * Returns the value of the caught expression.
    * @param qc query context
-   * @param ex thrown exception
+   * @param qe thrown exception
    * @return resulting item
    * @throws QueryException query exception
    */
-  Value value(final QueryContext qc, final QueryException ex) throws QueryException {
+  Value value(final QueryContext qc, final QueryException qe) throws QueryException {
+    Util.debug(qe);
     int i = 0;
-    final byte[] io = ex.file() == null ? EMPTY : token(ex.file());
-    final Value val = ex.value();
-    for(final Value v : new Value[] { ex.qname(),
-        Str.get(ex.getLocalizedMessage()), val == null ? Empty.SEQ : val,
-        Str.get(io), Int.get(ex.line()), Int.get(ex.column()),
-        Str.get(ex.getMessage().replaceAll("\r\n?", "\n")) }) {
-      qc.set(vars[i++], v);
-    }
-    Util.debug(ex);
-    return qc.value(expr);
+    for(final Value value : values(qe)) qc.set(vars[i++], value);
+    return expr.value(qc);
   }
 
   @Override
@@ -86,56 +86,98 @@ public final class Catch extends Single {
     final Var[] vrs = new Var[NAMES.length];
     final int vl = vrs.length;
     for(int v = 0; v < vl; v++) vrs[v] = cc.vs().addNew(NAMES[v], TYPES[v], false, cc.qc, info);
-    final Catch ctch = new Catch(info, codes.clone(), vrs);
+    final Catch ctch = new Catch(info, tests.toArray(new NameTest[0]), vrs);
     final int val = vars.length;
     for(int v = 0; v < val; v++) vm.put(vars[v].id, ctch.vars[v]);
     ctch.expr = expr.copy(cc, vm);
-    return ctch;
+    return copyType(ctch);
   }
 
   @Override
-  public Catch inline(final Var var, final Expr ex, final CompileContext cc) {
+  public Catch inline(final InlineContext ic) {
     try {
-      final Expr sub = expr.inline(var, ex, cc);
-      if(sub == null) return null;
-      expr = sub;
+      final Expr inlined = expr.inline(ic);
+      if(inlined == null) return null;
+      expr = inlined;
     } catch(final QueryException qe) {
-      expr = cc.error(qe, expr);
+      expr = ic.cc.error(qe, expr);
     }
     return this;
   }
 
   /**
-   * Returns this clause as an inlineable expression.
-   * @param ex caught exception
+   * Returns the catch expression with inlined exception values.
+   * @param qe caught exception
    * @param cc compilation context
-   * @return equivalent expression
-   * @throws QueryException query exception during inlining
+   * @return expression
+   * @throws QueryException query exception
    */
-  Expr asExpr(final QueryException ex, final CompileContext cc) throws QueryException {
-    if(expr.isValue()) return expr;
-    int i = 0;
-    Expr e = expr;
-    for(final Value v : values(ex)) {
-      final Expr e2 = e.inline(vars[i++], v, cc);
-      if(e2 != null) e = e2;
-      if(e.isValue()) break;
+  Expr inline(final QueryException qe, final CompileContext cc) throws QueryException {
+    if(expr instanceof Value) return expr;
+
+    Expr ex = expr;
+    int v = 0;
+    for(final Value value : values(qe)) {
+      ex = new InlineContext(vars[v++], value, cc).inline(ex);
     }
-    return e;
+    return ex;
   }
 
   /**
    * Returns all error values.
-   * @param ex exception
+   * @param qe exception
    * @return values
    */
-  public static Value[] values(final QueryException ex) {
-    final byte[] io = ex.file() == null ? EMPTY : token(ex.file());
-    final Value val = ex.value();
-    return new Value[] { ex.qname(),
-        Str.get(ex.getLocalizedMessage()), val == null ? Empty.SEQ : val,
-        Str.get(io), Int.get(ex.line()), Int.get(ex.column()),
-        Str.get(ex.getMessage().replaceAll("\r\n?", "\n")) };
+  public static Value[] values(final QueryException qe) {
+    final byte[] io = qe.file() == null ? EMPTY : token(qe.file());
+    final Value value = qe.value();
+    return new Value[] {
+      qe.qname(),
+      Str.get(qe.getLocalizedMessage()),
+      value == null ? Empty.VALUE : value,
+      Str.get(io),
+      Int.get(qe.line()),
+      Int.get(qe.column()),
+      Str.get(qe.getMessage().replaceAll("\r\n?", "\n"))
+    };
+  }
+
+  /**
+   * Removes redundant tests.
+   * @param list current tests
+   * @param cc compilation context
+   * @return if catch clause contains relevant tests
+   */
+  boolean simplify(final ArrayList<NameTest> list, final CompileContext cc) {
+    // check if all errors are already caught
+    if(list.contains(null)) {
+      cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, "*");
+      return false;
+    }
+
+    // check if the current clause will catch all errors
+    for(final NameTest test : tests) {
+      if(test == null) {
+        list.add(null);
+        cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, "*");
+        tests.clear();
+        tests.add(null);
+        return true;
+      }
+    }
+
+    // remove redundant tests
+    final Iterator<NameTest> iter = tests.iterator();
+    while(iter.hasNext()) {
+      final NameTest test = iter.next();
+      if(list.contains(test)) {
+        cc.info(OPTREMOVE_X_X, test != null ? test : "*", (Supplier<?>) this::description);
+        iter.remove();
+      } else {
+        list.add(test);
+      }
+    }
+    return !tests.isEmpty();
   }
 
   /**
@@ -144,33 +186,51 @@ public final class Catch extends Single {
    * @return result of check
    */
   boolean matches(final QueryException qe) {
-    final QNm code = qe.qname();
-    for(final NameTest c : codes) if(c.eq(code)) return true;
+    final QNm name = qe.qname();
+    for(final NameTest test : tests) {
+      if(test == null || test.matches(name)) return true;
+    }
     return false;
-  }
-
-  @Override
-  public String toString() {
-    return "catch * { " + expr + " }";
   }
 
   /**
    * Creates an error QName with the specified name.
-   * @param n name
+   * @param name name
    * @return QName
    */
-  private static QNm create(final byte[] n) {
-    return new QNm(concat(ERR_PREFIX, COLON, n), ERROR_URI);
+  private static QNm create(final byte[] name) {
+    return new QNm(concat(ERR_PREFIX, COLON, name), ERROR_URI);
   }
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
-    for(final Var v : vars) if(!visitor.declared(v)) return false;
+    for(final Var var : vars) {
+      if(!visitor.declared(var)) return false;
+    }
     return visitAll(visitor, expr);
   }
 
   @Override
   public int exprSize() {
     return expr.exprSize();
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(this == obj) return true;
+    if(!(obj instanceof Catch)) return false;
+    final Catch ctch = (Catch) obj;
+    return Array.equals(vars, ctch.vars) && tests.equals(ctch.tests) && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(CATCH);
+    int c = 0;
+    for(final NameTest test : tests) {
+      if(c++ > 0) qs.token('|');
+      qs.token(test != null ? test.toString(false) : "*");
+    }
+    qs.brace(expr);
   }
 }

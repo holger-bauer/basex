@@ -1,11 +1,13 @@
 package org.basex.gui;
 
+import java.util.*;
+
 import org.basex.gui.layout.*;
 
 /**
  * This class provides a default implementation for GUI popup commands.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public abstract class GUIPopupCmd implements GUICommand {
@@ -35,7 +37,7 @@ public abstract class GUIPopupCmd implements GUICommand {
   }
 
   @Override
-  public final boolean toggle() {
+  public boolean toggle() {
     return false;
   }
 
@@ -62,5 +64,10 @@ public abstract class GUIPopupCmd implements GUICommand {
   @Override
   public boolean selected(final GUI main) {
     return false;
+  }
+
+  @Override
+  public String toString() {
+    return label + ' ' + Arrays.toString(shortcut);
   }
 }

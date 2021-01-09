@@ -1,6 +1,7 @@
 package org.basex.util.hash;
 
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.util.*;
 
@@ -8,13 +9,20 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing tokens and objects.
  * {@link TokenSet hash set}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @param <E> generic value type
  */
 public final class TokenObjMap<E> extends TokenSet {
   /** Values. */
-  private Object[] values = new Object[Array.CAPACITY];
+  private Object[] values;
+
+  /**
+   * Default constructor.
+   */
+  public TokenObjMap() {
+    values = new Object[capacity()];
+  }
 
   /**
    * Indexes the specified key and value.
@@ -30,8 +38,24 @@ public final class TokenObjMap<E> extends TokenSet {
 
   /**
    * Returns the value for the specified key.
+   * Creates a new value if none exists.
+   * @param key key
+   * @param func function that create a new value
+   * @return value
+   */
+  public E computeIfAbsent(final byte[] key, final Supplier<? extends E> func) {
+    E value = get(key);
+    if(value == null) {
+      value = func.get();
+      put(key, value);
+    }
+    return value;
+  }
+
+  /**
+   * Returns the value for the specified key.
    * @param key key to be looked up
-   * @return value or {@code null} if nothing was found
+   * @return value, or {@code null} if nothing was found
    */
   @SuppressWarnings("unchecked")
   public E get(final byte[] key) {
@@ -47,8 +71,8 @@ public final class TokenObjMap<E> extends TokenSet {
   }
 
   @Override
-  public int delete(final byte[] key) {
-    final int i = super.delete(key);
+  public int remove(final byte[] key) {
+    final int i = super.remove(key);
     values[i] = null;
     return i;
   }
@@ -60,22 +84,13 @@ public final class TokenObjMap<E> extends TokenSet {
   }
 
   @Override
-  protected void rehash(final int sz) {
-    super.rehash(sz);
-    values = Array.copy(values, new Object[sz]);
+  protected void rehash(final int newSize) {
+    super.rehash(newSize);
+    values = Array.copy(values, new Object[newSize]);
   }
 
   @Override
   public String toString() {
-    final TokenBuilder tb = new TokenBuilder();
-    for(final byte[] key : this) {
-      if(!tb.isEmpty()) tb.add(", ");
-      if(key != null) {
-        final Object val = values[id(key)];
-        tb.add('{').add(key).add(',').add(val == null ? "null" :  val.toString()).add('}');
-      }
-    }
-    return new TokenBuilder(Util.className(getClass())).add('[').add(tb.finish()).
-      add(']').toString();
+    return toString(keys, values);
   }
 }

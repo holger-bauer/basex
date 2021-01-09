@@ -5,11 +5,10 @@ import org.basex.query.*;
 /**
  * XQuery functions tests.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class FnFormatDateTest extends QueryTest {
-  /** Constructor. */
   static {
     queries = new Object[][] {
       { "formdate  10", strings("2002-12-31"),

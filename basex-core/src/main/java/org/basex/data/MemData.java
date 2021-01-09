@@ -18,7 +18,7 @@ import org.basex.util.hash.*;
  * for textual content in a compressed memory structure.
  * The table mapping is documented in {@link Data}.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class MemData extends Data {
@@ -92,8 +92,8 @@ public final class MemData extends Data {
   @Override
   public void dropIndex(final IndexType type) throws BaseXException {
     switch(type) {
-      case TEXT:      break;
-      case ATTRIBUTE: break;
+      case TEXT:
+      case ATTRIBUTE:
       case TOKEN:     break;
       case FULLTEXT:  throw new BaseXException(NO_MAINMEM);
       default:        throw Util.notExpected();
@@ -160,7 +160,7 @@ public final class MemData extends Data {
     return text ? texts : values;
   }
 
-  // UPDATE OPERATIONS ========================================================
+  // UPDATE OPERATIONS ============================================================================
 
   @Override
   protected void delete(final int pre, final boolean text) { }

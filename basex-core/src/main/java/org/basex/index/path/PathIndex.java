@@ -12,6 +12,7 @@ import org.basex.index.query.*;
 import org.basex.index.stats.*;
 import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
+import org.basex.query.util.index.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
@@ -19,7 +20,7 @@ import org.basex.util.list.*;
  * This class stores the path summary of a database.
  * It contains all unique location paths.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class PathIndex implements Index {
@@ -88,7 +89,7 @@ public final class PathIndex implements Index {
   @Override
   public void close() { }
 
-  // Build Index ==============================================================
+  // Build Index ==================================================================================
 
   /**
    * Adds an element or document node.
@@ -121,7 +122,7 @@ public final class PathIndex implements Index {
     }
   }
 
-  // Traverse Index ===========================================================
+  // Traverse Index ===============================================================================
 
   /**
    * Returns the root node.
@@ -141,7 +142,9 @@ public final class PathIndex implements Index {
    */
   public static ArrayList<PathNode> parent(final ArrayList<PathNode> nodes) {
     final ArrayList<PathNode> out = new ArrayList<>();
-    for(final PathNode node : nodes) if(!out.contains(node.parent)) out.add(node.parent);
+    for(final PathNode node : nodes) {
+      if(!out.contains(node.parent)) out.add(node.parent);
+    }
     return out;
   }
 
@@ -153,14 +156,14 @@ public final class PathIndex implements Index {
    * @return descendant nodes
    */
   public static ArrayList<PathNode> desc(final ArrayList<PathNode> nodes, final boolean desc) {
-    final ArrayList<PathNode> out = new ArrayList<>();
+    final ArrayList<PathNode> list = new ArrayList<>();
     for(final PathNode node : nodes) {
       for(final PathNode child : node.children) {
-        if(desc) child.addDesc(out);
-        else if(!out.contains(child)) out.add(child);
+        if(desc) child.addDesc(list);
+        else if(!list.contains(child)) list.add(child);
       }
     }
-    return out;
+    return list;
   }
 
   /**
@@ -171,9 +174,9 @@ public final class PathIndex implements Index {
    */
   public ArrayList<PathNode> desc(final byte[] name) {
     final int id = data.elemNames.id(name);
-    final ArrayList<PathNode> nodes = new ArrayList<>();
-    for(final PathNode child : root.children) child.addDesc(nodes, id);
-    return nodes;
+    final ArrayList<PathNode> list = new ArrayList<>();
+    for(final PathNode child : root.children) child.addDesc(list, id);
+    return list;
   }
 
   /**
@@ -207,15 +210,15 @@ public final class PathIndex implements Index {
       final byte kind = attr ? Data.ATTR : Data.ELEM;
       final int id = attr ? data.attrNames.id(substring(name, 1)) : data.elemNames.id(name);
 
-      final ArrayList<PathNode> tmp = new ArrayList<>();
+      final ArrayList<PathNode> list = new ArrayList<>();
       for(final PathNode node : nodes) {
         if(node.name != id || node.kind != kind) continue;
         for(final PathNode child : node.children) {
-          if(desc) child.addDesc(tmp);
-          else tmp.add(child);
+          if(desc) child.addDesc(list);
+          else list.add(child);
         }
       }
-      nodes = tmp;
+      nodes = list;
     }
 
     // sort by number of occurrences
@@ -225,24 +228,24 @@ public final class PathIndex implements Index {
     final int[] occs = Array.createOrder(tmp, false);
 
     // remove non-text/attribute nodes
-    final TokenList list = new TokenList();
+    final TokenList tl = new TokenList();
     for(int n = 0; n < ns; n++) {
       final PathNode node = nodes.get(occ ? occs[n] : n);
       final byte[] name = node.token(data);
-      if(name.length != 0 && !list.contains(name) && !contains(name, '(')) list.add(name);
+      if(name.length != 0 && !tl.contains(name) && !contains(name, '(')) tl.add(name);
     }
-    if(!occ) list.sort(false);
-    return list;
+    if(!occ) tl.sort(false);
+    return tl;
   }
 
-  // Info =====================================================================
+  // Info =========================================================================================
 
   @Override
   public byte[] info(final MainOptions options) {
     return root != null ? chop(root.info(data, 0), 1 << 20) : EMPTY;
   }
 
-  // Unsupported methods ======================================================
+  // Unsupported methods ==========================================================================
 
   @Override
   public boolean drop() {
@@ -250,12 +253,12 @@ public final class PathIndex implements Index {
   }
 
   @Override
-  public IndexIterator iter(final IndexToken token) {
+  public IndexIterator iter(final IndexSearch search) {
     throw Util.notExpected();
   }
 
   @Override
-  public int costs(final IndexToken token) {
+  public IndexCosts costs(final IndexSearch search) {
     throw Util.notExpected();
   }
 

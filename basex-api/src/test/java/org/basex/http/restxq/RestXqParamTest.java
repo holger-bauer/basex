@@ -1,11 +1,11 @@
 package org.basex.http.restxq;
 
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This test contains RESTXQ parameters.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RestXqParamTest extends RestXqTest {
@@ -13,8 +13,7 @@ public final class RestXqParamTest extends RestXqTest {
    * Query parameters.
    * @throws Exception exception
    */
-  @Test
-  public void queryParams() throws Exception {
+  @Test public void queryParams() throws Exception {
     // correct syntax
     get("declare %R:path('') %R:query-param('a','{$v}') " +
         "function m:f($v) {$v};", "?a=1", "1");

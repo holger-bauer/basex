@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class DbExists extends DbAccess {
@@ -29,7 +29,7 @@ public final class DbExists extends DbAccess {
       }
       return Bln.get(raw || data.resources.doc(path) != -1);
     } catch(final QueryException ex) {
-      if(ex.error() == BXDB_OPEN_X) return Bln.FALSE;
+      if(ex.error() == DB_OPEN2_X) return Bln.FALSE;
       throw ex;
     }
   }

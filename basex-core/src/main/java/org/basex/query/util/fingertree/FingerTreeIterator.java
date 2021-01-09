@@ -2,10 +2,12 @@ package org.basex.query.util.fingertree;
 
 import java.util.*;
 
+import org.basex.util.*;
+
 /**
  * List iterator over the elements of a finger tree.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Leo Woerteler
  *
  * @param <E> element type
@@ -28,7 +30,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
   /** Position stack. */
   private int[] poss;
   /** Stack pointer. */
-  private int nTop = -1;
+  private int nTop;
 
   /** Current leaf node. */
   private Node<E, E> leaf;
@@ -53,6 +55,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
     } else {
       leaf = (Node<E, E>) root;
       leafPos = (int) start;
+      nTop = -1;
     }
 
     assert start >= 0 && start <= n;
@@ -107,9 +110,9 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
           int i = 0;
           for(;; i++) {
             node = left[i];
-            final long sz = node.size();
-            if(pos < sz) break;
-            pos -= sz;
+            final long size = node.size();
+            if(pos < size) break;
+            pos -= size;
           }
           deepPos = i - left.length;
           break;
@@ -125,14 +128,13 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
           int i = 0;
           for(;; i++) {
             node = right[i];
-            final long sz = node.size();
-            if(pos < sz) break;
-            pos -= sz;
+            final long size = node.size();
+            if(pos < size) break;
+            pos -= size;
           }
           deepPos = i + 1;
           break;
         }
-
 
         if(mid instanceof SingletonTree) {
           // single middle node
@@ -158,9 +160,9 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
       int idx = 0;
       Node<?, E> sub = inner.getSub(0);
       while(true) {
-        final long sz = sub.size();
-        if(pos < sz) break;
-        pos -= sz;
+        final long size = sub.size();
+        if(pos < size) break;
+        pos -= size;
         sub = inner.getSub(++idx);
       }
 
@@ -190,7 +192,6 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
   @Override
   @SuppressWarnings("unchecked")
   public E next() {
-    if(index >= n) throw new NoSuchElementException();
     if(leaf == null) init();
 
     index++;
@@ -225,7 +226,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
           final DeepTree<?, E> deep = (DeepTree<?, E>) mid;
           if(++tTop == trees.length) {
             final DeepTree<?, E>[] newTrees = new DeepTree[2 * tTop];
-            System.arraycopy(trees, 0, newTrees, 0, tTop);
+            Array.copy(trees, tTop, newTrees);
             trees = newTrees;
           }
           trees[tTop] = deep;
@@ -258,7 +259,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
     while(sub instanceof InnerNode) {
       if(++nTop == nodes.length) {
         final InnerNode<?, E>[] newNodes = new InnerNode[2 * nTop];
-        System.arraycopy(nodes, 0, newNodes, 0, nTop);
+        Array.copy(nodes, nTop, newNodes);
         nodes = newNodes;
         poss = Arrays.copyOf(poss, 2 * nTop);
       }
@@ -285,7 +286,6 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
   @Override
   @SuppressWarnings("unchecked")
   public E previous() {
-    if(index <= 0) throw new NoSuchElementException();
     if(leaf == null) init();
 
     --index;
@@ -322,7 +322,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
           final DeepTree<?, E> deep = (DeepTree<?, E>) mid;
           if(++tTop == trees.length) {
             final DeepTree<?, E>[] newTrees = new DeepTree[2 * tTop];
-            System.arraycopy(trees, 0, newTrees, 0, tTop);
+            Array.copy(trees, tTop, newTrees);
             trees = newTrees;
           }
           trees[tTop] = deep;
@@ -355,7 +355,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
     while(sub instanceof InnerNode) {
       if(++nTop == nodes.length) {
         final InnerNode<?, E>[] newNodes = new InnerNode[2 * nTop];
-        System.arraycopy(nodes, 0, newNodes, 0, nTop);
+        Array.copy(nodes, nTop, newNodes);
         nodes = newNodes;
         poss = Arrays.copyOf(poss, 2 * nTop);
       }
@@ -371,16 +371,16 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
 
   @Override
   public void set(final E e) {
-    throw new UnsupportedOperationException();
+    throw Util.notExpected();
   }
 
   @Override
   public void add(final E e) {
-    throw new UnsupportedOperationException();
+    throw Util.notExpected();
   }
 
   @Override
   public void remove() {
-    throw new UnsupportedOperationException();
+    throw Util.notExpected();
   }
 }

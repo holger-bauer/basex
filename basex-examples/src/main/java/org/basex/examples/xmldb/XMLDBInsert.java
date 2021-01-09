@@ -9,7 +9,7 @@ import org.xmldb.api.modules.*;
  * the XML:DB API.
  * You first need to run {@link XMLDBCreate} in order to create the addressed database.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  */
 public final class XMLDBInsert {
   /** Database driver. */
@@ -33,7 +33,7 @@ public final class XMLDBInsert {
     try {
       // Register the database
       Class<?> c = Class.forName(DRIVER);
-      Database db = (Database) c.newInstance();
+      Database db = (Database) c.getDeclaredConstructor().newInstance();
       DatabaseManager.registerDatabase(db);
 
       System.out.println("\n* Get collection.");

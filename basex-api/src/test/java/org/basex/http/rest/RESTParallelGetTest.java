@@ -1,17 +1,17 @@
 package org.basex.http.rest;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
 import org.basex.http.*;
 import org.basex.util.*;
-import org.junit.*;
+import org.junit.jupiter.api.*;
 
 /**
  * This class sends parallel GET requests to the REST API.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RESTParallelGetTest extends HTTPTest {
@@ -22,25 +22,23 @@ public final class RESTParallelGetTest extends HTTPTest {
   /** Failed string. */
   private static String failed;
 
-  // INITIALIZERS =============================================================
+  // INITIALIZERS =================================================================================
 
   /**
    * Start server.
    * @throws Exception exception
    */
-  @BeforeClass
-  public static void start() throws Exception {
+  @BeforeAll public static void start() throws Exception {
     init(REST_ROOT, true);
   }
 
-  // TEST METHODS =============================================================
+  // TEST METHODS =================================================================================
 
   /**
    * Concurrency test.
    * @throws Exception exception
    */
-  @Test
-  public void test() throws Exception {
+  @Test public void test() throws Exception {
     get("?command=create+db+" + REST + "+<a/>");
 
     // start and join concurrent clients

@@ -2,58 +2,25 @@ package org.basex.data;
 
 import static org.basex.query.func.Function.*;
 
-import java.util.*;
-import java.util.List;
-
+import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.query.*;
-import org.junit.*;
-import org.junit.Test;
-import org.junit.runner.*;
-import org.junit.runners.*;
-import org.junit.runners.Parameterized.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * This class tests the {@link MainOptions#UPDINDEX} and {@link MainOptions#AUTOOPTIMIZE} options.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
-@RunWith(Parameterized.class)
-public final class IndexTest extends AdvancedQueryTest {
-  /** Main memory flag. */
-  @Parameter
-  public Object mainmem;
-
-  /**
-   * Mainmem parameters.
-   * @return parameters
-   */
-  @Parameters
-  public static Collection<Object[]> params() {
-    final List<Object[]> params = new ArrayList<>();
-    params.add(new Object[] { false });
-    params.add(new Object[] { true });
-    return params;
-  }
-
-  /** Test file. */
-  public static final String FILE = "src/test/resources/selective.xml";
-
-  /**
-   * Initializes a test.
-   */
-  @Before
-  public void before() {
-    set(MainOptions.MAINMEM, mainmem);
-  }
+public final class IndexTest extends SandboxTest {
 
   /**
    * Finalize test.
    */
-  @After
-  public void after() {
+  @AfterEach public void after() {
     execute(new DropDB(NAME));
     set(MainOptions.TOKENINDEX, false);
     set(MainOptions.UPDINDEX, false);
@@ -63,9 +30,12 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexText() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexText(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     for(int i = 0; i < 5; i++) {
@@ -73,14 +43,17 @@ public final class IndexTest extends AdvancedQueryTest {
     }
     query(_DB_TEXT.args(NAME, "A"), "A");
     query(_DB_TEXT.args(NAME, "B"), "B");
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "true");
+    query(_DB_INFO.args(NAME) + "//textindex/text()", true);
   }
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexText2() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexText2(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     for(int i = 0; i < 5; i++) {
@@ -94,9 +67,12 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexText3() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexText3(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     for(int i = 0; i < 5; i++) {
@@ -109,9 +85,12 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexAttribute() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexAttribute(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     for(int i = 0; i < 5; i++) {
@@ -126,16 +105,19 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexToken() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexToken(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     set(MainOptions.TOKENINDEX, true);
     execute(new CreateDB(NAME));
 
     execute(new Add("a", "<x c='c'/>"));
     query(_DB_TOKEN.args(NAME, "a"), "");
-    query(DATA.args(_DB_TOKEN.args(NAME, "c")), "c");
+    query("data(" + _DB_TOKEN.args(NAME, "c") + ')', "c");
 
     for(int i = 0; i < 5; i++) {
       execute(new Add("a", "<x c='c'/>"));
@@ -145,14 +127,17 @@ public final class IndexTest extends AdvancedQueryTest {
     query(_DB_TOKEN.args(NAME, "a"), "");
     query(_DB_TOKEN.args(NAME, "b"), "");
     query(_DB_TOKEN.args(NAME, "c"), "");
-    query(_DB_INFO.args(NAME) + "//tokenindex/text()", "true");
+    query(_DB_INFO.args(NAME) + "//tokenindex/text()", true);
   }
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexReplace1() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexReplace1(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME, "<X><A>q</A><B>q</B></X>"));
     query("replace node /X/A with 'x', replace node /X/B with 'y'", "");
@@ -160,9 +145,12 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexReplace2() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexReplace2(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     execute(new Replace("A", "<X a='?' b='a' c='1'/>"));
@@ -172,10 +160,13 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexOpenClose1() {
-    final boolean openClose = !(Boolean) mainmem;
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexOpenClose1(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
+    final boolean openClose = !mainmem;
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     for(int i = 0; i < 5; i++) {
@@ -189,10 +180,13 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void updindexOpenClose2() {
-    final boolean openClose = !(Boolean) mainmem;
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void updindexOpenClose2(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
+    final boolean openClose = !mainmem;
     set(MainOptions.UPDINDEX, true);
     execute(new CreateDB(NAME));
     execute(new Replace("A", "<a/>"));
@@ -208,25 +202,28 @@ public final class IndexTest extends AdvancedQueryTest {
 
   /**
    * Test.
+   * @param mainmem main memory flag.
    */
-  @Test
-  public void autooptimize() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void autooptimize(final boolean mainmem) {
+    set(MainOptions.MAINMEM, mainmem);
     set(MainOptions.AUTOOPTIMIZE, true);
     execute(new CreateDB(NAME));
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "true");
+    query(_DB_INFO.args(NAME) + "//textindex/text()", true);
     execute(new Replace("x.xml", "<a>A</a>"));
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "true");
-    query(_DB_REPLACE.args(NAME, "x.xml", "<a>B</a>"));
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "true");
+    query(_DB_INFO.args(NAME) + "//textindex/text()", true);
+    query(_DB_REPLACE.args(NAME, "x.xml", " <a>B</a>"));
+    query(_DB_INFO.args(NAME) + "//textindex/text()", true);
 
     set(MainOptions.AUTOOPTIMIZE, false);
     execute(new Optimize());
     execute(new Replace("x.xml", "<a>C</a>"));
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "false");
+    query(_DB_INFO.args(NAME) + "//textindex/text()", false);
 
     execute(new Optimize());
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "true");
-    query(_DB_REPLACE.args(NAME, "x.xml", "<a>D</a>"));
-    query(_DB_INFO.args(NAME) + "//textindex/text()", "false");
+    query(_DB_INFO.args(NAME) + "//textindex/text()", true);
+    query(_DB_REPLACE.args(NAME, "x.xml", " <a>D</a>"));
+    query(_DB_INFO.args(NAME) + "//textindex/text()", false);
   }
 }

@@ -1,14 +1,14 @@
 package org.basex.http.restxq;
 
-import static org.basex.http.HTTPText.*;
-import static org.basex.http.restxq.RestXqText.*;
+import static javax.servlet.http.HttpServletResponse.*;
 
-import javax.servlet.http.*;
+import java.util.stream.*;
 
 import org.basex.http.*;
+import org.basex.http.web.*;
+import org.basex.http.web.WebResponse.*;
 import org.basex.query.*;
-import org.basex.query.value.item.*;
-import org.basex.util.*;
+import org.basex.util.http.*;
 
 /**
  * <p>This servlet receives and processes REST requests.
@@ -19,62 +19,65 @@ import org.basex.util.*;
  * <p>The implementation is based on Adam Retter's paper presented at XMLPrague 2012,
  * titled "RESTful XQuery - Standardised XQuery 3.0 Annotations for REST".</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class RestXqServlet extends BaseXServlet {
   @Override
   protected void run(final HTTPConnection conn) throws Exception {
     // no trailing slash: send redirect
-    if(conn.req.getPathInfo() == null) {
+    if(conn.request.getPathInfo() == null) {
       conn.redirect("/");
       return;
     }
 
     // analyze input path
-    final RestXqModules rxm = RestXqModules.get(conn.context);
+    final WebModules modules = WebModules.get(conn.context);
 
     // initialize RESTXQ
-    if(conn.path().equals('/' + INIT)) {
-      rxm.init();
+    if(conn.path().equals('/' + WebText.INIT)) {
+      modules.init(false);
       return;
     }
 
-    // select function that closest matches the request
-    RestXqFunction func = rxm.find(conn, null);
-    if(func == null) throw HTTPCode.NO_XQUERY.get();
+    // choose function to process
+    RestXqFunction func = modules.restxq(conn, null);
+    boolean body = true;
 
+    // no function found? check alternatives
+    if(func == null) {
+      // OPTIONS: no custom response required
+      if(conn.method.equals(HttpMethod.OPTIONS.name())) {
+        conn.response.setHeader(HttpText.ALLOW, Stream.of(HttpMethod.values()).map(Enum::name).
+            collect(Collectors.joining(",")));
+        return;
+      }
+      // HEAD: evaluate GET, discard body
+      if(conn.method.equals(HttpMethod.HEAD.name())) {
+        conn.method = HttpMethod.GET.name();
+        func = modules.restxq(conn, null);
+        body = false;
+      }
+      if(func == null) throw HTTPCode.NO_XQUERY.get();
+    }
+
+    // create response
+    final RestXqResponse response = new RestXqResponse(conn);
     try {
-      // process function
-      func.process(conn, null);
+      // run checks; stop further processing if a function produces a response
+      for(final RestXqFunction check : modules.checks(conn)) {
+        if(response.create(check, func, body) != Response.NONE) return;
+      }
+
+      // run addressed function
+      if(response.create(func, null, body) != Response.CUSTOM) conn.log(SC_OK, "");
+
     } catch(final QueryException ex) {
       // run optional error function
-      func = rxm.find(conn, ex.qname());
+      func = modules.restxq(conn, ex.qname());
       if(func == null) throw ex;
-      func.process(conn, ex);
-    }
-  }
 
-  @Override
-  public String username(final HTTPConnection http) {
-    // try to retrieve session id (DBA, global one)
-    final HttpSession session = http.req.getSession(false);
-    byte[] value = null;
-    if(session != null) {
-      value = token(session.getAttribute("id"));
-      if((http.path() + '/').contains('/' + DBA + '/')) value = token(session.getAttribute(DBA));
+      response.create(func, ex, body);
     }
-    return value != null ? Token.string(Token.normalize(value)) : super.username(http);
-  }
-
-  /**
-   * Converts the specified session value to a string.
-   * @param value value
-   * @return return string, or {@code null}
-   */
-  private static byte[] token(final Object value) {
-    if(value instanceof Str) return ((Str) value).string();
-    if(value instanceof Atm) return ((Atm) value).string(null);
-    return null;
   }
 }

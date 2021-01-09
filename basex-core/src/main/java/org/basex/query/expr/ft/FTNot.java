@@ -4,8 +4,8 @@ import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.ft.*;
+import org.basex.query.util.index.*;
 import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -15,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * FTUnaryNot expression.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
@@ -32,7 +32,7 @@ public final class FTNot extends FTExpr {
   @Override
   public FTExpr compile(final CompileContext cc) throws QueryException {
     super.compile(cc);
-    return exprs[0] instanceof FTNot ? exprs[0].exprs[0] : this;
+    return exprs[0] instanceof FTNot ? (FTExpr) cc.replaceWith(this, exprs[0].exprs[0]) : this;
   }
 
   @Override
@@ -43,11 +43,10 @@ public final class FTNot extends FTExpr {
   @Override
   public FTIter iter(final QueryContext qc) throws QueryException {
     return new FTIter() {
-      final FTIter ir = exprs[0].iter(qc);
-
+      final FTIter iter = exprs[0].iter(qc);
       @Override
       public FTNode next() throws QueryException {
-        return not(ir.next());
+        return not(iter.next());
       }
     };
   }
@@ -85,7 +84,7 @@ public final class FTNot extends FTExpr {
     if(i == m.size()) {
       all.add(new FTMatch());
     } else {
-      for(final FTStringMatch s : m.match[i]) {
+      for(final FTStringMatch s : m.list[i]) {
         s.exclude ^= true;
         for(final FTMatch tmp : not(m, i + 1)) {
           all.add(new FTMatch(1 + tmp.size()).add(s).add(tmp));
@@ -102,7 +101,7 @@ public final class FTNot extends FTExpr {
 
   @Override
   public FTExpr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return new FTNot(info, exprs[0].copy(cc, vm));
+    return copyType(new FTNot(info, exprs[0].copy(cc, vm)));
   }
 
   @Override
@@ -111,7 +110,12 @@ public final class FTNot extends FTExpr {
   }
 
   @Override
-  public String toString() {
-    return FTNOT + ' ' + exprs[0];
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTNot && super.equals(obj);
+  }
+
+  @Override
+  public void plan(final QueryString qs) {
+    qs.token(FTNOT).token(exprs[0]);
   }
 }

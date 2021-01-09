@@ -9,7 +9,6 @@ import java.util.zip.*;
 
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -17,36 +16,31 @@ import org.basex.query.value.node.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ArchiveEntries extends StandardFunc {
   @Override
-  public Iter iter(final QueryContext qc) throws QueryException {
-    return value(qc).iter();
-  }
-
-  @Override
   public Value value(final QueryContext qc) throws QueryException {
     final B64 archive = toB64(exprs[0], qc, false);
-    final ValueBuilder vb = new ValueBuilder();
+    final ValueBuilder vb = new ValueBuilder(qc);
     try(ArchiveIn in = ArchiveIn.get(archive.input(info), info)) {
       while(in.more()) {
         final ZipEntry ze = in.entry();
         if(ze.isDirectory()) continue;
-        final FElem e = new FElem(Q_ENTRY).declareNS();
-        long s = ze.getSize();
-        if(s != -1) e.add(SIZE, token(s));
-        s = ze.getTime();
-        if(s != -1) e.add(LAST_MOD, Dtm.get(s).string(info));
-        s = ze.getCompressedSize();
-        if(s != -1) e.add(COMP_SIZE, token(s));
-        e.add(ze.getName());
-        vb.add(e);
+        final FElem elem = new FElem(Q_ENTRY).declareNS();
+        long size = ze.getSize();
+        if(size != -1) elem.add(SIZE, token(size));
+        size = ze.getTime();
+        if(size != -1) elem.add(LAST_MODIFIED, Dtm.get(size).string(info));
+        size = ze.getCompressedSize();
+        if(size != -1) elem.add(COMPRESSED_SIZE, token(size));
+        elem.add(ze.getName());
+        vb.add(elem);
       }
-      return vb.value();
+      return vb.value(this);
     } catch(final IOException ex) {
-      throw ARCH_FAIL_X.get(info, ex);
+      throw ARCHIVE_ERROR_X.get(info, ex);
     }
   }
 }

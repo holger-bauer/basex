@@ -3,6 +3,7 @@ package org.basex.gui.view;
 import static org.basex.core.Text.*;
 
 import java.awt.*;
+import java.util.Objects;
 
 import org.basex.core.*;
 import org.basex.data.*;
@@ -15,7 +16,7 @@ import org.basex.util.*;
  * This class serves as a container for all existing views. The observer pattern
  * is used to inform all views on user interactions.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class ViewNotifier {
@@ -25,7 +26,7 @@ public final class ViewNotifier {
   public static final int MAXHIST = 20;
   /** History pointer. */
   public int hist;
-  /** Reference to main window. */
+  /** Reference to the main window. */
   final GUI gui;
 
   /** Zoomed rectangle history. */
@@ -35,7 +36,7 @@ public final class ViewNotifier {
   /** Command history. */
   private final String[] queries = new String[MAXHIST];
   /** Attached views. */
-  private View[] view = {};
+  private View[] views = {};
   /** Number of history entries. */
   private int histsize;
 
@@ -52,7 +53,7 @@ public final class ViewNotifier {
    * @param vw view to be added
    */
   void add(final View vw) {
-    view = Array.add(view, vw);
+    views = Array.add(views, vw);
   }
 
   /**
@@ -63,22 +64,26 @@ public final class ViewNotifier {
     if(data != null) {
       // if a large database is opened, the user is asked if complex
       /// visualizations should be closed first
-      final long size = data.meta.dbsize();
+      final long size = data.meta.dbSize();
       boolean open = false;
-      for(final View v : view) open |= v.visible() && v.db();
+      for(final View view : views) open |= view.visible() && view.db();
       if(open && size > LARGEDB && BaseXDialog.confirm(gui,
           Util.info(H_LARGE_DB, Performance.format(size)))) {
-        for(final View v : view) if(v.visible() && v.db()) v.visible(false);
+        for(final View view : views) {
+          if(view.visible() && view.db()) view.visible(false);
+        }
       }
     } else {
       // database closed: close open dialogs
       for(final Window w : gui.getOwnedWindows()) {
-        if(w.isVisible() && w instanceof BaseXDialog) ((BaseXDialog) w).cancel();
+        if(w.isVisible() && w instanceof BaseXDialog && ((BaseXDialog) w).modal()) {
+          ((BaseXDialog) w).cancel();
+        }
       }
     }
 
     gui.context.focused = -1;
-    for(final View v : view) v.refreshInit();
+    for(final View view : views) view.refreshInit();
     gui.layoutViews();
     gui.setTitle();
   }
@@ -91,7 +96,9 @@ public final class ViewNotifier {
   public void focus(final int pre, final View vw) {
     if(gui.context.focused == pre) return;
     gui.context.focused = pre;
-    for(final View v : view) if(v != vw && v.visible()) v.refreshFocus();
+    for(final View view : views) {
+      if(view != vw && view.visible()) view.refreshFocus();
+    }
     if(pre != -1) {
       gui.status.setText(Token.string(ViewData.path(gui.context.data(), pre)));
     }
@@ -105,9 +112,11 @@ public final class ViewNotifier {
   public void mark(final DBNodes mark, final View vw) {
     final Context ctx = gui.context;
     ctx.marked = mark;
-    for(final View v : view) if(v != vw && v.visible()) v.refreshMark();
+    for(final View view : views) {
+      if(view != vw && view.visible()) view.refreshMark();
+    }
     gui.filter.setEnabled(!mark.isEmpty());
-    gui.refreshControls();
+    gui.refreshControls(true);
   }
 
   /**
@@ -155,8 +164,10 @@ public final class ViewNotifier {
     ctx.set(cont[hist], marked[hist]);
 
     gui.input.setText(query);
-    for(final View v : view) if(v.visible()) v.refreshContext(forward, false);
-    gui.refreshControls();
+    for(final View view : views) {
+      if(view.visible()) view.refreshContext(forward, false);
+    }
+    gui.refreshControls(true);
   }
 
   /**
@@ -173,7 +184,7 @@ public final class ViewNotifier {
     final DBNodes empty = new DBNodes(ctx.data()).ftpos(ctx.marked.ftpos());
     final DBNodes curr = quick ? ctx.current() : null;
     final DBNodes cmp = quick ? curr : ctx.marked;
-    if(cont[hist] == null ? cmp != null : cmp == null || !cont[hist].sameAs(cmp)) {
+    if(!Objects.equals(cont[hist], cmp)) {
       checkHist();
       if(quick) {
         // store history entry
@@ -195,8 +206,10 @@ public final class ViewNotifier {
     }
     ctx.set(newn, empty);
 
-    for(final View v : view) if(v != vw && v.visible()) v.refreshContext(true, quick);
-    gui.refreshControls();
+    for(final View view : views) {
+      if(view != vw && view.visible()) view.refreshContext(true, quick);
+    }
+    gui.refreshControls(true);
   }
 
   /**
@@ -206,20 +219,17 @@ public final class ViewNotifier {
     final Data data = initHistory(gui.context);
     if(data == null) return;
     gui.context.marked = new DBNodes(data);
-    for(final View v : view) if(v.visible()) v.refreshUpdate();
-    gui.refreshControls();
+    for(final View view : views) {
+      if(view.visible()) view.refreshUpdate();
+    }
+    gui.refreshControls(true);
   }
 
   /**
    * Notifies all views of layout changes.
    */
   public void layout() {
-    for(final View v : view) {
-      v.refreshLayout();
-      final ViewPanel vp = (ViewPanel) v.getParent();
-      final ViewMover vm = (ViewMover) vp.getComponent(0);
-      vm.refreshLayout();
-    }
+    for(final View view : views) view.refreshLayout();
   }
 
   /**
@@ -232,7 +242,7 @@ public final class ViewNotifier {
       hist < histsize ? queries[hist + 1] : null;
   }
 
-  // PRIVATE METHODS ==========================================================
+  // PRIVATE METHODS ==============================================================================
 
   /**
    * Checks the history data arrays.
@@ -240,9 +250,9 @@ public final class ViewNotifier {
   private void checkHist() {
     final int hl = queries.length;
     if(hist + 1 == hl) {
-      Array.move(queries, 1, 0, hl - 1);
-      Array.move(cont, 1, 0, hl - 1);
-      Array.move(marked, 1, 0, hl - 1);
+      Array.remove(queries, 0, 1, hl);
+      Array.remove(cont, 0, 1, hl);
+      Array.remove(marked, 0, 1, hl);
       --hist;
     }
   }

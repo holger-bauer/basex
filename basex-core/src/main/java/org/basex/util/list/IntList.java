@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Resizable-array implementation for native int values.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public class IntList extends ElementList {
@@ -18,25 +18,25 @@ public class IntList extends ElementList {
    * Default constructor.
    */
   public IntList() {
-    this(Array.CAPACITY);
+    this(Array.INITIAL_CAPACITY);
   }
 
   /**
-   * Constructor, specifying an initial internal array size.
-   * @param capacity initial array capacity
+   * Constructor with initial capacity.
+   * @param capacity array capacity
    */
-  public IntList(final int capacity) {
-    list = new int[capacity];
+  public IntList(final long capacity) {
+    list = new int[Array.checkCapacity(capacity)];
   }
 
   /**
    * Constructor, specifying a resize factor. Smaller values are more memory-saving,
-   * while larger will provide better performance.
-   * @param resize resize factor
+   * while larger values will provide better performance.
+   * @param factor resize factor
    */
-  public IntList(final double resize) {
+  public IntList(final double factor) {
     this();
-    factor = resize;
+    this.factor = factor;
   }
 
   /**
@@ -56,7 +56,7 @@ public class IntList extends ElementList {
   public final IntList add(final int element) {
     int[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Arrays.copyOf(lst, newSize());
+    if(s == lst.length) lst = Arrays.copyOf(lst, newCapacity());
     lst[s] = element;
     list = lst;
     size = s + 1;
@@ -71,8 +71,8 @@ public class IntList extends ElementList {
   public final IntList add(final int... elements) {
     int[] lst = list;
     final int l = elements.length, s = size, ns = s + l;
-    if(ns > lst.length) lst = Arrays.copyOf(lst, newSize(ns));
-    System.arraycopy(elements, 0, lst, s, l);
+    if(ns > lst.length) lst = Arrays.copyOf(lst, newCapacity(ns));
+    Array.copyFromStart(elements, l, lst, s);
     list = lst;
     size = ns;
     return this;
@@ -93,7 +93,7 @@ public class IntList extends ElementList {
    * @param element element to be stored
    */
   public final void set(final int index, final int element) {
-    if(index >= list.length) list = Arrays.copyOf(list, newSize(index + 1));
+    if(index >= list.length) list = Arrays.copyOf(list, newCapacity(index + 1));
     list[index] = element;
     size = Math.max(size, index + 1);
   }
@@ -106,7 +106,9 @@ public class IntList extends ElementList {
   public final boolean contains(final int element) {
     final int s = size;
     final int[] lst = list;
-    for(int i = 0; i < s; ++i) if(lst[i] == element) return true;
+    for(int i = 0; i < s; ++i) {
+      if(lst[i] == element) return true;
+    }
     return false;
   }
 
@@ -118,9 +120,8 @@ public class IntList extends ElementList {
   public final void insert(final int index, final int... elements) {
     final int l = elements.length;
     if(l == 0) return;
-    if(size + l > list.length) list = Arrays.copyOf(list, newSize(size + l));
-    Array.move(list, index, l, size - index);
-    System.arraycopy(elements, 0, list, index, l);
+    if(size + l > list.length) list = Arrays.copyOf(list, newCapacity(size + l));
+    Array.insert(list, index, l, size, elements);
     size += l;
   }
 
@@ -128,7 +129,7 @@ public class IntList extends ElementList {
    * Removes all occurrences of the specified element from the list.
    * @param element element to be removed
    */
-  public final void delete(final int element) {
+  public final void removeAll(final int element) {
     final int[] lst = list;
     final int sz = size;
     int s = 0;
@@ -139,15 +140,16 @@ public class IntList extends ElementList {
   }
 
   /**
-   * Deletes the element at the specified position.
-   * @param index index of the element to delete
-   * @return deleted element
+   * Removes the element at the specified position.
+   * @param index index of the element to remove
+   * @return removed element
    */
   public final int remove(final int index) {
     final int[] lst = list;
-    final int l = lst[index];
-    Array.move(lst, index + 1, -1, --size - index);
-    return l;
+    final int e = lst[index];
+    Array.remove(lst, index, 1, size);
+    --size;
+    return e;
   }
 
   /**
@@ -216,11 +218,12 @@ public class IntList extends ElementList {
   }
 
   /**
-   * Removes duplicate entries.
+   * Sorts the data and removes distinct values.
    * @return self reference
    */
-  public final IntList distinct() {
+  public final IntList ddo() {
     if(!isEmpty()) {
+      sort();
       int i = 1;
       for(int j = 1; j < size; ++j) {
         while(j < size && list[i - 1] == list[j]) j++;
@@ -678,6 +681,18 @@ public class IntList extends ElementList {
     return list[a] < list[b] ?
       list[b] < list[c] ? b : list[a] < list[c] ? c : a :
       list[b] > list[c] ? b : list[a] > list[c] ? c : a;
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    if(obj == this) return true;
+    if(!(obj instanceof IntList)) return false;
+    final IntList il = (IntList) obj;
+    if(size != il.size) return false;
+    for(int l = 0; l < size; ++l) {
+      if(list[l] != il.list[l]) return false;
+    }
+    return true;
   }
 
   @Override

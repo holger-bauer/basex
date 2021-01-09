@@ -9,7 +9,7 @@ import org.basex.util.Performance;
 /**
  * Job pool.
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 public final class JobPool {
@@ -18,9 +18,9 @@ public final class JobPool {
   /** Queued or running jobs. */
   public final Map<String, Job> active = new ConcurrentHashMap<>();
   /** Cached results. */
-  public final Map<String, JobResult> results = new ConcurrentHashMap<>();
+  public final Map<String, QueryJobResult> results = new ConcurrentHashMap<>();
   /** Timer tasks. */
-  public final Map<String, JobTask> tasks = new ConcurrentHashMap<>();
+  public final Map<String, QueryJobTask> tasks = new ConcurrentHashMap<>();
 
   /** Timer. */
   final Timer timer = new Timer(true);

@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * <p>This index organizes binary files in a database.</p>
  *
- * @author BaseX Team 2005-17, BSD License
+ * @author BaseX Team 2005-20, BSD License
  * @author Christian Gruen
  */
 final class Binaries {
@@ -22,10 +22,10 @@ final class Binaries {
 
   /**
    * Constructor.
-   * @param d data reference
+   * @param data data reference
    */
-  Binaries(final Data d) {
-    data = d;
+  Binaries(final Data data) {
+    this.data = data;
   }
 
   /**
@@ -40,8 +40,8 @@ final class Binaries {
     if(np == null || data.inMemory()) return tl;
 
     final String exct = Prop.CASE ? np : np.toLowerCase(Locale.ENGLISH);
-    final String pref = exct.endsWith("/") ? exct : exct + '/';
-    for(final String f : data.meta.binaries().descendants()) {
+    final String pref = Strings.endsWith(exct, '/') ? exct : exct + '/';
+    for(final String f : data.meta.binaryDir().descendants()) {
       final String lc = Prop.CASE ? f : f.toLowerCase(Locale.ENGLISH);
       if(exct.isEmpty() || lc.equals(exct) || lc.startsWith(pref)) tl.add(f);
     }
