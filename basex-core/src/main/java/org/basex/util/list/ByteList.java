@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Resizable-array implementation for native bytes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class ByteList extends ElementList {
@@ -39,9 +39,11 @@ public class ByteList extends ElementList {
   public ByteList add(final int element) {
     byte[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Arrays.copyOf(lst, newCapacity());
+    if(s == lst.length) {
+      lst = Arrays.copyOf(lst, newCapacity());
+      list = lst;
+    }
     lst[s] = (byte) element;
-    list = lst;
     size = s + 1;
     return this;
   }
@@ -109,6 +111,20 @@ public class ByteList extends ElementList {
     list = null;
     final int s = size;
     return s == 0 ? EMPTY : s == lst.length ? lst : Arrays.copyOf(lst, s);
+  }
+
+  /**
+   * Reverses the order of the elements.
+   * @return self reference
+   */
+  public ByteList reverse() {
+    final byte[] lst = list;
+    for(int l = 0, r = size - 1; l < r; l++, r--) {
+      final byte tmp = lst[l];
+      lst[l] = lst[r];
+      lst[r] = tmp;
+    }
+    return this;
   }
 
   @Override

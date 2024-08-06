@@ -3,7 +3,6 @@ package org.basex.query.func;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
-import static org.basex.util.Token.normalize;
 
 import org.basex.core.*;
 import org.basex.io.serial.*;
@@ -20,12 +19,13 @@ import org.basex.util.options.*;
 /**
  * This class parses options specified in function arguments.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FuncOptions {
   /** QName. */
-  public static final QNm Q_SPARAM = new QNm(OUTPUT_PREFIX, SERIALIZATION_PARAMETERS, OUTPUT_URI);
+  public static final QNm Q_SERIALIZTION_PARAMETERS =
+      new QNm(OUTPUT_PREFIX, "serialization-parameters", OUTPUT_URI);
   /** Value. */
   private static final byte[] VALUE = token("value");
 
@@ -33,15 +33,15 @@ public final class FuncOptions {
   private final QNm root;
   /** Root node test (can be {@code null}). */
   private final NameTest test;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
-  /** Accept unknown options. */
-  private boolean acceptUnknown;
+  /** Raise error if a supplied option is unknown. */
+  private boolean enforceKnown;
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public FuncOptions(final InputInfo info) {
     this(null, info);
@@ -50,21 +50,12 @@ public final class FuncOptions {
   /**
    * Constructor.
    * @param root name of root node (can be {@code null})
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public FuncOptions(final QNm root, final InputInfo info) {
     test = root == null ? null : new NameTest(root);
     this.root = root;
     this.info = info;
-  }
-
-  /**
-   * Accept unknown options.
-   * @return self reference
-   */
-  public FuncOptions acceptUnknown() {
-    acceptUnknown = true;
-    return this;
   }
 
   /**
@@ -76,6 +67,7 @@ public final class FuncOptions {
    * @throws QueryException query exception
    */
   public <T extends Options> T assign(final Item item, final T options) throws QueryException {
+    enforceKnown = options.getClass() != Options.class;
     return assign(item, options, INVALIDOPT_X);
   }
 
@@ -91,13 +83,14 @@ public final class FuncOptions {
   private <T extends Options> T assign(final Item item, final T options, final QueryError error)
       throws QueryException {
 
-    if(item != Empty.VALUE) {
+    if(!item.isEmpty()) {
       try {
         if(item instanceof XQMap) {
-          options.assign((XQMap) item, !acceptUnknown, info);
+          options.assign((XQMap) item, enforceKnown ? OPTION_X : null, info);
         } else {
-          if(test == null) throw MAP_X_X.get(info, item.type, item);
-          if(!test.matches(item)) throw ELMMAP_X_X_X.get(info, root.prefixId(XML), item.type, item);
+          final Type type = item.type;
+          if(test == null) throw MAP_X_X.get(info, type, item);
+          if(!test.matches(item)) throw ELMMAP_X_X_X.get(info, root.prefixId(XML), type, item);
           options.assign(toString((ANode) item, error));
         }
       } catch(final BaseXException ex) {
@@ -168,17 +161,13 @@ public final class FuncOptions {
     if(!Strings.contains(value, ':')) return value;
 
     final TokenBuilder tb = new TokenBuilder();
-    for(final byte[] name : split(normalize(token(value)), ' ')) {
+    for(final byte[] name : distinctTokens(token(value))) {
       final int i = indexOf(name, ':');
       if(i == -1) {
         tb.add(name);
       } else {
-        final byte[] vl = elem.nsScope(null).value(substring(name, 0, i));
-        if(vl != null) {
-          tb.add(QNm.eqName(vl, substring(name, i + 1)));
-        } else {
-          tb.add(name);
-        }
+        final byte[] uri = elem.nsScope(null).value(substring(name, 0, i));
+        tb.add(uri != null ? QNm.eqName(uri, substring(name, i + 1)) : name);
       }
       tb.add(' ');
     }
@@ -200,27 +189,27 @@ public final class FuncOptions {
   /**
    * Converts the specified output parameter item to serialization parameters.
    * @param item input item
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return serialization parameters
    * @throws QueryException query exception
    */
-  public static SerializerOptions serializer(final Item item, final InputInfo ii)
+  public static SerializerOptions serializer(final Item item, final InputInfo info)
       throws QueryException {
-    final SerializerOptions so = new SerializerOptions();
-    so.set(SerializerOptions.METHOD, SerialMethod.XML);
-    return serializer(item, so, ii);
+    final SerializerOptions sopts = new SerializerOptions();
+    sopts.set(SerializerOptions.METHOD, SerialMethod.XML);
+    return serializer(item, sopts, info);
   }
 
   /**
    * Converts the specified output parameter item to serializer options.
    * @param item input item
    * @param sopts serialization parameters
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return serialization parameters
    * @throws QueryException query exception
    */
   public static SerializerOptions serializer(final Item item, final SerializerOptions sopts,
-      final InputInfo ii) throws QueryException {
-    return new FuncOptions(Q_SPARAM, ii).assign(item, sopts, SEROPT_X);
+      final InputInfo info) throws QueryException {
+    return new FuncOptions(Q_SERIALIZTION_PARAMETERS, info).assign(item, sopts, SEROPT_X);
   }
 }

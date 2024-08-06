@@ -10,6 +10,7 @@ import org.basex.core.parse.*;
 import org.basex.core.parse.Commands.*;
 import org.basex.core.users.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.io.serial.*;
 import org.basex.query.value.item.*;
@@ -21,7 +22,7 @@ import org.basex.util.list.*;
  * the currently opened database. This effectively eliminates all fragmentation
  * and can lead to significant space savings after updates.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class OptimizeAll extends ACreate {
@@ -35,15 +36,12 @@ public final class OptimizeAll extends ACreate {
   @Override
   protected boolean run() {
     final Data data = context.data();
-    if(!update(data, new Code() {
-      @Override
-      boolean run() throws IOException {
-        try {
-          optimizeAll(data, context, options, OptimizeAll.this);
-          return true;
-        } finally {
-          context.closeDB();
-        }
+    if(!update(data, () -> {
+      try {
+        optimizeAll(data, context, options, OptimizeAll.this);
+        return true;
+      } finally {
+        context.closeDB();
       }
     })) return false;
 
@@ -111,7 +109,7 @@ public final class OptimizeAll extends ACreate {
 
     // build database and index structures
     final StaticOptions sopts = context.soptions;
-    final String tmpName = sopts.createRandomDb(name);
+    final String tmpName = sopts.createTempDb(name);
     final DBParser parser = new DBParser(odata, options);
     final DiskBuilder builder = new DiskBuilder(tmpName, parser, sopts, options);
     if(cmd != null) cmd.pushJob(builder);
@@ -145,9 +143,11 @@ public final class OptimizeAll extends ACreate {
       ndata.close();
     }
 
-    // move binary files
-    final IOFile bin = ometa.binaryDir();
-    if(bin.exists()) bin.rename(nmeta.binaryDir());
+    // move file resources to new database
+    for(final ResourceType type : Resources.BINARIES) {
+      final IOFile bin = ometa.dir(type);
+      if(bin.exists()) bin.rename(nmeta.dir(type));
+    }
 
     // drop old database, rename temporary database
     if(!DropDB.drop(name, sopts)) throw new BaseXException(DB_NOT_DROPPED_X, name);
@@ -157,7 +157,7 @@ public final class OptimizeAll extends ACreate {
   /**
    * Parser for rebuilding existing databases.
    *
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Leo Woerteler
    */
   private static final class DBParser extends Parser {
@@ -174,7 +174,7 @@ public final class OptimizeAll extends ACreate {
      * @param options main options
      */
     DBParser(final DiskData data, final MainOptions options) {
-      super(data.meta.original.isEmpty() ? null : IO.get(data.meta.original), options);
+      super(data.meta.original, options);
       this.data = data;
       size = data.meta.size;
     }

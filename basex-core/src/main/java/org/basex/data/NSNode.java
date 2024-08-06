@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * This class stores a single namespace node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class NSNode {
@@ -323,9 +323,9 @@ final class NSNode {
   void info(final TokenObjMap<TokenList> map, final Namespaces ns) {
     final int vl = values.length;
     for(int v = 0; v < vl; v += 2) {
-      final byte[] pref = ns.prefix(values[v]), uri = ns.uri(values[v + 1]);
+      final byte[] prefix = ns.prefix(values[v]), uri = ns.uri(values[v + 1]);
       final TokenList prfs = map.computeIfAbsent(uri, () -> new TokenList(1));
-      if(!prfs.contains(pref)) prfs.add(pref);
+      if(!prfs.contains(prefix)) prfs.add(prefix);
     }
     for(int c = 0; c < size; ++c) nodes[c].info(map, ns);
   }

@@ -18,21 +18,21 @@ import org.basex.util.list.*;
  * Function implementation.
  *
  * @author Christian Gruen
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
-public final class FnUnparsedTextLines extends Parse {
+public final class FnUnparsedTextLines extends FnUnparsedTextAvailable {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Item item = unparsedText(qc, false, true);
-    return item == Empty.VALUE ? Empty.ITER : new LinesIter(item.string(info));
+    final Item text = unparsedText(qc, false, arg(1));
+    return text.isEmpty() ? Empty.ITER : new LinesIter(text.string(info));
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Item item = unparsedText(qc, false, true);
-    if(item == Empty.VALUE) return Empty.VALUE;
+    final Item text = unparsedText(qc, false, arg(1));
+    if(text.isEmpty()) return Empty.VALUE;
 
-    try(NewlineInput ni = new NewlineInput(item.string(info))) {
+    try(NewlineInput ni = new NewlineInput(text.string(info))) {
       final TokenList tl = new TokenList();
       final TokenBuilder tb = new TokenBuilder();
       while(ni.readLine(tb)) {
@@ -46,15 +46,15 @@ public final class FnUnparsedTextLines extends Parse {
   }
 
   @Override
-  protected Expr opt(final CompileContext cc) {
-    final Expr expr = exprs[0];
-    return expr.seqType().zero() ? expr : this;
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    final Expr href = arg(0);
+    return href.seqType().zero() ? href : super.opt(cc);
   }
 
   /**
    * Line iterator.
    * @author Christian Gruen
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    */
   private static final class LinesIter extends Iter {
     /** Token builder. */

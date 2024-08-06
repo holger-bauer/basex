@@ -1,7 +1,6 @@
 package org.basex.core.cmd;
 
 import static org.basex.core.Text.*;
-import static org.basex.util.Token.*;
 
 import java.io.*;
 
@@ -12,13 +11,12 @@ import org.basex.data.*;
 import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.util.*;
-import org.basex.util.http.*;
 import org.basex.util.list.*;
 
 /**
  * Evaluates the 'list' command and shows all available databases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class List extends Command {
@@ -48,7 +46,7 @@ public final class List extends Command {
 
   @Override
   protected boolean run() throws IOException {
-    return args[0].isEmpty() ? list() : listDB();
+    return args[0].isEmpty() ? list() : listResources();
   }
 
   @Override
@@ -68,9 +66,7 @@ public final class List extends Command {
     table.description = DATABASES_X;
 
     final boolean create = context.user().has(Perm.CREATE);
-    table.header.add(NAME);
-    table.header.add(RESOURCES);
-    table.header.add(SIZE);
+    table.header.add(NAME).add(RESOURCES).add(SIZE);
     if(create) table.header.add(INPUT_PATH);
 
     for(final String name : context.listDBs()) {
@@ -83,8 +79,8 @@ public final class List extends Command {
         meta.read();
         dbsize = meta.dbSize();
         file = meta.original;
-        // add number of raw files
-        count = meta.ndocs + meta.binaryDir().descendants().size();
+        count = meta.ndocs + meta.dir(ResourceType.BINARY).descendants().size() +
+            meta.dir(ResourceType.VALUE).descendants().size();
       } catch(final IOException ex) {
         Util.debug(ex);
         file = ERROR;
@@ -107,41 +103,32 @@ public final class List extends Command {
    * @return success flag
    * @throws IOException I/O exception
    */
-  private boolean listDB() throws IOException {
-    final String db = args[0], path = args[1];
+  private boolean listResources() throws IOException {
+    final String db = args[0], root = args[1];
     if(!Databases.validName(db)) return error(NAME_INVALID_X, db);
 
     final Table table = new Table();
     table.description = RESOURCES_X;
-    table.header.add(INPUT_PATH);
-    table.header.add(TYPE);
-    table.header.add(DataText.CONTENT_TYPE);
-    table.header.add(SIZE);
+    table.header.add(INPUT_PATH).add(TYPE).add(DataText.CONTENT_TYPE).add(SIZE);
 
     try {
-      // add xml documents
-      final Data data = Open.open(db, context, options);
+      final Data data = Open.open(db, context, options, true, true);
       final Resources resources = data.resources;
-      final IntList il = resources.docs(path);
-      final int ds = il.size();
-      for(int i = 0; i < ds; i++) {
-        final int pre = il.get(i);
-        final TokenList tl = new TokenList(4);
-        tl.add(data.text(pre, true));
-        tl.add(XML);
-        tl.add(MediaType.APPLICATION_XML.toString());
-        tl.add(data.size(pre, Data.DOC));
-        table.contents.add(tl);
+
+      // list XML documents
+      final IntList docs = resources.docs(root);
+      final int ds = docs.size();
+      for(int d = 0; d < ds; d++) {
+        final int pre = docs.get(d);
+        final String string = Token.string(data.text(pre, true));
+        add(table, string, data.size(pre, Data.DOC), ResourceType.XML);
       }
-      // add binary resources
-      for(final byte[] file : resources.binaries(path)) {
-        final String bin = string(file);
-        final TokenList tl = new TokenList(4);
-        tl.add(file);
-        tl.add(IO.RAW);
-        tl.add(MediaType.get(bin).toString());
-        tl.add(data.meta.binary(bin).length());
-        table.contents.add(tl);
+      // list file resources
+      for(final ResourceType type : Resources.BINARIES) {
+        final IOFile bin = data.meta.dir(type);
+        for(final String path : resources.paths(root, type)) {
+          add(table, path, type.filePath(bin, path).length(), type);
+        }
       }
       Close.close(data, context);
     } catch(final IOException ex) {
@@ -149,5 +136,18 @@ public final class List extends Command {
     }
     out.println(table.sort().finish());
     return true;
+  }
+
+  /**
+   * Adds a table entry.
+   * @param table table
+   * @param path path to resource
+   * @param size size of resource
+   * @param type resource type
+   */
+  private static void add(final Table table, final String path, final long size,
+      final ResourceType type) {
+    table.contents.add(new TokenList(4).add(path).add(type.toString()).
+        add(type.contentType(path).toString()).add(size));
   }
 }

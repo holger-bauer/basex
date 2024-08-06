@@ -22,7 +22,7 @@ import org.basex.util.list.*;
 /**
  * A scatter plot visualization of the database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class PlotView extends View {
@@ -37,9 +37,9 @@ public final class PlotView extends View {
   /** Position where over-length text is cut off. */
   private static final int CUTOFF = 10;
 
-  /** X axis selector. */
+  /** X-axis selector. */
   private final BaseXCombo xCombo;
-  /** Y axis selector. */
+  /** Y-axis selector. */
   private final BaseXCombo yCombo;
   /** Item selector combo. */
   private final BaseXCombo itemCombo;
@@ -206,7 +206,8 @@ public final class PlotView extends View {
         gui.gopts.get(GUIOptions.PLOTDOTS) - (focus ? 2 : marked || markedSub ? 4 : 6));
     final BufferedImage img = new BufferedImage(size, size, Transparency.TRANSLUCENT);
 
-    final Graphics g = BaseXLayout.antiAlias(img.getGraphics());
+    final Graphics g = img.getGraphics();
+    BaseXLayout.antiAlias(g);
     Color c = color1A;
     if(marked) c = colormark1A;
     if(markedSub) c = colormark2A;
@@ -222,7 +223,8 @@ public final class PlotView extends View {
    */
   private void createPlotImage() {
     plotImg = new BufferedImage(getWidth(), getHeight(), Transparency.BITMASK);
-    final Graphics g = BaseXLayout.antiAlias(plotImg.getGraphics());
+    final Graphics g = plotImg.getGraphics();
+    BaseXLayout.antiAlias(g);
 
     // draw axis and grid
     drawAxis(g, true);
@@ -311,12 +313,10 @@ public final class PlotView extends View {
         int ya = calcCoordinate(false, y1) + gui.gopts.get(GUIOptions.PLOTDOTS);
         final int ww = getWidth();
 
-        final int id = ViewData.nameID(data);
-        final byte[] nm = data.attValue(id, focused);
-        String name = nm != null ? string(nm) : "";
-        if(!name.isEmpty() && plotData.xAxis.attrID != id &&
-            plotData.yAxis.attrID != id) {
-
+        final int id = ViewData.labelID(data, gui.gopts.get(GUIOptions.LABELS));
+        final byte[] l = data.attValue(id, focused);
+        String name = l != null ? string(l) : "";
+        if(!name.isEmpty() && plotData.xAxis.attrID != id && plotData.yAxis.attrID != id) {
           if(ol > 1) name = ol + "x: " + name + ", ...";
           final int lw = BaseXLayout.width(g, label);
           if(ya < MARGIN[0] + textH && xa < w - lw) {
@@ -357,7 +357,8 @@ public final class PlotView extends View {
   private void createMarkedNodes() {
     final Data data = gui.context.data();
     markedImg = new BufferedImage(getWidth(), getHeight(), Transparency.BITMASK);
-    final Graphics gi = BaseXLayout.antiAlias(markedImg.getGraphics());
+    final Graphics gi = markedImg.getGraphics();
+    BaseXLayout.antiAlias(gi);
 
     final DBNodes marked = gui.context.marked;
     if(marked.isEmpty()) return;
@@ -445,15 +446,12 @@ public final class PlotView extends View {
     final PlotAxis axis = drawX ? plotData.xAxis : plotData.yAxis;
 
     // drawing horizontal axis line
-    if(drawX) {
-      if(plotChanged) {
+    if(plotChanged) {
+      if(drawX) {
         if(plotData.pres.length > 0) axis.calcCaption(pWidth);
         xLog.setEnabled(StatsType.isNumeric(plotData.xAxis.type) &&
             Math.abs(axis.min - axis.max) >= 1);
-      }
-    } else {
-      // drawing vertical axis line
-      if(plotChanged) {
+      } else {
         if(plotData.pres.length > 0) axis.calcCaption(pHeight);
         yLog.setEnabled(StatsType.isNumeric(plotData.yAxis.type) &&
             Math.abs(axis.min - axis.max) >= 1);
@@ -489,7 +487,7 @@ public final class PlotView extends View {
       int i = 0;
       // find first non .0d coordinate value
       while(i < cl && coSorted[i] == 0) ++i;
-      // find nearest position for next axis caption
+      // find the nearest position for next axis caption
       while(i < cl && op < 1.0d - 0.4d * capRange) {
         if(coSorted[i] > op) {
           final double distL = Math.abs(coSorted[i - 1] - op);
@@ -638,7 +636,7 @@ public final class PlotView extends View {
       final double d) {
 
     String cap = caption;
-    // if label is too long, it is is chopped to the first characters
+    // if label is too long, it is chopped to the first characters
     if(cap.length() > MAXL) cap = cap.substring(0, CUTOFF) + "..";
 
     final int pos = calcCoordinate(drawX, d);
@@ -650,7 +648,7 @@ public final class PlotView extends View {
     final BufferedImage img = createCaptionImage(g, cap, false, imgW);
 
     // ... after that
-    // the image and the grid line are drawn beside x / y axis
+    // the image and the grid line are drawn beside x-/y-axis
     g.setColor(color(2));
     if(drawX) {
       final int y = h - MARGIN[2];
@@ -678,11 +676,13 @@ public final class PlotView extends View {
     final int textH = g.getFontMetrics().getHeight();
     final int fs = fontSize;
 
-    // caption labels are rotated, for both x and y axis. first a buffered
+    // caption labels are rotated, for both x- and y-axis. first a buffered
     // image is created which displays the rotated label ...
     final int imgH = 160;
     final BufferedImage img = new BufferedImage(imgW, imgH, Transparency.BITMASK);
-    final Graphics2D g2d = BaseXLayout.antiAlias(img.createGraphics());
+    final Graphics2D g2d = img.createGraphics();
+    BaseXLayout.antiAlias(g2d);
+
     g2d.rotate(ROTATE, imgW, textH);
     g2d.setFont(font);
     g2d.setColor(im ? color3 : TEXT);
@@ -693,7 +693,7 @@ public final class PlotView extends View {
   /**
    * Draws intermediate grid lines without caption.
    * @param g Graphics reference
-   * @param drawX draw line for x axis
+   * @param drawX draw line for x-axis
    * @param d relative position of grid line
    * @param caption caption to draw (if {@code null}, no caption is drawn)
    */
@@ -721,12 +721,10 @@ public final class PlotView extends View {
         g.drawImage(img, MARGIN[1] - imgW - fs / 2, pos - fs, this);
         g.drawLine(MARGIN[1], pos, w - MARGIN[3], pos);
       }
+    } else if(drawX) {
+      g.drawLine(pos, MARGIN[0], pos, h - MARGIN[2] - sf);
     } else {
-      if(drawX) {
-        g.drawLine(pos, MARGIN[0], pos, h - MARGIN[2] - sf);
-      } else {
-        g.drawLine(MARGIN[1] + sf, pos, w - MARGIN[3], pos);
-      }
+      g.drawLine(MARGIN[1] + sf, pos, w - MARGIN[3], pos);
     }
   }
 
@@ -847,7 +845,7 @@ public final class PlotView extends View {
   private boolean focus() {
     final int size = itemImg.getWidth() / 2;
     int focusedPre = gui.context.focused;
-    // if mouse pointer is outside of the plot the focused item is set to -1,
+    // if mouse pointer is outside the plot, the focused item is set to -1.
     // focus may be refreshed if necessary
     if(mouseX < MARGIN[1] ||
         mouseX > getWidth() - MARGIN[3] + size ||

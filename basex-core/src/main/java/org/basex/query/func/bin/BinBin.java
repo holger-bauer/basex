@@ -8,13 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BinBin extends BinFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] token = token(0, qc);
-    return token == null ? Empty.VALUE : B64.get(binary2bytes(token));
+    final byte[] string = toTokenOrNull(arg(0), qc);
+    return string == null ? Empty.VALUE : B64.get(binary2bytes(string));
   }
 }

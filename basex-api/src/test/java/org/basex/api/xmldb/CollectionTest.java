@@ -6,6 +6,7 @@ import java.io.*;
 
 import javax.xml.parsers.*;
 
+import org.basex.util.*;
 import org.junit.jupiter.api.*;
 import org.w3c.dom.*;
 import org.xml.sax.*;
@@ -15,7 +16,7 @@ import org.xmldb.api.modules.*;
 /**
  * This class tests the XMLDB/API Collection implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CollectionTest extends XMLDBBaseTest {
@@ -30,7 +31,7 @@ public final class CollectionTest extends XMLDBBaseTest {
     createDB();
     final Class<?> c = Class.forName(DRIVER);
     final Database database = (Database) c.getDeclaredConstructor().newInstance();
-    collection = database.getCollection(PATH, LOGIN, PW);
+    collection = database.getCollection(PATH, USERNAME, PASSWORD);
   }
 
   /**
@@ -191,11 +192,13 @@ public final class CollectionTest extends XMLDBBaseTest {
     try {
       collection.createResource("hans", "UnknownResource");
       fail("Resource Type is expected to be unknown.");
-    } catch(final XMLDBException ignored) { }
+    } catch(final XMLDBException ex) {
+      Util.debug(ex);
+    }
 
     // test xml resource and ID creation
     Resource resource = collection.createResource(null, XMLResource.RESOURCE_TYPE);
-    assertTrue(resource instanceof XMLResource, "XMLResource expected.");
+    assertInstanceOf(XMLResource.class, resource, "XMLResource expected.");
     assertNotNull(resource.getId(), "No ID was created.");
 
     // test adoption of specified id

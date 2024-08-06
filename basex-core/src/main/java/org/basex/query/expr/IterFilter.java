@@ -11,13 +11,13 @@ import org.basex.util.hash.*;
 /**
  * Iterative filter expression without numeric predicates.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IterFilter extends Filter {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param root root expression
    * @param preds predicate expressions
    */

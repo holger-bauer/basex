@@ -12,9 +12,9 @@ import org.basex.util.list.*;
 import org.junit.jupiter.api.Test;
 
 /**
- * This class tests commands and XQueries for correct identification of databases to lock.
+ * This class tests commands and XQuery expressions for correct identification of databases to lock.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class CommandLockingTest extends SandboxTest {
@@ -42,11 +42,8 @@ public final class CommandLockingTest extends SandboxTest {
   private static final LockList USER_LIST = new LockList().add(Locking.USER);
   /** StringList containing REPO lock string. */
   private static final LockList REPO_LIST = new LockList().add(Locking.REPO);
-  /** StringList containing BACKUP lock string. */
-  private static final LockList BACKUP_LIST = new LockList().add(Locking.BACKUP);
   /** StringList containing BACKUP lock string and name. */
-  private static final LockList BACKUP_NAME =
-      new LockList().add(Locking.BACKUP).add(NAME);
+  private static final LockList BACKUP_NAME = new LockList().add(NAME);
   /** StringList containing java module test lock strings. */
   private static final LockList MODULE_LIST = new LockList().
       add(Locking.BASEX_PREFIX + QueryModuleTest.LOCK);
@@ -59,16 +56,19 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new AlterDB(NAME, NAME2), true, new LockList().add(NAME).add(NAME2));
     ckDBs(new AlterPassword(NAME, NAME), true, USER_LIST);
     ckDBs(new AlterUser(NAME, NAME), true, USER_LIST);
+    ckDBs(new BinaryGet(FILE), false, CTX_LIST);
+    ckDBs(new BinaryPut(FILE), true, CTX_LIST);
     ckDBs(new Check(NAME), false, NAME_CTX);
     ckDBs(new Close(), false, CTX_LIST);
     ckDBs(new Copy(NAME2, NAME), new LockList().add(NAME2), NAME_LIST);
-    ckDBs(new CreateBackup(NAME), NAME_LIST, BACKUP_LIST);
+    ckDBs(new CreateBackup(NAME), true, NAME_LIST);
     ckDBs(new CreateDB(NAME), CTX_LIST, NAME_LIST);
     ckDBs(new CreateIndex(IndexType.TEXT), true, CTX_LIST);
     ckDBs(new CreateUser(NAME, NAME), true, USER_LIST);
     ckDBs(new Delete(FILE), true, CTX_LIST);
-    ckDBs(new DropBackup(NAME), true, BACKUP_LIST);
-    ckDBs(new DropDB(NAME + '*'), true, null); // Drop using globbing
+    ckDBs(new Dir(FILE), false, CTX_LIST);
+    ckDBs(new DropBackup(NAME), true, NAME_LIST);
+    ckDBs(new DropDB(NAME + '*'), true, null);
     ckDBs(new DropDB(NAME), true, NAME_LIST);
     ckDBs(new DropIndex(IndexType.TEXT), true, CTX_LIST);
     ckDBs(new DropUser(NAME), true, USER_LIST);
@@ -76,7 +76,7 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new Export(FILE), false, CTX_LIST);
     ckDBs(new Find("token"), false, CTX_LIST);
     ckDBs(new Flush(), true, CTX_LIST);
-    ckDBs(new Get("DBPATH"), false, NONE);
+    ckDBs(new Get(FILE), false, CTX_LIST);
     ckDBs(new Grant("all", NAME), true, USER_LIST);
     ckDBs(new Grant("all", NAME, NAME), true, USER_LIST);
     ckDBs(new Grant("all", NAME, NAME + '*'), true, USER_LIST);
@@ -86,9 +86,6 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new InfoIndex(), false, CTX_LIST);
     ckDBs(new InfoStorage(), false, CTX_LIST);
     ckDBs(new Inspect(), false, CTX_LIST);
-    ckDBs(new JobsList(), false, NONE);
-    ckDBs(new JobsResult("job0"), false, NONE);
-    ckDBs(new JobsStop("job0"), false, NONE);
     ckDBs(new Kill(NAME), true, USER_LIST);
     ckDBs(new List(), false, null);
     ckDBs(new List(NAME), false, NAME_LIST);
@@ -96,20 +93,19 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new Optimize(), true, CTX_LIST);
     ckDBs(new OptimizeAll(), true, CTX_LIST);
     ckDBs(new Password(NAME), true, USER_LIST);
+    ckDBs(new Put(FILE, FILE), true, CTX_LIST);
     ckDBs(new Rename(FILE, FILE), true, CTX_LIST);
-    ckDBs(new Replace(FILE, FILE), true, CTX_LIST);
     ckDBs(new RepoInstall(REPO + "/pkg3.xar", null), true, REPO_LIST);
     ckDBs(new RepoList(), false, REPO_LIST);
     ckDBs(new RepoDelete("http://www.pkg3.com", null), true, REPO_LIST);
     ckDBs(new Restore(NAME), true, BACKUP_NAME);
-    ckDBs(new Retrieve(FILE), false, CTX_LIST);
     ckDBs(new Run(FILE), false, null);
     ckDBs(new Set(NAME, NAME), false, NONE);
-    ckDBs(new ShowBackups(), false, BACKUP_LIST);
+    ckDBs(new ShowBackups(), false, null);
+    ckDBs(new ShowOptions("DBPATH"), false, NONE);
     ckDBs(new ShowSessions(), false, NONE);
     ckDBs(new ShowUsers(), false, NONE);
     ckDBs(new ShowUsers(NAME), false, NONE);
-    ckDBs(new Store(FILE), true, CTX_LIST);
   }
 
   /** Tests locked databases in XQuery queries. */
@@ -159,10 +155,10 @@ public final class CommandLockingTest extends SandboxTest {
         GENERATE_ID, HAS_CHILDREN, PATH };
     for(final Function function : functions) {
       ckDBs(new XQuery(function.args()), false, CTX_LIST);
-      ckDBs(new XQuery(DOC.args(NAME) + '/' + function.args()), false, NAME_LIST, NAME_CTX);
+      ckDBs(new XQuery(DOC.args(NAME) + "/*/" + function.args()), false, NAME_LIST, NAME_CTX);
     }
     for(final Function function : functions) {
-      ckDBs(new XQuery(function.args(DOC.args(NAME))), false, NAME_LIST);
+      ckDBs(new XQuery(function.args(DOC.args(NAME) + "/*")), false, NAME_LIST);
     }
 
     // errors
@@ -175,13 +171,13 @@ public final class CommandLockingTest extends SandboxTest {
 
   /** Tests user-defined functions. */
   @Test public void userDefined() {
-    ckDBs(new XQuery("declare function local:a($a) {" +
+    ckDBs(new XQuery("declare function local:a($a) { " +
         "if($a = 0) then $a else local:a($a idiv 2) };" +
         "local:a(5)"), false, NONE);
-    ckDBs(new XQuery("declare function local:a($a) {" +
+    ckDBs(new XQuery("declare function local:a($a) { " +
         "if($a = 0) then " + COLLECTION.args() + " else local:a($a idiv 2) };" +
         "local:a(5)"), false, CTX_LIST);
-    ckDBs(new XQuery("declare function local:a($a) {" +
+    ckDBs(new XQuery("declare function local:a($a) { " +
         "if($a = 0) then " + DOC.args(NAME) + " else local:a($a idiv 2) };" +
         "local:a(5)"), false, NAME_LIST);
   }
@@ -221,9 +217,11 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new XQuery(_DB_LIST.args(NAME)), false, NAME_LIST);
     ckDBs(new XQuery(_DB_LIST_DETAILS.args(NAME)), false, NAME_LIST);
     ckDBs(new XQuery(_DB_LIST_DETAILS.args()), false, null);
-    ckDBs(new XQuery(_DB_OPEN.args(NAME)), false, NAME_LIST);
-    ckDBs(new XQuery(_DB_OPEN_ID.args(NAME, 0)), false, NAME_LIST);
-    ckDBs(new XQuery(_DB_OPEN_PRE.args(NAME, 0)), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_GET.args(NAME)), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_GET_ID.args(NAME, 0)), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_GET_PRE.args(NAME, 0)), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_GET_BINARY.args(NAME, "path")), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_GET_VALUE.args(NAME, "path")), false, NAME_LIST);
     ckDBs(new XQuery(_DB_SYSTEM.args()), false, NONE);
 
     // Read Operations
@@ -231,7 +229,6 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new XQuery(_DB_ATTRIBUTE.args(NAME, 23, 42)), false, NAME_LIST);
     ckDBs(new XQuery(_DB_NODE_ID.args(" .")), false, CTX_LIST);
     ckDBs(new XQuery(_DB_NODE_PRE.args(" .")), false, CTX_LIST);
-    ckDBs(new XQuery(_DB_RETRIEVE.args(NAME, "foo")), false, NAME_LIST);
     ckDBs(new XQuery(_DB_TEXT.args(NAME, "foo")), false, NAME_LIST);
     ckDBs(new XQuery(_DB_TEXT_RANGE.args(NAME, 23, 42)), false, NAME_LIST);
     ckDBs(new XQuery(_DB_TOKEN.args(NAME, "foo")), false, NAME_LIST);
@@ -247,17 +244,17 @@ public final class CommandLockingTest extends SandboxTest {
     ckDBs(new XQuery(_DB_ADD.args(NAME, " <foo/>", FILE)), true, NAME_LIST);
     ckDBs(new XQuery(_DB_ADD.args(NAME, FILE, FILE)), true, NAME_LIST);
     ckDBs(new XQuery(_DB_DELETE.args(NAME, FILE)), true, NAME_LIST);
+    ckDBs(new XQuery(_DB_FLUSH.args(NAME)), true, NAME_LIST);
     ckDBs(new XQuery(_DB_OPTIMIZE.args(NAME)), true, NAME_LIST);
     ckDBs(new XQuery(_DB_OPTIMIZE.args(NAME, "true()")), true, NAME_LIST);
+    ckDBs(new XQuery(_DB_PUT.args(NAME, FILE + '2', FILE)), true, NAME_LIST);
+    ckDBs(new XQuery(_DB_PUT_BINARY.args(NAME, "binary", "path")), true, NAME_LIST);
+    ckDBs(new XQuery(_DB_PUT_VALUE.args(NAME, "value", "path")), true, NAME_LIST);
     ckDBs(new XQuery(_DB_RENAME.args(NAME, FILE, FILE + '2')), true, NAME_LIST);
-    ckDBs(new XQuery(_DB_REPLACE.args(NAME, FILE, FILE + '2')), true, NAME_LIST);
-    ckDBs(new XQuery(_DB_STORE.args(NAME, FILE, "foo")), true, NAME_LIST);
-    ckDBs(new XQuery(_DB_FLUSH.args(NAME)), true, NAME_LIST);
 
     // Helper Functions
     ckDBs(new XQuery(_DB_EXISTS.args(NAME)), false, NAME_LIST);
-    ckDBs(new XQuery(_DB_IS_RAW.args(NAME, FILE)), false, NAME_LIST);
-    ckDBs(new XQuery(_DB_IS_XML.args(NAME, FILE)), false, NAME_LIST);
+    ckDBs(new XQuery(_DB_TYPE.args(NAME, FILE)), false, NAME_LIST);
     ckDBs(new XQuery(_DB_CONTENT_TYPE.args(NAME, FILE)), false, NAME_LIST);
   }
 
@@ -303,11 +300,11 @@ public final class CommandLockingTest extends SandboxTest {
    * no additional ones allowed.
    * Pass empty string for currently opened database, {@code null} for all.
    * @param cmd command to test
-   * @param up updating command?
+   * @param updating updating command?
    * @param dbs required and allowed databases (can be {@code null})
    */
-  private static void ckDBs(final Command cmd, final boolean up, final LockList dbs) {
-    ckDBs(cmd, up, dbs, dbs);
+  private static void ckDBs(final Command cmd, final boolean updating, final LockList dbs) {
+    ckDBs(cmd, updating, dbs, dbs);
   }
 
   /**
@@ -326,15 +323,15 @@ public final class CommandLockingTest extends SandboxTest {
    * Test if the right databases are identified for locking.
    * Pass empty string for currently opened database, {@code null} for all.
    * @param cmd command to test
-   * @param up updating command?
+   * @param updating updating command?
    * @param required required databases (can be {@code null})
    * @param allowed allowed databases (can be {@code null})
    */
-  private static void ckDBs(final Command cmd, final boolean up, final LockList required,
+  private static void ckDBs(final Command cmd, final boolean updating, final LockList required,
       final LockList allowed) {
 
-    final LockList reqRd = up ? NONE : required, allowRd = up ? NONE : allowed;
-    final LockList reqWt = up ? required : NONE, allowWt = up ? allowed : NONE;
+    final LockList reqRd = updating ? NONE : required, allowRd = updating ? NONE : allowed;
+    final LockList reqWt = updating ? required : NONE, allowWt = updating ? allowed : NONE;
     ckDBs(cmd, reqRd, allowRd, reqWt, allowWt);
   }
 
@@ -354,9 +351,7 @@ public final class CommandLockingTest extends SandboxTest {
     cmd.updating(DUMMY_CONTEXT);
     cmd.addLocks();
 
-    final Locks locks = cmd.jc().locks;
-    cmd.jc().locks.finish(context);
-
+    final Locks locks = cmd.jc().locks.finish(context);
     for(final LockList list : new LockList[] { reqRd, allowRd, reqWt, allowWt }) {
       if(list != null) list.finish(null);
     }
@@ -364,28 +359,28 @@ public final class CommandLockingTest extends SandboxTest {
     // read locks
     final StringList list = new StringList();
     if(reqRd == null && !locks.reads.global())
-      list.add("Should apply global READ lock.");
+      list.add("No global READ lock.");
     if(reqRd != null && allowRd != null && !containsAll(locks.reads, reqRd))
-      list.add("Applied too few READ locks: " + locks.reads + " vs. " + reqRd);
+      list.add("Too few READ locks: " + locks.reads + " vs. " + reqRd);
     if(allowRd != null && locks.reads.global())
-      list.add("Applied global WRITE locks; expected: " + allowRd);
+      list.add("Global READ lock; expected: " + allowRd);
     if(allowRd != null && !containsAll(allowRd, locks.reads))
-      list.add("Applied too many READ locks: " + locks.reads + " vs. " + allowRd);
+      list.add("Too many READ locks: " + locks.reads + " vs. " + allowRd);
 
     // write locks
     if(reqWt == null && !locks.writes.global())
-      list.add("Should apply global WRITE lock.");
+      list.add("No global WRITE lock.");
     if(reqWt != null && allowWt != null && !containsAll(locks.writes, reqWt))
-      list.add("Applied too few WRITE locks: " + locks.writes + " vs. " + reqWt);
+      list.add("Too few WRITE locks: " + locks.writes + " vs. " + reqWt);
     if(allowWt != null && locks.writes.global())
-      list.add("Applied global WRITE locks; expected: " + allowWt);
+      list.add("Global WRITE lock; expected: " + allowWt);
     if(allowWt != null && !containsAll(allowWt, locks.writes))
-      list.add("Applied too many WRITE locks: " + locks.writes + " vs. " + allowWt);
+      list.add("Too many WRITE locks: " + locks.writes + " vs. " + allowWt);
 
     if(!list.isEmpty()) {
       final StringBuilder sb = new StringBuilder("Errors:");
       for(final String string : list) sb.append("\n- ").append(string);
-      fail(sb.toString());
+      fail(sb.append("\nCommand: ").append(cmd).toString());
     }
   }
 

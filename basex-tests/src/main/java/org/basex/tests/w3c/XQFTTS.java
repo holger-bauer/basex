@@ -14,7 +14,7 @@ import org.basex.util.ft.*;
 /**
  * XQuery Full Text Test Suite wrapper.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XQFTTS extends W3CTS {
@@ -48,7 +48,7 @@ public final class XQFTTS extends W3CTS {
 
   @Override
   protected void init(final DBNode root) throws QueryException {
-    Util.outln("Caching Full-text Structures...");
+    Util.println("Caching Full-text Structures...");
     for(final Item node : nodes("//*:stopwords", root)) {
       final String val = (path + text("@FileName", node)).replace('\\', '/');
       stop.put(text("@uri", node), IO.get(val));
@@ -94,8 +94,8 @@ public final class XQFTTS extends W3CTS {
     for(final String s : aux("thesaurus", root)) {
       final IO fn = thes2.get(s);
       if(fn != null) {
-        if(opt.th == null) opt.th = new ThesQuery();
-        opt.th.add(new Thesaurus(fn, context));
+        if(opt.th == null) opt.th = new ThesList();
+        opt.th.add(new ThesAccessor(fn));
       }
     }
   }

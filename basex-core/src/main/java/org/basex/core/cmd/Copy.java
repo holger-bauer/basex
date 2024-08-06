@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'copy' command and creates a copy of a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Copy extends Command {
@@ -42,8 +42,6 @@ public final class Copy extends Command {
 
     // source database does not exist
     if(!soptions.dbExists(src)) return error(DB_NOT_FOUND_X, src);
-    // target database already exists
-    if(soptions.dbExists(trg)) return error(DB_EXISTS_X, trg);
 
     // try to copy database
     try {

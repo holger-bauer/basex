@@ -13,29 +13,33 @@ import org.basex.query.value.item.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FileReadBinary extends FileFn {
   @Override
   public B64 item(final QueryContext qc) throws QueryException, IOException {
-    final Path path = toPath(0, qc);
-    final long off = exprs.length > 1 ? toLong(exprs[1], qc) : 0;
-    long len = exprs.length > 2 ? toLong(exprs[2], qc) : 0;
+    final Path path = toPath(arg(0), qc);
+    final Item offset = arg(1).atomItem(qc, info);
+    final Item length = arg(2).atomItem(qc, info);
+    final long off = offset.isEmpty() ? 0 : toLong(offset);
+    long len = length.isEmpty() ? Long.MAX_VALUE : toLong(length);
 
     if(!Files.exists(path)) throw FILE_NOT_FOUND_X.get(info, path.toAbsolutePath());
     if(Files.isDirectory(path)) throw FILE_IS_DIR_X.get(info, path.toAbsolutePath());
 
     // read full file
-    if(exprs.length == 1) return new B64Lazy(new IOFile(path.toFile()), FILE_IO_ERROR_X);
+    if(off == 0 && len == Long.MAX_VALUE) {
+      return new B64Lazy(new IOFile(path), FILE_IO_ERROR_X);
+    }
 
-    // read file chunk
-    try(DataAccess da = new DataAccess(new IOFile(path.toFile()))) {
+    // read chunk
+    try(DataAccess da = new DataAccess(new IOFile(path))) {
       final long dlen = da.length();
-      if(exprs.length == 2) len = dlen - off;
-      if(off < 0 || off > dlen || len < 0 || off + len > dlen)
+      if(len == Long.MAX_VALUE) len = dlen - off;
+      if(off < 0 || off > dlen || len < 0 || off + len > dlen) {
         throw FILE_OUT_OF_RANGE_X_X.get(info, off, off + len);
-
+      }
       da.cursor(off);
       return B64.get(da.readBytes((int) len));
     }

@@ -13,17 +13,16 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserUpdateInfo extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toElem(exprs[0], qc);
-    if(!T_INFO.matches(node)) throw ELM_X_X.get(info, Q_INFO.prefixId(), node);
-    final User user = exprs.length > 1 ? toUser(1, qc) : null;
+    final ANode node = toElem(arg(0), Q_INFO, qc, ELM_X_X_X);
+    final User user = defined(1) ? toUser(arg(1), qc) : null;
 
-    qc.updates().add(new UpdateInfo(node.materialize(qc, true), user, qc, info), qc);
+    qc.updates().add(new UpdateInfo(node.materialize(n -> false, info, qc), user, qc, info), qc);
     return Empty.VALUE;
   }
 
@@ -37,7 +36,7 @@ public final class UserUpdateInfo extends UserFn {
      * @param user user ({@code null} if operation is global)
      * @param node info element
      * @param qc query context
-     * @param info input info
+     * @param info input info (can be {@code null})
      */
     private UpdateInfo(final ANode node, final User user, final QueryContext qc,
         final InputInfo info) {

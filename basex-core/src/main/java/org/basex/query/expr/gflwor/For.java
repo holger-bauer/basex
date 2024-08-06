@@ -19,7 +19,7 @@ import org.basex.util.hash.*;
 /**
  * FLWOR {@code for} clause, iterating over a sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class For extends ForLet {
@@ -166,13 +166,21 @@ public final class For extends ForLet {
    * Tries to convert this for loop into a let binding.
    * @param clauses FLWOR clauses
    * @param p position
+   * @param cc compilation context
    * @return {@code true} if the clause was converted, {@code false} otherwise
+   * @throws QueryException query exception
    */
-  boolean asLet(final List<Clause> clauses, final int p) {
+  boolean asLet(final List<Clause> clauses, final int p, final CompileContext cc)
+      throws QueryException {
+
     if(!expr.seqType().one()) return false;
-    clauses.set(p, Let.fromFor(this));
-    if(score != null) clauses.add(p + 1, Let.fromForScore(this));
-    if(pos != null) clauses.add(p + 1, new Let(pos, Int.ONE));
+    clauses.set(p, new Let(var, expr).optimize(cc));
+    if(score != null) {
+      clauses.add(p + 1, new Let(score, new VarRef(info(), var).optimize(cc), true).optimize(cc));
+    }
+    if(pos != null) {
+      clauses.add(p + 1, new Let(pos, Int.ONE).optimize(cc));
+    }
     return true;
   }
 
@@ -202,7 +210,7 @@ public final class For extends ForLet {
 
   @Override
   Expr inlineExpr(final CompileContext cc) {
-    return empty || vars.length > 1 || var.checksType() ? null : expr;
+    return empty || vars.length > 1 || var.declType != null ? null : expr;
   }
 
   @Override
@@ -214,16 +222,16 @@ public final class For extends ForLet {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.attachVariable(plan.create(this), var, false);
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.attachVariable(plan.create(this), var, false);
     if(empty) plan.addAttribute(elem, EMPTYY, true);
-    if(pos != null) plan.addElement(elem, plan.create(AT, pos));
-    if(score != null) plan.addElement(elem, plan.create(SCORE, score));
+    if(pos != null) elem.add(plan.create(AT, pos));
+    if(score != null) elem.add(plan.create(SCORE, score));
     plan.add(elem, expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(FOR).token(var);
     if(empty) qs.token(ALLOWING).token(EMPTYY);
     if(pos != null) qs.token(AT).token(pos);

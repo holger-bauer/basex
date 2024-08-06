@@ -11,13 +11,13 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'create user' command and creates a new user.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CreateUser extends AUser {
   /**
    * Default constructor.
-   * @param name user name
+   * @param name username
    * @param pw password
    */
   public CreateUser(final String name, final String pw) {
@@ -26,12 +26,12 @@ public final class CreateUser extends AUser {
 
   @Override
   protected boolean run() {
-    final String name = args[0], pw = args[1];
+    final String name = args[0], password = args[1];
     if(!Databases.validName(name)) return error(NAME_INVALID_X, name);
     if(name.equals(UserText.ADMIN)) return error(ADMIN_STATIC);
 
     final Users users = context.users;
-    users.add(new User(name, pw));
+    users.add(new User(name, password));
     users.write();
     return info(USER_CREATED_X, args[0]);
   }
@@ -39,6 +39,6 @@ public final class CreateUser extends AUser {
   @Override
   public void build(final CmdBuilder cb) {
     cb.init(Cmd.CREATE + " " + CmdCreate.USER).arg(0);
-    if(!cb.conf()) cb.arg(1);
+    if(!cb.password()) cb.arg(1);
   }
 }

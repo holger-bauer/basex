@@ -10,7 +10,7 @@ import org.w3c.dom.*;
 /**
  * DOM - Document implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BXDoc extends BXNode implements Document {
@@ -49,22 +49,22 @@ public final class BXDoc extends BXNode implements Document {
 
   @Override
   public BXComm createComment(final String value) {
-    return new BXComm(new FComm(value));
+    return new BXComm(new FComm(token(value)));
   }
 
   @Override
   public BXDocFrag createDocumentFragment() {
-    return new BXDocFrag(new FDoc(nd.baseURI()));
+    return new BXDocFrag(FDoc.build(nd.baseURI()).finish());
   }
 
   @Override
   public BXElem createElement(final String name) {
-    return new BXElem(new FElem(new QNm(name)));
+    return new BXElem(FElem.build(new QNm(name)).finish());
   }
 
   @Override
   public BXElem createElementNS(final String uri, final String name) {
-    return new BXElem(new FElem(new QNm(name, uri)));
+    return new BXElem(FElem.build(new QNm(name, uri)).finish());
   }
 
   @Override
@@ -74,7 +74,7 @@ public final class BXDoc extends BXNode implements Document {
 
   @Override
   public BXPI createProcessingInstruction(final String name, final String value) {
-    return new BXPI(new FPI(name, value));
+    return new BXPI(new FPI(new QNm(name), token(value)));
   }
 
   @Override

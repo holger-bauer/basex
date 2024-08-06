@@ -3,7 +3,7 @@ package org.basex.query.util.regex;
 /**
  * A quantifier, like {@code ?}, {@code *} or {@code &#x7b;17,123&#x7d;}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Quantifier extends RegExp {
@@ -26,6 +26,14 @@ public final class Quantifier extends RegExp {
     this.lazy = lazy;
   }
 
+  /**
+   * Get minimum number of occurences.
+   * @return the minimum.
+   */
+  public int getMin() {
+    return min;
+  }
+
   @Override
   void toRegEx(final StringBuilder sb) {
     sb.append(string()).append(lazy ? "?" : "");
@@ -39,7 +47,9 @@ public final class Quantifier extends RegExp {
     if(min == 0) {
       if(max == 1) return "?";
       if(max == -1) return "*";
-    } else if(min == 1 && max == -1) return "+";
+    } else if(min == 1 && max == -1) {
+      return "+";
+    }
     return "{" + min + (min == max ? "" : "," + (max == -1 ? "" : max)) + '}';
   }
 }

@@ -1,11 +1,13 @@
 package org.basex.util.options;
 
+import java.util.*;
+
 import org.basex.util.list.*;
 
 /**
  * Option containing an enumeration value.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <V> enumeration value
  */
@@ -72,5 +74,14 @@ public final class EnumOption<V extends Enum<V>> extends Option<V> {
     final StringList sl = new StringList(values.length);
     for(final V v : values) sl.add(v.toString());
     return sl.finish();
+  }
+
+  /**
+   * Helper function for converting enumeration names to strings.
+   * @param en enumeration
+   * @return lower-case string with '-' replaced by '-';
+   */
+  public static String string(final Enum<?> en) {
+    return en.name().toLowerCase(Locale.ENGLISH).replace('_', '-');
   }
 }

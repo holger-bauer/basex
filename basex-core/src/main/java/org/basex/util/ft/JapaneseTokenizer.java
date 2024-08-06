@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Japanese lexer using igo (http://igo.sourceforge.jp/).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Toshio HIRAI
  */
 final class JapaneseTokenizer extends Tokenizer {
@@ -103,18 +103,18 @@ final class JapaneseTokenizer extends Tokenizer {
     if(available) {
       Class<?> clz = Reflect.find(PATTERN);
       if(clz == null) {
-        Util.debug("Could not initialize Igo Japanese lexer.");
+        Util.debugln("Could not initialize Igo Japanese lexer.");
       } else {
         /* Igo constructor. */
         final Constructor<?> tgr = Reflect.find(clz, String.class);
         tagger = Reflect.get(tgr, dic.path());
         if(tagger == null) {
           available = false;
-          Util.debug("Could not initialize Igo Japanese lexer.");
+          Util.debugln("Could not initialize Igo Japanese lexer.");
         } else {
           parse = Reflect.method(clz, "parse", CharSequence.class);
           if(parse == null) {
-            Util.debug("Could not initialize Igo lexer method.");
+            Util.debugln("Could not initialize Igo lexer method.");
           }
           clz = Reflect.find("net.reduls.igo.Morpheme");
           surface = Reflect.field(clz, "surface");
@@ -182,12 +182,8 @@ final class JapaneseTokenizer extends Tokenizer {
         for(int s = 0; s < sl; s++) {
           final String c = String.valueOf(srfc.charAt(s));
           final byte[] t = token(c);
-          if(t.length == 1) {
-            if(letter(t[0]) || digit(t[0])) cont = false;
-            else marks.add(new Morpheme(c, KIGOU_FEATURE));
-          } else {
-            cont = false;
-          }
+          if(t.length != 1 || letter(t[0]) || digit(t[0])) cont = false;
+          else marks.add(new Morpheme(c, KIGOU_FEATURE));
         }
 
         if(cont) list.addAll(marks);
@@ -273,25 +269,19 @@ final class JapaneseTokenizer extends Tokenizer {
           }
           continue;
         }
-      } else {
-        // last token.
-        if(cMark) {
-          if("\\".equals(cSrfc)) continue;
-          if(word.length() != 0) {
-            word.append(cSrfc);
-          }
-          more = true;
-          continue;
-        }
+      } else if(cMark) {
+        // last token
+        if("\\".equals(cSrfc)) continue;
+        if(word.length() != 0) word.append(cSrfc);
+        more = true;
+        continue;
       }
 
       if(period) {
         word.append(cSrfc);
-      } else {
-        if(bs)
-          if(!isFtChar(cSrfc)) word.append(cSrfc);
-        else
-          word.setLength(0);
+      } else if(bs) {
+        if(!isFtChar(cSrfc)) word.append(cSrfc);
+        else word.setLength(0);
       }
       more = true;
       cpos++;
@@ -316,8 +306,8 @@ final class JapaneseTokenizer extends Tokenizer {
       if(!currToken.isMark() && !currToken.isAttachedWord()) return true;
     }
     return false;
-
   }
+
   @Override
   public boolean hasNext() {
     return wc ? moreWC() : more();
@@ -336,10 +326,8 @@ final class JapaneseTokenizer extends Tokenizer {
     pos++;
     String n = currToken.getSurface();
     final int hinshi = currToken.getHinshi();
-    if(st &&
-       (hinshi == Morpheme.HINSHI_DOUSHI ||
-        hinshi == Morpheme.HINSHI_KEIYOUSHI)) {
-        n = currToken.getBaseForm();
+    if(st && (hinshi == Morpheme.HINSHI_DOUSHI || hinshi == Morpheme.HINSHI_KEIYOUSHI)) {
+      n = currToken.getBaseForm();
     }
     byte[] t = token(n);
     final boolean a = ascii(t);
@@ -399,11 +387,7 @@ final class JapaneseTokenizer extends Tokenizer {
         tb.add(0x0020);
       } else if(c == 0xFF01) { // !
         tb.add(0x0021);
-      } else if(c == 0xFF02) { // " FULLWIDTH QUOTATION MARK
-        tb.add(0x0022);
-      } else if(c == 0x201C) { // " LEFT DOUBLE QUOTATION MARK
-        tb.add(0x0022);
-      } else if(c == 0x201D) { // " RIGHT DOUBLE QUOTATION MARK
+      } else if(c == 0xFF02 || c == 0x201C || c == 0x201D) { // " FULLWIDTH QUOTATION MARK
         tb.add(0x0022);
       } else if(c == 0xFF03) { // #
         tb.add(0x0023);
@@ -413,11 +397,7 @@ final class JapaneseTokenizer extends Tokenizer {
         tb.add(0x0025);
       } else if(c == 0xFF06) { // &
         tb.add(0x0026);
-      } else if(c == 0xFF07) { // ' FULLWIDTH APOSTROPHE
-        tb.add(0x0027);
-      } else if(c == 0x2018) { // ' LEFT SINGLE QUOTATION MARK
-        tb.add(0x0027);
-      } else if(c == 0x2019) { // ' RIGHT SINGLE QUOTATION MARK
+      } else if(c == 0xFF07 || c == 0x2018 || c == 0x2019) { // ' FULLWIDTH APOSTROPHE
         tb.add(0x0027);
       } else if(c == 0xFF08) { // (
         tb.add(0x0028);
@@ -529,7 +509,7 @@ final class JapaneseTokenizer extends Tokenizer {
     }
 
     /**
-     * Returns whether the avoid token.
+     * Checks for a mark.
      * @return result
      */
     public boolean isMark() {

@@ -3,11 +3,10 @@ package org.basex.query.value.seq;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
-import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
+import org.basex.query.expr.CmpV.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.collation.*;
-import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -15,14 +14,17 @@ import org.basex.util.*;
 /**
  * Empty sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Empty extends Item {
-  /** Single instance. */
+  /** Singleton instance. */
   public static final Empty VALUE = new Empty();
+  /** Placeholder for an undefined function argument. */
+  public static final Empty UNDEFINED = new Empty();
+
   /** Empty iterator. */
-  public static final BasicIter<Item> ITER = new BasicIter<Item>(0) {
+  public static final BasicIter<Item> ITER = new BasicIter<>(0) {
     @Override
     public Item next() {
       return null;
@@ -32,11 +34,11 @@ public final class Empty extends Item {
       return null;
     }
     @Override
-    public Value iterValue() {
-      return VALUE;
+    public boolean valueIter() {
+      return true;
     }
     @Override
-    public Value value(final QueryContext qc, final Expr expr) {
+    public Empty value(final QueryContext qc, final Expr expr) {
       return VALUE;
     }
   };
@@ -59,8 +61,18 @@ public final class Empty extends Item {
   }
 
   @Override
+  public boolean isEmpty() {
+    return true;
+  }
+
+  @Override
+  public boolean isItem() {
+    return false;
+  }
+
+  @Override
   public Object toJava() {
-    return new Object[0];
+    return null;
   }
 
   @Override
@@ -69,13 +81,8 @@ public final class Empty extends Item {
   }
 
   @Override
-  public Item ebv(final QueryContext qc, final InputInfo ii) {
-    return Bln.FALSE;
-  }
-
-  @Override
-  public Item test(final QueryContext qc, final InputInfo ii) {
-    return null;
+  public boolean test(final QueryContext qc, final InputInfo ii, final long pos) {
+    return false;
   }
 
   @Override
@@ -84,8 +91,12 @@ public final class Empty extends Item {
   }
 
   @Override
-  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) {
+  public boolean bool(final InputInfo ii) {
+    return false;
+  }
+
+  @Override
+  public boolean equal(final Item item, final Collation coll, final InputInfo ii) {
     throw Util.notExpected();
   }
 
@@ -100,7 +111,12 @@ public final class Empty extends Item {
   }
 
   @Override
-  public int hash(final InputInfo ii) {
+  public Expr optimizePos(final OpV op, final CompileContext cc) {
+    return Bln.FALSE;
+  }
+
+  @Override
+  public int hash() {
     return 0;
   }
 
@@ -110,19 +126,8 @@ public final class Empty extends Item {
   }
 
   @Override
-  public long atomSize() {
-    return 0;
-  }
-
-  @Override
-  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
-    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
-      cc.simplify(this, Bln.FALSE) : this;
-  }
-
-  @Override
   public boolean equals(final Object obj) {
-    return obj == VALUE;
+    return obj instanceof Empty;
   }
 
   @Override
@@ -131,12 +136,12 @@ public final class Empty extends Item {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.paren("");
   }
 }

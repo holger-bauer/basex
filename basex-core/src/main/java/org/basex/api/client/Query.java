@@ -4,7 +4,7 @@ import java.io.*;
 
 import org.basex.io.in.*;
 import org.basex.query.value.type.*;
-import org.basex.query.value.type.Type.ID;
+import org.basex.query.value.type.Type.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
@@ -16,7 +16,7 @@ import org.basex.util.list.*;
  * stream that has been specified via the constructor or via
  * {@link Session#setOutputStream(OutputStream)}.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Query implements Closeable {
@@ -44,7 +44,7 @@ public abstract class Query implements Closeable {
    * Binds a value with an optional type to an external variable.
    * @param name name of variable
    * @param value value to be bound
-   * @param type value type (may be {@code null})
+   * @param type value type (can be {@code null})
    * @throws IOException I/O exception
    */
   public abstract void bind(String name, Object value, String type) throws IOException;
@@ -61,7 +61,7 @@ public abstract class Query implements Closeable {
   /**
    * Binds a value with an optional type to an external variable.
    * @param value value to be bound
-   * @param type value type (may be {@code null})
+   * @param type value type (can be {@code null})
    * @throws IOException I/O exception
    */
   public abstract void context(Object value, String type) throws IOException;
@@ -102,11 +102,11 @@ public abstract class Query implements Closeable {
   }
 
   /**
-   * Returns the XQuery type of the current item (must be called after {@link #next()}.
+   * Returns the XQuery type of the current item (must be called after {@link #next()}).
    * @return item type
    */
   public final Type type() {
-    return ID.getType(types.get(pos - 1));
+    return Types.type(types.get(pos - 1));
   }
 
   /**
@@ -119,10 +119,10 @@ public abstract class Query implements Closeable {
     cache = new TokenList();
     types = new ByteList();
     final ByteList bl = new ByteList();
-    for(int t; (t = input.read()) > 0;) {
+    for(int index; (index = input.read()) > 0;) {
       // skip type information
       if(full) {
-        final ID id = ID.get(t);
+        final ID id = Types.type(index).id();
         if(id != null && id.isExtended()) {
           while(input.read() > 0);
         }
@@ -131,7 +131,7 @@ public abstract class Query implements Closeable {
       final ServerInput si = new ServerInput(input);
       for(int b; (b = si.read()) != -1;) bl.add(b);
       cache.add(bl.next());
-      types.add(t);
+      types.add(index);
     }
     pos = 0;
   }

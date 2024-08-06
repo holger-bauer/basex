@@ -9,13 +9,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnTimezoneFromTime extends DateTime {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = exprs[0].atomItem(qc, info);
-    return item == Empty.VALUE ? Empty.VALUE : zon(toDate(item, AtomType.TIME, qc));
+    final Item value = arg(0).atomItem(qc, info);
+    return value.isEmpty() ? Empty.VALUE : zon(toDate(value, AtomType.TIME, qc));
   }
 }

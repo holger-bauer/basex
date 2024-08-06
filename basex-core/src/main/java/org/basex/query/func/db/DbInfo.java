@@ -1,7 +1,5 @@
 package org.basex.query.func.db;
 
-import static org.basex.util.Token.*;
-
 import java.util.*;
 
 import org.basex.core.cmd.*;
@@ -14,50 +12,40 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbInfo extends DbAccess {
-  /** Resource element name. */
-  private static final String DATABASE = "database";
-
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Data data = checkData(qc);
-    return toNode(InfoDB.db(data.meta, false, true), DATABASE);
+  public FNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final Data data = toData(qc);
+    return toNode(Q_DATABASE, InfoDB.db(data.meta, false, true), qc);
   }
 
   /**
    * Converts the specified info string to a node fragment.
-   * @param root name of the root node
+   * @param name name of the root node
    * @param string string to be converted
+   * @param qc query context
    * @return node
    */
-  static ANode toNode(final String string, final String root) {
-    final FElem top = new FElem(root);
-    FElem node = null;
-    for(final String l : string.split("\r\n?|\n")) {
-      final String[] cols = l.split(": ", 2);
+  static FNode toNode(final QNm name, final String string, final QueryContext qc) {
+    final FBuilder root = FElem.build(name);
+
+    FBuilder header = null;
+    for(final String line : string.split(Prop.NL)) {
+      final String[] cols = line.split(": ", 2);
       if(cols[0].isEmpty()) continue;
 
-      final FElem n = new FElem(token(toName(cols[0])));
+      final String col = cols[0].replaceAll("[ -:]", "").toLowerCase(Locale.ENGLISH);
+      final FBuilder node = FElem.build(qc.shared.qName(Token.token(col)));
       if(Strings.startsWith(cols[0], ' ')) {
-        if(node != null) node.add(n);
-        if(!cols[1].isEmpty()) n.add(cols[1]);
+        header.add(node.add(cols[1]));
       } else {
-        node = n;
-        top.add(n);
+        if(header != null) root.add(header);
+        header = node;
       }
     }
-    return top;
-  }
-
-  /**
-   * Converts the specified info key to an element name.
-   * @param string string to be converted
-   * @return resulting name
-   */
-  public static String toName(final String string) {
-    return string.replaceAll("[ -:]", "").toLowerCase(Locale.ENGLISH);
+    return root.add(header).finish();
   }
 }

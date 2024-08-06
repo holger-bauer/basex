@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests adding files/folders/zip files/urls to collections.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Michael Seiferle
  */
 public final class AddDeleteTest extends SandboxTest {
@@ -186,7 +186,9 @@ public final class AddDeleteTest extends SandboxTest {
     try {
       new Add("", io.path()).execute(context);
       fail("Broken file was added to the database.");
-    } catch(final BaseXException ignored) { }
+    } catch(final BaseXException ex) {
+      Util.debug(ex);
+    }
 
     assertTrue(io.delete());
   }
@@ -227,7 +229,9 @@ public final class AddDeleteTest extends SandboxTest {
     try {
       new Add("", "<x").execute(context);
       fail("Broken file was added to the database.");
-    } catch(final BaseXException ignored) { }
+    } catch(final BaseXException ex) {
+      Util.debug(ex);
+    }
   }
 
   /**

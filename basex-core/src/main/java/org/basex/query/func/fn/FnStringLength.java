@@ -7,35 +7,33 @@ import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnStringLength extends ContextFn {
   @Override
   public Int item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] token;
-    if(exprs.length == 0) {
-      final Item item = ctxValue(qc).item(qc, info);
-      if(item instanceof FItem) throw FISTRING_X.get(info, item.type);
-      token = item == Empty.VALUE ? Token.EMPTY : item.string(info);
+    final AStr value;
+    if(defined(0)) {
+      value = toZeroStr(arg(0), qc);
     } else {
-      token = toZeroToken(exprs[0], qc);
+      final Item item = context(qc).item(qc, info);
+      if(item instanceof AStr) value = (AStr) item;
+      else if(item instanceof FItem && !(item instanceof XQJava)) throw FISTRING_X.get(info, item);
+      else if(item.isEmpty()) return Int.ZERO;
+      else return Int.get(Token.length(item.string(info)));
     }
-    return Int.get(Token.length(token));
+    return Int.get(value.length(info));
   }
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    if(mode == Simplify.EBV) {
-      // if(string-length(nodes))  ->  if(string(nodes))
-      return cc.simplify(this, cc.function(STRING, info, exprs));
-    }
-    return this;
+    // if(string-length(E))  ->  if(string(E))
+    return cc.simplify(this, mode == Simplify.EBV ? cc.function(STRING, info, exprs) : this, mode);
   }
 }

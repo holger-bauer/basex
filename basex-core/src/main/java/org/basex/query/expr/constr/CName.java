@@ -1,16 +1,12 @@
 package org.basex.query.expr.constr;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
-import static org.basex.util.Token.normalize;
 
 import org.basex.query.*;
-import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -18,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract fragment constructor with a QName argument.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class CName extends CNode {
@@ -27,16 +23,15 @@ abstract class CName extends CNode {
 
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param seqType sequence type
    * @param computed computed constructor
    * @param name name
-   * @param cont contents
+   * @param exprs contents
    */
-  CName(final StaticContext sc, final InputInfo info, final SeqType seqType, final boolean computed,
-      final Expr name, final Expr... cont) {
-    super(sc, info, seqType, computed, cont);
+  CName(final InputInfo info, final SeqType seqType, final boolean computed, final Expr name,
+      final Expr... exprs) {
+    super(info, seqType, computed, exprs);
     this.name = name;
   }
 
@@ -53,60 +48,28 @@ abstract class CName extends CNode {
   }
 
   /**
-   * Optimizes the node value.
-   * @param cc compilation context
-   * @throws QueryException query exception
-   */
-  final void optValue(final CompileContext cc) throws QueryException {
-    simplifyAll(Simplify.STRING, cc);
-    if(allAreValues(true) && (exprs.length != 1 || !(exprs[0] instanceof Str))) {
-      exprs = new Expr[] { Str.get(atomValue(cc.qc)) };
-    }
-  }
-
-  @Override
-  final byte[] atomValue(final QueryContext qc) throws QueryException {
-    final byte[] value = super.atomValue(qc);
-    return value != null ? value : Token.EMPTY;
-  }
-
-  /**
    * Evaluates the name expression as a QName.
-   * @param elem element
+   * @param elem element construction
    * @param qc query context
-   * @param sctx static context for resolving namespaces (can be {@code null})
-   * @return result, or {@code null} if namespace cannot be resolved (at compile time)
+   * @return result
    * @throws QueryException query exception
    */
-  final QNm qname(final boolean elem, final QueryContext qc, final StaticContext sctx)
-      throws QueryException {
-
-    final Item item = checkNoEmpty(name.atomItem(qc, info), AtomType.QNAME);
+  final QNm qname(final boolean elem, final QueryContext qc) throws QueryException {
+    final Item item = name.atomItem(qc, info);
     final Type type = item.type;
     if(type == AtomType.QNAME) return (QNm) item;
+
     if(!type.isStringOrUntyped() || type == AtomType.ANY_URI)
-      throw STRQNM_X_X.get(info, type, item);
+      throw STRQNM_X_X.get(info, item.seqType(), item);
 
-    // check for QName
-    final byte[] token = normalize(item.string(info));
-    if(XMLToken.isQName(token)) return !(elem || contains(token, ':')) ?
-      new QNm(token) : sctx != null ? new QNm(token, sctx) : null;
+    final QNm qnm = qc.shared.parseQName(item.string(info), elem, sc());
+    if(qnm != null) return qnm;
 
-    // check for EQName
-    final String string = string(token);
-    if(string.matches("^Q\\{.*\\}.+")) {
-      final byte[] local = token(string.replaceAll("^.*?\\}", ""));
-      final byte[] uri = normalize(token(string.replaceAll("^Q\\{|\\}.*", "")));
-      if(XMLToken.isNCName(local) && !eq(uri, XMLNS_URI) && !contains(uri, '{')) {
-        return new QNm(local, uri);
-      }
-    }
-
-    throw INVNAME_X.get(info, token);
+    throw INVQNAME_X.get(info, item);
   }
 
   /**
-   * Evaluates the name expression as a NCName.
+   * Evaluates the name expression as an NCName.
    * @param empty allow empty name
    * @param qc query context
    * @return name
@@ -114,13 +77,13 @@ abstract class CName extends CNode {
    */
   final byte[] ncname(final boolean empty, final QueryContext qc) throws QueryException {
     final Item item = name.atomItem(qc, info);
-    if(item != Empty.VALUE) {
+    if(item.isEmpty()) {
+      if(empty) return EMPTY;
+    } else {
       final Type type = item.type;
       if(type.isStringOrUntyped() && type != AtomType.ANY_URI) return trim(item.string(info));
-      throw STRNCN_X_X.get(info, type, item);
     }
-    if(empty) return EMPTY;
-    throw STRNCN_X_X.get(info, SeqType.EMPTY_SEQUENCE_Z, item);
+    throw STRNCN_X_X.get(info, item.seqType(), item);
   }
 
   @Override
@@ -167,15 +130,15 @@ abstract class CName extends CNode {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), name, exprs);
   }
 
   @Override
-  public final void plan(final QueryString qs, final String kind) {
+  public final void toString(final QueryString qs, final String kind) {
     qs.token(kind);
-    if(name instanceof QNm) qs.token(((QNm) name).id());
+    if(name instanceof QNm) qs.token(((QNm) name).unique());
     else qs.brace(name);
-    super.plan(qs, null);
+    super.toString(qs, null);
   }
 }

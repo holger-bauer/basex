@@ -9,12 +9,12 @@ import org.basex.util.http.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebContentType extends StandardFunc {
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return Str.get(MediaType.get(Token.string(toToken(exprs[0], qc))).toString());
+    return Str.get(MediaType.get(toString(arg(0), qc)).toString());
   }
 }

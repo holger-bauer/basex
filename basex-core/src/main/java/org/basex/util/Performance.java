@@ -3,7 +3,7 @@ package org.basex.util;
 /**
  * This class contains methods for performance measurements.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Performance {
@@ -24,8 +24,7 @@ public final class Performance {
    * @return execution time
    */
   public long ns(final boolean reset) {
-    final long time2 = System.nanoTime();
-    final long diff = time2 - time;
+    final long time2 = System.nanoTime(), diff = time2 - time;
     if(reset) time = time2;
     return diff;
   }
@@ -100,7 +99,11 @@ public final class Performance {
    * @param ms time in milliseconds to wait
    */
   public static void sleep(final long ms) {
-    try { Thread.sleep(Math.max(0, ms)); } catch(final InterruptedException ignored) { }
+    try {
+      Thread.sleep(Math.max(0, ms));
+    } catch(final InterruptedException ex) {
+      Util.debug(ex);
+    }
   }
 
   /**

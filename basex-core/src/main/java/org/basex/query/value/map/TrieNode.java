@@ -1,10 +1,10 @@
 package org.basex.query.value.map;
 
-import static org.basex.query.QueryText.*;
+import java.util.function.*;
 
+import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.func.fn.*;
-import org.basex.query.util.collation.*;
+import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract superclass of all trie nodes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 abstract class TrieNode {
@@ -26,26 +26,23 @@ abstract class TrieNode {
   /** The empty node. */
   static final TrieNode EMPTY = new TrieNode(0) {
     @Override
-    TrieNode delete(final int hash, final Item key, final int level, final InputInfo ii) {
-      return this; }
+    TrieNode delete(final int hash, final Item key, final int level) { return this; }
     @Override
-    Value get(final int hash, final Item key, final int level, final InputInfo ii) {
-      return null; }
+    Value get(final int hash, final Item key, final int level) { return null; }
     @Override
-    boolean contains(final int hash, final Item key, final int level, final InputInfo ii) {
-      return false; }
+    boolean contains(final int hash, final Item key, final int level) { return false; }
     @Override
     TrieNode addAll(final TrieNode node, final int level, final MergeDuplicates merge,
-        final QueryContext qc, final InputInfo ii) { return node; }
+        final QueryContext qc, final InputInfo info) { return node; }
     @Override
     TrieNode add(final TrieLeaf leaf, final int level, final MergeDuplicates merge,
-        final QueryContext qc, final InputInfo ii) { return leaf; }
+        final QueryContext qc, final InputInfo info) { return leaf; }
     @Override
     TrieNode add(final TrieList list, final int level, final MergeDuplicates merge,
-        final QueryContext qc, final InputInfo ii) { return list; }
+        final QueryContext qc, final InputInfo info) { return list; }
     @Override
     TrieNode add(final TrieBranch branch, final int level, final MergeDuplicates merge,
-        final QueryContext qc, final InputInfo ii) { return branch; }
+        final QueryContext qc, final InputInfo info) { return branch; }
     @Override
     boolean verify() { return true; }
     @Override
@@ -53,30 +50,27 @@ abstract class TrieNode {
     @Override
     void values(final ValueBuilder vs) { }
     @Override
-    void cache(final boolean lazy, final InputInfo ii) { }
+    void cache(final boolean lazy, final InputInfo info) { }
     @Override
-    boolean materialized() { return true; }
+    boolean materialized(final Predicate<Data> test, final InputInfo info) { return true; }
     @Override
-    boolean instanceOf(final AtomType kt, final SeqType dt) { return true; }
+    boolean instanceOf(final Type kt, final SeqType dt) { return true; }
     @Override
-    int hash(final InputInfo ii) { return 0; }
+    boolean equal(final TrieNode node, final DeepEqual deep) { return this == node; }
     @Override
-    boolean deep(final TrieNode node, final Collation coll, final InputInfo ii) {
-return this == node; }
+    public TrieNode put(final int hash, final Item key, final Value value, final int level) {
+      return new TrieLeaf(hash, key, value); }
     @Override
-    public TrieNode put(final int hash, final Item key, final Value value, final int level,
-        final InputInfo ii) { return new TrieLeaf(hash, key, value); }
+    void apply(final QueryBiConsumer<Item, Value> func) { }
     @Override
-    void forEach(final ValueBuilder vb, final FItem func, final QueryContext qc,
-        final InputInfo ii) { }
+    void add(final TokenBuilder tb, final String indent) { tb.add("{ }"); }
     @Override
-    StringBuilder append(final StringBuilder sb, final String indent) { return sb.append("{ }"); }
-    @Override
-    StringBuilder append(final StringBuilder sb) { return sb; }
+    void add(final TokenBuilder tb) { }
   };
 
   /** Size of this node. */
   final int size;
+
   /**
    * Constructor.
    * @param size size
@@ -91,100 +85,94 @@ return this == node; }
    * @param key key to insert
    * @param value value to insert
    * @param level level
-   * @param ii input info
    * @return updated map if changed, {@code this} otherwise
    * @throws QueryException query exception
    */
-  abstract TrieNode put(int hash, Item key, Value value, int level, InputInfo ii)
-      throws QueryException;
+  abstract TrieNode put(int hash, Item key, Value value, int level) throws QueryException;
 
   /**
    * Deletes a key from this map.
    * @param hash hash code of the key
    * @param key key to delete
    * @param level level
-   * @param ii input info
    * @return updated map if changed, {@code null} if deleted, {@code this} otherwise
    * @throws QueryException query exception
    */
-  abstract TrieNode delete(int hash, Item key, int level, InputInfo ii) throws QueryException;
+  abstract TrieNode delete(int hash, Item key, int level) throws QueryException;
 
   /**
    * Looks up the value associated with the given key.
    * @param hash hash code
    * @param key key to look up
    * @param level level
-   * @param ii input info
    * @return bound value if found, {@code null} otherwise
    * @throws QueryException query exception
    */
-  abstract Value get(int hash, Item key, int level, InputInfo ii) throws QueryException;
+  abstract Value get(int hash, Item key, int level) throws QueryException;
 
   /**
    * Checks if the given key exists in the map.
    * @param hash hash code
    * @param key key to look for
    * @param level level
-   * @param ii input info
    * @return {@code true} if the key exists, {@code false} otherwise
    * @throws QueryException query exception
    */
-  abstract boolean contains(int hash, Item key, int level, InputInfo ii) throws QueryException;
+  abstract boolean contains(int hash, Item key, int level) throws QueryException;
 
   /**
    * <p> Inserts all bindings from the given node into this one.
    * <p> This method is part of the <i>double dispatch</i> pattern and
-   *     should be implemented as {@code return o.add(this, lvl, ii);}.
+   *     should be implemented as {@code return o.add(this, lvl, info);}.
    * @param node other node
    * @param level level
    * @param merge merge duplicates
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return updated map if changed, {@code this} otherwise
    * @throws QueryException query exception
    */
   abstract TrieNode addAll(TrieNode node, int level, MergeDuplicates merge, QueryContext qc,
-      InputInfo ii) throws QueryException;
+      InputInfo info) throws QueryException;
 
   /**
-   * Add a leaf to this node if the key isn't already used.
+   * Add a leaf to this node if the key is not already used.
    * @param leaf leaf to insert
    * @param level level
    * @param merge merge duplicates
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return updated map if changed, {@code this} otherwise
    * @throws QueryException query exception
    */
   abstract TrieNode add(TrieLeaf leaf, int level, MergeDuplicates merge, QueryContext qc,
-      InputInfo ii) throws QueryException;
+      InputInfo info) throws QueryException;
 
   /**
-   * Add an overflow list to this node if the key isn't already used.
+   * Add an overflow list to this node if the key is not already used.
    * @param list leaf to insert
    * @param level level
    * @param merge merge duplicates
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return updated map if changed, {@code this} otherwise
    * @throws QueryException query exception
    */
   abstract TrieNode add(TrieList list, int level, MergeDuplicates merge, QueryContext qc,
-      InputInfo ii) throws QueryException;
+      InputInfo info) throws QueryException;
 
   /**
-   * Add all bindings of the given branch to this node for which the key isn't
-   * already used.
+   * Add all bindings of the given branch to this node for which the key is not already used.
    * @param branch leaf to insert
    * @param level level
    * @param merge merge duplicates
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return updated map if changed, {@code this} otherwise
    * @throws QueryException query exception
    */
   abstract TrieNode add(TrieBranch branch, int level, MergeDuplicates merge, QueryContext qc,
-      InputInfo ii) throws QueryException;
+      InputInfo info) throws QueryException;
 
   /**
    * Verifies the tree.
@@ -207,27 +195,26 @@ return this == node; }
   /**
    * Caches all keys and values.
    * @param lazy lazy caching
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  abstract void cache(boolean lazy, InputInfo ii) throws QueryException;
+  abstract void cache(boolean lazy, InputInfo info) throws QueryException;
 
   /**
-   * Checks if all values are materialized.
+   * Checks if all value of this node are materialized.
+   * @param test test for copying nodes
+   * @param info input info (can be {@code null})
    * @return result of check
+   * @throws QueryException query exception
    */
-  abstract boolean materialized();
+  abstract boolean materialized(Predicate<Data> test, InputInfo info) throws QueryException;
 
   /**
    * Applies a function on all entries.
-   * @param vb value builder
    * @param func function to apply on keys and values
-   * @param qc query context
-   * @param ii input info
    * @throws QueryException query exception
    */
-  abstract void forEach(ValueBuilder vb, FItem func, QueryContext qc, InputInfo ii)
-      throws QueryException;
+  abstract void apply(QueryBiConsumer<Item, Value> func) throws QueryException;
 
   /**
    * Calculates the hash key for the given level.
@@ -245,69 +232,34 @@ return this == node; }
    * @param dt declared type
    * @return {@code true} if the type fits, {@code false} otherwise
    */
-  abstract boolean instanceOf(AtomType kt, SeqType dt);
-
-  /**
-   * Compares two values.
-   * @param value1 first value
-   * @param value2 second value
-   * @param coll collation (can be {@code null})
-   * @param ii input info
-   * @return {@code true} if both values are deep equal, {@code false} otherwise
-   * @throws QueryException query exception
-   */
-  static boolean deep(final Value value1, final Value value2, final Collation coll,
-      final InputInfo ii) throws QueryException {
-    return value1.size() == value2.size() && new DeepEqual(ii).collation(coll).
-        equal(value1, value2);
-  }
-
-  /**
-   * Calculates the hash code of this node.
-   * @param ii input info
-   * @return hash value
-   * @throws QueryException query exception
-   */
-  abstract int hash(InputInfo ii) throws QueryException;
+  abstract boolean instanceOf(Type kt, SeqType dt);
 
   /**
    * Checks if this node is indistinguishable from the given node.
    * @param node other node
-   * @param coll collation
-   * @param ii input info
+   * @param deep comparator
    * @return result of check
    * @throws QueryException query exception
    */
-  abstract boolean deep(TrieNode node, Collation coll, InputInfo ii) throws QueryException;
+  abstract boolean equal(TrieNode node, DeepEqual deep) throws QueryException;
 
   /**
    * Recursive {@link #toString()} helper.
-   * @param sb string builder
+   * @param tb token builder
    * @param indent indentation string
-   * @return string builder for convenience
    */
-  abstract StringBuilder append(StringBuilder sb, String indent);
+  abstract void add(TokenBuilder tb, String indent);
 
   /**
    * Recursive helper for {@link XQMap#toString()}.
-   * @param sb string builder
-   * @return reference to {@code sb}
+   * @param tb token builder
    */
-  abstract StringBuilder append(StringBuilder sb);
+  abstract void add(TokenBuilder tb);
 
   @Override
   public String toString() {
-    return append(new StringBuilder(), "").toString();
-  }
-
-  /**
-   * Checks if string building should be continued.
-   * @param sb string builder
-   * @return result of check
-   */
-  static boolean more(final StringBuilder sb) {
-    if(sb.length() <= 32) return true;
-    if(!sb.substring(sb.length() - DOTS.length()).equals(DOTS)) sb.append(DOTS);
-    return false;
+    final TokenBuilder tb = new TokenBuilder();
+    add(tb, "");
+    return tb.toString();
   }
 }

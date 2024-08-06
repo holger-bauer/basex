@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * This class stores the table on disk and reads it page-wise.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Tim Petrowsky
  */
@@ -227,8 +227,9 @@ public final class TableDiskAccess extends TableAccess {
   }
 
   @Override
-  protected void copy(final byte[] entries, final int pre, final int last) {
-    for(int o = 0, i = pre; i < last; ++i, o += IO.NODESIZE) {
+  protected void copy(final byte[] entries, final int first, final int last) {
+    dirty();
+    for(int o = 0, i = first; i < last; ++i, o += IO.NODESIZE) {
       final int off = cursor(i);
       final Buffer buffer = buffers.current();
       Array.copy(entries, o, IO.NODESIZE, buffer.data, off);
@@ -362,8 +363,8 @@ public final class TableDiskAccess extends TableAccess {
 
     // number of new required pages and remaining bytes
     final int req = all.length - nrem;
-    int needed = req / IO.BLOCKSIZE;
-    final int remain = req % IO.BLOCKSIZE;
+    int needed = req >>> IO.BLOCKPOWER;
+    final int remain = req & IO.BLOCKSIZE - 1;
 
     if(remain > 0) {
       // check if the last entries can fit in the page after the current one
@@ -426,19 +427,6 @@ public final class TableDiskAccess extends TableAccess {
   }
 
   @Override
-  protected void dirty() {
-    // initialize data structures required for performing updates
-    if(fPreIndex == null) {
-      fPreIndex = new int[pages];
-      for(int i = 0; i < pages; i++) fPreIndex[i] = i * IO.ENTRIES;
-      pageIndex = new int[pages];
-      for(int i = 0; i < pages; i++) pageIndex[i] = i;
-      usedPages = new BitArray(used, true);
-    }
-    dirty = true;
-  }
-
-  @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder();
     sb.append(Util.className(this)).append(" (").append("pages: ").append(pages);
@@ -451,6 +439,21 @@ public final class TableDiskAccess extends TableAccess {
   }
 
   // PRIVATE METHODS ==============================================================================
+
+  /**
+   * Marks the data structures as dirty.
+   */
+  private void dirty() {
+    // initialize data structures required for performing updates
+    if(fPreIndex == null) {
+      fPreIndex = new int[pages];
+      for(int i = 0; i < pages; i++) fPreIndex[i] = i * IO.ENTRIES;
+      pageIndex = new int[pages];
+      for(int i = 0; i < pages; i++) pageIndex[i] = i;
+      usedPages = new BitArray(used, true);
+    }
+    dirty = true;
+  }
 
   /**
    * Searches for the page containing the entry for the specified pre value.
@@ -525,11 +528,11 @@ public final class TableDiskAccess extends TableAccess {
       if(pre >= pages) {
         pages = pre + 1;
       } else {
-        file.seek(buffer.pos * IO.BLOCKSIZE);
+        file.seek(buffer.pos << IO.BLOCKPOWER);
         file.readFully(buffer.data);
       }
     } catch(final IOException ex) {
-      Util.stack(ex);
+      throw new RuntimeException(Util.info(ex));
     }
   }
 
@@ -541,7 +544,7 @@ public final class TableDiskAccess extends TableAccess {
   private void write(final Buffer buffer) throws IOException {
     if(!buffer.dirty) return;
 
-    file.seek(buffer.pos * IO.BLOCKSIZE);
+    file.seek(buffer.pos << IO.BLOCKPOWER);
     file.write(buffer.data);
     buffer.dirty = false;
   }
@@ -597,7 +600,7 @@ public final class TableDiskAccess extends TableAccess {
   /**
    * Calculates the occupied space in a page.
    * @param index page index
-   * @return occupied space in number of records
+   * @return occupied space
    */
   private int occSpace(final int index) {
     return (index + 1 < used ? fPreIndex[index + 1] : meta.size) - fPreIndex[index];

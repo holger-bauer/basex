@@ -1,13 +1,13 @@
 package org.basex.io;
 
 import java.io.*;
+import java.net.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
 
 import javax.xml.transform.stream.*;
 
-import org.basex.io.in.*;
 import org.basex.io.out.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
@@ -16,7 +16,7 @@ import org.xml.sax.*;
 /**
  * {@link IO} reference, representing a local file or directory path.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IOFile extends IO {
@@ -30,6 +30,14 @@ public final class IOFile extends IO {
   private final boolean absolute;
   /** File reference. */
   private final File file;
+
+  /**
+   * Constructor.
+   * @param path path reference
+   */
+  public IOFile(final Path path) {
+    this(path.toFile(), "");
+  }
 
   /**
    * Constructor.
@@ -70,8 +78,8 @@ public final class IOFile extends IO {
    * @param file file reference
    * @param last last path segment; if it ends with a slash, it indicates a directory
    */
-  private IOFile(final File file, final String last) {
-    super(create(file.getAbsolutePath(), Strings.endsWith(last, '/') ||
+  public IOFile(final File file, final String last) {
+    super(normalize(file.getAbsolutePath(), Strings.endsWith(last, '/') ||
         Strings.endsWith(last, '\\')));
     boolean abs = file.isAbsolute();
     this.file = abs ? file : new File(pth);
@@ -81,6 +89,20 @@ public final class IOFile extends IO {
       abs = Strings.startsWith(p, '/') || Strings.startsWith(p, '\\');
     }
     absolute = abs;
+  }
+
+  /**
+   * Converts the specified URI to a file path.
+   * @param uri URI to be converted
+   * @return file path
+   */
+  static String toPath(final String uri) {
+    try {
+      return new URL(uri).toURI().getPath();
+    } catch(final Exception ex) {
+      Util.errln(ex);
+      return uri;
+    }
   }
 
   /**
@@ -210,7 +232,7 @@ public final class IOFile extends IO {
         io.add(child.isDirectory() ? new IOFile(child.getPath() + '/') : new IOFile(child));
       }
     }
-    return io.toArray(new IOFile[0]);
+    return io.toArray(IOFile[]::new);
   }
 
   /**
@@ -226,7 +248,7 @@ public final class IOFile extends IO {
     for(final File child : children) {
       io.add(child.isDirectory() ? new IOFile(child + "/") : new IOFile(child));
     }
-    return io.toArray(new IOFile[0]);
+    return io.toArray(IOFile[]::new);
   }
 
   /**
@@ -275,9 +297,7 @@ public final class IOFile extends IO {
    * @throws IOException I/O exception
    */
   public void write(final InputStream is) throws IOException {
-    try(BufferInput in = BufferInput.get(is); BufferOutput out = new BufferOutput(this)) {
-      for(int i; (i = in.read()) != -1;) out.write(i);
-    }
+    write(is, new BufferOutput(this));
   }
 
   /**
@@ -322,7 +342,7 @@ public final class IOFile extends IO {
 
   @Override
   public boolean eq(final IO io) {
-    return io instanceof IOFile && (Prop.CASE ? pth.equals(io.pth) : pth.equalsIgnoreCase(io.pth));
+    return io instanceof IOFile && equals(pth, io.pth);
   }
 
   @Override
@@ -419,10 +439,8 @@ public final class IOFile extends IO {
       for(final IOFile child : io.children(filter)) {
         addDescendants(child, files, filter, offset);
       }
-    } else {
-      if(filter == null || filter.accept(io.file)) {
-        files.add(io.path().substring(offset));
-      }
+    } else if(filter == null || filter.accept(io.file)) {
+      files.add(io.path().substring(offset));
     }
   }
 
@@ -499,12 +517,12 @@ public final class IOFile extends IO {
   // PRIVATE METHODS ==============================================================================
 
   /**
-   * Creates a path.
+   * Returns a normalized file path.
    * @param path input path
    * @param directory directory flag
    * @return path
    */
-  private static String create(final String path, final boolean directory) {
+  private static String normalize(final String path, final boolean directory) {
     final StringList sl = new StringList();
     final int l = path.length();
     final TokenBuilder tb = new TokenBuilder(l);
@@ -552,5 +570,4 @@ public final class IOFile extends IO {
     }
     tb.reset();
   }
-
 }

@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Dialog window for specifying options for creating a new database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DialogNew extends BaseXDialog {
@@ -46,7 +46,7 @@ public final class DialogNew extends BaseXDialog {
   public DialogNew(final GUI gui) {
     super(gui, CREATE_DATABASE);
 
-    // define buttons first to assign simplest mnemonics
+    // define buttons first to assign the simplest mnemonics
     buttons = okCancel();
 
     final MainOptions opts = gui.context.options;

@@ -3,9 +3,11 @@ package org.basex.query.value.type;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
+import static org.basex.util.Token.normalize;
 
 import java.util.*;
 
+import org.basex.io.in.*;
 import org.basex.query.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -15,7 +17,7 @@ import org.basex.util.*;
 /**
  * XQuery list types.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public enum ListType implements Type {
@@ -73,32 +75,31 @@ public enum ListType implements Type {
   }
 
   @Override
-  public final Value cast(final Item item, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
+  public final Value cast(final Item item, final QueryContext qc, final InputInfo info)
+      throws QueryException {
 
-    final byte[][] values = split(normalize(item.string(ii)), ' ');
-    if(values.length == 0) throw FUNCCAST_X_X_X.get(ii, item.type, this, item);
+    final byte[][] values = split(normalize(item.string(info)), ' ');
+    if(values.length == 0) throw FUNCCAST_X_X_X.get(info, item.type, this, item);
 
     final ValueBuilder vb = new ValueBuilder(qc);
-    for(final byte[] value : values) vb.add(type.cast(Str.get(value), qc, sc, ii));
+    for(final byte[] value : values) vb.add(type.cast(Str.get(value), qc, info));
     return vb.value(type);
   }
 
   @Override
-  public final Value cast(final Object value, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    return cast(Str.get(value, qc, ii), qc, sc, ii);
+  public final Value cast(final Object value, final QueryContext qc, final InputInfo info)
+      throws QueryException {
+    return cast(Str.get(value, qc, info), qc, info);
   }
 
   @Override
-  public final Value castString(final String value, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    return cast(value, qc, sc, ii);
+  public Item read(final DataInput in, final QueryContext qc) {
+    throw Util.notExpected();
   }
 
   @Override
   public SeqType seqType(final Occ occ) {
-    // cannot statically be instantiated due to circular dependencies
+    // cannot be instantiated statically due to circular dependencies
     if(seqTypes == null) seqTypes = new EnumMap<>(Occ.class);
     return seqTypes.computeIfAbsent(occ, o -> new SeqType(this, o));
   }
@@ -110,17 +111,19 @@ public enum ListType implements Type {
 
   @Override
   public final boolean instanceOf(final Type tp) {
-    return this == tp;
+    return this == tp || (tp instanceof ChoiceItemType ? ((ChoiceItemType) tp).hasInstance(this) :
+      tp == AtomType.ITEM);
   }
 
   @Override
   public final Type union(final Type tp) {
-    return this == tp ? tp : AtomType.ITEM;
+    return this == tp ? tp : tp instanceof ChoiceItemType ? tp.union(this) : AtomType.ITEM;
   }
 
   @Override
   public final Type intersect(final Type tp) {
-    return this == tp ? this : tp.instanceOf(this) ? tp : null;
+    return tp instanceof ChoiceItemType ? tp.intersect(this) : instanceOf(tp) ? this :
+      tp.instanceOf(this) ? tp : null;
   }
 
   @Override
@@ -145,12 +148,12 @@ public enum ListType implements Type {
 
   /**
    * Finds and returns the specified type.
-   * @param type type
+   * @param qname name of type
    * @return type or {@code null}
    */
-  public static ListType find(final QNm type) {
+  public static ListType find(final QNm qname) {
     for(final ListType lt : VALUES) {
-      if(lt.name.eq(type)) return lt;
+      if(lt.name.eq(qname)) return lt;
     }
     return null;
   }

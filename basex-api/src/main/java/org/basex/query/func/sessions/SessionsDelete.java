@@ -9,14 +9,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SessionsDelete extends SessionsFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final ASession session = session(qc);
-    final byte[] name = toToken(exprs[1], qc);
+    final String name = toString(arg(1), qc);
 
     session.delete(name);
     return Empty.VALUE;

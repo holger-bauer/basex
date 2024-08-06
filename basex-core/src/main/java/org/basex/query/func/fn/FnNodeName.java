@@ -1,6 +1,7 @@
 package org.basex.query.func.fn;
 
 import static org.basex.query.value.type.NodeType.*;
+
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
@@ -12,15 +13,18 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnNodeName extends ContextFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
-    return node == null || empty(node.type) ||
-      node.type == NAMESPACE_NODE && node.name().length == 0 ? Empty.VALUE : node.qname();
+    final ANode node = toNodeOrNull(context(qc), qc);
+    if(node == null) return Empty.VALUE;
+
+    final Type type = node.type;
+    return empty(type) || type == NAMESPACE_NODE && node.name().length == 0 ? Empty.VALUE :
+      node.qname();
   }
 
   @Override
@@ -36,12 +40,12 @@ public class FnNodeName extends ContextFn {
    * @return result of check
    */
   final boolean empty(final CompileContext cc, final boolean occ) {
-    final Expr expr = contextAccess() ? cc.qc.focus.value : exprs[0];
-    if(expr == null) return false;
+    final Expr node = contextAccess() ? cc.qc.focus.value : arg(0);
+    if(node == null) return false;
 
-    final SeqType st = expr.seqType();
+    final SeqType st = node.seqType();
     final Type type = st.type;
-    if(occ && st.oneOrMore() && (type.oneOf(ELEMENT, ATTRIBUTE, PROCESSING_INSTRUCTION))) {
+    if(occ && st.oneOrMore() && type.oneOf(ELEMENT, ATTRIBUTE, PROCESSING_INSTRUCTION)) {
       exprType.assign(Occ.EXACTLY_ONE);
     }
     return type instanceof NodeType && type != NODE && empty(type);

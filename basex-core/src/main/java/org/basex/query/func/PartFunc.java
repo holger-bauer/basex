@@ -10,37 +10,36 @@ import org.basex.query.ann.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
- * Partial function application.
+ * Partially applied function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class PartFunc extends Arr {
-  /** Static context. */
-  private final StaticContext sc;
-  /** Positions of the placeholders. */
-  private final int[] holes;
+  /** Number of placeholders. */
+  private final int placeholders;
+  /** Placeholder parameter permutation (can be {@code null}). */
+  private final int[] placeholderPerm;
 
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
-   * @param expr function expression
-   * @param args arguments
-   * @param holes positions of the placeholders
+   * @param info input info (can be {@code null})
+   * @param exprs expressions (arguments with optional placeholders, followed by body)
+   * @param placeholders number of placeholders
+   * @param placeholderPerm placeholder parameter permutation (can be {@code null})
    */
-  public PartFunc(final StaticContext sc, final InputInfo info, final Expr expr, final Expr[] args,
-      final int[] holes) {
-
-    super(info, SeqType.FUNCTION_O, ExprList.concat(args, expr));
-    this.sc = sc;
-    this.holes = holes;
+  public PartFunc(final InputInfo info, final Expr[] exprs, final int placeholders,
+      final int[] placeholderPerm) {
+    super(info, SeqType.FUNCTION_O, exprs);
+    this.placeholders = placeholders;
+    this.placeholderPerm = placeholderPerm;
   }
 
   /**
@@ -55,49 +54,53 @@ public final class PartFunc extends Arr {
   public Expr optimize(final CompileContext cc) throws QueryException {
     if(allAreValues(false)) return cc.preEval(this);
 
-    final Expr body = body();
-    final FuncType ft = body.funcType();
+    final Expr func = body();
+    final FuncType ft = func.funcType();
     if(ft != null && ft != SeqType.FUNCTION) {
-      final int nargs = exprs.length + holes.length - 1;
-      if(ft.argTypes.length != nargs)
-        throw INVARITY_X_X_X.get(info, arguments(nargs), ft.argTypes.length, body);
-      final SeqType[] args = new SeqType[holes.length];
-      final int hl = holes.length;
-      for(int h = 0; h < hl; h++) args[h] = ft.argTypes[holes[h]];
+      final int nargs = exprs.length - 1, arity = ft.argTypes.length;
+      if(nargs != arity) throw arityError(func, nargs, arity, false, info);
+
+      final SeqType[] args = new SeqType[placeholders];
+      for(int a = 0, e = 0; e < nargs; e++) if(placeholder(exprs[e])) {
+        args[placeholderPerm == null ? a : placeholderPerm[a]] = ft.argTypes[e];
+        ++a;
+      }
       exprType.assign(FuncType.get(ft.declType, args).seqType());
     }
-
     return this;
   }
 
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final FItem func = toFunc(body(), qc);
+  public FuncItem item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final FItem func = toFunction(body(), qc);
 
-    final int hl = holes.length, nargs = exprs.length + hl - 1;
-    if(func.arity() != nargs) throw INVARITY_X_X_X.get(info, arguments(nargs), func.arity(), func);
+    final int el = exprs.length - 1;
+    final int nargs = el, arity = func.arity();
+    if(nargs != arity) throw arityError(func, nargs, arity, false, info);
 
     final FuncType ft = func.funcType();
     final Expr[] args = new Expr[nargs];
-    final VarScope vs = new VarScope(sc);
-    final Var[] params = new Var[hl];
-    int a = -1;
-    for(int h = 0; h < hl; h++) {
-      while(++a < holes[h]) args[a] = exprs[a - h].value(qc);
-      params[h] = vs.addNew(func.paramName(holes[h]), null, false, qc, info);
-      args[a] = new VarRef(info, params[h]);
-      final SeqType at = ft.argTypes[a];
-      if(at != null) params[h].refineType(at, null);
-    }
-    final int al = args.length;
-    while(++a < al) args[a] = exprs[a - hl].value(qc);
+    final VarScope vs = new VarScope();
 
+    final Var[] params = new Var[placeholders];
+    for(int p = 0, e = 0; e < el; e++) {
+      final Expr expr = exprs[e];
+      final SeqType at = ft.argTypes[e];
+      if(placeholder(expr)) {
+        final Var param = vs.addNew(func.paramName(e), at, qc, info);
+        args[e] = new VarRef(info, param);
+        params[placeholderPerm == null ? p : placeholderPerm[p]] = param;
+        ++p;
+      } else {
+        args[e] = at.coerce(expr.value(qc), null, qc, null, ii);
+      }
+    }
     final AnnList anns = func.annotations();
     final boolean updating = anns.contains(Annotation.UPDATING);
-    final DynFuncCall expr = new DynFuncCall(info, sc, updating, false, func, args);
+    final DynFuncCall expr = new DynFuncCall(info, updating, false, func, args);
 
     final FuncType type = FuncType.get(anns, ft.declType, params);
-    return new FuncItem(sc, anns, null, params, type, expr, qc.focus.copy(), vs.stackSize(), info);
+    return new FuncItem(info, expr, params, anns, type, vs.stackSize(), null, qc.focus.copy());
   }
 
   @Override
@@ -107,30 +110,36 @@ public final class PartFunc extends Arr {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new PartFunc(sc, info, body().copy(cc, vm),
-        copyAll(cc, vm, Arrays.copyOf(exprs, exprs.length - 1)), holes.clone()));
+    return copyType(new PartFunc(info, copyAll(cc, vm, exprs), placeholders, placeholderPerm));
   }
 
   @Override
   public boolean equals(final Object obj) {
-    return this == obj || obj instanceof PartFunc && Arrays.equals(holes, ((PartFunc) obj).holes) &&
-        super.equals(obj);
+    return this == obj || obj instanceof PartFunc && super.equals(obj);
+  }
+
+  /**
+   * Checks if an expression is a placeholder.
+   * @param expr expression to be checked
+   * @return result of check
+   */
+  static boolean placeholder(final Expr expr) {
+    return expr == Empty.UNDEFINED;
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(body()).token('(');
-    int p = -1;
-    final int el = exprs.length, hs = holes.length;
-    for(int i = 0; i < hs; i++) {
-      while(++p < holes[i]) {
-        if(p > 0) qs.token(SEP);
-        qs.token(exprs[p - i]);
+    final int el = exprs.length - 1;
+    for(int e = 0; e < el; e++) {
+      if(e > 0) qs.token(SEP);
+      final Expr expr = exprs[e];
+      if(placeholder(expr)) {
+        qs.token('?');
+      } else {
+        qs.token(exprs[e]);
       }
-      if(p > 0) qs.token(SEP);
-      qs.token('?');
     }
-    while(++p < el + hs - 1) qs.token(SEP).token(exprs[p - hs]);
     qs.token(')');
   }
 }

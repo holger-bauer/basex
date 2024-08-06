@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * This class assembles some index statistics.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IndexStats {
@@ -62,7 +62,7 @@ public final class IndexStats {
     final byte[][] txt = dsc ? txtMax : txtMin;
     final int[] ocs = dsc ? occMax : occMin;
     for(int a = max - 1; a >= 0; a--) {
-      if(a == 0 || dsc && oc < ocs[a - 1] || !dsc && oc > ocs[a - 1]) {
+      if(a == 0 || (dsc ? oc < ocs[a - 1] : oc > ocs[a - 1])) {
         txt[a] = tx;
         ocs[a] = oc;
         break;

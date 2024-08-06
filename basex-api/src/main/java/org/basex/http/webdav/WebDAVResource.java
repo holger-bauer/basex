@@ -15,7 +15,7 @@ import com.bradmcevoy.http.exceptions.*;
 /**
  * WebDAV resource representing an abstract folder within a collection database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */
@@ -74,7 +74,7 @@ abstract class WebDAVResource implements CopyableResource, DeletableResource, Mo
 
   @Override
   public void delete() throws BadRequestException {
-    new WebDAVCode<Object>(this) {
+    new WebDAVCode<>(this) {
       @Override
       public void run() throws IOException {
         remove();
@@ -86,7 +86,7 @@ abstract class WebDAVResource implements CopyableResource, DeletableResource, Mo
   public void copyTo(final CollectionResource target, final String name)
       throws BadRequestException {
 
-    new WebDAVCode<Object>(this) {
+    new WebDAVCode<>(this) {
       @Override
       public void run() throws IOException {
         if(target instanceof WebDAVRoot) {
@@ -102,7 +102,7 @@ abstract class WebDAVResource implements CopyableResource, DeletableResource, Mo
   public void moveTo(final CollectionResource target, final String name)
       throws BadRequestException {
 
-    new WebDAVCode<Object>(this) {
+    new WebDAVCode<>(this) {
       @Override
       public void run() throws IOException {
         if(target instanceof WebDAVRoot) {

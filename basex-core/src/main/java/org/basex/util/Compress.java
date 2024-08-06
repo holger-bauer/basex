@@ -8,7 +8,7 @@ import org.basex.data.*;
  * This class compresses and decompresses tokens. It is inspired by the
  * Huffman coding, but was simplified to speed up processing.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Compress {
@@ -73,7 +73,7 @@ public final class Compress {
       for(int i = 0; i < s; i++) {
         out |= (in & 1) << off;
         in >>>= 1;
-        off = (off + 1) & 7;
+        off = off + 1 & 7;
         if(off == 0) {
           // skip compression if packed array gets too large
           if(size == tl) return text;

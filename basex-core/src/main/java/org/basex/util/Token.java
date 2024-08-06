@@ -1,9 +1,16 @@
 package org.basex.util;
 
+import static org.basex.query.util.DeepEqualOptions.*;
+
+import java.math.*;
 import java.text.*;
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.io.out.*;
+import org.basex.query.util.*;
+import org.basex.query.util.collation.*;
+import org.basex.util.list.*;
 
 /**
  * <p>This class provides convenience operations for handling 'Tokens'.
@@ -12,7 +19,7 @@ import org.basex.io.out.*;
  * <p>In order to ensure a consistent representation of tokens in the project, all string
  * conversions should be done via the methods of this class.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Token {
@@ -64,9 +71,9 @@ public final class Token {
   public static final byte[] DOLLAR = { '$' };
 
   /** Comparator for byte arrays. */
-  public static final Comparator<byte[]> COMPARATOR = Token::diff;
+  public static final Comparator<byte[]> COMPARATOR = Token::compare;
   /** Case-insensitive comparator for byte arrays. */
-  public static final Comparator<byte[]> LC_COMPARATOR = (o1, o2) -> diff(lc(o1), lc(o2));
+  public static final Comparator<byte[]> LC_COMPARATOR = (o1, o2) -> compare(lc(o1), lc(o2));
   /** Unicode replacement codepoint (\\uFFFD). */
   public static final char REPLACEMENT = '\uFFFD';
 
@@ -81,8 +88,17 @@ public final class Token {
   /** Decimal float output. */
   public static final DecimalFormat DF = new DecimalFormat("#####0.0######", LOC);
 
-  /** Maximum length for hash calculation. */
-  private static final byte MAX_HASH_LENGTH = 96;
+  /** BigInteger representing 2 * ({@link Long#MAX_VALUE} + 1). */
+  public static final BigInteger MAX_ULONG = BigInteger.ONE.shiftLeft(64);
+  /** Digits used in base conversion. */
+  public static final byte[] DIGITS = {
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b',
+    'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+    'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+  };
+
+  /** Maximum number of hash operations. */
+  private static final byte MAX_HASH_OPS = 127;
   /** Maximum values for converting tokens to integer values. */
   private static final int MAX_INT = Integer.MAX_VALUE / 10;
   /** Maximum values for converting tokens to long values. */
@@ -94,6 +110,8 @@ public final class Token {
   private static final byte[] IRI_CHARACTERS = token("!#$%&*'()+,-./:;=?@[]~_");
   /** Reserved characters. */
   private static final byte[] URI_CHARACTERS = token("-._~");
+  /** URI path characters. */
+  private static final byte[] URI_PATH = token("\r\n\t %/?#+[]");
 
   /** Character lengths. */
   private static final int[] CHLEN = { 1, 1, 1, 1, 2, 2, 3, 4 };
@@ -173,7 +191,7 @@ public final class Token {
   }
 
   /**
-   * Converts a string to a byte array.
+   * Converts a string to a token.
    * All strings should be converted by this function to guarantee
    * a consistent character conversion.
    * @param string string to be converted
@@ -222,25 +240,6 @@ public final class Token {
   }
 
   /**
-   * Converts a token from the input encoding to UTF8.
-   * @param token token to be converted
-   * @param encoding input encoding
-   * @return byte array
-   */
-  public static byte[] utf8(final byte[] token, final String encoding) {
-    // UTF8 (comparison by ref.) or no special characters: return input
-    if(encoding == Strings.UTF8 || ascii(token)) return token;
-
-    // convert to utf8. if errors occur while converting, an empty is returned.
-    try {
-      return token(new String(token, encoding));
-    } catch(final Exception ex) {
-      Util.debug(ex);
-      return EMPTY;
-    }
-  }
-
-  /**
    * Returns a token representation of the specified object.
    * <ul>
    *   <li> byte arrays are returned as-is.</li>
@@ -255,8 +254,9 @@ public final class Token {
    */
   public static byte[] token(final Object object) {
     if(object instanceof byte[]) return (byte[]) object;
-    if(object instanceof ArrayOutput) return ((ArrayOutput) object).finish();
-    if(object instanceof TokenBuilder) return ((TokenBuilder) object).finish();
+    if(object instanceof ArrayOutput) return ((ArrayOutput) object).toArray();
+    if(object instanceof TokenBuilder) return ((TokenBuilder) object).toArray();
+    if(object instanceof Supplier<?>) return token(((Supplier<?>) object).get());
 
     final String s;
     if(object == null) {
@@ -320,11 +320,26 @@ public final class Token {
    * @return codepoints
    */
   public static int[] cps(final byte[] token) {
+    return cps(token, ascii(token));
+  }
+
+  /**
+   * Converts a token to a sequence of codepoints.
+   * @param token token
+   * @param ascii ASCII flag
+   * @return codepoints
+   */
+  public static int[] cps(final byte[] token, final boolean ascii) {
+    final int cl = token.length;
+    final int[] cps = new int[cl];
+    if(ascii) {
+      for(int c = 0; c < cl; c++) cps[c] = token[c];
+      return cps;
+    }
+
     int pos = 0;
-    final int tl = token.length;
-    final int[] cp = new int[tl];
-    for(int i = 0; i < tl; i += cl(token, i)) cp[pos++] = cp(token, i);
-    return pos < tl ? Arrays.copyOf(cp, pos) : cp;
+    for(int c = 0; c < cl; c += cl(token, c)) cps[pos++] = cp(token, c);
+    return pos < cl ? Arrays.copyOf(cps, pos) : cps;
   }
 
   /**
@@ -363,8 +378,18 @@ public final class Token {
    * @return number of codepoints
    */
   public static int length(final byte[] token) {
+    return length(token, ascii(token));
+  }
+
+  /**
+   * Returns the number of codepoints in the token.
+   * @param token token
+   * @param ascii ASCII flag
+   * @return number of codepoints
+   */
+  public static int length(final byte[] token, final boolean ascii) {
     final int tl = token.length;
-    if(ascii(token)) return tl;
+    if(ascii) return tl;
     int l = 0;
     for(int t = 0; t < tl; t += cl(token, t)) ++l;
     return l;
@@ -408,6 +433,47 @@ public final class Token {
     }
     if(m) num[--nl] = '-';
     return num;
+  }
+
+  /**
+   * Creates a byte array representation of the specified integer value.
+   * @param value value to be converted
+   * @param radix radix
+   * @return integer value in byte array
+   */
+  public static byte[] token(final long value, final int radix) {
+    // use fast variant for powers of two
+    for(int shift = 1, p = 2; shift < 6; shift++, p <<= 1) {
+      if(radix == p) {
+        final byte[] bytes = new byte[(64 + shift - 1) / shift];
+        final int mask = (1 << shift) - 1;
+        long n = value;
+        int pos = bytes.length;
+        do {
+          bytes[--pos] = DIGITS[(int) (n & mask)];
+          n >>>= shift;
+        } while(n != 0);
+        return substring(bytes, pos);
+      }
+    }
+
+    final ByteList bl = new ByteList();
+    long n = value;
+    if(n < 0) {
+      // unsigned value doesn't fit in any native type...
+      final BigInteger[] dr = BigInteger.valueOf(n).add(MAX_ULONG).divideAndRemainder(
+          BigInteger.valueOf(radix));
+      n = dr[0].longValue();
+      bl.add(DIGITS[dr[1].intValue()]);
+    } else {
+      bl.add(DIGITS[(int) (n % radix)]);
+      n /= radix;
+    }
+    while(n != 0) {
+      bl.add(DIGITS[(int) (n % radix)]);
+      n /= radix;
+    }
+    return bl.reverse().finish();
   }
 
   /**
@@ -526,6 +592,7 @@ public final class Token {
     while(++s < tl && ws(token[s]));
     if(s == tl) return Double.NaN;
 
+    // check for integer value
     int e = s;
     boolean f = false;
     for(int p = s; p < tl; ++p) {
@@ -543,30 +610,43 @@ public final class Token {
       }
     }
     if(e == s) e = tl;
-    if(f || e - s > 9) return toDouble(token, s, e);
+    if(!f && e - s <= 9) {
+      final int d = toInt(token, s, e);
+      return d == Integer.MIN_VALUE ? Double.NaN : d;
+    }
 
-    final int d = toInt(token, s, e);
-    return d == Integer.MIN_VALUE ? Double.NaN : d;
-  }
+    // check if the value is a double
+    final int l = e - s;
+    if(l == 1) return Double.NaN;
+    final char[] str = new char[l];
+    int sd = 0, se = 0;
+    for(int p = 0; p < l; ++p) {
+      char b = (char) token[s + p];
+      if(b == 'e' || b == 'E') {
+        // 'e1', '1e', '1e1e1'
+        b = p == 0 || p + 1 == l || ++se > 1 ? 0 : 'e';
+      } else if(b == '-') {
+        // '1-', '1.-1', '1-1'
+        if(p > 0 && (p + 1 == l || str[p - 1] != 'e')) b = 0;
+      } else if(b == '.') {
+        // '1e.', '1.1.1',
+        if(p > 0 && str[p - 1] == 'e' || ++sd > 1) b = 0;
+      }
+      if(b == 0) return Double.NaN;
+      str[p] = b;
+    }
 
-  /**
-   * Converts the specified token into a double value.
-   * {@link Double#NaN} is returned if the input is invalid.
-   * @param token token to be converted
-   * @param start first byte to be parsed
-   * @param end last byte to be parsed - exclusive
-   * @return resulting double value
-   */
-  private static double toDouble(final byte[] token, final int start, final int end) {
+    // parse as double value
     try {
-      return Double.parseDouble(string(token, start, end - start));
+      return Double.parseDouble(new String(str));
     } catch(final NumberFormatException ex) {
+      Util.debug(ex);
       return Double.NaN;
     }
   }
 
   /**
-   * Converts the specified token into an long value.
+   * Converts the specified token into a long value.
    * {@link Long#MIN_VALUE} is returned if the input is invalid.
    * Note that this may also be the actual value ({@link #MIN_LONG}).
    * @param token token to be converted
@@ -577,7 +657,7 @@ public final class Token {
   }
 
   /**
-   * Converts the specified token into an long value.
+   * Converts the specified token into a long value.
    * {@link Long#MIN_VALUE} is returned if the input is invalid.
    * Note that this may also be the actual value ({@link #MIN_LONG}).
    * @param token token to be converted
@@ -645,10 +725,40 @@ public final class Token {
    * @return hash code
    */
   public static int hash(final byte[] token) {
+    final int tl = token.length, s = Math.max(1, tl / MAX_HASH_OPS);
     int h = 0;
-    final int l = Math.min(token.length, MAX_HASH_LENGTH);
-    for(int i = 0; i != l; ++i) h = (h << 5) - h + token[i];
+    for(int t = 0; t < tl; t += s) {
+      h = (h << 5) - h + token[t];
+    }
     return h;
+  }
+
+  /**
+   * Compares two tokens for equality.
+   * @param token1 first token
+   * @param token2 token to be compared
+   * @param coll collation (can be {@code null})
+   * @return true if the tokens are equal
+   */
+  public static boolean eq(final byte[] token1, final byte[] token2, final Collation coll) {
+    return coll != null ? coll.compare(token1, token2) == 0 : eq(token1, token2);
+  }
+
+  /**
+   * Compares two tokens for equality.
+   * @param token1 first token
+   * @param token2 token to be compared
+   * @param deep equality
+   * @return true if the tokens are equal
+   */
+  public static boolean eq(final byte[] token1, final byte[] token2, final DeepEqual deep) {
+    final Normalizer.Form form = deep.options.get(NORMALIZATION_FORM);
+    byte[] t1 = normalize(token1, form), t2 = normalize(token2, form);
+    if(deep.options.get(WHITESPACE) == Whitespace.NORMALIZE) {
+      t1 = normalize(t1);
+      t2 = normalize(t2);
+    }
+    return eq(t1, t2, deep.coll);
   }
 
   /**
@@ -678,18 +788,26 @@ public final class Token {
    * Compares two tokens lexicographically.
    * @param token first token
    * @param compare token to be compared
-   * @return 0 if tokens are equal, negative if first token is smaller,
-   *         positive if first token is bigger
+   * @return result of comparison (-1, 0, 1)
    */
-  public static int diff(final byte[] token, final byte[] compare) {
-    final int tl = token.length;
-    final int cl = compare.length;
-    final int l = Math.min(tl, cl);
+  public static int compare(final byte[] token, final byte[] compare) {
+    final int tl = token.length, cl = compare.length, l = Math.min(tl, cl);
     for(int i = 0; i < l; ++i) {
       final int c = (token[i] & 0xFF) - (compare[i] & 0xFF);
-      if(c != 0) return c;
+      if(c != 0) return Integer.signum(c);
     }
-    return tl - cl;
+    return Integer.signum(tl - cl);
+  }
+
+  /**
+   * Compares two tokens lexicographically.
+   * @param token first token
+   * @param compare token to be compared
+   * @param coll collation (can be {@code null})
+   * @return result of comparison (-1, 0, 1)
+   */
+  public static int compare(final byte[] token, final byte[] compare, final Collation coll) {
+    return coll != null ? coll.compare(token, compare) : compare(token, compare);
   }
 
   /**
@@ -699,7 +817,7 @@ public final class Token {
    * @return smaller token
    */
   public static byte[] min(final byte[] token, final byte[] compare) {
-    return diff(token, compare) < 0 ? token : compare;
+    return compare(token, compare) < 0 ? token : compare;
   }
 
   /**
@@ -709,7 +827,7 @@ public final class Token {
    * @return bigger token
    */
   public static byte[] max(final byte[] token, final byte[] compare) {
-    return diff(token, compare) > 0 ? token : compare;
+    return compare(token, compare) > 0 ? token : compare;
   }
 
   /**
@@ -750,13 +868,24 @@ public final class Token {
    * @return position or {@code -1}
    */
   public static int indexOf(final byte[] token, final int ch) {
+    return indexOf(token, ch, 0);
+  }
+
+  /**
+   * Returns the position of the specified character or -1.
+   * @param token token
+   * @param ch character to be found
+   * @param pos start position
+   * @return position or {@code -1}
+   */
+  public static int indexOf(final byte[] token, final int ch, final int pos) {
     final int tl = token.length;
     if(ch < 0x80) {
-      for(int t = 0; t < tl; t++) {
+      for(int t = pos; t < tl; t++) {
         if(token[t] == ch) return t;
       }
     } else {
-      for(int t = 0; t < tl; t += cl(token, t)) {
+      for(int t = pos; t < tl; t += cl(token, t)) {
         if(cp(token, t) == ch) return t;
       }
     }
@@ -948,25 +1077,34 @@ public final class Token {
   /**
    * Splits a token around matches of the given separator.
    * @param token token to be split
-   * @param sep separation character
+   * @param separator separator character
    * @return array
    */
-  public static byte[][] split(final byte[] token, final int sep) {
-    final int tl = token.length;
-    final byte[][] split = new byte[tl][];
+  public static byte[][] split(final byte[] token, final int separator) {
+    return split(token, separator, false);
+  }
 
-    int sl = 0;
+  /**
+   * Splits a token around matches of the given separator.
+   * @param token token to be split
+   * @param separator separator character
+   * @param empty include empty tokens
+   * @return array
+   */
+  public static byte[][] split(final byte[] token, final int separator, final boolean empty) {
+    final TokenList split = new TokenList();
     final TokenBuilder tb = new TokenBuilder();
+    final int tl = token.length;
     for(int t = 0; t < tl; t += cl(token, t)) {
       final int c = cp(token, t);
-      if(c == sep) {
-        if(!tb.isEmpty()) split[sl++] = tb.next();
+      if(c == separator) {
+        if(empty || !tb.isEmpty()) split.add(tb.next());
       } else {
         tb.add(c);
       }
     }
-    if(!tb.isEmpty()) split[sl++] = tb.finish();
-    return Array.copyOf(split, sl);
+    if(empty || !tb.isEmpty()) split.add(tb.finish());
+    return split.finish();
   }
 
   /**
@@ -990,9 +1128,9 @@ public final class Token {
   }
 
   /**
-   * Checks if the specified token has only whitespaces.
+   * Checks if the specified token has only whitespace.
    * @param token token
-   * @return true if all characters are whitespaces
+   * @return true if all characters are whitespace
    */
   public static boolean ws(final byte[] token) {
     for(final byte b : token) {
@@ -1021,7 +1159,7 @@ public final class Token {
   }
 
   /**
-   * Removes leading and trailing whitespaces from the specified token.
+   * Removes leading and trailing whitespace from the specified token.
    * @param token token to be trimmed
    * @return trimmed token
    */
@@ -1172,7 +1310,17 @@ public final class Token {
    * @return resulting token
    */
   public static byte[] uc(final byte[] token) {
-    if(ascii(token)) {
+    return uc(token, ascii(token));
+  }
+
+  /**
+   * Converts the specified token to upper case.
+   * @param token token to be converted
+   * @param ascii ASCII flag
+   * @return resulting token
+   */
+  public static byte[] uc(final byte[] token, final boolean ascii) {
+    if(ascii) {
       final int tl = token.length;
       final byte[] tok = new byte[tl];
       for(int t = 0; t < tl; t++) tok[t] = (byte) uc(token[t]);
@@ -1213,7 +1361,17 @@ public final class Token {
    * @return resulting token
    */
   public static byte[] lc(final byte[] token) {
-    if(ascii(token)) {
+    return lc(token, ascii(token));
+  }
+
+  /**
+   * Converts the specified token to lower case.
+   * @param token token to be converted
+   * @param ascii ASCII flag
+   * @return resulting token
+   */
+  public static byte[] lc(final byte[] token, final boolean ascii) {
+    if(ascii) {
       final int tl = token.length;
       final byte[] tok = new byte[tl];
       for(int t = 0; t < tl; t++) tok[t] = (byte) lc(token[t]);
@@ -1252,16 +1410,21 @@ public final class Token {
   }
 
   /**
-   * Returns a URI encoded token.
+   * Returns a URI-encoded token.
    * @param token token
    * @param iri input
+   * @param path uri path
    * @return encoded token
    */
-  public static byte[] encodeUri(final byte[] token, final boolean iri) {
+  public static byte[] encodeUri(final byte[] token, final boolean iri, final boolean path) {
     final TokenBuilder tb = new TokenBuilder();
     for(final byte b : token) {
-      if(letterOrDigit(b) || contains(iri ? IRI_CHARACTERS : URI_CHARACTERS, b)) tb.addByte(b);
-      else hex(tb, b);
+      if(path ? !contains(URI_PATH, b) :
+        letterOrDigit(b) || contains(iri ? IRI_CHARACTERS : URI_CHARACTERS, b)) {
+        tb.addByte(b);
+      } else {
+        tb.add('%').add(hex(b, 2));
+      }
     }
     return tb.finish();
   }
@@ -1275,20 +1438,21 @@ public final class Token {
     final TokenBuilder tb = new TokenBuilder();
     for(final byte b : token) {
       if(b >= 0x20 && b <= 0x7e) tb.addByte(b);
-      else hex(tb, b);
+      else tb.add('%').add(hex(b, 2));
     }
     return tb.finish();
   }
 
   /**
-   * Adds the specified byte in hex code.
-   * @param tb token builder
-   * @param value byte to be added
+   * Returns a hex representation of the specified value.
+   * @param value value
+   * @param length length of hex output
+   * @return hex representation
    */
-  private static void hex(final TokenBuilder tb, final byte value) {
-    tb.add('%');
-    tb.addByte(HEX_TABLE[(value & 0xFF) >> 4]);
-    tb.addByte(HEX_TABLE[value & 0xFF & 15]);
+  public static byte[] hex(final int value, final int length) {
+    final TokenBuilder tb = new TokenBuilder(length);
+    for(int l = length - 1; l >= 0; l--) tb.add(HEX_TABLE[value >> (l << 2) & 0xF]);
+    return tb.finish();
   }
 
   /**
@@ -1327,29 +1491,16 @@ public final class Token {
    */
   public static int dec(final int ch1, final int ch2) {
     final int n1 = dec(ch1), n2 = dec(ch2);
-    return n1 < 0 || n2 < 0 ? -1 : (n1 << 4) | n2;
+    return n1 < 0 || n2 < 0 ? -1 : n1 << 4 | n2;
   }
 
   /**
-   * Returns a URI decoded token.
+   * Normalizes Unicode characters in the specified token.
    * @param token token
-   * @return decoded token, or {@code null} if input was invalid
+   * @param form normalization form (can be {@code null})
+   * @return normalized token
    */
-  public static byte[] decodeUri(final byte[] token) {
-    if(!contains(token, '%')) return token;
-
-    final int tl = token.length;
-    final TokenBuilder tb = new TokenBuilder(tl);
-    for(int t = 0; t < tl; t++) {
-      byte b = token[t];
-      if(b == '%') {
-        final int n = t + 2 < tl ? dec(token[t + 1], token[t + 2]) : -1;
-        if(n < 0) return null;
-        b = (byte) n;
-        t += 2;
-      }
-      tb.addByte(b);
-    }
-    return tb.finish();
+  public static byte[] normalize(final byte[] token, final Normalizer.Form form) {
+    return form == null || ascii(token) ? token : token(Normalizer.normalize(string(token), form));
   }
 }

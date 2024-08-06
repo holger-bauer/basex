@@ -9,7 +9,7 @@ import org.basex.data.*;
 /**
  * Replaces a node in the database with an insertion sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class Replace extends StructuralUpdate {
@@ -46,21 +46,22 @@ final class Replace extends StructuralUpdate {
 
   @Override
   void apply(final Data data) {
-    if(data.nspaces.isEmpty() && clip.data.nspaces.isEmpty()) {
-      // Lazy Replace: rewrite to value updates if structure has not changed
-      if(lazyReplace(data)) return;
-      // Rapid Replace: in-place update, overwrite existing table entries
-      data.replace(location, clip);
-    } else {
-      // fallback: delete old entries, add new ones
+    try {
+      // if possible, replace values or overwrite database entries
+      if(data.nspaces.isEmpty() && clip.data.nspaces.isEmpty() && (
+        lazyReplace(data) || data.replace(location, clip)
+      )) return;
+
+      // otherwise, delete old entries and insert new ones
       final int kind = data.kind(location), par = data.parent(location, kind);
-      // delete first - otherwise insert must be at location+1
       data.delete(location);
       if(kind == Data.ATTR) {
         data.insertAttr(location, par, clip);
       } else {
         data.insert(location, par, clip);
       }
+    } finally {
+      clip.finish();
     }
   }
 
@@ -68,7 +69,7 @@ final class Replace extends StructuralUpdate {
    * Lazy Replace implementation. Checks if the replace operation can be substituted with
    * cheaper value updates. If structural changes have to be made no substitution takes place.
    * @param data destination data reference
-   * @return true if substitution successful
+   * @return true if operation was successful
    */
   private boolean lazyReplace(final Data data) {
     final Data src = clip.data;
@@ -79,11 +80,8 @@ final class Replace extends StructuralUpdate {
     final List<BasicUpdate> valueUpdates = new ArrayList<>();
     for(int c = 0; c < srcSize; c++) {
       final int s = clip.start + c, t = location + c, sk = src.kind(s), tk = data.kind(t);
-      if(sk != tk)
-        return false;
       // distance can differ for first two tuples
-      if(c > 0 && src.dist(s, sk) != data.dist(t, tk))
-        return false;
+      if(sk != tk || c > 0 && src.dist(s, sk) != data.dist(t, tk)) return false;
       // check texts, comments and documents
       if(sk == Data.TEXT || sk == Data.COMM || sk == Data.DOC) {
         final byte[] srcText = src.text(s, true);
@@ -120,7 +118,7 @@ final class Replace extends StructuralUpdate {
         }
       }
     }
-    for(final BasicUpdate bu : valueUpdates) bu.apply(data);
+    for(final BasicUpdate update : valueUpdates) update.apply(data);
     return true;
   }
 

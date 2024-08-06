@@ -2,16 +2,13 @@ package org.basex.query.expr;
 
 import static org.basex.query.func.Function.*;
 
-import java.util.*;
-
-import org.basex.data.*;
 import org.basex.query.*;
+import org.basex.query.expr.CmpG.*;
 import org.basex.query.expr.CmpV.*;
 import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
 import org.basex.query.func.fn.*;
 import org.basex.query.util.*;
-import org.basex.query.util.collation.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -23,15 +20,10 @@ import org.basex.util.*;
 /**
  * Abstract comparison.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Cmp extends Arr {
-  /** Collation (can be {@code null}). */
-  final Collation coll;
-  /** Static context. */
-  final StaticContext sc;
-
   /** Check: true. */
   private static final long[] COUNT_TRUE = { };
   /** Check: false. */
@@ -43,18 +35,13 @@ public abstract class Cmp extends Arr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr1 first expression
    * @param expr2 second expression
-   * @param coll collation (can be {@code null})
    * @param seqType sequence type
-   * @param sc static context
    */
-  Cmp(final InputInfo info, final Expr expr1, final Expr expr2, final Collation coll,
-      final SeqType seqType, final StaticContext sc) {
+  Cmp(final InputInfo info, final Expr expr1, final Expr expr2, final SeqType seqType) {
     super(info, seqType, expr1, expr2);
-    this.coll = coll;
-    this.sc = sc;
   }
 
   /**
@@ -75,6 +62,8 @@ public abstract class Cmp extends Arr {
       // hashed comparisons: . = $words
       expr1 instanceof VarRef && expr1.seqType().occ.max > 1 &&
         !(expr2 instanceof VarRef && expr2.seqType().occ.max > 1) ||
+      // context value: . = $item
+      expr1 instanceof VarRef && expr2 instanceof ContextValue ||
       // index rewritings: move path to the left: word/text() = $word
       !(expr1 instanceof Path && ((Path) expr1).root == null) &&
         expr2 instanceof Path && ((Path) expr2).root == null
@@ -105,10 +94,16 @@ public abstract class Cmp extends Arr {
   public abstract Expr invert();
 
   /**
-   * Returns the value operator of the expression.
+   * Returns the value comparator of the expression.
    * @return operator, or {@code null} for node comparisons
    */
   public abstract OpV opV();
+
+  /**
+   * Returns the general comparator of the expression.
+   * @return operator, or {@code null} for node comparisons
+   */
+  public abstract OpG opG();
 
   /**
    * Performs various optimizations.
@@ -128,133 +123,20 @@ public abstract class Cmp extends Arr {
   }
 
   /**
-   * Optimizes this expression as predicate.
-   * @param root root expression
-   * @param cc compilation context
-   * @return resulting expression
-   * @throws QueryException query exception
-   */
-  public final Expr optPred(final Expr root, final CompileContext cc) throws QueryException {
-    final Type type = root.seqType().type;
-    final Expr expr1 = exprs[0], expr2 = exprs[1];
-    final OpV opV = opV();
-    if(positional()) {
-      if(Preds.numeric(expr2) && opV == OpV.EQ) {
-        // position() = NUMBER  ->  NUMBER
-        return expr2;
-      } else if(LAST.is(expr2)) {
-        switch(opV) {
-          // position() =/>= last()  ->  last()
-          case EQ: case GE: return expr2;
-          // position() <= last()  ->  true()
-          case LE: return Bln.TRUE;
-          // position() > last()  ->  false()
-          case GT: return Bln.FALSE;
-          // position() </!= last()  ->  handled in {@link Filter} expression
-          default:
-        }
-      }
-    } else if(type instanceof NodeType && type != NodeType.NODE && expr1 instanceof ContextFn &&
-        (this instanceof CmpG ? expr2 instanceof Value : expr2 instanceof Item) && opV == OpV.EQ) {
-
-      // skip functions that do not refer to the current context item
-      final ContextFn func = (ContextFn) expr1;
-      final Value value = (Value) expr2;
-      if(func.exprs.length > 0 && !(func.exprs[0] instanceof ContextValue)) return this;
-
-      final ArrayList<QNm> qnames = new ArrayList<>();
-      NamePart part = null;
-      if(expr2.seqType().type.isStringOrUntyped()) {
-        // local-name() eq 'a'  ->  self::*:a
-        if(LOCAL_NAME.is(func)) {
-          part = NamePart.LOCAL;
-          for(final Item item : value) {
-            final byte[] name = item.string(info);
-            if(XMLToken.isNCName(name)) qnames.add(new QNm(name));
-          }
-        } else if(NAMESPACE_URI.is(func)) {
-          // namespace-uri() = ('URI1', 'URI2')  ->  self::Q{URI1}* | self::Q{URI2}*
-          for(final Item item : value) {
-            final byte[] uri = item.string(info);
-            if(Token.eq(Token.normalize(uri), uri)) qnames.add(new QNm(Token.COLON, uri));
-          }
-          if(qnames.size() == value.size()) part = NamePart.URI;
-        } else if(NAME.is(func)) {
-          // (db-without-ns)[name() = 'city']  ->  (db-without-ns)[self::city]
-          final Data data = cc.qc.focus.value.data();
-          final byte[] dataNs = data != null ? data.defaultNs() : null;
-          if(dataNs != null && dataNs.length == 0) {
-            part = NamePart.LOCAL;
-            for(final Item item : value) {
-              final byte[] name = item.string(info);
-              if(XMLToken.isNCName(name)) qnames.add(new QNm(name));
-            }
-          }
-        }
-      } else if(NODE_NAME.is(func) && expr2.seqType().type == AtomType.QNAME) {
-        // node-name() = xs:QName('pref:local')  ->  self::pref:local
-        part = NamePart.FULL;
-        for(final Item item : value) {
-          qnames.add((QNm) item);
-        }
-      }
-
-      if(part != null) {
-        final ExprList paths = new ExprList(2);
-        for(final QNm qname : qnames) {
-          final Test test = new NameTest(qname, part, (NodeType) type, cc.sc().elemNS);
-          final Expr step = Step.get(cc, null, info, test);
-          if(step != Empty.VALUE) paths.add(Path.get(cc, info, null, step));
-        }
-        return paths.isEmpty() ? Bln.FALSE : paths.size() == 1 ? paths.get(0) :
-          new Union(info, paths.finish()).optimize(cc);
-      }
-    }
-    return this;
-  }
-
-  /**
    * Tries to simplify an expression with equal operands.
    * @param op operator
    * @param cc compilation context
-   * @return resulting expression
-   * @throws QueryException query exception
+   * @return optimized or original expression
    */
-  private Expr optEqual(final OpV op, final CompileContext cc) throws QueryException {
+  private Expr optEqual(final OpV op, final CompileContext cc) {
+    if(!(this instanceof CmpG)) return this;
+
     final Expr expr1 = exprs[0], expr2 = exprs[1];
-    Expr expr = optEqual(expr1, expr2, op, cc);
-    if(expr != this) return expr;
-
-    // (if(A) then 'B' else 'C') = C  ->  boolean(A)
-    if(expr1 instanceof If && !expr1.has(Flag.NDT)) {
-      final If iff = (If) expr1;
-      boolean invert = false;
-      for(final Expr ex : iff.exprs) {
-        expr = optEqual(ex, expr2, op, cc);
-        if(expr != this) {
-          invert ^= expr == Bln.FALSE;
-          return cc.function(invert ? NOT : BOOLEAN, info, iff.cond);
-        }
-        invert = true;
-      }
-    }
-    return this;
-  }
-
-  /**
-   * Tries to simplify an expression with equal operands.
-   * @param expr1 first operand
-   * @param expr2 second operand
-   * @param op operator
-   * @param cc compilation context
-   * @return resulting expression
-   */
-  private Expr optEqual(final Expr expr1, final Expr expr2, final OpV op, final CompileContext cc) {
     final SeqType st1 = expr1.seqType();
     final Type type1 = st1.type;
     if(expr1.equals(expr2) &&
       // keep: () = (), (1,2) != (1,2), (1,2) eq (1,2)
-      (op != OpV.EQ || this instanceof CmpV ? st1.one() : st1.oneOrMore()) &&
+      (op != OpV.EQ ? st1.one() : st1.oneOrMore()) &&
       // keep: xs:double('NaN') = xs:double('NaN')
       (type1.isStringOrUntyped() || type1.instanceOf(AtomType.DECIMAL) ||
           type1 == AtomType.BOOLEAN) &&
@@ -280,12 +162,80 @@ public abstract class Cmp extends Arr {
    */
   private Expr optBoolean(final OpV op, final CompileContext cc) throws QueryException {
     final Expr expr1 = exprs[0], expr2 = exprs[1];
-    if(expr1.seqType().eq(SeqType.BOOLEAN_O)) {
-      // boolean(A) = true()   ->  boolean(A)
-      if(op == OpV.EQ && expr2 == Bln.TRUE || op == OpV.NE && expr2 == Bln.FALSE) return expr1;
-      // boolean(A) = false()  ->  not(boolean(A))
-      if(op == OpV.EQ && expr2 == Bln.FALSE || op == OpV.NE && expr2 == Bln.TRUE)
-        return cc.function(NOT, info, expr1);
+    final SeqType st1 = expr1.seqType(), st2 = expr2.seqType();
+    if(st1.type == AtomType.BOOLEAN && st2.type == AtomType.BOOLEAN) {
+      final boolean eq = op == OpV.EQ, ne = op == OpV.NE;
+      if(expr2 instanceof Bln) {
+        final boolean ok = expr2 == Bln.TRUE, success = ne ^ ok;
+
+        // boolean(A) = true()  ->  boolean(A)
+        // boolean(A) <= true()  ->  true()
+        if(st1.zeroOrOne() && (success || st1.one())) {
+          final Expr ex1 = st1.one() ? expr1 : cc.function(BOOLEAN, info, expr1);
+          final QuerySupplier<Expr> not = () -> cc.function(NOT, info, ex1);
+          switch(op) {
+            case EQ: return ok ? ex1       : not.get();
+            case NE: return ok ? not.get() : ex1;
+            case GE: return ok ? ex1       : Bln.TRUE;
+            case LE: return ok ? Bln.TRUE  : not.get();
+            case GT: return ok ? Bln.FALSE : ex1;
+            default: return ok ? not.get() : Bln.FALSE;
+          }
+        }
+
+        if(this instanceof CmpG) {
+          // (A, B) = true()  ->  A or B
+          // (A, B) = false()  ->  not(A and B)
+          final Expr[] args = expr1.args();
+          if((eq || ne) && expr1 instanceof List &&
+              ((Checks<Expr>) expr -> expr.seqType().eq(SeqType.BOOLEAN_O)).all(args)) {
+            return success ? new Or(info, args).optimize(cc) :
+              cc.function(NOT, info, new And(info, args).optimize(cc));
+          }
+
+          if(expr1 instanceof SimpleMap) {
+            final SimpleMap map = (SimpleMap) expr1;
+            final int al = args.length - 1;
+            final Expr last = args[al];
+
+            // expr ! true() = true()  ->  exists(expr)
+            if(last instanceof Bln && (eq || ne)) {
+              return ((Bln) last).bool(info) != success ? Bln.FALSE :
+                cc.function(EXISTS, info, map.remove(cc, al));
+            }
+
+            final Expr[] ops = last.args();
+            if(ops != null && ops.length > 0 && ops[0] instanceof ContextValue) {
+              if(last instanceof CmpG) {
+                // (name ! (. = 'Ukraine')) = true()  ->  name = 'Ukraine'
+                // (code ! (. = 1)) = false()  ->  code != 1
+                final Expr op2 = ops[1];
+                if(!op2.has(Flag.CTX) && (eq && ok || op2.seqType().one())) {
+                  OpG opG = ((CmpG) last).op;
+                  if(!success) opG = opG.invert();
+                  return new CmpG(info, map.remove(cc, al), op2, opG).optimize(cc);
+                }
+              } else if(success && last instanceof CmpR) {
+                // (number ! (. >= 1e0) = true()  ->  number >= 1e0
+                final CmpR cmp = (CmpR) last;
+                return CmpR.get(cc, info, map.remove(cc, al), cmp.min, cmp.max);
+              } else if(success && last instanceof CmpIR) {
+                // (integer ! (. >= 1) != false()  ->  integer >= 1
+                final CmpIR cmp = (CmpIR) last;
+                return CmpIR.get(cc, info, map.remove(cc, al), cmp.min, cmp.max);
+              } else if(success && last instanceof CmpSR) {
+                // (string ! (. >= 'b') = true()  ->  string >= 'b'
+                final CmpSR cmp = (CmpSR) last;
+                return new CmpSR(map.remove(cc, al), cmp.min, cmp.mni, cmp.max, cmp.mxi, info).
+                    optimize(cc);
+              }
+            }
+          }
+        }
+      }
+      // BOOL = not(BOOL)  ->  false()
+      if((eq || ne) && st1.one() && st2.one() && (NOT.is(expr2) && expr1.equals(expr2.arg(0)) ||
+          NOT.is(expr1) && expr2.equals(expr1.arg(0)))) return Bln.get(ne);
     }
     return this;
   }
@@ -299,7 +249,7 @@ public abstract class Cmp extends Arr {
    */
   private Expr optCount(final OpV op, final CompileContext cc) throws QueryException {
     final Expr expr1 = exprs[0];
-    if(!(COUNT.is(expr1))) return this;
+    if(!COUNT.is(expr1)) return this;
 
     // distinct values checks
     final Expr arg = expr1.arg(0), count = exprs[1];
@@ -322,10 +272,13 @@ public abstract class Cmp extends Arr {
     if(count instanceof ANum) {
       final double cnt = ((ANum) count).dbl();
       if(arg.seqType().zeroOrOne()) {
-        // count(ZeroOrOne)
+        // count(ZeroOrOne) < 2  ->  true()
         if(cnt > 1) {
           return Bln.get(op == OpV.LT || op == OpV.LE || op == OpV.NE);
         }
+        // count(ZeroOrOne)  < 1  ->  empty(ZeroOrOne)
+        // count(ZeroOrOne)  = 1  ->  exists(ZeroOrOne)
+        // count(ZeroOrOne) <= 1  ->  true()
         if(cnt == 1) {
           return op == OpV.NE || op == OpV.LT ? cc.function(EMPTY, info, arg) :
                  op == OpV.EQ || op == OpV.GE ? cc.function(EXISTS, info, arg) :
@@ -334,14 +287,13 @@ public abstract class Cmp extends Arr {
       }
       final long[] counts = countRange(op, cnt);
       // count(A) >= 0  ->  true()
-      if(counts == COUNT_TRUE || counts == COUNT_FALSE) {
-        return Bln.get(counts == COUNT_TRUE);
-      }
+      if(counts == COUNT_TRUE) return Bln.TRUE;
+      if(counts == COUNT_FALSE) return Bln.FALSE;
       // count(A) > 0  ->  exists(A)
-      if(counts == COUNT_EMPTY || counts == COUNT_EXISTS) {
-        return cc.function(counts == COUNT_EMPTY ? EMPTY : EXISTS, info, arg);
-      }
+      if(counts == COUNT_EMPTY) return cc.function(EMPTY, info, arg);
+      if(counts == COUNT_EXISTS) return cc.function(EXISTS, info, arg);
       // count(A) > 1  ->  util:within(A, 2)
+      // count(A) < 5  ->  util:within(A, 0, 4)
       if(counts != null) {
         for(final long c : counts) args.add(Int.get(c));
       }
@@ -349,9 +301,11 @@ public abstract class Cmp extends Arr {
       final SeqType st2 = count.seqType();
       if(st2.type.instanceOf(AtomType.INTEGER)) {
         if(count instanceof RangeSeq) {
-          final long[] range = ((RangeSeq) count).range(false);
-          args.add(Int.get(range[0])).add(Int.get(range[1]));
+          // count(A) = 3 to 5  ->  util:within(A, 3, 5)
+          final RangeSeq rs = (RangeSeq) count;
+          args.add(Int.get(rs.min())).add(Int.get(rs.max()));
         } else if(st2.one() && (count instanceof VarRef || count instanceof ContextValue)) {
+          // count(A) = $c  ->  util:within(A, $c)
           args.add(count).add(count);
         }
         if(!args.isEmpty()) {
@@ -364,7 +318,7 @@ public abstract class Cmp extends Arr {
 
     // count(A) = 1  ->  util:within(A, 1, 1)
     args.insert(0, arg);
-    return cc.function(_UTIL_WITHIN, info, args.finish());
+    return cc.function(_UTIL_COUNT_WITHIN, info, args.finish());
   }
 
   /**
@@ -422,25 +376,17 @@ public abstract class Cmp extends Arr {
 
   /**
    * Positional optimizations.
-   * @param op operator
+   * @param op comparison operator
    * @param cc compilation context
    * @return optimized or original expression
    * @throws QueryException query exception
    */
   private Expr optPos(final OpV op, final CompileContext cc) throws QueryException {
-    if(!positional()) return this;
-
-    Expr expr = ItrPos.get(exprs[1], op, info);
-    if(expr == null) expr = Pos.get(exprs[1], op, info, cc);
-    return expr != null ? expr : this;
-  }
-
-  /**
-   * Indicates if this is a positional comparison.
-   * @return result of check
-   */
-  boolean positional() {
-    return POSITION.is(exprs[0]);
+    if(POSITION.is(exprs[0]) && exprs[1].seqType().type.isNumberOrUntyped()) {
+      final Expr expr = Pos.get(exprs[1], op, info, cc, null);
+      if(expr != null) return expr;
+    }
+    return this;
   }
 
   /**

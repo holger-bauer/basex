@@ -14,14 +14,15 @@ import org.basex.util.options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbOption extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] name = toToken(exprs[0], qc);
-    final Object value = Get.get(Token.string(Token.uc(name)), qc.context);
+    final byte[] name = toToken(arg(0), qc);
+
+    final Object value = ShowOptions.get(Token.string(Token.uc(name)), qc.context);
     if(value == null) throw DB_OPTION_X.get(info, name);
     return item(value);
   }
@@ -37,13 +38,13 @@ public final class DbOption extends StandardFunc {
     if(value instanceof Boolean) return Bln.get((Boolean) value);
     if(value instanceof Integer) return Int.get((Integer) value);
     if(value instanceof Options) {
-      XQMap map = XQMap.EMPTY;
-      final Options opts = (Options) value;
-      for(final Option<?> opt : opts) {
-        final Item item = item(opt.value());
-        if(item != null) map = map.put(Str.get(opt.name()), item, info);
+      final Options options = (Options) value;
+      final MapBuilder mb = new MapBuilder();
+      for(final Option<?> opt : options) {
+        final Item item = item(options.get(opt));
+        if(item != null) mb.put(Str.get(opt.name()), item);
       }
-      return map;
+      return mb.map();
     }
     // string or enumeration
     return Str.get(value.toString());

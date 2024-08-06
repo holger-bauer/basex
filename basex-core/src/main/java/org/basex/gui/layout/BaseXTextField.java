@@ -3,17 +3,21 @@ package org.basex.gui.layout;
 import static org.basex.gui.layout.BaseXKeys.*;
 
 import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
 
 import javax.swing.*;
+import javax.swing.event.*;
 
 import org.basex.gui.*;
 import org.basex.gui.listener.*;
+import org.basex.util.*;
 import org.basex.util.options.*;
 
 /**
  * Project specific text field implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class BaseXTextField extends JTextField {
@@ -103,6 +107,25 @@ public class BaseXTextField extends JTextField {
       }
     });
 
+    // copy and paste text with middle mouse button
+    addMouseListener(new MouseInputAdapter() {
+      @Override
+      public void mousePressed(final MouseEvent e) {
+        if(!SwingUtilities.isMiddleMouseButton(e)) return;
+        final String txt = getSelectedText();
+        if(txt != null) {
+          BaseXLayout.toClipboard(txt);
+          setCaretPosition(getCaretPosition());
+        } else if(isEnabled() && isEditable()) {
+          final ArrayList<Object> clips = BaseXLayout.fromClipboard(null);
+          if(!clips.isEmpty()) {
+            final String string = clips.get(0).toString();
+            setText(new StringBuilder(getText()).insert(getCaretPosition(), string).toString());
+          }
+        }
+      }
+    });
+
     final BaseXDialog dialog = win.dialog();
     if(dialog != null) addKeyListener(dialog.keys);
   }
@@ -162,7 +185,8 @@ public class BaseXTextField extends JTextField {
         final int num = Integer.parseInt(getText());
         if(assign) options.set((NumberOption) option, num);
         setBackground(back);
-      } catch(final NumberFormatException ignored) {
+      } catch(final NumberFormatException ex) {
+        Util.debug(ex);
         setBackground(GUIConstants.LRED);
         return false;
       }

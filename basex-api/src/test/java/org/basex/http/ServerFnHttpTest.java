@@ -6,7 +6,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the embedded HTTP Client.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class ServerFnHttpTest extends FnHttpTest {
@@ -15,7 +15,7 @@ public final class ServerFnHttpTest extends FnHttpTest {
    * @throws Exception exception
    */
   @BeforeAll public static void start() throws Exception {
-    init(RESTURL, false);
+    init(REST_URL, false);
     ctx = new Context();
   }
 }

@@ -17,8 +17,6 @@ import javax.xml.crypto.dsig.spec.*;
 import javax.xml.parsers.*;
 import javax.xml.xpath.*;
 
-import org.basex.io.out.*;
-import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -31,7 +29,7 @@ import org.xml.sax.*;
 /**
  * This class generates and validates digital signatures for XML data.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class DigitalSignature {
@@ -72,12 +70,12 @@ final class DigitalSignature {
     TYPES.add(ENVT);
   }
 
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   DigitalSignature(final InputInfo info) {
     this.info = info;
@@ -91,14 +89,14 @@ final class DigitalSignature {
    * @param sig signature algorithm
    * @param ns signature element namespace prefix
    * @param tp signature type (enveloped, enveloping, detached)
-   * @param expr XPath expression which specifies node to be signed
+   * @param path XPath expression which specifies node to be signed
    * @param cert certificate which contains keystore information for signing the node, may be null
    * @param qc query context
    * @return signed node
    * @throws QueryException query exception
    */
-  Item generateSignature(final ANode node, final byte[] can, final byte[] dig, final byte[] sig,
-      final byte[] ns, final byte[] tp, final byte[] expr, final ANode cert, final QueryContext qc)
+  Item generate(final ANode node, final byte[] can, final byte[] dig, final byte[] sig,
+      final byte[] ns, final byte[] tp, final byte[] path, final ANode cert, final QueryContext qc)
       throws QueryException {
 
     // checking input variables
@@ -198,13 +196,13 @@ final class DigitalSignature {
       final List<Transform> tfList;
 
       // validating a given XPath expression to get nodes to be signed
-      if(expr.length > 0) {
+      if(path.length > 0) {
         final XPathFactory xpf = XPathFactory.newInstance();
-        final XPathExpression xExpr = xpf.newXPath().compile(string(expr));
+        final XPathExpression xExpr = xpf.newXPath().compile(string(path));
         final NodeList xRes = (NodeList) xExpr.evaluate(inputNode, XPathConstants.NODESET);
-        if(xRes.getLength() < 1) throw CX_XPINV.get(info, expr);
+        if(xRes.getLength() < 1) throw CX_XPINV.get(info, path);
         tfList = new ArrayList<>(2);
-        tfList.add(fac.newTransform(Transform.XPATH, new XPathFilterParameterSpec(string(expr))));
+        tfList.add(fac.newTransform(Transform.XPATH, new XPathFilterParameterSpec(string(path))));
         tfList.add(fac.newTransform(Transform.ENVELOPED, (TransformParameterSpec) null));
 
       } else {
@@ -243,7 +241,7 @@ final class DigitalSignature {
 
       // actually sign the document
       xmlSig.sign(signContext);
-      signedNode = NodeType.DOCUMENT_NODE.cast(inputNode, qc, null, info);
+      signedNode = NodeType.DOCUMENT_NODE.cast(inputNode, qc, info);
 
     } catch(final XPathExpressionException ex) {
       throw CX_XPINV.get(info, ex);
@@ -265,11 +263,10 @@ final class DigitalSignature {
   /**
    * Validates a signature.
    * @param node input node
-   *
-   * @return true if signature valid
+   * @return boolean result of validation
    * @throws QueryException query exception
    */
-  Item validateSignature(final ANode node) throws QueryException {
+  Bln validateSignature(final ANode node) throws QueryException {
     try {
       final Document doc = toDOMNode(node);
       final DOMValidateContext valContext = new DOMValidateContext(new MyKeySelector(), doc);
@@ -289,20 +286,6 @@ final class DigitalSignature {
   }
 
   /**
-   * Serializes the given XML node to a byte array.
-   * @param node node to be serialized
-   * @return byte array containing XML
-   * @throws IOException exception
-   */
-  private static byte[] nodeToBytes(final ANode node) throws IOException {
-    final ArrayOutput ao = new ArrayOutput();
-    try(Serializer ser = Serializer.get(ao, SerializerMode.NOINDENT.get())) {
-      ser.serialize(node);
-    }
-    return ao.finish();
-  }
-
-  /**
    * Creates a DOM node for the given input node.
    * @param node node
    * @return DOM node representation of input node
@@ -315,6 +298,6 @@ final class DigitalSignature {
 
     final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
     dbf.setNamespaceAware(true);
-    return dbf.newDocumentBuilder().parse(new ByteArrayInputStream(nodeToBytes(node)));
+    return dbf.newDocumentBuilder().parse(new ByteArrayInputStream(node.serialize().finish()));
   }
 }

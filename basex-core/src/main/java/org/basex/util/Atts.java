@@ -1,36 +1,50 @@
 package org.basex.util;
 
+import static org.basex.util.Token.*;
 import org.basex.util.list.*;
 
 /**
  * Resizable-array implementation for attributes (name/value pairs).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Atts extends ElementList {
-  /** Name array. */
-  private byte[][] nm;
-  /** Value array. */
-  private byte[][] vl;
+  /** Name/value pairs. */
+  private byte[][] list;
 
   /**
    * Default constructor.
    */
   public Atts() {
-    nm = new byte[1][];
-    vl = new byte[1][];
+    this(1);
   }
 
   /**
-   * Constructor, specifying an initial entry.
-   * @param name name to be added
-   * @param value value to be added
+   * Constructor with initial capacity.
+   * @param capacity array capacity
    */
-  public Atts(final byte[] name, final byte[] value) {
-    nm = new byte[][] { name };
-    vl = new byte[][] { value };
-    size = 1;
+  public Atts(final long capacity) {
+    list = new byte[Array.checkCapacity(capacity << 1)][];
+  }
+
+  /**
+   * Constructor.
+   * @param atts object to copy
+   */
+  public Atts(final Atts atts) {
+    list = atts.list.clone();
+    size = atts.size;
+  }
+
+  @Override
+  public int size() {
+    return size >>> 1;
+  }
+
+  @Override
+  public void size(final int sz) {
+    size = sz << 1;
   }
 
   /**
@@ -40,16 +54,33 @@ public final class Atts extends ElementList {
    * @return self reference
    */
   public Atts add(final byte[] name, final byte[] value) {
-    final int sz = size;
-    if(sz == nm.length) {
-      final int s = Array.newCapacity(sz);
-      nm = Array.copyOf(nm, s);
-      vl = Array.copyOf(vl, s);
+    byte[][] lst = list;
+    final int s = size;
+    if(s == lst.length) {
+      lst = Array.copyOf(lst, Array.newCapacity(s >>> 1) << 1);
+      list = lst;
     }
-    nm[sz] = name;
-    vl[sz] = value;
-    ++size;
+    lst[s] = name;
+    lst[s + 1] = value;
+    size = s + 2;
     return this;
+  }
+
+  /**
+   * Adds the next name/value pair.
+   * @param name name to be added (can be {@code null})
+   * @param value value to be added (can be {@code null})
+   * @param stripNS strip namespaces
+   * @return self reference
+   */
+  public Atts add(final byte[] name, final byte[] value, final boolean stripNS) {
+    if(!stripNS) return add(name, value);
+
+    final byte[] local = local(name);
+    byte[] an = local;
+    int c = 0;
+    while(contains(an)) an = concat(local, '_', token(++c));
+    return add(an, value);
   }
 
   /**
@@ -58,12 +89,12 @@ public final class Atts extends ElementList {
    * @return self reference
    */
   public Atts remove(final int index) {
-    final int sz = size;
-    Array.remove(nm, index, 1, sz);
-    Array.remove(vl, index, 1, sz);
-    nm[sz - 1] = null;
-    vl[sz - 1] = null;
-    --size;
+    final byte[][] lst = list;
+    final int s = size;
+    Array.remove(lst, index, 2, s);
+    lst[s - 2] = null;
+    lst[s - 1] = null;
+    size = s - 2;
     return this;
   }
 
@@ -82,8 +113,9 @@ public final class Atts extends ElementList {
    * @return offset or -1
    */
   public int get(final byte[] name) {
-    for(int i = 0; i < size; ++i) {
-      if(Token.eq(nm[i], name)) return i;
+    final byte[][] lst = list;
+    for(int p = 0; p < size; p += 2) {
+      if(eq(lst[p], name)) return p >>> 1;
     }
     return -1;
   }
@@ -94,7 +126,7 @@ public final class Atts extends ElementList {
    * @return name
    */
   public byte[] name(final int index) {
-    return nm[index];
+    return list[index << 1];
   }
 
   /**
@@ -103,7 +135,7 @@ public final class Atts extends ElementList {
    * @return value
    */
   public byte[] value(final int index) {
-    return vl[index];
+    return list[(index << 1) + 1];
   }
 
   /**
@@ -113,29 +145,42 @@ public final class Atts extends ElementList {
    */
   public byte[] value(final byte[] name) {
     final int i = get(name);
-    return i == -1 ? null : vl[i];
+    return i == -1 ? null : value(i);
   }
 
   /**
-   * Creates a shallow copy which shares all keys and values.
-   * @return shallow copy
+   * Optimizes the attribute list.
+   * @return self reference
    */
-  public Atts copy() {
-    final Atts copy = new Atts();
-    copy.nm = nm.clone();
-    copy.vl = vl.clone();
-    copy.size = size;
-    return copy;
+  public Atts optimize() {
+    final byte[][] lst = list;
+    if(size != lst.length) list = Array.copyOf(lst, size);
+    return this;
   }
 
   @Override
   public boolean equals(final Object obj) {
-    if(obj == this) return true;
-    if(!(obj instanceof Atts)) return false;
-    final Atts a = (Atts) obj;
-    if(size != a.size) return false;
-    for(int i = 0; i < size; ++i) {
-      if(!Token.eq(nm[i], a.nm[i]) || !Token.eq(vl[i], a.vl[i])) return false;
+    return obj == this || obj instanceof Atts && equals((Atts) obj);
+  }
+
+  /**
+   * Compares attributes.
+   * @param atts attributes to be compared
+   * @return result of check
+   */
+  public boolean equals(final Atts atts) {
+    final int s1 = size, s2 = atts.size;
+    if(s1 != s2) return false;
+    final byte[][] lst1 = list, lst2 = atts.list;
+
+    for(int p1 = 0; p1 < s1; p1 += 2) {
+      for(int p2 = 0;; p2 += 2) {
+        if(p2 == s1) return false;
+        if(eq(lst1[p1], lst2[p2])) {
+          if(eq(lst1[p1 + 1], lst2[p2 + 1])) break;
+          return false;
+        }
+      }
     }
     return true;
   }
@@ -143,9 +188,9 @@ public final class Atts extends ElementList {
   @Override
   public String toString() {
     final TokenBuilder tb = new TokenBuilder().add(Util.className(this)).add('[');
-    for(int i = 0; i < size; ++i) {
-      if(i > 0) tb.add(", ");
-      tb.add(nm[i]).add("=\"").add(vl[i]).add("\"");
+    for(int p = 0; p < size; p += 2) {
+      if(p > 0) tb.add(", ");
+      tb.add(list[p]).add("=\"").add(list[p + 1]).add("\"");
     }
     return tb.add("]").toString();
   }

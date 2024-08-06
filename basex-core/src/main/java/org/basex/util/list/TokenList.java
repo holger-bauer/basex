@@ -8,7 +8,7 @@ import org.basex.util.hash.*;
 /**
  * Resizable-array implementation for tokens (byte arrays).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TokenList extends ObjectList<byte[], TokenList> {
@@ -33,7 +33,7 @@ public final class TokenList extends ObjectList<byte[], TokenList> {
    * @param factor resize factor
    */
   public TokenList(final double factor) {
-    this.factor = factor;
+    this.factor = (byte) Math.max(10, (byte) (factor * 10));
   }
 
   /**
@@ -109,5 +109,15 @@ public final class TokenList extends ObjectList<byte[], TokenList> {
   @Override
   protected byte[][] newArray(final int s) {
     return new byte[s][];
+  }
+
+  @Override
+  public String toString() {
+    final TokenBuilder tb = new TokenBuilder().add('[');
+    for(final byte[] token : this) {
+      if(tb.size() > 1) tb.add(", ");
+      tb.add(token);
+    }
+    return tb.add(']').toString();
   }
 }

@@ -4,7 +4,6 @@ import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 import static org.basex.util.ft.FTFlag.*;
 
-import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.util.ft.*;
 import org.basex.util.*;
@@ -17,7 +16,7 @@ import org.basex.util.similarity.*;
 /**
  * This class performs the full-text tokenization.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTTokenizer {
@@ -28,8 +27,6 @@ public final class FTTokenizer {
   private final TokenObjMap<FTWildcard> wcCache = new TokenObjMap<>();
   /** Token cache. */
   private final TokenObjMap<FTTokens> cache = new TokenObjMap<>();
-  /** Input info. */
-  private final InputInfo info;
   /** Full-text options. */
   private final FTOpt opt;
 
@@ -43,24 +40,15 @@ public final class FTTokenizer {
   /**
    * Constructor.
    * @param opt full-text options
-   * @param qc query context
-   * @param info input info
+   * @param errors levenshtein errors
+   * @param info input info (can be {@code null})
    */
-  FTTokenizer(final FTOpt opt, final QueryContext qc, final InputInfo info) {
-    this(opt, new Levenshtein(qc.context.options.get(MainOptions.LSERROR)), info);
-  }
-
-  /**
-   * Constructor.
-   * @param opt full-text options
-   * @param ls Levenshtein distance calculation
-   * @param info input info
-   */
-  private FTTokenizer(final FTOpt opt, final Levenshtein ls, final InputInfo info) {
+  FTTokenizer(final FTOpt opt, final int errors, final InputInfo info) {
     this.opt = opt;
-    this.info = info;
 
     cmp = (in, qu) -> {
+      final Levenshtein ls = opt.is(FZ) ? new Levenshtein(
+          opt.errors != -1 ? opt.errors : errors) : null;
       FTWildcard ftw = null;
       if(opt.is(WC)) {
         ftw = wcCache.get(qu);
@@ -74,7 +62,7 @@ public final class FTTokenizer {
       }
 
       return
-        // skip stop words, i. e. if the current query token is a stop word,
+        // skip stop words, i.e., if the current query token is a stop word,
         // it is always equal to the corresponding input token:
         opt.sw != null && opt.sw.contains(qu) ||
         // fuzzy search:
@@ -106,7 +94,7 @@ public final class FTTokenizer {
 
       // if thesaurus is required, add the terms which extend the query:
       if(opt.th != null) {
-        for(final byte[] thes : opt.th.find(info, input)) {
+        for(final byte[] thes : opt.th.find(input)) {
           // parse each extension term to a set of tokens:
           final TokenList tl = new TokenList(1);
           lexer.init(thes);

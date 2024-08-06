@@ -10,7 +10,7 @@ import org.basex.io.*;
  * This abstract class defines the methods for accessing the
  * database table representation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class TableAccess {
@@ -41,7 +41,7 @@ public abstract class TableAccess {
   public abstract void close() throws IOException;
 
   /**
-   * Tries to acquires a lock on the table. If a lock exists, it is first released.
+   * Tries to acquire a lock on the table. If a lock exists, it is first released.
    * @param write write/read lock
    * @return success flag
    */
@@ -118,7 +118,6 @@ public abstract class TableAccess {
    * @param count number of entries to be replaced
    */
   public final void replace(final int pre, final byte[] entries, final int count) {
-    dirty();
     final int nsize = entries.length >>> IO.NODEPOWER;
     final int diff = count - nsize;
     final int last = diff <= 0 ? pre + nsize - Math.abs(diff) : pre + nsize;
@@ -136,27 +135,12 @@ public abstract class TableAccess {
   }
 
   /**
-   * Copies the specified entries into the database.
-   * @param pre pre value
-   * @param entries array of bytes containing the entries to insert
-   */
-  final void set(final int pre, final byte[] entries) {
-    dirty();
-    copy(entries, pre, pre + (entries.length >>> IO.NODEPOWER));
-  }
-
-  /**
-   * Marks the data structures as dirty.
-   */
-  protected abstract void dirty();
-
-  /**
    * Copies the specified values into the database.
    * @param entries entries to copy
-   * @param pre first target pre value
+   * @param first first target pre value
    * @param last last pre value
    */
-  protected abstract void copy(byte[] entries, int pre, int last);
+  protected abstract void copy(byte[] entries, int first, int last);
 
   /**
    * Deletes the specified number of entries from the database.

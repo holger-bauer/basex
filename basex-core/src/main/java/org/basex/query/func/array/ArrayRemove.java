@@ -12,29 +12,34 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayRemove extends ArrayFn {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    XQArray array = toArray(exprs[0], qc);
+  public XQArray item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    XQArray array = toArray(arg(0), qc);
 
-    // collect positions, sort and remove duplicates
-    final LongList list = new LongList();
-    final Iter pos = exprs[1].iter(qc);
-    for(Item item; (item = qc.next(pos)) != null;) list.add(checkPos(array, toLong(item), false));
-    list.sort().distinct();
+    // collect and sort positions and remove duplicates
+    final LongList pos = new LongList();
+    final Iter iter = arg(1).iter(qc);
+    for(Item item; (item = qc.next(iter)) != null;) {
+      pos.add(toPos(array, toLong(item), false));
+    }
+    pos.ddo();
 
     // delete entries backwards
-    for(int l = list.size() - 1; l >= 0; l--) array = array.remove(list.get(l), qc);
+    for(int l = pos.size() - 1; l >= 0; l--) {
+      final long p = pos.get(l);
+      if(p < array.arraySize()) array = array.remove(p, qc);
+    }
     return array;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    final Type type1 = exprs[0].seqType().type;
-    if(type1 instanceof ArrayType) exprType.assign(type1);
+    final Type type = arg(0).seqType().type;
+    if(type instanceof ArrayType) exprType.assign(type);
     return this;
   }
 }

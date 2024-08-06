@@ -6,7 +6,7 @@ import org.basex.query.up.*;
  * Types of update operations. Do not change the order as this affects
  * {@link NodeUpdateComparator} and will most likely lead to weird results.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public enum UpdateType {
@@ -25,6 +25,9 @@ public enum UpdateType {
 
   /** Alter backup.         */ BACKUPALTER,
   /** Create backup.        */ BACKUPCREATE,
+
+  /** Add value resource .  */ DBPUT,
+  /** Add binary resource.  */ DBPUTBINARY,
 
   // Operations on nodes of existing databases
 
@@ -45,7 +48,6 @@ public enum UpdateType {
   // Operations on resources of existing databases
 
   /** Add document.         */ DBADD,
-  /** Add binary resource.  */ DBSTORE,
   /** Rename resource.      */ DBRENAME,
   /** Delete resource.      */ DBDELETE,
   /** Optimize database.    */ DBOPTIMIZE,
@@ -54,10 +56,10 @@ public enum UpdateType {
   // User operations
 
   /** Update info.          */ USERINFO,
-  /** Change user name.     */ USERGRANT,
+  /** Change username.      */ USERGRANT,
   /** Change password.      */ USERPASSWORD,
   /** Drop user.            */ USERDROP,
-  /** Change user name.     */ USERALTER,
+  /** Change username.      */ USERALTER,
   /** Create user.          */ USERCREATE,
 
   // Database operations

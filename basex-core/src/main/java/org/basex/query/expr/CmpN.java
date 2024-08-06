@@ -3,6 +3,7 @@ package org.basex.query.expr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.expr.CmpG.*;
 import org.basex.query.expr.CmpV.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -15,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * Node comparison.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CmpN extends Cmp {
@@ -33,7 +34,7 @@ public final class CmpN extends Cmp {
     ET("<<") {
       @Override
       public boolean eval(final ANode node1, final ANode node2) {
-        return node1.diff(node2) < 0;
+        return node1.compare(node2) < 0;
       }
     },
 
@@ -41,7 +42,7 @@ public final class CmpN extends Cmp {
     GT(">>") {
       @Override
       public boolean eval(final ANode node1, final ANode node2) {
-        return node1.diff(node2) > 0;
+        return node1.compare(node2) > 0;
       }
     };
 
@@ -77,13 +78,13 @@ public final class CmpN extends Cmp {
 
   /**
    * Constructor.
+   * @param info input info (can be {@code null})
    * @param expr1 first expression
    * @param expr2 second expression
    * @param op comparator
-   * @param info input info
    */
-  public CmpN(final Expr expr1, final Expr expr2, final OpN op, final InputInfo info) {
-    super(info, expr1, expr2, null, SeqType.BOOLEAN_ZO, null);
+  public CmpN(final InputInfo info, final Expr expr1, final Expr expr2, final OpN op) {
+    super(info, expr1, expr2, SeqType.BOOLEAN_ZO);
     this.op = op;
   }
 
@@ -117,8 +118,13 @@ public final class CmpN extends Cmp {
   }
 
   @Override
+  public OpG opG() {
+    return null;
+  }
+
+  @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new CmpN(exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), op, info));
+    return copyType(new CmpN(info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm), op));
   }
 
   @Override
@@ -132,12 +138,12 @@ public final class CmpN extends Cmp {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, OP, op.name), exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.tokens(exprs, " " + op + ' ', true);
   }
 }

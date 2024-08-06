@@ -16,13 +16,13 @@ import org.basex.util.hash.*;
 /**
  * Axis path expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CachedPath extends AxisPath {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param root root expression; can be a {@code null} reference
    * @param steps axis steps
    */
@@ -73,7 +73,9 @@ public final class CachedPath extends AxisPath {
     // cast is safe (steps will always return a {@link NodeIter} instance)
     final NodeIter ni = (NodeIter) steps[step].iter(qc);
     if(step + 1 == steps.length) {
-      for(ANode node; (node = ni.next()) != null;) list.add(node);
+      for(ANode node; (node = ni.next()) != null;) {
+        list.add(node);
+      }
     } else {
       for(ANode node; (node = ni.next()) != null;) {
         qc.focus.value = node;

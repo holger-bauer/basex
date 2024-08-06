@@ -20,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * This view creates a flat table view on the database contents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TableView extends View {
@@ -231,9 +231,7 @@ public final class TableView extends View {
     final Context context = gui.context;
     final Data data = gui.context.data();
 
-    if(tdata.rows == null) return;
-
-    if(e.getY() < header.getHeight()) return;
+    if(tdata.rows == null || e.getY() < header.getHeight()) return;
 
     if(SwingUtilities.isLeftMouseButton(e)) {
       if(e.getClickCount() == 1) {

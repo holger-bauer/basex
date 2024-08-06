@@ -10,16 +10,16 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProfRuntime extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] name = toToken(exprs[0], qc);
+    final String name = toString(arg(0), qc);
 
     final Runtime rt = Runtime.getRuntime();
-    switch(Token.string(name)) {
+    switch(name) {
       case "max":        return Int.get(rt.maxMemory());
       case "total":      return Int.get(rt.totalMemory());
       case "used":       return Int.get(rt.totalMemory() - rt.freeMemory());

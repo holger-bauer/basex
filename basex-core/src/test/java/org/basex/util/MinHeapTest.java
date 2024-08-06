@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * Tests for the {@link MinHeap} implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class MinHeapTest {
@@ -28,7 +28,7 @@ public final class MinHeapTest {
 
     int i = 0;
     while(!heap.isEmpty()) {
-      assertEquals(Integer.valueOf(i++), heap.removeMin());
+      assertEquals(i++, heap.removeMin());
       heap.verify();
     }
     assertEquals(1000, i);
@@ -44,7 +44,7 @@ public final class MinHeapTest {
 
     int i = 0;
     while(!heap.isEmpty()) {
-      assertEquals(i++, heap.removeMin().intValue());
+      assertEquals(i++, heap.removeMin());
       heap.verify();
     }
     assertEquals(1000, i);

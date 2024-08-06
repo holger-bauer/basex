@@ -6,7 +6,6 @@ import static org.basex.query.QueryText.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.util.*;
-import org.basex.query.util.format.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
@@ -17,46 +16,47 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InspectStaticContext extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    Item func = exprs[0].item(qc, info);
-    final String name = Token.string(toToken(exprs[1], qc));
+    final Item func = arg(0).item(qc, info);
+    final String name = toString(arg(1), qc);
     final StaticContext sctx;
-    if(func == Empty.VALUE) {
-      sctx = sc;
+    if(func.isEmpty()) {
+      sctx = sc();
+    } else if(func instanceof FuncItem) {
+      final FuncItem fi = (FuncItem) func;
+      sctx = fi.info().sc();
     } else {
-      func = toFunc(func, qc);
-      if(!(func instanceof FuncItem)) throw INVFUNCITEM_X_X.get(info, func.type, func);
-      sctx = ((FuncItem) func).sc;
+      throw INVFUNCITEM_X_X.get(info, func.type, func);
     }
 
     switch(name) {
       case BASE_URI:
         return sctx.baseURI();
       case NAMESPACES:
-        XQMap map = XQMap.EMPTY;
+        MapBuilder mb = new MapBuilder();
         Atts nsp = sctx.ns.list;
         int ns = nsp.size();
         for(int n = 0; n < ns; n++) {
-          map = map.put(Str.get(nsp.name(n)), Str.get(nsp.value(n)), info);
+          mb.put(Str.get(nsp.name(n)), Str.get(nsp.value(n)));
         }
         nsp = NSGlobal.NS;
         ns = nsp.size();
         for(int n = 0; n < ns; n++) {
           final Str key = Str.get(nsp.name(n));
-          if(!map.contains(key, info)) map = map.put(key, Str.get(nsp.value(n)), info);
+          if(!mb.contains(key)) mb.put(key, Str.get(nsp.value(n)));
         }
-        return map;
+        return mb.map();
       case ELEMENT_NAMESPACE:
-        return sctx.elemNS == null ? Empty.VALUE : Uri.uri(sctx.elemNS);
+        return sctx.elemNS == null ? Empty.VALUE : Uri.get(sctx.elemNS);
       case FUNCTION_NAMESPACE:
-        return sctx.funcNS == null ? Empty.VALUE : Uri.uri(sctx.funcNS);
+        return sctx.funcNS == null ? Empty.VALUE : Uri.get(sctx.funcNS);
       case COLLATION:
-        return Uri.uri(sctx.collation == null ? COLLATION_URI : sctx.collation.uri());
+        return Uri.get(sctx.collation == null ? COLLATION_URI : sctx.collation.uri());
       case ORDERING:
         return Str.get(sctx.ordered ? ORDERED : UNORDERED);
       case CONSTRUCTION:
@@ -71,40 +71,16 @@ public final class InspectStaticContext extends StandardFunc {
         tl.add(sctx.inheritNS ? INHERIT : NO_INHERIT);
         return StrSeq.get(tl);
       case DECIMAL_FORMATS:
-        map = XQMap.EMPTY;
         // enforce creation of default formatter
-        sctx.decFormat(Token.EMPTY);
+        sctx.decFormat(QNm.EMPTY, info);
         // loop through all formatters
+        mb = new MapBuilder();
         for(final byte[] format : sctx.decFormats) {
-          final DecFormatter df = sctx.decFormats.get(format);
-          map = map.put(Str.get(format), XQMap.EMPTY.
-              put(Str.get(DF_DEC), Str.get(token(df.decimal)), info).
-              put(Str.get(DF_EXP), Str.get(token(df.exponent)), info).
-              put(Str.get(DF_GRP), Str.get(token(df.grouping)), info).
-              put(Str.get(DF_PC), Str.get(token(df.percent)), info).
-              put(Str.get(DF_PM), Str.get(token(df.permille)), info).
-              put(Str.get(DF_ZD), Str.get(token(df.zero)), info).
-              put(Str.get(DF_DIG), Str.get(token(df.optional)), info).
-              put(Str.get(DF_PAT), Str.get(token(df.pattern)), info).
-              put(Str.get(DF_INF), Str.get(df.inf), info).
-              put(Str.get(DF_NAN), Str.get(df.nan), info).
-              put(Str.get(DF_MIN), Str.get(token(df.minus)), info)
-          , info);
+          mb.put(Str.get(format), sctx.decFormats.get(format).toMap());
         }
-        return map;
+        return mb.map();
       default:
         throw INSPECT_UNKNOWN_X.get(info, name);
     }
-  }
-
-  /**
-   * Converts codepoints to a token.
-   * @param cps codepoints
-   * @return token
-   */
-  private static byte[] token(final int... cps) {
-    final TokenBuilder tb = new TokenBuilder(cps.length);
-    for(final int cp : cps) tb.add(cp);
-    return tb.finish();
   }
 }

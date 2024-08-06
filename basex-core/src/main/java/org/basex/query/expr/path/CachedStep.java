@@ -4,7 +4,6 @@ import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
-import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -13,13 +12,13 @@ import org.basex.util.hash.*;
 /**
  * Step expression, caching all results.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CachedStep extends Step {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param axis axis
    * @param test node test
    * @param preds predicates
@@ -40,21 +39,15 @@ public final class CachedStep extends Step {
     final QueryFocus focus = qc.focus, qf = new QueryFocus();
     qc.focus = qf;
     try {
-      final boolean scoring = qc.scoring;
       for(final Expr expr : exprs) {
-        final long nl = list.size();
-        qf.size = nl;
+        final long ns = list.size();
+        qf.size = ns;
         int c = 0;
-        for(int n = 0; n < nl; n++) {
+        for(int n = 0; n < ns; n++) {
           final ANode node = list.get(n);
           qf.value = node;
           qf.pos = n + 1;
-          final Item tst = expr.test(qc, info);
-          if(tst != null) {
-            // assign score value
-            if(scoring) node.score(tst.score());
-            list.set(c++, node);
-          }
+          if(expr.test(qc, info, qf.pos)) list.set(c++, node);
         }
         list.size(c);
       }
@@ -66,9 +59,6 @@ public final class CachedStep extends Step {
 
   @Override
   public Step copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final int pl = exprs.length;
-    final Expr[] pred = new Expr[pl];
-    for(int p = 0; p < pl; p++) pred[p] = exprs[p].copy(cc, vm);
-    return copyType(new CachedStep(info, axis, test.copy(), pred));
+    return copyType(new CachedStep(info, axis, test.copy(), copyAll(cc, vm, exprs)));
   }
 }

@@ -10,7 +10,7 @@ import org.basex.util.hash.*;
 /**
  * Axis component of the scatter plot visualization.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class PlotAxis {
@@ -45,7 +45,7 @@ final class PlotAxis {
   /** Axis uses logarithmic scale. */
   boolean log;
 
-  /** True if attribute is an element, false if attribute. */
+  /** Element flag. */
   private boolean elem;
   /** Ln of min. */
   private double logMin;
@@ -145,7 +145,7 @@ final class PlotAxis {
     int i = 0;
 
     // find first non-empty value
-    // empty string is treated as non existing value -> coordinate = -1
+    // empty string is treated as non-existing value -> coordinate = -1
     while(i < vl && vals[i].length == 0) co[tmpI[i++]] = -1;
 
     // count number of unique values
@@ -163,7 +163,7 @@ final class PlotAxis {
       final byte[] b = vals[i];
       // l: highest index in sorted array for value b
       int l = i;
-      // determining highest index of value/category b
+      // determine the highest index of value/category b
       while(l < vl && eq(vals[l], b)) ++l;
 
       // calculating positions for all items with value b in current category
@@ -244,8 +244,8 @@ final class PlotAxis {
     final int limit = pre + data.size(pre, Data.ELEM);
     for(int p = pre; p < limit; ++p) {
       final int kind = data.kind(p);
-      if((kind == Data.ELEM && elem || kind == Data.ATTR && !elem) &&
-          attrID == data.nameId(p)) return data.atom(p);
+      if((elem ? kind == Data.ELEM : kind == Data.ATTR) && attrID == data.nameId(p))
+        return data.atom(p);
     }
     return EMPTY;
   }

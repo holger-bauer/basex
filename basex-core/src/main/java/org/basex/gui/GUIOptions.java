@@ -3,12 +3,8 @@ package org.basex.gui;
 import static org.basex.util.Prop.*;
 
 import java.awt.*;
-import java.text.*;
-import java.util.function.*;
 
-import org.basex.core.*;
 import org.basex.io.*;
-import org.basex.util.*;
 import org.basex.util.list.*;
 import org.basex.util.options.*;
 
@@ -16,13 +12,22 @@ import org.basex.util.options.*;
  * This class contains options which are used in the GUI.
  * They are also stored in the project's home directory.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class GUIOptions extends Options {
   // DATABASE & PROGRAM PATHS =====================================================================
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
+  public static final Comment C_VERSION = new Comment("Version");
+
+  /** Latest released version. */
+  public static final StringOption UPDATEVERSION = new StringOption("UPDATEVERSION",
+    VERSION.replaceAll(" .*", ""));
+  /** Check for updates. */
+  public static final BooleanOption CHECKUPDATES = new BooleanOption("CHECKUPDATES", false);
+
+  /** Comment: written to the options file. */
   public static final Comment C_PATHS = new Comment("Paths");
 
   /** Current path to database input. */
@@ -34,34 +39,29 @@ public final class GUIOptions extends Options {
   /** Current path to database project. */
   public static final StringOption PROJECTPATH = new StringOption("PROJECTPATH", "");
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_LAYOUT = new Comment("Layout");
 
   /** Default GUI Font. */
   public static final StringOption FONT = new StringOption("FONT", Font.SANS_SERIF);
   /** Default GUI Monospace Font. */
-  public static final StringOption MONOFONT = new StringOption("MONOFONT",
-      WIN ? "Consolas" : Font.MONOSPACED);
-  /** Font TYPE = plain, bold, italics). */
-  public static final NumberOption FONTTYPE = new NumberOption("FONTTYPE", 0);
+  public static final StringOption MONOFONT = new StringOption("MONOFONT", GUIConstants.MONOFONT);
   /** Font size. */
   public static final NumberOption FONTSIZE = new NumberOption("FONTSIZE", 15);
-  /** Only display monospace fonts. */
-  public static final BooleanOption ONLYMONO = new BooleanOption("ONLYMONO", false);
+  /** List monospace fonts. */
+  public static final BooleanOption LISTMONO = new BooleanOption("LISTMONO", true);
+  /** Anti-aliasing type. */
+  public static final StringOption ANTIALIAS = new StringOption("ANTIALIAS", "System");
 
   /** Red GUI color factor. */
-  public static final NumberOption COLORRED = new NumberOption("COLORRED", 15);
+  public static final NumberOption COLORRED = new NumberOption("COLORRED", 21);
   /** Green GUI color factor. */
-  public static final NumberOption COLORGREEN = new NumberOption("COLORGREEN", 11);
+  public static final NumberOption COLORGREEN = new NumberOption("COLORGREEN", 14);
   /** Blue GUI color factor. */
-  public static final NumberOption COLORBLUE = new NumberOption("COLORBLUE", 6);
+  public static final NumberOption COLORBLUE = new NumberOption("COLORBLUE", 7);
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_WINDOWS = new Comment("Windows");
-
-  /** Last updated version. */
-  public static final StringOption UPDATEVERSION = new StringOption("UPDATEVERSION",
-    VERSION.replaceAll(" .*", ""));
 
   /** GUI layout. */
   public static final StringOption VIEWS = new StringOption("VIEWS", GUIConstants.VIEWS);
@@ -100,13 +100,15 @@ public final class GUIOptions extends Options {
   public static final BooleanOption SHOWTREE = new BooleanOption("SHOWTREE", false);
   /** Flag for activated project structure. */
   public static final BooleanOption SHOWPROJECT = new BooleanOption("SHOWPROJECT", true);
+  /** Indent result. */
+  public static final BooleanOption INDENTRESULT = new BooleanOption("INDENTRESULT", false);
 
   /** Preferences tab. */
   public static final NumberOption PREFTAB = new NumberOption("PREFTAB", 0);
   /** Flag for Java look and feel. */
   public static final StringOption LOOKANDFEEL = new StringOption("LOOKANDFEEL", "");
-  /** Flag for dissolving name attributes. */
-  public static final BooleanOption SHOWNAME = new BooleanOption("SHOWNAME", true);
+  /** Label attributes, separated by comma. */
+  public static final StringOption LABELS = new StringOption("LABELS", "name,label,id");
   /** Flag for scrolling editor tabs. */
   public static final BooleanOption SCROLLTABS = new BooleanOption("SCROLLTABS", true);
   /** Focus follows mouse. */
@@ -117,7 +119,7 @@ public final class GUIOptions extends Options {
 
   /** Sort ascending. */
   public static final BooleanOption ASCSORT = new BooleanOption("ASCSORT", true);
-  /** Case sensitive sorting. */
+  /** Case-sensitive sorting. */
   public static final BooleanOption CASESORT = new BooleanOption("CASESORT", true);
   /** Merge duplicate lines. */
   public static final BooleanOption MERGEDUPL = new BooleanOption("MERGEDUPL", false);
@@ -155,9 +157,9 @@ public final class GUIOptions extends Options {
 
   /** Current input mode in global text field (Search, XQuery, Command). */
   public static final NumberOption SEARCHMODE = new NumberOption("SEARCHMODE", 0);
-  /** Flag for realtime context filtering. */
+  /** Flag for real-time context filtering. */
   public static final BooleanOption FILTERRT = new BooleanOption("FILTERRT", false);
-  /** Flag for realtime query execution. */
+  /** Flag for real-time query execution. */
   public static final BooleanOption EXECRT = new BooleanOption("EXECRT", false);
 
   /** Name of new database. */
@@ -165,7 +167,7 @@ public final class GUIOptions extends Options {
   /** Last insertion type. */
   public static final NumberOption LASTINSERT = new NumberOption("LASTINSERT", 1);
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_VISUALIZATIONS = new Comment("Visualizations");
 
   /** Show attributes in treemap. */
@@ -194,7 +196,7 @@ public final class GUIOptions extends Options {
   /** Maximum number of items to be displayed. */
   public static final NumberOption MAXRESULTS = new NumberOption("MAXRESULTS", 500000);
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_SEARCH = new Comment("Search");
 
   /** Last searched strings. */
@@ -202,7 +204,7 @@ public final class GUIOptions extends Options {
   /** Last replaced strings. */
   public static final StringsOption REPLACED = new StringsOption("REPLACED");
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_HISTORY = new Comment("History");
 
   /** Last command inputs. */
@@ -233,7 +235,7 @@ public final class GUIOptions extends Options {
    */
   public GUIOptions() {
     super(new IOFile(HOMEDIR + IO.BASEXSUFFIX + "gui"));
-    // reset realtime operations
+    // reset real-time operations
     set(FILTERRT, false);
     set(EXECRT, false);
     gui = true;
@@ -276,24 +278,5 @@ public final class GUIOptions extends Options {
     final StringList list = new StringList();
     for(final String suffix : get(XMLSUFFIXES).split("\\W+")) list.add('.' + suffix);
     return list.finish();
-  }
-
-  /**
-   * Returns a string representation of the number of results.
-   * @param results number of results
-   * @param bytes number of bytes (ignored if smaller than {@code 1})
-   * @return result string
-   */
-  public String results(final long results, final long bytes) {
-    final BiFunction<Long, Integer, String> more = (num, max) -> num >= max ? "\u2265" : "";
-    final StringBuilder sb = new StringBuilder();
-    final String num = new DecimalFormat("#,###,###").format(results);
-    final String text = more.apply(results, get(MAXRESULTS)) + num;
-    sb.append(Util.info(results == 1 ? Text.RESULT_X : Text.RESULTS_X, text));
-    if(bytes > 0) {
-      sb.append(", ");
-      sb.append(more.apply(bytes, get(MAXTEXT))).append(Performance.format(bytes));
-    }
-    return sb.toString();
   }
 }

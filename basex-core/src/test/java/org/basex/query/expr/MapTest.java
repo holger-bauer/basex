@@ -4,12 +4,13 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 
 import org.basex.*;
+import org.basex.query.value.item.*;
 import org.junit.jupiter.api.*;
 
 /**
  * Tests for XQuery maps.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class MapTest extends SandboxTest {
@@ -17,10 +18,16 @@ public final class MapTest extends SandboxTest {
   @Test public void mapAsKeyTest() {
     error("declare variable $m := map { 'a': 'b' };" +
           "declare variable $q := map { $m: 'a' };" +
-          "$q", FIATOM_X);
+          "$q", FIATOMIZE_X);
   }
 
-  /** Tests the the new syntax for map literals. */
+  /** Tests the map constructor. */
+  @Test public void constructor() {
+    check("map { 'A': 1, 2: 3 }?A", 1, root(Int.class));
+    check("map { <_>A</_>: 1, 2: 3 }?A", 1, root(Int.class));
+  }
+
+  /** Tests the new syntax for map literals. */
   @Test public void gh755() {
     query("(<x><y/></x> / map { 'test': y, 42: 'asdf' })('test')", "<y/>");
   }
@@ -48,7 +55,7 @@ public final class MapTest extends SandboxTest {
         + "let $k2 := xs:time('01:01:02')"
         + "let $k3 := xs:time('01:01:03+01:00')"
         + "let $m := map { $k1: 1, $k2: 2 }"
-        + "return map:put(map:remove($m,$k2), $k3, 3)");
+        + "return map:put(map:remove($m, $k2), $k3, 3)");
     query("let $k1 := xs:time('01:01:01')"
         + "let $k2 := xs:time('01:01:02')"
         + "let $k3 := xs:time('01:01:02+01:00')"

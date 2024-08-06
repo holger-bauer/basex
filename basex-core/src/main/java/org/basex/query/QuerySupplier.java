@@ -1,9 +1,9 @@
 package org.basex.query;
 
 /**
- * Function that supplied results.
+ * Function that supplies results.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <T> the type of results supplied by this supplier
  */

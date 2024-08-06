@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Insert into primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public class InsertInto extends NodeCopy {
@@ -19,11 +19,11 @@ public class InsertInto extends NodeCopy {
    * Constructor for an insertInto.
    * @param pre target pre value
    * @param data target data instance
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param nodes node copy insertion sequence
    */
-  public InsertInto(final int pre, final Data data, final InputInfo ii, final ANodeList nodes) {
-    super(UpdateType.INSERTINTO, pre, data, ii, nodes);
+  public InsertInto(final int pre, final Data data, final InputInfo info, final ANodeList nodes) {
+    super(UpdateType.INSERTINTO, pre, data, info, nodes);
   }
 
   @Override
@@ -39,5 +39,6 @@ public class InsertInto extends NodeCopy {
   }
 
   @Override
-  public final void update(final NamePool pool) { }
+  public final void update(final NamePool pool) {
+  }
 }

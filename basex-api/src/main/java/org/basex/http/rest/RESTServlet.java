@@ -1,6 +1,6 @@
 package org.basex.http.rest;
 
-import static javax.servlet.http.HttpServletResponse.*;
+import static jakarta.servlet.http.HttpServletResponse.*;
 
 import java.io.*;
 
@@ -12,7 +12,7 @@ import org.basex.util.http.*;
 /**
  * <p>This servlet receives and processes REST requests.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RESTServlet extends BaseXServlet {
@@ -25,19 +25,16 @@ public final class RESTServlet extends BaseXServlet {
 
     // generate and run commands
     final RESTCmd cmd = command(session);
-    final Context ctx = conn.context;
-    if(ctx.soptions.get(StaticOptions.LOGTRACE)) cmd.jc().tracer = ctx.log;
-
     try {
-      cmd.execute(ctx);
+      cmd.execute(conn.context);
       conn.log(SC_OK, "");
     } catch(final BaseXException ex) {
       // ignore error if code was assigned (same error message)
-      if(cmd.code == null) throw ex;
+      if(cmd.status == null) throw ex;
     }
 
-    final HTTPCode code = cmd.code;
-    if(code != null) throw code.get(cmd.info());
+    final HTTPStatus status = cmd.status;
+    if(status != null) throw status.get(cmd.info());
   }
 
   /**
@@ -47,11 +44,11 @@ public final class RESTServlet extends BaseXServlet {
    * @throws IOException I/O exception
    */
   private static RESTCmd command(final RESTSession session) throws IOException {
-    final String mth = session.conn.method;
-    if(mth.equals(HttpMethod.GET.name()))    return RESTGet.get(session);
-    if(mth.equals(HttpMethod.POST.name()))   return RESTPost.get(session);
-    if(mth.equals(HttpMethod.PUT.name()))    return RESTPut.get(session);
-    if(mth.equals(HttpMethod.DELETE.name())) return RESTDelete.get(session);
-    throw HTTPCode.NOT_IMPLEMENTED_X.get(session.conn.request.getMethod());
+    final String method = session.conn.method;
+    if(method.equals(Method.GET.name()))    return RESTGet.get(session);
+    if(method.equals(Method.POST.name()))   return RESTPost.get(session);
+    if(method.equals(Method.PUT.name()))    return RESTPut.get(session);
+    if(method.equals(Method.DELETE.name())) return RESTDelete.get(session);
+    throw HTTPStatus.METHOD_NOT_SUPPORTED_X.get(session.conn.request.getMethod());
   }
 }

@@ -6,7 +6,7 @@ import org.basex.util.*;
 /**
  * Expression information, used for debugging and logging.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ExprInfo {
@@ -31,16 +31,24 @@ public abstract class ExprInfo {
   }
 
   /**
+   * Returns the input info of an expression.
+   * @return info or {@code null}
+   */
+  public InputInfo info() {
+    return null;
+  }
+
+  /**
    * Creates a query plan.
    * @param plan expression plan
    */
-  public abstract void plan(QueryPlan plan);
+  public abstract void toXml(QueryPlan plan);
 
   /**
    * Creates a query string.
    * @param qs query string builder
    */
-  public abstract void plan(QueryString qs);
+  public abstract void toString(QueryString qs);
 
   /**
    * Returns a string representation of the expression that can be embedded in error messages.

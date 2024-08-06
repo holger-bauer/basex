@@ -7,7 +7,7 @@ import org.basex.util.list.*;
 /**
  * This class provides functions for encoding and decoding Base64 strings.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Base64 {
@@ -56,13 +56,12 @@ public final class Base64 {
       if(p == 1) {
         bl.add(H2B[b0 << 4 & 0x3f]);
         bl.add('=');
-        bl.add('=');
       } else {
         final int b1 = token[c] & 0xff;
         bl.add(H2B[b0 << 4 & 0x3f | b1 >> 4]);
         bl.add(H2B[b1 << 2 & 0x3f]);
-        bl.add('=');
       }
+      bl.add('=');
     }
     return bl.finish();
   }

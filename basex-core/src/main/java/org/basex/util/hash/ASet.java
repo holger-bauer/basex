@@ -1,6 +1,7 @@
 package org.basex.util.hash;
 
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.util.*;
 
@@ -8,7 +9,7 @@ import org.basex.util.*;
  * This is the basic structure of an efficient and memory-saving hash set.
  * The first entry of the token set (offset 0) will always be kept empty.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ASet {
@@ -62,27 +63,37 @@ public abstract class ASet {
   }
 
   /**
-   * Resizes the hash table.
+   * Checks the capacity of the hash table and resizes it if necessary.
+   * @return {@code true} if the hash table was resized
    */
-  protected final void checkSize() {
-    if(size < capacity()) return;
+  protected final boolean checkCapacity() {
+    return checkCapacity((id, bucket) -> { });
+  }
+
+  /**
+   * Checks the capacity of the hash table and resizes it if necessary.
+   * @param relocateAction action to be executed while relocating id to new bucket
+   * @return {@code true} if the hash table was resized
+   */
+  protected final boolean checkCapacity(final BiConsumer<Integer, Integer> relocateAction) {
+    if(size < capacity()) return false;
 
     final int newSize = size << 1;
-    final int[] tmp = new int[newSize];
+    final int[] bckts = new int[newSize];
 
-    for(final int b : buckets) {
-      int id = b;
-      while(id != 0) {
-        final int p = hash(id) & newSize - 1;
-        final int nx = next[id];
-        next[id] = tmp[p];
-        tmp[p] = id;
+    for(final int bucket : buckets) {
+      for(int id = bucket; id != 0;) {
+        final int b = hash(id) & newSize - 1, nx = next[id];
+        relocateAction.accept(id, b);
+        next[id] = bckts[b];
+        bckts[b] = id;
         id = nx;
       }
     }
-    buckets = tmp;
+    buckets = bckts;
     next = Arrays.copyOf(next, newSize);
     rehash(newSize);
+    return true;
   }
 
   /**

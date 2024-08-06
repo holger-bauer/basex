@@ -7,7 +7,7 @@ import org.basex.io.*;
 /**
  * EXPath or internal package. Internal packages have no version.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class Pkg {
@@ -55,7 +55,7 @@ public final class Pkg {
    * @return id
    */
   public String id() {
-    return type == PkgType.EXPATH ? (name + '-' + version) : name;
+    return type == PkgType.EXPATH ? name + '-' + version : name;
   }
 
   /**

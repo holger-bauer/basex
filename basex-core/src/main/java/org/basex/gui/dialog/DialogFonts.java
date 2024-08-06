@@ -6,12 +6,11 @@ import java.awt.*;
 
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
-import org.basex.util.list.*;
 
 /**
  * Dialog window for changing the used fonts.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DialogFonts extends BaseXDialog {
@@ -23,21 +22,19 @@ public final class DialogFonts extends BaseXDialog {
   /** Dialog. */
   private static DialogFonts dialog;
 
-  /** Fonts. */
-  private final String[] fonts;
   /** Monospace fonts. */
-  private String[] monoFonts;
+  private final String[] monoFonts;
 
   /** Font name chooser. */
   private final BaseXList font;
   /** Font name chooser. */
   private final BaseXList font2;
-  /** Font type chooser. */
-  private final BaseXList type;
   /** Font size chooser. */
   private final BaseXList size;
   /** Only display monospace fonts. */
   private final BaseXCheckBox onlyMono;
+  /** Anti-aliasing. */
+  private final BaseXCombo antiAlias;
 
   /**
    * Default constructor.
@@ -47,18 +44,18 @@ public final class DialogFonts extends BaseXDialog {
     super(gui, CHOOSE_FONT, false);
 
     final GUIOptions gopts = gui.gopts;
-    fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
 
-    final BaseXBack p = new BaseXBack(new TableLayout(2, 4, 8, 0));
+    antiAlias = new BaseXCombo(this, "System", "GASP", "On", "Off");
+    antiAlias.setSelectedItem(gopts.get(GUIOptions.ANTIALIAS));
+
+    final BaseXBack p = new BaseXBack(new TableLayout(2, 3, 8, 8));
+    final String[] fonts = GUIConstants.fonts();
     font = new BaseXList(this, fonts);
-    font.setWidth(200);
+    font.setWidth(250);
     p.add(font);
     font2 = new BaseXList(this, fonts);
-    font2.setWidth(200);
+    font2.setWidth(250);
     p.add(font2);
-    type = new BaseXList(this, FONT_TYPES);
-    type.setWidth(90);
-    p.add(type);
     size = new BaseXList(this, SIZES);
     size.setWidth(50);
     p.add(size);
@@ -66,17 +63,20 @@ public final class DialogFonts extends BaseXDialog {
     font.setValue(gopts.get(GUIOptions.FONT));
     font2.setValue(gopts.get(GUIOptions.MONOFONT));
     font2.setEnabled(false);
-    type.setValue(FONT_TYPES[gopts.get(GUIOptions.FONTTYPE)]);
     font.setValue(gopts.get(GUIOptions.FONT));
 
-    p.add(new BaseXBack());
-    onlyMono = new BaseXCheckBox(this, "Monospace", GUIOptions.ONLYMONO, gopts);
+    final BaseXBack pp = new BaseXBack(new TableLayout(1, 2, 8, 8));
+    pp.add(new BaseXLabel("Anti-Aliasing"));
+    pp.add(antiAlias);
+    p.add(pp);
+
+    onlyMono = new BaseXCheckBox(this, "Monospace", GUIOptions.LISTMONO, gopts);
     p.add(onlyMono);
 
     set(p, BorderLayout.CENTER);
     finish();
 
-    monoFonts();
+    monoFonts = GUIConstants.monoFonts();
     action(onlyMono);
   }
 
@@ -92,76 +92,47 @@ public final class DialogFonts extends BaseXDialog {
 
   @Override
   public void action(final Object cmp) {
+    boolean changed = false;
+
     final GUIOptions gopts = gui.gopts;
-    if(cmp == onlyMono) {
+    if(cmp == antiAlias) {
+      gopts.set(GUIOptions.ANTIALIAS, antiAlias.getSelectedItem());
+      changed = true;
+    } else if(cmp == onlyMono) {
       final boolean selected = onlyMono.isSelected();
-      gopts.set(GUIOptions.ONLYMONO, selected);
+      gopts.set(GUIOptions.LISTMONO, selected);
       if(selected) {
         final boolean ready = monoFonts != null;
         font2.setEnabled(ready);
         font2.setData(ready ? monoFonts : new String[] { PLEASE_WAIT_D });
       } else {
         font2.setEnabled(true);
-        font2.setData(fonts);
+        font2.setData(GUIConstants.fonts());
       }
       font2.setValue(gopts.get(GUIOptions.MONOFONT));
-    } else {
-      boolean changed = false;
-      if(cmp == font) {
-        final String name = font.getValue();
-        if(!name.isEmpty()) {
-          gopts.set(GUIOptions.FONT, name);
-          changed = true;
-        }
-      } else if(cmp == font2) {
-        final String name = font2.getValue();
-        if(!name.isEmpty()) {
-          gopts.set(GUIOptions.MONOFONT, name);
-          changed = true;
-        }
-      } else if(cmp == size) {
-        final int num = size.getNum();
-        if(num > 0) {
-          gopts.set(GUIOptions.FONTSIZE, num);
-          changed = true;
-        }
-      } else if(cmp == type) {
-        final int num = type.getIndex();
-        if(num >= 0) {
-          gopts.set(GUIOptions.FONTTYPE, num);
-          changed = true;
-        }
+    } else if(cmp == font) {
+      final String name = font.getValue();
+      if(!name.isEmpty()) {
+        gopts.set(GUIOptions.FONT, name);
+        changed = true;
       }
-
-      if(changed) {
-        final int t = gopts.get(GUIOptions.FONTTYPE);
-        font.setFont(gopts.get(GUIOptions.FONT), t);
-        font2.setFont(gopts.get(GUIOptions.MONOFONT), t);
-        gui.updateLayout();
+    } else if(cmp == font2) {
+      final String name = font2.getValue();
+      if(!name.isEmpty()) {
+        gopts.set(GUIOptions.MONOFONT, name);
+        changed = true;
+      }
+    } else if(cmp == size) {
+      final int num = size.getNum();
+      if(num > 0) {
+        gopts.set(GUIOptions.FONTSIZE, num);
+        changed = true;
       }
     }
-  }
-
-  /**
-   * Creates a list of mono-spaced fonts in a separate thread.
-   */
-  private void monoFonts() {
-    new GUIWorker<Boolean>() {
-      @Override
-      protected Boolean doInBackground() {
-        final Graphics g = getGraphics();
-        final StringList monos = new StringList();
-        for(final String name : fonts) {
-          final FontMetrics fm = g.getFontMetrics(new Font(name, Font.PLAIN, 128));
-          if(fm.charWidth(' ') == fm.charWidth('M')) monos.add(name);
-        }
-        monoFonts = monos.finish();
-        return gui.gopts.get(GUIOptions.ONLYMONO);
-      }
-      @Override
-      protected void done(final Boolean mono) {
-        if(mono) action(onlyMono);
-      }
-    }.execute();
+    if(changed) {
+      font.setFont(gopts.get(GUIOptions.FONT));
+      font2.setFont(gopts.get(GUIOptions.MONOFONT));
+      gui.updateLayout();
+    }
   }
 }

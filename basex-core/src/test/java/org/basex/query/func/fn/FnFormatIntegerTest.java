@@ -5,7 +5,7 @@ import org.basex.query.*;
 /**
  * XQuery functions tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnFormatIntegerTest extends QueryTest {
@@ -67,7 +67,7 @@ public final class FnFormatIntegerTest extends QueryTest {
         "format-integer(1500000, '#,###,000')" },
       { "290", strings("1500\ud800\udd000,00"),
         "format-integer(1500000, '###\ud800\udd000,00')" },
-      { "300", strings("(602)347-826"),
+      { "300", strings("602)347-826"),
         "format-integer(602347826, '#(000)000-000')" },
       { "310", strings("SECOND"), "format-integer(2, 'W;o')" },
       { "330", strings("1st"), "format-integer(1, '1;o(-en)')" },
@@ -104,7 +104,7 @@ public final class FnFormatIntegerTest extends QueryTest {
         "\u4E8C|469=\u56DB\u767E\u516D\u5341\u4E5D|2025=\u4E8C\u5343" +
         "\u4E8C\u5341\u4E94|"),
         "string-join(for $i in (1 to 23, 151, 302, 469, 2025) " +
-        "return concat($i, '=',  format-integer($i, '\u4e00'), '|'))" },
+        "return concat($i, '=', format-integer($i, '\u4e00'), '|'))" },
 
       // errors
       { "err010", "format-integer(123, '0\u0661')" },

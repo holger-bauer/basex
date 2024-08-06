@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * XQUnit tests: Testing multiple modules.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Suite {
@@ -35,11 +35,11 @@ public final class Suite {
    * @return resulting value
    * @throws IOException I/O exception
    */
-  public FElem test(final IOFile root, final Context ctx, final Job job) throws IOException {
+  public FNode test(final IOFile root, final Context ctx, final Job job) throws IOException {
     final ArrayList<IOFile> files = new ArrayList<>();
 
     final Performance perf = new Performance();
-    final FElem suites = new FElem(TESTSUITES);
+    final FBuilder suites = FElem.build(Q_TESTSUITES);
     if(root.isDir()) {
       for(final String path : root.descendants()) {
         final IOFile file = new IOFile(root, path);
@@ -57,8 +57,6 @@ public final class Suite {
       skipped += unit.skipped;
       tests += unit.tests;
     }
-
-    suites.add(TIME, Unit.time(perf));
-    return suites;
+    return suites.add(Q_TIME, Unit.time(perf)).finish();
   }
 }

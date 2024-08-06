@@ -2,6 +2,9 @@ package org.basex.query.value.node;
 
 import static org.basex.query.QueryText.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -10,12 +13,14 @@ import org.basex.util.*;
 /**
  * Namespace node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FNSpace extends FNode {
   /** Namespace name. */
   private final byte[] name;
+  /** Namespace value. */
+  private final byte[] value;
 
   /**
    * Default constructor.
@@ -39,23 +44,31 @@ public final class FNSpace extends FNode {
   }
 
   @Override
-  public FNSpace materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FNSpace(name, value) : this;
+  public byte[] string() {
+    return value;
+  }
+
+  @Override
+  public FNSpace materialize(final Predicate<Data> test, final InputInfo ii,
+      final QueryContext qc) {
+    return materialized(test, ii) ? this : new FNSpace(name, value);
   }
 
   @Override
   public boolean equals(final Object obj) {
-    return this == obj || obj instanceof FNSpace && Token.eq(name, ((FNSpace) obj).name) &&
-        super.equals(obj);
+    if(this == obj) return true;
+    if(!(obj instanceof FNSpace)) return false;
+    final FNSpace f = (FNSpace) obj;
+    return Token.eq(name, ((FNSpace) obj).name) && Token.eq(value, f.value) && super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name, VALUEE, value));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final TokenBuilder tb = new TokenBuilder().add(Token.XMLNS);
     if(name.length != 0) tb.add(':').add(name);
     tb.add('=').add(QueryString.toQuoted(value));

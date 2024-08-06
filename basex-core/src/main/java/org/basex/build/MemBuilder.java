@@ -10,7 +10,7 @@ import org.basex.util.*;
  * This class creates a database instance in main memory.
  * The storage layout is described in the {@link Data} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MemBuilder extends Builder {
@@ -21,11 +21,19 @@ public final class MemBuilder extends Builder {
 
   /**
    * Constructor.
-   * @param name name of database
-   * @param parse parser
+   * @param parser parser
    */
-  public MemBuilder(final String name, final Parser parse) {
-    super(name, parse);
+  public MemBuilder(final Parser parser) {
+    this("", parser);
+  }
+
+  /**
+   * Constructor.
+   * @param name name of database
+   * @param parser parser
+   */
+  public MemBuilder(final String name, final Parser parser) {
+    super(name, parser);
   }
 
   /**
@@ -73,14 +81,16 @@ public final class MemBuilder extends Builder {
 
   /**
    * Initializes the builder.
+   * @return self reference
    */
-  public void init() {
+  public MemBuilder init() {
     data = new MemData(path, nspaces, parser.options);
     meta = data.meta;
     meta.name = dbName;
     elemNames = data.elemNames;
     attrNames = data.attrNames;
     path.data(data);
+    return this;
   }
 
   /**

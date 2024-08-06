@@ -11,7 +11,7 @@ import org.junit.jupiter.api.*;
 /**
  * Class for testing the {@link Compress} methods.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InlineTest extends SandboxTest {
@@ -50,12 +50,12 @@ public final class InlineTest extends SandboxTest {
   }
 
   /** Test. */
-  @Test public void inlineWhitespaces() {
+  @Test public void inlineWhitespace() {
     // spaces
     run("     ");
     run("      ");
     run("         ");
-    // mixture of whitespaces
+    // mixture of whitespace
     run("\t\n\r  \t\n\r");
     run("\t\n\r  \t\r\n \n\r\t ");
     run("\t\t\t\t\t");
@@ -69,10 +69,10 @@ public final class InlineTest extends SandboxTest {
     reject("abcde");
     // too long string (and too large digit)
     reject("2147483648");
-    // mixture of whitespaces and non-whitespaces
+    // mixture of whitespace and non-whitespace
     reject("    1");
     reject("1    ");
-    // too many whitespaces
+    // too much whitespace
     reject("                ");
   }
 
@@ -93,7 +93,7 @@ public final class InlineTest extends SandboxTest {
       sb.append("\nFound: ").append(Arrays.toString(unpacked));
       sb.append("\nInlined Value:\n");
       for(int i = 32; i >= 0; i -= 8) {
-        final StringBuilder bin = new StringBuilder(Long.toBinaryString((packed >> i) & 0xFF));
+        final StringBuilder bin = new StringBuilder(Long.toBinaryString(packed >> i & 0xFF));
         while(bin.length() < 8) bin.insert(0, '0');
         sb.append(bin).append("\n");
       }
@@ -113,7 +113,7 @@ public final class InlineTest extends SandboxTest {
       sb.append("Value must not be inlined: ").append(string);
       sb.append("\nInlined Value:\n");
       for(int i = 32; i >= 0; i -= 8) {
-        final StringBuilder bin = new StringBuilder(Long.toBinaryString((packed >> i) & 0xFF));
+        final StringBuilder bin = new StringBuilder(Long.toBinaryString(packed >> i & 0xFF));
         while(bin.length() < 8) bin.insert(0, '0');
         sb.append(bin).append("\n");
       }

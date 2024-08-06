@@ -19,7 +19,7 @@ import org.basex.util.*;
 /**
  * This class serializes items in adaptive mode.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class AdaptiveSerializer extends OutputSerializer {
@@ -101,7 +101,7 @@ public class AdaptiveSerializer extends OutputSerializer {
       tb.add(dur.type).add("(\"").add(dur.string(null)).add("\")");
     } else {
       try {
-        tb.add(item.type).add('(').add(value(item.string(null), '"', false)).add(')');
+        tb.add(type).add('(').add(value(item.string(null), '"', false)).add(')');
       } catch(final QueryException ex) {
         throw new QueryIOException(ex);
       }
@@ -169,9 +169,7 @@ public class AdaptiveSerializer extends OutputSerializer {
    * @throws IOException I/O exception
    */
   protected void map(final XQMap map) throws IOException {
-    final TokenBuilder tb = new TokenBuilder().add("map");
-    if(indent) tb.add(' ');
-    tb.add('{');
+    final TokenBuilder tb = new TokenBuilder().add('{');
     int c = 0;
     ++level;
     for(final Item key : map.keys()) {
@@ -183,7 +181,7 @@ public class AdaptiveSerializer extends OutputSerializer {
       tb.add(':');
       if(indent) tb.add(' ');
       try {
-        final Value value = map.get(key, null);
+        final Value value = map.get(key);
         final boolean par = value.size() != 1;
         if(par) tb.add('(');
         int cc = 0;

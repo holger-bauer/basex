@@ -5,6 +5,8 @@ import static org.basex.core.Text.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.AbstractMap.*;
+import java.util.Map.*;
 
 import org.basex.api.client.*;
 import org.basex.core.cmd.*;
@@ -16,7 +18,7 @@ import org.basex.util.*;
 /**
  * This is the abstract main class for the starter classes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class CLI extends Main {
@@ -24,7 +26,7 @@ public abstract class CLI extends Main {
   public Context context;
 
   /** Cached initial commands. */
-  protected final ArrayList<Pair<String, String>> commands = new ArrayList<>();
+  protected final ArrayList<Entry<String, String>> commands = new ArrayList<>();
   /** Output file for queries. */
   protected OutputStream out = System.out;
   /** Verbose mode. */
@@ -32,7 +34,7 @@ public abstract class CLI extends Main {
 
   /** Password reader. */
   private static final PasswordReader PWREADER = () -> {
-    Util.out(PASSWORD + COLS);
+    Util.print(PASSWORD + COLS);
     return Util.password();
   };
   /** Session. */
@@ -58,9 +60,9 @@ public abstract class CLI extends Main {
    * @return {@code false} if the exit command was sent
    * @throws IOException database exception
    */
-  protected final boolean execute(final Pair<String, String> command) throws IOException {
-    final CommandParser cp = CommandParser.get(command.value(), context);
-    return execute(cp.baseURI(command.name()).pwReader(PWREADER));
+  protected final boolean execute(final Entry<String, String> command) throws IOException {
+    final CommandParser cp = CommandParser.get(command.getValue(), context);
+    return execute(cp.baseURI(command.getKey()).pwReader(PWREADER));
   }
 
   /**
@@ -90,7 +92,7 @@ public abstract class CLI extends Main {
   protected final void execute(final Command cmd, final boolean info) throws IOException {
     final Session ss = session();
     ss.execute(cmd);
-    if(info) Util.out(ss.info());
+    if(info) Util.print(ss.info());
   }
 
   /**
@@ -113,21 +115,21 @@ public abstract class CLI extends Main {
     if(local()) return new LocalSession(context, out);
 
     // user/password input
-    String user = context.soptions.get(StaticOptions.USER);
-    String pass = context.soptions.get(StaticOptions.PASSWORD);
-    while(user.isEmpty()) {
-      Util.out(USERNAME + COLS);
-      user = Util.input();
+    String username = context.soptions.get(StaticOptions.USER);
+    String password = context.soptions.get(StaticOptions.PASSWORD);
+    while(username.isEmpty()) {
+      Util.print(USERNAME + COLS);
+      username = Util.input();
     }
-    while(pass.isEmpty()) {
-      Util.out(PASSWORD + COLS);
-      pass = Util.password();
+    while(password.isEmpty()) {
+      Util.print(PASSWORD + COLS);
+      password = Util.password();
     }
 
     final String host = context.soptions.get(StaticOptions.HOST);
     final int port = context.soptions.get(StaticOptions.PORT);
     try {
-      return new ClientSession(host, port, user, pass, out);
+      return new ClientSession(host, port, username, password, out);
     } catch(final ConnectException ex) {
       Util.debug(ex);
       throw new BaseXException(CONNECTION_ERROR_X, port);
@@ -135,15 +137,34 @@ public abstract class CLI extends Main {
   }
 
   /**
-   * Returns the base URI and the query string for the specified input.
+   * Returns the base URI and the query string for the specified command input.
+   * @param input command string or command script reference
+   * @return return base URI and query string
+   * @throws IOException I/O exception
+   */
+  protected static Entry<String, String> commands(final String input) throws IOException {
+    return isFile(input) ? script(input) : new SimpleEntry<>("", input);
+  }
+
+  /**
+   * Returns the base URI and the contents for the specified command script.
    * @param input input
    * @return return base URI and query string
    * @throws IOException I/O exception
    */
-  protected static Pair<String, String> input(final String input) throws IOException {
+  protected static Entry<String, String> script(final String input) throws IOException {
     final IO io = IO.get(input);
-    final boolean file = !(io instanceof IOContent) && io.exists() && !io.isDir();
-    return new Pair<>(file ? io.path() : "./", file ? io.string() : input);
+    return new SimpleEntry<>(io.path(), io.string());
+  }
+
+  /**
+   * Indicates if the specified string points to an existing file.
+   * @param input string
+   * @return return result of check
+   */
+  protected static boolean isFile(final String input) {
+    final IO io = IO.get(input);
+    return !(io instanceof IOContent) && io.exists() && !io.isDir();
   }
 
   /**

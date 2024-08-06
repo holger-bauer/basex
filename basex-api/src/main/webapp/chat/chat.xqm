@@ -1,6 +1,6 @@
 (:~
  : Simple WebSocket chat. RESTXQ functions.
- : @author BaseX Team 2005-20, BSD License
+ : @author BaseX Team 2005-24, BSD License
  :)
 module namespace chat = 'chat';
 
@@ -23,7 +23,7 @@ function chat:chat() as element() {
 
 (:~
  : Checks the user input, registers the user and reloads the chat.
- : @param  $name  user name
+ : @param  $name  username
  : @param  $pass  password
  : @return redirection
  :)  
@@ -125,7 +125,7 @@ declare %private function chat:wrap(
     <head>
       <meta charset='utf-8'/>
       <title>BaseX WebSocket Chat</title>
-      <meta name='author' content='BaseX Team 2005-20, BSD License'/>
+      <meta name='author' content='BaseX Team 2005-24, BSD License'/>
       <link rel='stylesheet' type='text/css' href='/static/style.css'/>
       { $headers }
     </head>

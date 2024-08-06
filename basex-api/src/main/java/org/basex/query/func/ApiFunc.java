@@ -2,7 +2,7 @@ package org.basex.query.func;
 
 import static org.basex.query.QueryError.*;
 
-import javax.servlet.http.*;
+import jakarta.servlet.http.*;
 
 import org.basex.http.*;
 import org.basex.query.*;
@@ -10,7 +10,7 @@ import org.basex.query.*;
 /**
  * Request function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ApiFunc extends StandardFunc {
@@ -21,9 +21,9 @@ public abstract class ApiFunc extends StandardFunc {
    * @throws QueryException query exception
    */
   public final RequestContext requestContext(final QueryContext qc) throws QueryException {
-    final Object request = qc.getProperty(HTTPText.REQUEST);
-    if(request == null) throw BASEX_HTTP.get(info);
-    return (RequestContext) request;
+    final RequestContext rc = (RequestContext) qc.context.getExternal(RequestContext.class);
+    if(rc == null) throw BASEX_HTTP.get(info);
+    return rc;
   }
 
   /**

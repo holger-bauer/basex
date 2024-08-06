@@ -10,23 +10,26 @@ import org.basex.query.value.item.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class ArrayFoldLeft extends ArrayFn {
+public class ArrayFoldLeft extends FnFoldLeft {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final XQArray array = toArray(exprs[0], qc);
-    Value result = exprs[1].value(qc);
-    final FItem func = checkArity(exprs[2], 2, qc);
+    final XQArray array = toArray(arg(0), qc);
+    final FItem action = action(qc);
 
-    for(final Value value : array.members()) result = func.invoke(qc, info, result, value);
+    int p = 0;
+    Value result = arg(1).value(qc);
+    for(final Value value : array.members()) {
+      if(skip(qc, result, value)) break;
+      result = action.invoke(qc, info, result, value, Int.get(++p));
+    }
     return result;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    FnFoldLeft.opt(this, cc, true, true);
-    return this;
+    return optType(cc, true, true);
   }
 }

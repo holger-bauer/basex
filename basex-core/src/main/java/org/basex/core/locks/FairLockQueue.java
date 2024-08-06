@@ -5,10 +5,10 @@ import java.util.*;
 /**
  * Lock queue for fair locking.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class FairLockQueue extends LockQueue {
+final class FairLockQueue extends LockQueue {
   /** Queue. */
   private final Queue<Long> queue = new LinkedList<>();
 
@@ -21,7 +21,7 @@ public final class FairLockQueue extends LockQueue {
   }
 
   @Override
-  public synchronized void acquire(final Long id, final boolean read, final boolean write)
+  synchronized void acquire(final Long id, final boolean read, final boolean write)
       throws InterruptedException {
 
     // add job id to queue and wait

@@ -9,7 +9,7 @@ import net.xqj.basex.*;
  * <a href="https://www.progress.com/products/data-integration-suite/data-integration-suite-developer-center/data-integration-suite-tutorials/learning-xquery/introduction-to-the-xquery-api-for-java-xqj-">
  * XQJ online tutorial</a>.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 abstract class Main {
   /**
@@ -24,8 +24,9 @@ abstract class Main {
   /**
    * Creates and returns a default connection.
    * @return connection instance
+   * @throws XQException XQException
    */
-  static XQConnection connect() {
+  static XQConnection connect() throws XQException {
     return new BaseXXQDataSource().getConnection("admin", "admin");
   }
 

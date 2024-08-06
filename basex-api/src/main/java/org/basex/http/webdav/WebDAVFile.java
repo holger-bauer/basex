@@ -11,7 +11,7 @@ import com.bradmcevoy.http.exceptions.*;
 /**
  * WebDAV resource representing a file.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  * @author Dimitar Popov
  */
@@ -48,17 +48,17 @@ final class WebDAVFile extends WebDAVResource implements FileResource {
 
   @Override
   public String getContentType(final String accepts) {
-    return meta.type.toString();
+    return meta.contentType;
   }
 
   @Override
   public void sendContent(final OutputStream out, final Range range,
       final Map<String, String> params, final String contentType) throws BadRequestException {
 
-    new WebDAVCode<Object>(this) {
+    new WebDAVCode<>(this) {
       @Override
       public void run() throws IOException {
-        service.retrieve(meta.db, meta.path, meta.raw, out);
+        service.get(meta.db, meta.path, meta.type, out);
       }
     }.eval();
   }

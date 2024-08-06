@@ -8,7 +8,7 @@ import org.basex.query.value.*;
  * This example demonstrates how items can be bound to variables with
  * the XQuery processor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class BindVariables {
   /**
@@ -40,8 +40,8 @@ public final class BindVariables {
       String number = "123";
 
       // Bind the variables
-      proc.bind("var1", string);
-      proc.bind("var2", number, "xs:integer");
+      proc.variable("var1", string);
+      proc.variable("var2", number, "xs:integer");
 
       // Execute the query
       Value result = proc.value();

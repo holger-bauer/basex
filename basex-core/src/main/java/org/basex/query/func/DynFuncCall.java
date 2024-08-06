@@ -1,3 +1,4 @@
+
 package org.basex.query.func;
 
 import static org.basex.query.QueryError.*;
@@ -6,13 +7,13 @@ import static org.basex.query.QueryText.*;
 import java.util.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.ann.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
-import org.basex.query.value.array.XQArray;
 import org.basex.query.value.item.*;
-import org.basex.query.value.map.XQMap;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -21,46 +22,39 @@ import org.basex.util.hash.*;
 /**
  * Dynamic function call.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class DynFuncCall extends FuncCall {
-  /** Static context. */
-  private final StaticContext sc;
-
   /** Updating flag. */
   private final boolean updating;
-  /** Non-deterministic flag. */
+  /** Nondeterministic flag. */
   private boolean ndt;
   /** Hash values of all function items that this call was copied from, possibly {@code null}. */
   private int[] inlinedFrom;
 
   /**
    * Function constructor.
-   * @param info input info
-   * @param sc static context
+   * @param info input info (can be {@code null})
    * @param expr function expression
-   * @param arg arguments
+   * @param args arguments
    */
-  public DynFuncCall(final InputInfo info, final StaticContext sc, final Expr expr,
-      final Expr... arg) {
-    this(info, sc, false, false, expr, arg);
+  public DynFuncCall(final InputInfo info, final Expr expr, final Expr... args) {
+    this(info, false, false, expr, args);
   }
 
   /**
    * Function constructor.
-   * @param info input info
-   * @param sc static context
+   * @param info input info (can be {@code null})
    * @param updating updating flag
-   * @param ndt non-deterministic flag
+   * @param ndt nondeterministic flag
    * @param expr function expression
-   * @param arg arguments
+   * @param args arguments
    */
-  public DynFuncCall(final InputInfo info, final StaticContext sc, final boolean updating,
-      final boolean ndt, final Expr expr, final Expr... arg) {
+  public DynFuncCall(final InputInfo info, final boolean updating, final boolean ndt,
+      final Expr expr, final Expr... args) {
 
-    super(info, ExprList.concat(arg, expr));
-    this.sc = sc;
+    super(info, ExprList.concat(args, expr));
     this.updating = updating;
     this.ndt = ndt;
   }
@@ -78,31 +72,36 @@ public final class DynFuncCall extends FuncCall {
     final int nargs = exprs.length - 1;
     final FuncType ft = func.funcType();
     if(ft != null) {
-      if(ft.argTypes != null && ft.argTypes.length != nargs) {
-        throw INVARITY_X_X_X.get(info, arguments(nargs), ft.argTypes.length, func.toErrorString());
+      if(ft.argTypes != null) {
+        final int arity = ft.argTypes.length;
+        if(nargs != arity) throw arityError(func, nargs, arity, false, info);
       }
-      final SeqType dt = ft.declType;
-      exprType.assign(ft instanceof MapType ? dt.union(Occ.ZERO) : dt);
+      if(!sc().mixUpdates && !updating && ft.anns.contains(Annotation.UPDATING)) {
+        throw FUNCUP_X.get(info, func);
+      }
+      exprType.assign(ft.declType);
     }
 
-    // maps and arrays can only contain evaluated values, so this is safe
-    if((func instanceof XQMap || func instanceof XQArray) && allAreValues(false)) {
-      return cc.preEval(this);
+    if(func instanceof XQData) {
+      // lookup key must be atomic
+      if(nargs == 1) arg(0, arg -> arg.simplifyFor(Simplify.DATA, cc));
+      // pre-evaluation is safe as maps and arrays contain values
+      if(allAreValues(false)) return cc.preEval(this);
     }
 
     if(func instanceof XQFunctionExpr) {
       // try to inline the function
-      final XQFunctionExpr fe = (XQFunctionExpr) func;
-      if(!(fe instanceof FuncItem && comesFrom((FuncItem) fe))) {
-        checkUp(fe, updating, sc);
+      if(!(func instanceof FuncItem && comesFrom((FuncItem) func))) {
+        final XQFunctionExpr fe = (XQFunctionExpr) func;
+        checkUp(fe, updating);
         final Expr inlined = fe.inline(Arrays.copyOf(exprs, nargs), cc);
         if(inlined != null) return inlined;
       }
     } else if(func instanceof Value) {
       // raise error (values tested at this stage are no functions)
-      final Item item = toItem(func, cc.qc);
-      throw INVFUNCITEM_X_X.get(info, item.type, func);
+      throw INVFUNCITEM_X_X.get(info, func.seqType(), func);
     }
+
     return this;
   }
 
@@ -141,7 +140,7 @@ public final class DynFuncCall extends FuncCall {
    * Returns the function body expression.
    * @return body
    */
-  public Expr body() {
+  private Expr body() {
     return exprs[exprs.length - 1];
   }
 
@@ -150,7 +149,7 @@ public final class DynFuncCall extends FuncCall {
     final Expr[] copy = copyAll(cc, vm, exprs);
     final int last = copy.length - 1;
     final Expr[] args = Arrays.copyOf(copy, last);
-    final DynFuncCall call = new DynFuncCall(info, sc, updating, ndt, copy[last], args);
+    final DynFuncCall call = new DynFuncCall(info, updating, ndt, copy[last], args);
     if(inlinedFrom != null) call.inlinedFrom = inlinedFrom.clone();
     return copyType(call);
   }
@@ -162,28 +161,19 @@ public final class DynFuncCall extends FuncCall {
 
   @Override
   FItem evalFunc(final QueryContext qc) throws QueryException {
-    final Item item = toItem(body(), qc);
-    if(!(item instanceof FItem)) throw INVFUNCITEM_X_X.get(info, item.type, item);
+    final Item item = body().item(qc, info);
+    if(!(item instanceof FItem)) throw INVFUNCITEM_X_X.get(info, item.seqType(), item);
 
-    final FItem func = checkUp((FItem) item, updating, sc);
-    final int nargs = exprs.length - 1;
-    if(func.arity() != nargs) throw INVARITY_X_X_X.get(
-        info, arguments(nargs), func.arity(), func.toErrorString());
+    final FItem func = checkUp((FItem) item, updating);
+    final int nargs = exprs.length - 1, arity = func.arity();
+    if(nargs != arity) throw arityError(func, nargs, arity, false, info);
     return func;
   }
 
   @Override
-  Value[] evalArgs(final QueryContext qc) throws QueryException {
-    final int el = exprs.length - 1;
-    final Value[] args = new Value[el];
-    for(int e = 0; e < el; e++) args[e] = exprs[e].value(qc);
-    return args;
-  }
-
-  @Override
   public boolean has(final Flag... flags) {
-    if(Flag.UPD.in(flags) && (updating || sc.mixUpdates)) return true;
-    if(Flag.NDT.in(flags) && ndt) return true;
+    if(Flag.UPD.in(flags) && (updating || sc().mixUpdates)) return true;
+    if(Flag.NDT.in(flags) && (ndt || updating || sc().mixUpdates)) return true;
     final Flag[] flgs = Flag.NDT.remove(Flag.UPD.remove(flags));
     return flgs.length != 0 && super.has(flgs);
   }
@@ -200,12 +190,12 @@ public final class DynFuncCall extends FuncCall {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, TAILCALL, tco), exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final int el = exprs.length - 1;
     qs.token(exprs[el]).token('(');
     for(int e = 0; e < el; e++) {

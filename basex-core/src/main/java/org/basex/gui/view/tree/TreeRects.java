@@ -10,7 +10,7 @@ import org.basex.query.value.seq.*;
 /**
  * This class stores the rectangles.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Wolfgang Miller
  */
 final class TreeRects {
@@ -19,7 +19,7 @@ final class TreeRects {
 
   /** Saved rectangles. */
   private TreeRect[][][] rects;
-  /** Displayed nods. */
+  /** Displayed nodes. */
   DBNodes nodes;
   /** Graphics reference. */
   Graphics g;
@@ -151,7 +151,7 @@ final class TreeRects {
    * @return text
    */
   byte[] text(final int pre) {
-    return ViewData.namedText(view.gui.gopts, nodes.data(), pre);
+    return ViewData.label(view.gui.gopts, nodes.data(), pre);
   }
 
   /**

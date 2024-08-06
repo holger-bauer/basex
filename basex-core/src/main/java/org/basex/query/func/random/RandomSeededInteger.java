@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dirk Kirsten
  */
 public final class RandomSeededInteger extends StandardFunc {
@@ -39,9 +39,9 @@ public final class RandomSeededInteger extends StandardFunc {
     final long[] args = args(qc);
     final Random r = new Random(args[0]);
     final int vl = Seq.initialCapacity(args[1]), max = (int) args[2];
-    final LongList values = new LongList(vl);
-    for(long v = 0; v < vl; v++) values.add(max == 0 ? r.nextInt() : r.nextInt(max));
-    return IntSeq.get(values.finish());
+    final LongList list = new LongList(vl);
+    for(long v = 0; v < vl; v++) list.add(max == 0 ? r.nextInt() : r.nextInt(max));
+    return IntSeq.get(list.finish());
   }
 
   /**
@@ -51,13 +51,13 @@ public final class RandomSeededInteger extends StandardFunc {
    * @throws QueryException query exception
    */
   private long[] args(final QueryContext qc) throws QueryException {
-    final long seed = toLong(exprs[0], qc);
-    final long num = toLong(exprs[1], qc);
+    final long seed = toLong(arg(0), qc);
+    final long num = toLong(arg(1), qc);
     if(num < 0) throw RANGE_NEGATIVE_X.get(info, num);
 
     long max = 0;
-    if(exprs.length > 2) {
-      max = toLong(exprs[2], qc);
+    if(defined(2)) {
+      max = toLong(arg(2), qc);
       if(max < 1 || max > Integer.MAX_VALUE) throw RANDOM_BOUNDS_X.get(info, max);
     }
     return new long[] { seed, num, max };

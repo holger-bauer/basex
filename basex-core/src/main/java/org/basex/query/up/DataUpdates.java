@@ -5,6 +5,7 @@ import static org.basex.query.QueryError.*;
 import java.io.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -14,6 +15,7 @@ import org.basex.query.func.fn.*;
 import org.basex.query.up.atomic.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.up.primitives.db.*;
+import org.basex.query.up.primitives.db.Put;
 import org.basex.query.up.primitives.node.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -26,7 +28,7 @@ import org.basex.util.list.*;
  * are initiated within a snapshot. Regarding the XQUF specification it fulfills the purpose of
  * a 'pending update list'.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class DataUpdates {
@@ -37,7 +39,7 @@ final class DataUpdates {
 
   /** Mapping between pre values of the target nodes and all node updates
    * which operate on this target. */
-  private IntObjMap<NodeUpdates> nodeUpdates = new IntObjMap<>();
+  private final IntObjMap<NodeUpdates> nodeUpdates = new IntObjMap<>();
   /** Database updates. */
   private final List<DBUpdate> dbUpdates = new LinkedList<>();
   /** Put operations which reflect all changes made during the snapshot, hence executed
@@ -94,11 +96,11 @@ final class DataUpdates {
 
   /**
    * Checks updates for violations. If a violation is found, the complete update process is aborted.
-   * @param tmp temporary mem data
+   * @param memData temporary data instance
    * @param qc query context
    * @throws QueryException query exception
    */
-  void prepare(final MemData tmp, final QueryContext qc) throws QueryException {
+  void prepare(final MemData memData, final QueryContext qc) throws QueryException {
     // Prepare/check database operations
     for(final DBUpdate update : dbUpdates) update.prepare();
 
@@ -110,7 +112,7 @@ final class DataUpdates {
 
     for(int i = 0; i < sz; ++i) {
       final NodeUpdates updates = nodeUpdates.get(nodes.get(i));
-      for(final NodeUpdate update : updates.updates) update.prepare(tmp, qc);
+      for(final NodeUpdate update : updates.updates) update.prepare(memData, qc);
     }
 
     // check attribute duplicates
@@ -158,17 +160,16 @@ final class DataUpdates {
    * @throws QueryException query exception
    */
   void apply(final QueryContext qc) throws QueryException {
-    // execute database updates
+    // apply initial database operations
+    Collections.sort(dbUpdates);
+    applyDbUpdates(true);
+
+    // execute updates within databases
     auc.execute(true);
     auc = null;
 
-    // execute database operations
-    Collections.sort(dbUpdates);
-    final int sz = dbUpdates.size();
-    for(int i = 0; i < sz; i++) {
-      dbUpdates.get(i).apply();
-      dbUpdates.set(i, null);
-    }
+    // apply remaining database operations
+    applyDbUpdates(false);
 
     // execute fn:put operations
     for(final Put put : puts.values()) put.apply();
@@ -193,7 +194,24 @@ final class DataUpdates {
           throw UPDBERROR_X.get(null, ex);
         }
       } else {
-        FnTrace.trace(Token.token(original + ": Updates are not written back."), null, qc);
+        FnTrace.trace(Token.token(original + ": Updates are not written back."), Token.EMPTY, qc);
+      }
+    }
+  }
+
+  /**
+   * Applies all database operations.
+   * @param before run updates specified before or after node updates
+   * @throws QueryException query exception
+   */
+  private void applyDbUpdates(final boolean before) throws QueryException {
+    final int pos = UpdateType._NODE_UPDATES_.ordinal();
+    for(final ListIterator<DBUpdate> iter = dbUpdates.listIterator(); iter.hasNext();) {
+      final DBUpdate up = iter.next();
+      final int ord = up.type.ordinal();
+      if(before ? ord < pos : ord > pos) {
+        up.apply();
+        iter.remove();
       }
     }
   }
@@ -207,17 +225,13 @@ final class DataUpdates {
     final List<NodeUpdate> upd = new ArrayList<>();
     for(int i = nodes.size() - 1; i >= 0; i--) {
       final int pre = nodes.get(i);
-      final NodeUpdates n = nodeUpdates.get(pre);
-      for(final NodeUpdate p : n.finish()) {
-        upd.add(p);
-        size += p.size();
+      for(final NodeUpdate up : nodeUpdates.get(pre).finish()) {
+        upd.add(up);
+        size += up.size();
       }
     }
-    for(int i = dbUpdates.size() - 1; i >= 0; i--) {
-      size += dbUpdates.get(i).size();
-    }
-    nodeUpdates = null;
     nodes = null;
+    for(final DBUpdate up : dbUpdates) size += up.size();
     upd.sort(new NodeUpdateComparator());
     return upd;
   }
@@ -266,37 +280,25 @@ final class DataUpdates {
     final byte[][] ns = names.nsOK();
     if(ns != null) throw UPNSCONFL2_X_X.get(null, ns[0], ns[1]);
 
-    // pre values of attributes that have already been added to the name pool
+    // check pre values of attributes that have already been added to the name pool
     final IntSet set = new IntSet();
+    final IntConsumer addAttribute = p -> {
+      final byte[][] qname = data.qname(p, Data.ATTR);
+      names.add(new QNm(qname[0], qname[1]), NodeType.ATTRIBUTE);
+    };
+    // pre values consist exclusively of element and attribute nodes
     for(final int pre : pres) {
-      // pre values consist exclusively of element and attribute nodes
       if(data.kind(pre) == Data.ATTR) {
-        addToPool(pre, names);
+        addAttribute.accept(pre);
         set.add(pre);
       } else {
         final int ps = pre + data.attSize(pre, Data.ELEM);
         for(int p = pre + 1; p < ps; ++p) {
-          if(!set.contains(p)) addToPool(p, names);
+          if(!set.contains(p)) addAttribute.accept(p);
         }
       }
     }
     final QNm dup = names.duplicate();
     if(dup != null) throw UPATTDUPL_X.get(null, dup);
   }
-
-  /**
-   * Adds an attribute to the pool.
-   * @param pre pre value
-   * @param names name pool
-   */
-  private void addToPool(final int pre, final NamePool names) {
-    final byte[] nm = data.name(pre, Data.ATTR);
-    final QNm name = new QNm(nm);
-    if(name.hasPrefix()) {
-      final int uriId = data.nspaces.uriIdForPrefix(Token.prefix(nm), pre, data);
-      if(uriId != 0) name.uri(data.nspaces.uri(uriId));
-    }
-    names.add(name, NodeType.ATTRIBUTE);
-  }
-
 }

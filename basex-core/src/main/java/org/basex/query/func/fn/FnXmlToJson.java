@@ -16,22 +16,22 @@ import org.basex.util.options.Options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnXmlToJson extends FnParseJson {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toNodeOrNull(exprs[0], qc);
-    final JsonSerialOptions jopts = toOptions(1, new JsonSerialOptions(), qc);
+    final ANode node = toNodeOrNull(arg(0), qc);
+    final JsonSerialOptions options = toOptions(arg(1), new JsonSerialOptions(), qc);
     if(node == null) return Empty.VALUE;
 
-    jopts.set(JsonOptions.FORMAT, JsonFormat.BASIC);
-    final Boolean indent = jopts.get(JsonSerialOptions.INDENT);
+    options.set(JsonOptions.FORMAT, JsonFormat.BASIC);
+    final Boolean indent = options.get(JsonSerialOptions.INDENT);
     // no indentation specified: adopt module indentation
-    if(indent == null) jopts.set(JsonSerialOptions.INDENT,
-        qc.serParams().get(SerializerOptions.INDENT) == YesNo.YES);
+    if(indent == null) options.set(JsonSerialOptions.INDENT,
+        qc.parameters().get(SerializerOptions.INDENT) == YesNo.YES);
 
-    return Str.get(serialize(node.iter(), JsonSerialize.options(jopts), INVALIDOPT_X, qc));
+    return Str.get(serialize(node.iter(), JsonSerialize.options(options), INVALIDOPT_X, qc));
   }
 }

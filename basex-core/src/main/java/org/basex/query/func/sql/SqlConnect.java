@@ -1,7 +1,6 @@
 package org.basex.query.func.sql;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
 import java.sql.*;
 import java.util.*;
@@ -9,12 +8,11 @@ import java.util.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
-import org.basex.util.options.*;
 
 /**
  * Functions on relational databases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class SqlConnect extends SqlFn {
@@ -25,45 +23,28 @@ public final class SqlConnect extends SqlFn {
   /** Password. */
   private static final String PASS = "password";
 
-  @SuppressWarnings("resource")
   @Override
   public Uri item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkCreate(qc);
-    // URL to relational database
-    final String url = string(toToken(exprs[0], qc));
-    final JDBCConnections jdbc = jdbc(qc);
+    final String url = toString(arg(0), qc);
+    final String username = toStringOrNull(arg(1), qc);
+    final String password = toStringOrNull(arg(2), qc);
+    final HashMap<String, String> options = toOptions(arg(3), qc);
+
+    // parse options; overwrite with user and password (if supplied); treat autocommit independently
+    final Properties props = new Properties();
+    props.putAll(options);
+    if(username != null) props.setProperty(USER, username);
+    if(password != null) props.setProperty(PASS, password);
+    final Object auto = props.remove(AUTOCOMMIT);
+
+    // open connection and set auto-commit mode
+    final Connection conn;
     try {
-      final Connection conn;
-      if(exprs.length > 2) {
-        // credentials
-        final String user = string(toToken(exprs[1], qc));
-        final String pass = string(toToken(exprs[2], qc));
-        if(exprs.length == 4) {
-          // parse connection options
-          final HashMap<String, String> options = toOptions(3, new Options(), qc).free();
-
-          // prepares connection properties
-          final Properties props = new Properties();
-          options.forEach((key, value) -> {
-            if(!key.equals(AUTOCOMMIT)) props.setProperty(key, value);
-          });
-          props.setProperty(USER, user);
-          props.setProperty(PASS, pass);
-
-          // open connection and set auto-commit mode
-          conn = DriverManager.getConnection(url, props);
-          if(options.containsKey(AUTOCOMMIT)) {
-            conn.setAutoCommit(Strings.toBoolean(options.get(AUTOCOMMIT)));
-          }
-        } else {
-          conn = DriverManager.getConnection(url, user, pass);
-        }
-      } else {
-        conn = DriverManager.getConnection(url);
-      }
-      return jdbc.add(conn, url);
+      conn = DriverManager.getConnection(url, props);
+      if(auto != null) conn.setAutoCommit(Strings.toBoolean(auto.toString()));
     } catch(final SQLException ex) {
       throw SQL_ERROR_X.get(info, ex);
     }
+    return jdbc(qc).add(conn, url);
   }
 }

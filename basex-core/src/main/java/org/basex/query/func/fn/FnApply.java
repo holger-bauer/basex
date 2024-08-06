@@ -2,6 +2,8 @@ package org.basex.query.func.fn;
 
 import static org.basex.query.QueryError.*;
 
+import java.util.*;
+
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
@@ -15,54 +17,68 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnApply extends StandardFunc {
   @Override
-  public final Value value(final QueryContext qc) throws QueryException {
-    final FItem func = toFunc(exprs[0], qc);
-    final XQArray array = toArray(exprs[1], qc);
+  public Value value(final QueryContext qc) throws QueryException {
+    final FItem function = checkUp(toFunction(arg(0), qc), this instanceof UpdateApply);
+    final XQArray arguments = toArray(arg(1), qc);
 
-    final long ar = checkUp(func, this instanceof UpdateApply, sc).arity(), as = array.arraySize();
-    if(ar != as) throw APPLY_X_X.get(info, ar, as);
-
-    final ValueList values = new ValueList(as);
-    for(final Value value : array.members()) values.add(value);
-    return func.invoke(qc, info, values.finish());
+    final ValueList args = new ValueList(arguments.arraySize());
+    for(final Value arg : arguments.members()) args.add(arg);
+    return apply(function, args, qc);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr1 = exprs[0], expr2 = exprs[1];
-    FuncType ft1 = expr1.funcType();
-    final FuncType ft2 = expr2.funcType();
+    final Expr func = arg(0), args = arg(1);
+    FuncType ft = func.funcType();
+    final Type tpArgs = args.seqType().type;
 
     // try to pass on types of array argument to function item
-    if(ft2 instanceof ArrayType) {
-      if(expr2 instanceof XQArray) {
+    if(tpArgs instanceof ArrayType) {
+      if(args instanceof XQArray) {
         // argument is a value: final types are known
-        final XQArray arr = (XQArray) expr2;
-        final int as = Math.max(0, (int) arr.arraySize());
-        final SeqType[] args = new SeqType[as];
-        for(int a = 0; a < as; a++) args[a] = arr.get(a).seqType();
-        exprs[0] = coerceFunc(exprs[0], cc, SeqType.ITEM_ZM, args);
-      } else if(ft1 != null) {
+        final XQArray array = (XQArray) args;
+        final int as = Math.max(0, (int) array.arraySize());
+        final SeqType[] ast = new SeqType[as];
+        for(int a = 0; a < as; a++) ast[a] = array.get(a).seqType();
+        arg(0, arg -> refineFunc(arg, cc, SeqType.ITEM_ZM, ast));
+      } else if(ft != null) {
         // argument will be of type array: assign generic array return type to all arguments
-        final SeqType[] args1 = ft1.argTypes;
-        if(args1 != null) {
-          final int as = args1.length;
-          final SeqType[] args2 = new SeqType[as];
-          final ArrayType at2 = (ArrayType) ft2;
-          for(int a = 0; a < as; a++) args2[a] = at2.declType;
-          exprs[0] = coerceFunc(exprs[0], cc, SeqType.ITEM_ZM, args2);
+        final SeqType[] at = ft.argTypes;
+        if(at != null) {
+          final SeqType[] ast = new SeqType[at.length];
+          Arrays.fill(ast, ((ArrayType) tpArgs).memberType);
+          arg(0, arg -> refineFunc(arg, cc, SeqType.ITEM_ZM, ast));
         }
       }
     }
 
-    final boolean updating = this instanceof UpdateApply;
-    ft1 = exprs[0].funcType();
-    if(ft1 != null && !updating) exprType.assign(ft1.declType);
+    ft = arg(0).funcType();
+    if(ft != null) exprType.assign(ft.declType);
     return this;
+  }
+
+  /**
+   * Applies a function with the specified arguments.
+   * @param func function
+   * @param args arguments
+   * @param qc query context
+   * @return result
+   * @throws QueryException query exception
+   */
+  protected final Value apply(final FItem func, final ValueList args, final QueryContext qc)
+      throws QueryException {
+    final long ar = func.arity(), as = args.size();
+    if(ar != as) throw APPLY_X_X.get(info, arguments(as), func, args);
+    return func.invoke(qc, info, args.finish());
+  }
+
+  @Override
+  public int hofIndex() {
+    return 0;
   }
 }

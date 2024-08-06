@@ -7,6 +7,8 @@ import java.util.*;
 import javax.swing.tree.*;
 
 import org.basex.core.*;
+import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
@@ -14,13 +16,13 @@ import org.basex.util.list.*;
 /**
  * JTree node which represents a folder.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public class ResourceFolder extends ResourceNode {
   /** Comparator. */
   private static final Comparator<byte[]> CMP =
-      (o1, o2) -> Prop.CASE ? diff(o1, o2) : diff(lc(o1), lc(o2));
+      (o1, o2) -> Prop.CASE ? compare(o1, o2) : compare(lc(o1), lc(o2));
 
   /** Children of node have been loaded. */
   private boolean loaded;
@@ -32,11 +34,11 @@ public class ResourceFolder extends ResourceNode {
    * @param name displayed node name
    * @param path folder path
    * @param tree tree reference
-   * @param context database context
+   * @param data database reference
    */
   public ResourceFolder(final byte[] name, final byte[] path, final BaseXTree tree,
-      final Context context) {
-    super(name, path, tree, context);
+      final Data data) {
+    super(name, path, tree, data);
   }
 
   @Override
@@ -47,16 +49,17 @@ public class ResourceFolder extends ResourceNode {
     int cmax = MAXC;
     // add folders
     final byte[] sub = subfolder();
-    final TokenSet set = context.data().resources.children(subfolder(), true);
+    final TokenSet set = data.resources.children(string(sub), true);
     for(final byte[] f : new TokenList(set).sort(Prop.CASE)) {
-      add(new ResourceFolder(f, sub, tree, context));
+      add(new ResourceFolder(f, sub, tree, data));
       if(--cmax == 0) break;
     }
     // add leaves
     cmax = addLeaves(EMPTY, cmax, this);
     // add dummy node if not all nodes are displayed
-    if(cmax <= 0)
-      add(new ResourceLeaf(token(Text.DOTS), sub, false, true, tree, context));
+    if(cmax <= 0) {
+      add(new ResourceLeaf(token(Text.DOTS), sub, ResourceType.XML, true, tree, data));
+    }
 
     loaded = true;
     ((DefaultTreeModel) tree.getModel()).nodeStructureChanged(this);
@@ -72,11 +75,11 @@ public class ResourceFolder extends ResourceNode {
    * @return number of remaining nodes that can be added
    */
   public final int addLeaves(final byte[] filter, final int cmax, final ResourceFolder target) {
-    final TokenBoolMap tbm = context.data().resources.children(subfolder(), false);
-    final List<byte[]> keys = new ArrayList<>(tbm.size());
+    final TokenObjMap<ResourceType> map = data.resources.children(string(subfolder()), false);
+    final List<byte[]> keys = new ArrayList<>(map.size());
 
     // get desired leaves, depending on the given filter
-    for(final byte[] b : tbm) {
+    for(final byte[] b : map) {
       if(filter.length == 0 || eq(b, filter)) keys.add(b);
     }
     keys.sort(CMP);
@@ -87,7 +90,7 @@ public class ResourceFolder extends ResourceNode {
     final int ks = keys.size();
     while(k < ks && m-- > 0) {
       final byte[] nm = keys.get(k++);
-      target.add(new ResourceLeaf(nm, sub, tbm.get(nm), false, tree, context));
+      target.add(new ResourceLeaf(nm, sub, map.get(nm), false, tree, data));
     }
 
     return m;

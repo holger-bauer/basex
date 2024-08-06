@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * A min-heap.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  * @param <K> key type
  * @param <V> value type
@@ -93,7 +93,7 @@ public final class MinHeap<K, V> {
    * Compares the keys at position {@code i} and {@code j}.
    * @param i position of first key
    * @param j position of second key
-   * @return result of check
+   * @return result of comparison
    */
   @SuppressWarnings("unchecked")
   private int compare(final int i, final int j) {
@@ -118,7 +118,7 @@ public final class MinHeap<K, V> {
 
   /**
    * Verifies the inner structure of the heap.
-   * @throws IllegalStateException if the invariants don't hold
+   * @throws IllegalStateException if the invariants do not hold
    */
   void verify() {
     verify(0);
@@ -127,7 +127,7 @@ public final class MinHeap<K, V> {
   /**
    * Checks if the heap invariant holds for the node at position {@code i}.
    * @param i position of the node
-   * @throws IllegalStateException if the invariants don't hold
+   * @throws IllegalStateException if the invariants do not hold
    */
   private void verify(final int i) {
     if(2 * i + 1 < size) {

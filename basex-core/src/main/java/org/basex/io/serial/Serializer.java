@@ -26,21 +26,23 @@ import org.basex.util.list.*;
 /**
  * This is an interface for serializing XQuery values.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Serializer implements Closeable {
   /** Stack with names of opened elements. */
-  protected final Stack<QNm> elems = new Stack<>();
+  protected final Stack<QNm> opened = new Stack<>();
   /** Current level. */
   protected int level;
   /** Current element name. */
   protected QNm elem;
+  /** Most recent tag, in case it was a closing tag. */
+  protected QNm closed = QNm.EMPTY;
   /** Indentation flag. */
   protected boolean indent;
 
   /** Stack with currently available namespaces. */
-  private final Atts nspaces = new Atts(XML, QueryText.XML_URI).add(EMPTY, EMPTY);
+  private final Atts nspaces = new Atts(2).add(XML, QueryText.XML_URI).add(EMPTY, EMPTY);
   /** Stack with namespace size pointers. */
   private final IntList nstack = new IntList();
 
@@ -51,7 +53,7 @@ public abstract class Serializer implements Closeable {
   /** Flag for skipping elements. */
   protected int skip;
   /** Indicates if an element is currently being opened. */
-  private boolean opening;
+  protected boolean opening;
 
   /**
    * Returns a default serializer.
@@ -66,7 +68,7 @@ public abstract class Serializer implements Closeable {
   /**
    * Returns a specific serializer.
    * @param os output stream reference
-   * @param sopts serialization parameters (may be {@code null})
+   * @param sopts serialization parameters (can be {@code null})
    * @return serializer
    * @throws IOException I/O exception
    */
@@ -172,6 +174,7 @@ public abstract class Serializer implements Closeable {
     opening = true;
     elem = name;
     startOpen(name);
+    closed = QNm.EMPTY;
     nstack.push(nspaces.size());
   }
 
@@ -184,11 +187,12 @@ public abstract class Serializer implements Closeable {
     if(opening) {
       finishEmpty();
       opening = false;
+      closed = elem;
     } else {
-      elem = elems.peek();
+      elem = opened.peek();
       level--;
       finishClose();
-      elems.pop();
+      closed = opened.pop();
     }
   }
 
@@ -461,7 +465,8 @@ public abstract class Serializer implements Closeable {
 
       // serialize declared namespaces
       final Atts nsp = node.namespaces();
-      for(int p = nsp.size() - 1; p >= 0; p--) namespace(nsp.name(p), nsp.value(p), false);
+      final int ps = nsp.size();
+      for(int p = 0; p < ps; p++) namespace(nsp.name(p), nsp.value(p), false);
       // add new or updated namespace
       namespace(name.prefix(), name.uri(), false);
 
@@ -524,7 +529,7 @@ public abstract class Serializer implements Closeable {
     if(!opening) return;
     opening = false;
     finishOpen();
-    elems.push(elem);
+    opened.push(elem);
     level++;
   }
 
@@ -534,24 +539,29 @@ public abstract class Serializer implements Closeable {
    * Serializes the specified value.
    * @param value value
    * @param chop chop large tokens
-   * @param quote character for quoting the value; ignored if {@code null}
+   * @param quote character for quoting the value; ignored if {@code 0}
    * @return value
    */
-  public static byte[] value(final byte[] value, final int quote, final boolean chop) {
+  public static byte[] value(final byte[] value, final char quote, final boolean chop) {
+    final boolean quoting = quote != 0;
     final TokenBuilder tb = new TokenBuilder();
-    if(quote != 0) tb.add(quote);
-    for(final byte v : value) {
-      if(chop && tb.size() > 127) {
+    if(quoting) tb.add(quote);
+
+    int c = 0;
+    for(final TokenParser tp = new TokenParser(value); tp.more(); c++) {
+      if(chop && c == 200) {
         tb.add(QueryText.DOTS);
         break;
       }
-      if(v == '&') tb.add(E_AMP);
-      else if(v == '\r') tb.add(E_CR);
-      else if(v == '\n') tb.add(E_NL);
-      else if(v == quote) tb.add(quote).add(quote);
-      else tb.addByte(v);
+      final int cp = tp.next();
+      if(cp == '&') tb.add(E_AMP);
+      else if(cp == '\r') tb.add(E_CR);
+      else if(cp == '\n') tb.add(E_NL);
+      else if(cp == quote) tb.add(quote).add(quote);
+      else tb.add(cp);
     }
-    if(quote != 0) tb.add(quote);
+
+    if(quoting) tb.add(quote);
     return tb.finish();
   }
 }

@@ -1,6 +1,5 @@
 package org.basex.query.func.ft;
 
-import static org.basex.query.QueryError.*;
 import static org.basex.util.ft.FTFlag.*;
 
 import org.basex.query.*;
@@ -14,37 +13,34 @@ import org.basex.util.ft.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FtContains extends FtAccess {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Value input = exprs[0].value(qc), query = exprs[1].value(qc);
-    final FtContainsOptions opts = toOptions(2, new FtContainsOptions(), qc);
+    final Value input = arg(0).value(qc), terms = arg(1).value(qc);
+    final FtContainsOptions options = toOptions(arg(2), new FtContainsOptions(), qc);
 
-    final FTOpt opt = new FTOpt().assign(qc.ftOpt());
-    final FTMode mode = opts.get(FtIndexOptions.MODE);
-    opt.set(FZ, opts.get(FtIndexOptions.FUZZY));
-    opt.set(WC, opts.get(FtIndexOptions.WILDCARDS));
-    if(opt.is(FZ) && opt.is(WC)) throw FT_OPTIONS.get(info, this);
+    final FTMode mode = options.get(FtIndexOptions.MODE);
+    final FTOpt opt = ftOpt(options, qc).assign(qc.ftOpt());
 
-    final FTDiacritics dc = opts.get(FtContainsOptions.DIACRITICS);
+    final FTDiacritics dc = options.get(FtContainsOptions.DIACRITICS);
     if(dc != null) opt.set(DC, dc == FTDiacritics.SENSITIVE);
-    final Boolean st = opts.get(FtContainsOptions.STEMMING);
+    final Boolean st = options.get(FtContainsOptions.STEMMING);
     if(st != null) opt.set(ST, st);
-    final String ln = opts.get(FtContainsOptions.LANGUAGE);
+    final String ln = options.get(FtContainsOptions.LANGUAGE);
     if(ln != null) opt.ln = Language.get(ln);
-    final FTCase cs = opts.get(FtContainsOptions.CASE);
+    final FTCase cs = options.get(FtContainsOptions.CASE);
     if(cs != null) opt.cs = cs;
 
-    final FTWords ftw = new FTWords(info, query, mode, null).ftOpt(opt).optimize(qc);
-    return new FTContains(input, options(ftw, opts), info).item(qc, info);
+    final FTWords ftw = new FTWords(info, terms, mode, null).ftOpt(opt).optimize(qc);
+    return new FTContains(input, ftExpr(ftw, options), info).item(qc, info);
   }
 
   @Override
   protected void simplifyArgs(final CompileContext cc) throws QueryException {
-    exprs[0] = exprs[0].simplifyFor(Simplify.STRING, cc);
-    exprs[1] = exprs[1].simplifyFor(Simplify.STRING, cc);
+    arg(0, arg -> arg.simplifyFor(Simplify.STRING, cc));
+    arg(1, arg -> arg.simplifyFor(Simplify.STRING, cc));
   }
 }

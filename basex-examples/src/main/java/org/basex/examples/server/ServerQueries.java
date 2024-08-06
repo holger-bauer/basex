@@ -6,7 +6,7 @@ import org.basex.api.client.*;
 /**
  * This class demonstrates query execution via the client/server architecture.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class ServerQueries {
   /**
@@ -22,7 +22,7 @@ public final class ServerQueries {
 
     BaseXServer server = new BaseXServer();
 
-    // Create a client session with host name, port, user name and password
+    // Create a client session with host name, port, username and password
     System.out.println("\n* Create a client session.");
 
     try(ClientSession session = new ClientSession("localhost", 1984, "admin", "admin")) {

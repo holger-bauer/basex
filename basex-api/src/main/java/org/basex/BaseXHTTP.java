@@ -1,10 +1,11 @@
 package org.basex;
 
 import static org.basex.core.Text.*;
-import static org.basex.http.HTTPText.*;
+import static org.basex.util.http.HTTPText.*;
 
 import java.io.*;
 import java.net.*;
+import java.util.Map.*;
 import java.util.function.*;
 
 import org.basex.core.*;
@@ -12,16 +13,18 @@ import org.basex.http.*;
 import org.basex.io.*;
 import org.basex.server.Log.*;
 import org.basex.util.*;
+import org.eclipse.jetty.http.*;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.gzip.*;
 import org.eclipse.jetty.util.resource.*;
 import org.eclipse.jetty.webapp.*;
+import org.eclipse.jetty.websocket.server.config.*;
 import org.eclipse.jetty.xml.*;
 
 /**
  * This is the main class for the starting the database HTTP services.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Dirk Kirsten
  */
@@ -37,6 +40,8 @@ public final class BaseXHTTP extends CLI {
   private boolean service;
   /** Quiet flag. */
   private boolean quiet;
+  /** Default admin password. */
+  private String password;
   /** Stop flag. */
   private boolean stop;
   /** HTTP port. */
@@ -67,7 +72,7 @@ public final class BaseXHTTP extends CLI {
     // context must be initialized after parsing of arguments
     soptions = new StaticOptions(true);
 
-    if(!quiet) Util.outln(header());
+    if(!quiet) Util.println(header());
 
     hc = HTTPContext.get();
     hc.init(soptions);
@@ -82,11 +87,14 @@ public final class BaseXHTTP extends CLI {
     // enable GZIP support
     if(soptions.get(StaticOptions.GZIP)) {
       final GzipHandler gzip = new GzipHandler();
+      gzip.addIncludedMethods(HttpMethod.POST.asString(), HttpMethod.PUT.asString());
+      gzip.setInflateBufferSize(1024);
       gzip.setHandler(wac);
       jetty.setHandler(gzip);
     } else {
       jetty.setHandler(wac);
     }
+    JettyWebSocketServletContainerInitializer.configure(wac, null);
 
     ServerConnector sc = null;
     for(final Connector conn : jetty.getConnectors()) {
@@ -101,10 +109,10 @@ public final class BaseXHTTP extends CLI {
     final Function<Boolean, String> msg2 = start -> Util.info(HTTP + ' ' + msg1.apply(start), port);
     // output user info, keep message visible for a while
     final Consumer<Boolean> info = start -> {
-      Util.outln(msg2.apply(start));
+      Util.println(msg2.apply(start));
       if(!soptions.get(StaticOptions.HTTPLOCAL)) {
         final int serverPort = soptions.get(StaticOptions.SERVERPORT);
-        Util.outln(msg1.apply(start), serverPort);
+        Util.println(msg1.apply(start), serverPort);
       }
       Performance.sleep(1000);
     };
@@ -137,6 +145,7 @@ public final class BaseXHTTP extends CLI {
     // initialize web.xml settings, assign system properties and run database server.
     // the call of this function may already have been triggered during the start of jetty
     context = hc.init(wac.getServletContext());
+    if(password != null) context.user().password(password);
 
     // start daemon for stopping the HTTP server
     final int stopPort = soptions.get(StaticOptions.STOPPORT);
@@ -146,19 +155,19 @@ public final class BaseXHTTP extends CLI {
     // otherwise, it may only be called if the JVM process is already shut down
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       final String message = msg2.apply(false);
-      if(!quiet) Util.outln(message);
+      if(!quiet) Util.println(message);
       context.log.writeServer(LogType.OK, message);
       context.close();
     }));
 
     // show start message
-    if(!quiet) Util.outln(msg2.apply(true));
+    if(!quiet) Util.println(msg2.apply(true));
 
     // log server start at very end (logging flag could have been updated by web.xml)
     context.log.writeServer(LogType.OK, msg2.apply(true));
 
     // execute initial command-line arguments
-    for(final Pair<String, String> cmd : commands) {
+    for(final Entry<String, String> cmd : commands) {
       if(!execute(cmd)) return;
     }
   }
@@ -181,8 +190,8 @@ public final class BaseXHTTP extends CLI {
    * @throws IOException I/O exception
    */
   private static IOFile locate(final String file, final String root) throws IOException {
-    final IOFile trg = new IOFile(root, file);
-    final boolean create = !trg.exists();
+    final IOFile target = new IOFile(root, file);
+    final boolean create = !target.exists();
 
     // try to locate file from development branch
     final IO io = new IOFile("src/main/webapp", file);
@@ -207,16 +216,16 @@ public final class BaseXHTTP extends CLI {
         data = new IOStream(is).read();
       }
     } else {
-      return trg;
+      return target;
     }
 
     if(create) {
       // create configuration file
-      Util.errln("Creating " +  trg);
-      trg.parent().md();
-      trg.write(data);
+      Util.errln("Creating " +  target);
+      target.parent().md();
+      target.write(data);
     }
-    return trg;
+    return target;
   }
 
   @Override
@@ -229,8 +238,11 @@ public final class BaseXHTTP extends CLI {
     while(arg.more()) {
       if(arg.dash()) {
         switch(arg.next()) {
-          case 'c': // gather up database commands
-            commands.add(input(arg.string()));
+          case 'c': // database command
+            commands.add(commands(arg.string()));
+            break;
+          case 'C': // command script
+            commands.add(script(arg.string()));
             break;
           case 'd': // activate debug mode
             Prop.put(StaticOptions.DEBUG, Boolean.toString(true));
@@ -258,6 +270,9 @@ public final class BaseXHTTP extends CLI {
             Prop.put(StaticOptions.PORT, Integer.toString(p));
             Prop.put(StaticOptions.SERVERPORT, Integer.toString(p));
             break;
+          case 'P': // default admin password
+            password = arg.string();
+            break;
           case 'q': // quiet flag (hidden)
             quiet = true;
             break;
@@ -267,7 +282,7 @@ public final class BaseXHTTP extends CLI {
           case 'S': // set service flag
             service = daemon;
             break;
-          case 'U': // specify user name
+          case 'U': // specify username
             Prop.put(StaticOptions.USER, arg.string());
             break;
           case 'z': // suppress logging
@@ -360,11 +375,11 @@ public final class BaseXHTTP extends CLI {
     public void run() {
       try {
         while(true) {
-          Util.outln(HTTP + " STOP " + SRV_STARTED_PORT_X, stopPort);
+          Util.println(HTTP + " STOP " + SRV_STARTED_PORT_X, stopPort);
           try(Socket s = socket.accept()) { /* no action */ }
           if(stopFile.exists()) {
             socket.close();
-            Util.outln(HTTP + " STOP " + SRV_STOPPED_PORT_X, stopPort);
+            Util.println(HTTP + " STOP " + SRV_STOPPED_PORT_X, stopPort);
             jetty.stop();
             hc.close();
             Prop.clear();

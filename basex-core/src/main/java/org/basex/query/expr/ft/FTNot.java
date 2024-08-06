@@ -15,14 +15,14 @@ import org.basex.util.hash.*;
 /**
  * FTUnaryNot expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
 public final class FTNot extends FTExpr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    */
   public FTNot(final InputInfo info, final FTExpr expr) {
@@ -115,7 +115,7 @@ public final class FTNot extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(FTNOT).token(exprs[0]);
   }
 }

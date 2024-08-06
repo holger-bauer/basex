@@ -18,21 +18,19 @@ import org.basex.util.hash.*;
 /**
  * Namespace constructor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CNSpace extends CName {
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param computed computed constructor
    * @param name name
    * @param value value
    */
-  public CNSpace(final StaticContext sc, final InputInfo info, final boolean computed,
-      final Expr name, final Expr value) {
-    super(sc, info, SeqType.NAMESPACE_NODE_O, computed, name, value);
+  public CNSpace(final InputInfo info, final boolean computed, final Expr name, final Expr value) {
+    super(info, SeqType.NAMESPACE_NODE_O, computed, name, value);
   }
 
   @Override
@@ -49,9 +47,9 @@ public final class CNSpace extends CName {
   @Override
   public FNSpace item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final byte[] nm = ncname(true, qc);
-    if(nm.length != 0 && !XMLToken.isNCName(nm)) throw INVNSNAME_X.get(info, nm);
+    if(nm.length != 0 && !XMLToken.isNCName(nm)) throw INVNSPREFIX_X.get(info, nm);
 
-    final byte[] value = atomValue(qc);
+    final byte[] value = atomValue(qc, true);
     if(eq(nm, XML) ^ eq(value, XML_URI)) throw CNXML.get(info);
     if(eq(nm, XMLNS)) throw CNINV_X.get(info, nm);
     if(eq(value, XMLNS_URI) || value.length == 0) throw CNINVNS_X.get(info, value);
@@ -61,7 +59,7 @@ public final class CNSpace extends CName {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new CNSpace(sc, info, computed, name.copy(cc, vm), exprs[0].copy(cc, vm)));
+    return copyType(new CNSpace(info, computed, name.copy(cc, vm), exprs[0].copy(cc, vm)));
   }
 
   @Override
@@ -70,7 +68,7 @@ public final class CNSpace extends CName {
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    plan(qs, NAMESPACE);
+  public void toString(final QueryString qs) {
+    toString(qs, NAMESPACE);
   }
 }

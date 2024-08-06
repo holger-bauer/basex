@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Delete primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class DeleteNode extends NodeUpdate {
@@ -23,27 +23,27 @@ public final class DeleteNode extends NodeUpdate {
    * Constructor.
    * @param pre target node PRE value
    * @param data target data reference
-   * @param ii input info
+   * @param info input info (can be {@code null})
    */
-  public DeleteNode(final int pre, final Data data, final InputInfo ii) {
-    this(pre, data, ii, false);
+  public DeleteNode(final int pre, final Data data, final InputInfo info) {
+    this(pre, data, info, false);
   }
 
   /**
-   * Constructor for a delete primitive that is a product of a replaceElementContent
+   * Constructor for a DELETE primitive that is a product of a replaceElementContent
    * substitution.
    * @param pre target node PRE value
    * @param data target data reference
-   * @param ii input info
-   * @param rec this delete is a product of a replaceElementContent substitution
+   * @param info input info (can be {@code null})
+   * @param rec this DELETE is a product of a replaceElementContent substitution
    */
-  DeleteNode(final int pre, final Data data, final InputInfo ii, final boolean rec) {
-    super(UpdateType.DELETENODE, pre, data, ii);
+  DeleteNode(final int pre, final Data data, final InputInfo info, final boolean rec) {
+    super(UpdateType.DELETENODE, pre, data, info);
     this.rec = rec;
   }
 
   @Override
-  public void prepare(final MemData tmp, final QueryContext qc) { }
+  public void prepare(final MemData memData, final QueryContext qc) { }
 
   @Override
   public void merge(final Update update) {

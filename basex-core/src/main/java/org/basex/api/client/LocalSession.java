@@ -12,7 +12,7 @@ import org.basex.server.*;
 /**
  * This class offers methods to locally execute database commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class LocalSession extends Session {
@@ -39,7 +39,7 @@ public class LocalSession extends Session {
   /**
    * Constructor, specifying login data.
    * @param context context
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @throws LoginException login exception
    */
@@ -51,7 +51,7 @@ public class LocalSession extends Session {
   /**
    * Constructor, specifying login data and an output stream.
    * @param context context
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @param output client output; if set to {@code null}, results will be returned as strings
    * @throws LoginException login exception
@@ -60,8 +60,7 @@ public class LocalSession extends Session {
       final OutputStream output) throws LoginException {
 
     this(context, output, context.users.get(username));
-    final User user = ctx.user();
-    if(!user.matches(password)) throw new LoginException(user.name());
+    if(!ctx.user().matches(password)) throw new LoginException(username);
   }
 
   /**
@@ -87,13 +86,13 @@ public class LocalSession extends Session {
   }
 
   @Override
-  public void replace(final String path, final InputStream input) throws BaseXException {
-    execute(new Replace(path), input);
+  public void put(final String path, final InputStream input) throws BaseXException {
+    execute(new Put(path), input);
   }
 
   @Override
-  public void store(final String path, final InputStream input) throws BaseXException {
-    execute(new Store(path), input);
+  public void putBinary(final String path, final InputStream input) throws BaseXException {
+    execute(new BinaryPut(path), input);
   }
 
   /**

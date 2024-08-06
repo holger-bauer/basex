@@ -12,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * JDBC connections.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class JDBCConnections implements QueryResource {
@@ -30,7 +30,7 @@ public final class JDBCConnections implements QueryResource {
   synchronized Uri add(final Connection conn, final String url) {
     final byte[] uri = token(url + "/connection-" + ++lastId);
     conns.put(uri, conn);
-    return Uri.uri(uri);
+    return Uri.get(uri);
   }
 
   /**
@@ -43,7 +43,7 @@ public final class JDBCConnections implements QueryResource {
     final String url = string(get(stmt.getConnection())).replaceAll("^(.+)/.+$", "$1");
     final byte[] uri = token(url + "/statement-" + ++lastId);
     conns.put(uri, stmt);
-    return Uri.uri(uri);
+    return Uri.get(uri);
   }
 
   /**
@@ -68,7 +68,7 @@ public final class JDBCConnections implements QueryResource {
    * @param ac connection or prepared statement
    * @return id or {@code null}
    */
-  synchronized byte[] get(final AutoCloseable ac) {
+  private byte[] get(final AutoCloseable ac) {
     for(final byte[] id : conns) {
       if(conns.get(id) == ac) return id;
     }

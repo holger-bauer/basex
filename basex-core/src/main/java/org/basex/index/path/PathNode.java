@@ -15,7 +15,7 @@ import org.basex.util.*;
 /**
  * This class represents a node of the path index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class PathNode {
@@ -224,5 +224,10 @@ public final class PathNode {
     tb.add(": " + stats);
     for(final PathNode p : children) tb.add(p.info(data, level + 1));
     return tb.finish();
+  }
+
+  @Override
+  public String toString() {
+    return Util.className(this) + '[' + name + ':' + kind + ']';
   }
 }

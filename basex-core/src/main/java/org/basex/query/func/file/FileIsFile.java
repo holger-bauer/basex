@@ -8,12 +8,12 @@ import org.basex.query.value.item.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FileIsFile extends FileFn {
   @Override
   public Item item(final QueryContext qc) throws QueryException {
-    return Bln.get(Files.isRegularFile(toPath(0, qc)));
+    return Bln.get(Files.isRegularFile(toPath(arg(0), qc)));
   }
 }

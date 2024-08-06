@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the functions of the Fulltext Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FtModuleTest extends SandboxTest {
@@ -35,38 +35,51 @@ public final class FtModuleTest extends SandboxTest {
 
     // check index results
     query(func.args("Assignments", "assignments"), true);
-    query(func.args("Exercise 1", "('exercise','1')"), true);
-    query(func.args("Exercise 1", " <x>1</x>"), true);
+    query(func.args("Exercise 1", "('exercise', '1')"), true);
+    query(func.args("Exercise 1", wrap(1)), true);
     query(func.args("Exercise 1", "1"), true);
     query(func.args("Exercise 1", "X"), false);
-    query(func.args(" ('A','B')", " ('C','B')"), true);
+    query(func.args(" ('A', 'B')", " ('C', 'B')"), true);
 
     // check match options
-    query(func.args("Assignments", "Azzignments", " map { 'fuzzy':'yes' }"), true);
-    query(func.args("Assignments", "Azzignments", " map { 'fuzzy':'no' }"), false);
-    query(func.args("Assignments", "assignment", " map { 'stemming':true() }"), true);
-    query(func.args("Assignment", "assignments", " map { 'stemming':true() }"), true);
-    query(func.args("A", "a", " map { 'case':'upper' }"), true);
-    query(func.args("a", "A", " map { 'case':'lower' }"), true);
-    query(func.args("A", "a", " map { 'case':'insensitive' }"), true);
-    query(func.args("A", "a", " map { 'case':'sensitive' }"), false);
+    query(func.args("Assignments", "Azzignments", " map { 'fuzzy': 'yes' }"), true);
+    query(func.args("Assignments", "Azzignments", " map { 'fuzzy': 'no' }"), false);
+    query(func.args("Assignments", "assignment", " map { 'stemming': true() }"), true);
+    query(func.args("Assignment", "assignments", " map { 'stemming': true() }"), true);
+    query(func.args("A", "a", " map { 'case': 'upper' }"), true);
+    query(func.args("a", "A", " map { 'case': 'lower' }"), true);
+    query(func.args("A", "a", " map { 'case': 'insensitive' }"), true);
+    query(func.args("A", "a", " map { 'case': 'sensitive' }"), false);
     // check search modes
-    query(func.args("Exercise 1", "1 Exercise", " map { 'mode':'phrase' }"), false);
-    query(func.args("Exercise 1", "1 Exercise", " map { 'mode':'all' }"), false);
-    query(func.args("Exercise 1", "1 Exercise", " map { 'mode':'any' }"), false);
-    query(func.args("Exercise 1", "1 Exercise", " map { 'mode':'any word' }"), true);
-    query(func.args("Exercise 1", "1 Exercise", " map { 'mode':'all words' }"), true);
+    query(func.args("Exercise 1", "1 Exercise", " map { 'mode': 'phrase' }"), false);
+    query(func.args("Exercise 1", "1 Exercise", " map { 'mode': 'all' }"), false);
+    query(func.args("Exercise 1", "1 Exercise", " map { 'mode': 'any' }"), false);
+    query(func.args("Exercise 1", "1 Exercise", " map { 'mode': 'any word' }"), true);
+    query(func.args("Exercise 1", "1 Exercise", " map { 'mode': 'all words' }"), true);
 
     query(func.args("databases and xml", "databases xml",
-        " map { 'mode': 'all words', 'distance':map { 'min': 0, 'max': 1 } }"), true);
+        " map { 'mode': 'all words', 'distance': map { 'min': 0, 'max': 1 } }"), true);
     query(func.args("databases and xml", "databases xml",
-        " map { 'mode': 'all words', 'distance':map { 'max': 0 } }"), false);
+        " map { 'mode': 'all words', 'distance': map { 'max': 0 } }"), false);
     query(func.args("databases and xml", "databases xml",
-        " map { 'mode': 'all words', 'window':map { 'size': 3 } }"), true);
+        " map { 'mode': 'all words', 'window': map { 'size': 3 } }"), true);
+
+    // GH-2296
+    query(func.args("serch", "serch", " { 'fuzzy': true() }"), true);
+    query(func.args("surch", "serch", " { 'fuzzy': true() }"), true);
+    query(func.args("serch", "surch", " { 'fuzzy': true() }"), true);
+    query(func.args("行イ音便", "行イ音便", " { 'fuzzy': true() }"), true);
+    query(func.args("行イ音音", "行イ音便", " { 'fuzzy': true() }"), true);
+    query(func.args("行イ音便", "行イ音音", " { 'fuzzy': true() }"), true);
+    query(func.args("イイ音便", "行イ音便", " { 'fuzzy': true() }"), true);
+    query(func.args("行イ音便", "イイ音便", " { 'fuzzy': true() }"), true);
+
+    query(func.args("行イ音便", "serch", " { 'fuzzy': true() }"), false);
+    query(func.args("serch", "行イ音便", " { 'fuzzy': true() }"), false);
 
     // check buggy options
-    error(func.args("x", "x", " map { 'x': 'y' }"), INVALIDOPT_X);
-    error(func.args("x", "x", " map { 'mode': '' }"), INVALIDOPT_X);
+    error(func.args("x", "x", " map { 'x': 'y' }"), OPTION_X);
+    error(func.args("x", "x", " map { 'mode': '' }"), OPTION_X);
     error(func.args("x", "x", " 1"), MAP_X_X);
   }
 
@@ -77,18 +90,18 @@ public final class FtModuleTest extends SandboxTest {
     query(func.args(" //*[text() contains text '1']"), 1);
     query(func.args(" //li[text() contains text 'exercise']"), 2);
     query("for $i in //li[text() contains text 'exercise'] return " +
-       func.args(" $i[text() contains text 'exercise']"), "1\n1");
+        func.args(" $i[text() contains text 'exercise']"), "1\n1");
   }
 
   /** Test method. */
   @Test public void extract() {
     final Function func = _FT_EXTRACT;
     query(func.args(" //*[text() contains text '1']"),
-      "<li>Exercise <mark>1</mark>\n</li>");
+      "<li>Exercise <mark>1</mark></li>");
     query(func.args(" //*[text() contains text '2'], 'b', 20"),
-      "<li>Exercise <b>2</b>\n</li>");
+      "<li>Exercise <b>2</b></li>");
     query(func.args(" //*[text() contains text '2'], '_o_', 1"),
-      "<li>...<_o_>2</_o_>\n</li>");
+      "<li>...<_o_>2</_o_></li>");
     contains(func.args(" //*[text() contains text 'Exercise'], 'b', 1"),
       "<li>...</li>");
   }
@@ -97,23 +110,23 @@ public final class FtModuleTest extends SandboxTest {
   @Test public void mark() {
     final Function func = _FT_MARK;
     query(func.args(" //*[text() contains text '1']"),
-      "<li>Exercise <mark>1</mark>\n</li>");
+      "<li>Exercise <mark>1</mark></li>");
     query(func.args(" //*[text() contains text '2'], 'b'"),
-      "<li>Exercise <b>2</b>\n</li>");
+      "<li>Exercise <b>2</b></li>");
     contains(func.args(" //*[text() contains text 'Exercise']"),
-      "<li>\n<mark>Exercise</mark> 1</li>");
+      "<li><mark>Exercise</mark> 1</li>");
     query("copy $a := text { 'a b' } modify () return " +
-        func.args(" $a[. contains text 'a']", "b"), "<b>a</b>\nb");
+        func.args(" $a[. contains text 'a']", "b"), "<b>a</b>\n b");
     query("copy $a := text { 'ab' } modify () return " +
         func.args(" $a[. contains text 'ab'], 'b'"), "<b>ab</b>");
     query("copy $a := text { 'a b' } modify () return " +
-        func.args(" $a[. contains text 'a b'], 'b'"), "<b>a</b>\n\n<b>b</b>");
+        func.args(" $a[. contains text 'a b'], 'b'"), "<b>a</b>\n \n<b>b</b>");
 
     query(COUNT.args(func.args(" //*[text() contains text '1']/../../../../..")), 1);
 
     execute(new CreateDB(NAME, "<a:a xmlns:a='A'>C</a:a>"));
     query(func.args(" /descendant::*[text() contains text 'C']", "b"),
-        "<a:a xmlns:a=\"A\">\n<b>C</b>\n</a:a>");
+        "<a:a xmlns:a=\"A\"><b>C</b></a:a>");
     execute(new DropDB(NAME));
     query("copy $c := <A xmlns='A'>A</A> modify () return <X>{ " +
         func.args(" $c[text() contains text 'A']") + " }</X>/*");
@@ -135,8 +148,10 @@ public final class FtModuleTest extends SandboxTest {
     query(func.args(""), "");
     query(func.args("a!b:c"), "a!b:c");
 
-    query("ft:normalize('&#778;', map { 'stemming': true(), 'language': 'de' })", "");
+    query(_FT_NORMALIZE.args("&#778;", " map { 'stemming': true(), 'language': 'de' }"), "");
     query("'/' ! " + func.args(" ."), "/");
+
+    query(_FT_NORMALIZE.args("a*", " map { 'stemming': true(), 'language': 'de' }"), "a*");
   }
 
   /** Test method. */
@@ -152,8 +167,8 @@ public final class FtModuleTest extends SandboxTest {
 
     // check index results
     query(func.args(NAME, "assignments"), "Assignments");
-    query(func.args(NAME, " ('exercise','1')"), "Exercise 1\nExercise 2");
-    query(func.args(NAME, " <x>1</x>"), "Exercise 1");
+    query(func.args(NAME, " ('exercise', '1')"), "Exercise 1\nExercise 2");
+    query(func.args(NAME, wrap(1)), "Exercise 1");
     query(func.args(NAME, "1"), "Exercise 1");
     query(func.args(NAME, "XXX"), "");
 
@@ -166,29 +181,41 @@ public final class FtModuleTest extends SandboxTest {
 
     // check match options
     query(func.args(NAME, "Assignments", " map { }"), "Assignments");
-    query(func.args(NAME, "Azzignments", " map { 'fuzzy':'yes' }"), "Assignments");
-    query(func.args(NAME, "Azzignments", " map { 'fuzzy':'no' }"), "");
+    query(func.args(NAME, "Azzignments", " map { 'fuzzy': 'yes' }"), "Assignments");
+    query(func.args(NAME, "Azzignments", " map { 'fuzzy': 'no' }"), "");
     // check search modes
-    query(func.args(NAME, "1 Exercise", " map { 'mode':'phrase' }"), "");
-    query(func.args(NAME, "1 Exercise", " map { 'mode':'all' }"), "");
-    query(func.args(NAME, "1 Exercise", " map { 'mode':'any' }"), "");
-    query(func.args(NAME, "1 Exercise", " map { 'mode':'any word' }"), "Exercise 1\nExercise 2");
-    query(func.args(NAME, "1 Exercise", " map { 'mode':'all words' }"), "Exercise 1");
+    query(func.args(NAME, "1 Exercise", " map { 'mode': 'phrase' }"), "");
+    query(func.args(NAME, "1 Exercise", " map { 'mode': 'all' }"), "");
+    query(func.args(NAME, "1 Exercise", " map { 'mode': 'any' }"), "");
+    query(func.args(NAME, "1 Exercise", " map { 'mode': 'any word' }"), "Exercise 1\nExercise 2");
+    query(func.args(NAME, "1 Exercise", " map { 'mode': 'all words' }"), "Exercise 1");
 
     query(func.args(NAME, "databases xml",
-        " map { 'mode': 'all words', 'distance':map { 'min': 0, 'max': 1 } }"),
+        " map { 'mode': 'all words', 'distance': map { 'min': 0, 'max': 1 } }"),
         "Databases and XML");
     query(func.args(NAME, "databases xml",
-        " map { 'mode': 'all words', 'distance':map { 'max': 0 } }"),
+        " map { 'mode': 'all words', 'distance': map { 'max': 0 } }"),
         "");
     query(func.args(NAME, "databases xml",
-        " map { 'mode': 'all words', 'window':map { 'size': 3 } }"),
+        " map { 'mode': 'all words', 'window': map { 'size': 3 } }"),
         "Databases and XML");
 
     // check buggy options
-    error(func.args(NAME, "x", " map { 'x': 'y' }"), INVALIDOPT_X);
-    error(func.args(NAME, "x", " map { 'mode': '' }"), INVALIDOPT_X);
+    error(func.args(NAME, "x", " map { 'x': 'y' }"), OPTION_X);
+    error(func.args(NAME, "x", " map { 'mode': '' }"), OPTION_X);
     error(func.args(NAME, "x", " 1"), MAP_X_X);
+  }
+
+  /** Test method. */
+  @Test public void thesaurus() {
+    final Function func = _FT_THESAURUS;
+    final String doc = " doc('src/test/resources/thesaurus.xml')";
+
+    query(func.args(doc, "happy"), "lucky\nhappy");
+    query(func.args(doc, "happy", " map { 'levels': 0 }"), "");
+    query(func.args(doc, "happy", " map { 'levels': 5 }"), "lucky\nhappy");
+    query(func.args(doc, "happy", " map { 'relationship': 'RT' }"), "lucky\nhappy");
+    query(func.args(doc, "happy", " map { 'relationship': 'XYZ' }"), "");
   }
 
   /** Test method. */

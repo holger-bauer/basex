@@ -27,7 +27,7 @@ import org.basex.util.*;
  *
  * <p>If T is a text node and the new text value is empty, T is deleted.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class ReplaceValue extends NodeUpdate {
@@ -40,17 +40,17 @@ public final class ReplaceValue extends NodeUpdate {
    * Constructor.
    * @param pre target node PRE value
    * @param data target data reference
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param value new value
    */
-  public ReplaceValue(final int pre, final Data data, final InputInfo ii, final byte[] value) {
-    super(UpdateType.REPLACEVALUE, pre, data, ii);
+  public ReplaceValue(final int pre, final Data data, final InputInfo info, final byte[] value) {
+    super(UpdateType.REPLACEVALUE, pre, data, info);
     this.value = value;
     rec = data.kind(pre) == Data.ELEM;
   }
 
   @Override
-  public void prepare(final MemData tmp, final QueryContext qc) { }
+  public void prepare(final MemData memData, final QueryContext qc) { }
 
   @Override
   public void merge(final Update update) throws QueryException {
@@ -73,7 +73,8 @@ public final class ReplaceValue extends NodeUpdate {
    * @return true if application of primitive results in empty text node
    */
   private boolean deleteText() {
-    return value.length == 0 && data.kind(pre) == Data.TEXT;
+    final int kind = data.kind(pre);
+    return value.length == 0 && kind == Data.TEXT && data.parent(pre, kind) >= 0;
   }
 
   /**
@@ -103,7 +104,7 @@ public final class ReplaceValue extends NodeUpdate {
       final List<NodeUpdate> l = new LinkedList<>();
       // add the primitive to catch forbidden primitive merges (same target node)
       l.add(this);
-      // add the delete primitives for the child nodes of the target
+      // add the DELETE primitives for the child nodes of the target
       // ... child axis boundaries
       final int firstChild = pre + data.attSize(pre, k);
       final int followingNode = pre + data.size(pre, k);
@@ -126,7 +127,7 @@ public final class ReplaceValue extends NodeUpdate {
         final ANodeList nl = new ANodeList().add(new DBNode(tmp, p));
         l.add(new ReplaceContent(pre, data, info, nl));
       }
-      return l.toArray(new NodeUpdate[0]);
+      return l.toArray(NodeUpdate[]::new);
     }
 
     // or a text node has to be deleted
@@ -140,5 +141,6 @@ public final class ReplaceValue extends NodeUpdate {
   }
 
   @Override
-  public void update(final NamePool pool) { }
+  public void update(final NamePool pool) {
+  }
 }

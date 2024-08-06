@@ -15,7 +15,7 @@ import org.basex.util.*;
 /**
  * Container of global variables of a module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Variables extends ExprInfo implements Iterable<StaticVar> {
@@ -25,17 +25,17 @@ public final class Variables extends ExprInfo implements Iterable<StaticVar> {
   /**
    * Declares a new static variable.
    * @param var variable
-   * @param anns annotations
    * @param expr bound expression, possibly {@code null}
-   * @param ext {@code external} flag
-   * @param doc xqdoc string
+   * @param anns annotations
+   * @param external {@code external} flag
    * @param vs variable scope
+   * @param doc xqdoc string
    * @return static variable reference
    * @throws QueryException query exception
    */
-  public StaticVar declare(final Var var, final AnnList anns, final Expr expr, final boolean ext,
-      final String doc, final VarScope vs) throws QueryException {
-    final StaticVar sv = new StaticVar(vs, anns, var, expr, ext, doc);
+  public StaticVar declare(final Var var, final Expr expr, final AnnList anns,
+      final boolean external, final VarScope vs, final String doc) throws QueryException {
+    final StaticVar sv = new StaticVar(var, expr, anns, external, vs, doc);
     varEntry(var.name).setVar(sv);
     return sv;
   }
@@ -56,22 +56,20 @@ public final class Variables extends ExprInfo implements Iterable<StaticVar> {
     for(final VarEntry ve : vars.values()) {
       if(ve.var == null) {
         final StaticVarRef vr = ve.refs.get(0);
-        throw VARUNDEF_X.get(vr.info, vr);
+        throw VARUNDEF_X.get(vr.info(), vr);
       }
     }
   }
 
   /**
    * Returns a new reference to the (possibly not yet declared) variable with the given name.
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param name variable name
-   * @param sc static context
    * @return reference
    * @throws QueryException if the variable is not visible
    */
-  public StaticVarRef newRef(final QNm name, final StaticContext sc, final InputInfo ii)
-      throws QueryException {
-    final StaticVarRef ref = new StaticVarRef(ii, name, sc);
+  public StaticVarRef newRef(final QNm name, final InputInfo info) throws QueryException {
+    final StaticVarRef ref = new StaticVarRef(info, name);
     varEntry(name).addRef(ref);
     return ref;
   }
@@ -100,15 +98,17 @@ public final class Variables extends ExprInfo implements Iterable<StaticVar> {
       throws QueryException {
 
     for(final QNm qnm : bindings) {
-      final VarEntry ve = vars.get(qnm);
-      if(ve != null) ve.var.bind(bindings.get(qnm), qc);
+      if(qnm != QNm.EMPTY) {
+        final VarEntry ve = vars.get(qnm);
+        if(ve != null) ve.var.bind(bindings.get(qnm), qc);
+      }
     }
   }
 
   @Override
   public Iterator<StaticVar> iterator() {
     final Iterator<QNm> qnames = vars.iterator();
-    return new Iterator<StaticVar>() {
+    return new Iterator<>() {
       @Override
       public boolean hasNext() {
         return qnames.hasNext();
@@ -127,7 +127,7 @@ public final class Variables extends ExprInfo implements Iterable<StaticVar> {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     if(vars.isEmpty()) return;
 
     final ArrayList<ExprInfo> list = new ArrayList<>(vars.size());
@@ -136,12 +136,12 @@ public final class Variables extends ExprInfo implements Iterable<StaticVar> {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     for(final VarEntry ve : vars.values()) qs.token(ve.var);
   }
 
   /** Entry for static variables and their references. */
-  private static class VarEntry {
+  private static final class VarEntry {
     /** The static variable. */
     StaticVar var;
     /** Variable references. */

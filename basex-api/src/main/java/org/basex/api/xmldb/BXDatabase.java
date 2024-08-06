@@ -15,7 +15,7 @@ import org.xmldb.api.base.Collection;
 /**
  * Implementation of the Database Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BXDatabase implements Database {
@@ -49,7 +49,7 @@ public final class BXDatabase implements Database {
 
   @Override
   public String getProperty(final String name) {
-    final Object value = Get.get(name.toUpperCase(Locale.ENGLISH), ctx);
+    final Object value = ShowOptions.get(name.toUpperCase(Locale.ENGLISH), ctx);
     return value == null ? null : value.toString();
   }
 

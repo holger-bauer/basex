@@ -20,7 +20,7 @@ import org.basex.util.*;
 /**
  * This class extends the text panel by editor features.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class EditorArea extends TextPanel {
@@ -130,11 +130,10 @@ public final class EditorArea extends TextPanel {
 
   @Override
   public void keyReleased(final KeyEvent e) {
-    final boolean exec = gui.editor.go.isEnabled();
-    if(EXEC1.is(e)) {
-      if(exec) release(Action.EXECUTE);
-    } else if(UNIT.is(e)) {
-      if(exec) release(Action.TEST);
+    if(TESTS.is(e)) {
+      if(gui.editor.test.isEnabled()) release(Action.TEST);
+    } else if(HISTORY.is(e)) {
+      gui.editor.historyPopup(0);
     } else if((!e.isActionKey() || MOVEDOWN.is(e) || MOVEUP.is(e)) && !modifier(e)) {
       release(Action.CHECK);
     }
@@ -193,10 +192,11 @@ public final class EditorArea extends TextPanel {
       try {
         final byte[] text = getText();
         final boolean xquery = io.hasSuffix(IO.XQSUFFIXES);
-        final boolean library = xquery && QueryProcessor.isLibrary(Token.string(text));
+        final boolean library = xquery && QueryParser.isLibrary(Token.string(text));
         io.write(text);
         file(io, true);
         view.project.save(io, rename, xquery, library);
+        view.gui.saveOptions();
         return true;
       } catch(final Exception ex) {
         Util.debug(ex);

@@ -12,9 +12,9 @@ import org.basex.util.list.*;
 
 /**
  * Resizable-array implementation for nodes. The stored nodes will be sorted and duplicates will
- * before removed before they are returned as value or via an iterator.
+ * be removed before they are returned as value or via an iterator.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
@@ -33,7 +33,7 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
   @Override
   public ANodeBuilder add(final ANode node) {
     if(isEmpty()) {
-      // empty list: assign initial database reference (may be null)
+      // empty list: assign initial database reference (can be null)
       data = node.data();
     } else {
       // check if new node is in same database
@@ -42,7 +42,7 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
 
       // check if new node is identical to last one, or destroys distinct document order
       if(ddo) {
-        final int d = node.diff(peek());
+        final int d = node.compare(peek());
         if(d == 0) return this;
         if(d < 0) ddo = false;
       }
@@ -127,6 +127,12 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
     return super.contains(node);
   }
 
+  @Override
+  public ANode[] finish() {
+    ddo();
+    return super.finish();
+  }
+
   /**
    * Performs a binary search on the given range of this sequence iterator.
    * This works if {@link #data} is assigned.
@@ -180,7 +186,7 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
     final ANode[] nodes = list;
     if(e < 7) {
       for(int i = s; i < e + s; ++i) {
-        for(int j = i; j > s && nodes[j - 1].diff(nodes[j]) > 0; j--) s(j, j - 1);
+        for(int j = i; j > s && nodes[j - 1].compare(nodes[j]) > 0; j--) s(j, j - 1);
       }
       return;
     }
@@ -202,13 +208,13 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
     int a = s, b = a, c = s + e - 1, d = c;
     while(true) {
       while(b <= c) {
-        final int h = nodes[b].diff(v);
+        final int h = nodes[b].compare(v);
         if(h > 0) break;
         if(h == 0) s(a++, b);
         ++b;
       }
       while(c >= b) {
-        final int h = nodes[c].diff(v);
+        final int h = nodes[c].compare(v);
         if(h < 0) break;
         if(h == 0) s(c, d--);
         --c;
@@ -247,9 +253,9 @@ public final class ANodeBuilder extends ObjectList<ANode, ANodeBuilder> {
   private int m(final int a, final int b, final int c) {
     final ANode[] nodes = list;
     final ANode nodeA = nodes[a], nodeB = nodes[b], nodeC = nodes[c];
-    return nodeA.diff(nodeB) < 0 ?
-      nodeB.diff(nodeC) < 0 ? b : nodeA.diff(nodeC) < 0 ? c : a :
-      nodeB.diff(nodeC) > 0 ? b : nodeA.diff(nodeC) > 0 ? c : a;
+    return nodeA.compare(nodeB) < 0 ?
+      nodeB.compare(nodeC) < 0 ? b : nodeA.compare(nodeC) < 0 ? c : a :
+      nodeB.compare(nodeC) > 0 ? b : nodeA.compare(nodeC) > 0 ? c : a;
   }
 
   /**

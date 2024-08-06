@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class ProfTime extends StandardFunc {
@@ -27,12 +27,12 @@ public class ProfTime extends StandardFunc {
 
   @Override
   protected final Expr opt(final CompileContext cc) {
-    return adoptType(exprs[0]);
+    return adoptType(arg(0));
   }
 
   @Override
   public boolean ddo() {
-    return exprs[0].ddo();
+    return arg(0).ddo();
   }
 
   /**
@@ -43,8 +43,8 @@ public class ProfTime extends StandardFunc {
    * @throws QueryException query exception
    */
   final Value value(final QueryContext qc, final Supplier<byte[]> func) throws QueryException {
-    final byte[] label = exprs.length > 1 ? toToken(exprs[1], qc) : null;
-    final Value value = exprs[0].value(qc);
+    final Value value = arg(0).value(qc);
+    final byte[] label = toZeroToken(arg(1), qc);
     FnTrace.trace(func.get(), label, qc);
     return value;
   }

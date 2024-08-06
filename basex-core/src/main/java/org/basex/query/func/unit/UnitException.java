@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Thrown to indicate an XQUnit exception.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class UnitException extends QueryException {
@@ -20,7 +20,7 @@ final class UnitException extends QueryException {
 
   /**
    * Default constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param err error reference
    * @param expected expected result
    * @param returned returned result

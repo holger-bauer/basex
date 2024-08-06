@@ -12,7 +12,7 @@ import org.basex.api.client.*;
  * Database information will be shown before and after the
  * clients have been run.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class ServerConcurrency {
   /**
@@ -36,7 +36,7 @@ public final class ServerConcurrency {
 
     BaseXServer server = new BaseXServer();
 
-    // Create a client session with host name, port, user name and password
+    // Create a client session with host name, port, username and password
     System.out.println("\n* Create a client session.");
 
     try(ClientSession session =

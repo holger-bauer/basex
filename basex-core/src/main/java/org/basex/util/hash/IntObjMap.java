@@ -9,7 +9,7 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing primitive integers
  * and objects. It extends the {@link IntSet} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <E> generic value type
  */
@@ -33,7 +33,7 @@ public final class IntObjMap<E> extends IntSet {
    */
   @SuppressWarnings("unchecked")
   public E put(final int key, final E value) {
-    // array bounds are checked before array is resized..
+    // array bounds are checked before array is resized
     final int i = put(key);
     final Object v = values[i];
     values[i] = value;

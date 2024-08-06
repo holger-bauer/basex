@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class replaces document nodes in a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DocReplaceTest extends SandboxTest {
@@ -27,11 +27,11 @@ public final class DocReplaceTest extends SandboxTest {
     execute(new CreateDB(NAME));
 
     // add documents
-    for(int i = 0; i < NQUERIES; i++) execute(new Add(i + IO.XMLSUFFIX, "<a/>"));
+    for(int n = 0; n < NQUERIES; n++) execute(new Add(n + IO.XMLSUFFIX, "<a/>"));
     execute(new Flush());
 
     // replace documents with same content
-    for(int i = 0; i < NQUERIES; i++) execute(new Replace(i + IO.XMLSUFFIX, "<a/>"));
+    for(int n = 0; n < NQUERIES; n++) execute(new Put(n + IO.XMLSUFFIX, "<a/>"));
 
     // Drop database
     execute(new DropDB(NAME));

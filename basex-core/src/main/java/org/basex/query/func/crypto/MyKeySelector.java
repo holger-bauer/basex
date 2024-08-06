@@ -3,8 +3,7 @@ package org.basex.query.func.crypto;
 import java.security.*;
 import java.util.*;
 
-import javax.security.cert.*;
-import javax.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import javax.xml.crypto.*;
 import javax.xml.crypto.dsig.*;
 import javax.xml.crypto.dsig.keyinfo.*;
@@ -12,14 +11,14 @@ import javax.xml.crypto.dsig.keyinfo.*;
 /**
  * Extracts a key from a given {@link KeyInfo} object.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class MyKeySelector extends KeySelector {
   /**
    * Wrapper for KeySelector results.
    *
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Lukas Kircher
    */
   private static class MyKeySelectorResult implements KeySelectorResult {
@@ -62,7 +61,7 @@ final class MyKeySelector extends KeySelector {
       } else if(s instanceof X509Data) {
         for(final Object d : ((X509Data) s).getContent()) {
           if(d instanceof X509Certificate) {
-            pk = ((Certificate) d).getPublicKey();
+            pk = ((X509Certificate) d).getPublicKey();
           }
         }
       }

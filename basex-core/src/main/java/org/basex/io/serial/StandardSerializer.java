@@ -5,13 +5,14 @@ import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
 import java.io.*;
-import java.text.*;
 import java.text.Normalizer.*;
 import java.util.*;
 
+import org.basex.io.in.*;
 import org.basex.query.*;
+import org.basex.query.util.list.*;
 import org.basex.query.value.*;
-import org.basex.query.value.array.XQArray;
+import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -21,14 +22,14 @@ import org.basex.util.hash.*;
 /**
  * This class serializes items to an output stream.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class StandardSerializer extends OutputSerializer {
   /** Normalization form. */
   protected final Form form;
   /** Character map. */
-  private final IntObjMap<byte[]> map;
+  protected final IntObjMap<byte[]> map;
 
   /** Include separator. */
   protected boolean sep;
@@ -106,11 +107,11 @@ public abstract class StandardSerializer extends OutputSerializer {
     if(sep && atomic) out.print(' ');
     try {
       if(item instanceof StrLazy && form == null) {
-        try(InputStream is = item.input(null)) {
-          for(int cp; (cp = is.read()) != -1;) printChar(cp);
+        try(TextInput ti = item.stringInput(null)) {
+          for(int cp; (cp = ti.read()) != -1;) printChar(cp);
         }
       } else {
-        printChars(norm(item.string(null)));
+        printChars(normalize(item.string(null), form));
       }
     } catch(final QueryException ex) {
       throw new QueryIOException(ex);
@@ -134,15 +135,6 @@ public abstract class StandardSerializer extends OutputSerializer {
   }
 
   /**
-   * Normalizes the specified text.
-   * @param text text to be normalized
-   * @return normalized text
-   */
-  protected final byte[] norm(final byte[] text) {
-    return form == null || ascii(text) ? text : token(Normalizer.normalize(string(text), form));
-  }
-
-  /**
    * Replaces a character with an entry from the character map.
    * @param cp codepoint
    * @return {@code true} if replacement was found
@@ -157,5 +149,24 @@ public abstract class StandardSerializer extends OutputSerializer {
       }
     }
     return false;
+  }
+
+  /**
+   * Flattens an array.
+   * @param array array
+   * @return contained items
+   */
+  static ItemList flatten(final XQArray array) {
+    final ItemList list = new ItemList();
+    for(final Value value : array.members()) {
+      for(final Item item : value) {
+        if(item instanceof XQArray) {
+          list.add(flatten((XQArray) item));
+        } else {
+          list.add(item);
+        }
+      }
+    }
+    return list;
   }
 }

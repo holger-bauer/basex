@@ -1,5 +1,10 @@
 package org.basex.query.value.seq;
 
+import java.io.*;
+
+import org.basex.core.*;
+import org.basex.io.in.DataInput;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -10,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Sequence of items of type {@link Str xs:string}, containing at least two of them.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StrSeq extends NativeSeq {
@@ -26,6 +31,28 @@ public final class StrSeq extends NativeSeq {
     this.values = values;
   }
 
+  /**
+   * Creates a value from the input stream. Called from {@link Store#read(DataInput, QueryContext)}.
+   * @param in data input
+   * @param type type
+   * @param qc query context
+   * @return value
+   * @throws IOException I/O exception
+   */
+  public static Value read(final DataInput in, final Type type, final QueryContext qc)
+      throws IOException {
+    final int size = in.readNum();
+    final byte[][] values = new byte[size][];
+    for(int s = 0; s < size; s++) values[s] = in.readToken();
+    return get(values);
+  }
+
+  @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeNum((int) size);
+    for(final byte[] v : values) out.writeToken(v);
+  }
+
   @Override
   public Str itemAt(final long pos) {
     return Str.get(values[(int) pos]);
@@ -34,16 +61,16 @@ public final class StrSeq extends NativeSeq {
   @Override
   public Value reverse(final QueryContext qc) {
     final int sz = (int) size;
-    final byte[][] tmp = new byte[sz][];
-    for(int i = 0; i < sz; i++) tmp[sz - i - 1] = values[i];
-    return get(tmp);
+    final byte[][] array = new byte[sz][];
+    for(int i = 0; i < sz; i++) array[sz - i - 1] = values[i];
+    return get(array);
   }
 
   @Override
   public String[] toJava() {
-    final String[] tmp = new String[(int) size];
-    for(int v = 0; v < size; v++) tmp[v] = Token.string(values[v]);
-    return tmp;
+    final StringList sl = new StringList((int) size);
+    for(final byte[] value : values) sl.add(value);
+    return sl.finish();
   }
 
   @Override
@@ -55,17 +82,17 @@ public final class StrSeq extends NativeSeq {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Creates a sequence with the specified items.
-   * @param items items (will be invalidated by this call)
+   * Creates a sequence with the specified values.
+   * @param values values (will be invalidated by this call)
    * @return value
    */
-  public static Value get(final TokenList items) {
-    return items.isEmpty() ? Empty.VALUE : items.size() == 1 ? Str.get(items.get(0)) :
-      new StrSeq(items.finish());
+  public static Value get(final TokenList values) {
+    return values.isEmpty() ? Empty.VALUE : values.size() == 1 ? Str.get(values.get(0)) :
+      new StrSeq(values.finish());
   }
 
   /**
-   * Creates a sequence with the specified items.
+   * Creates a sequence with the specified values.
    * @param values values
    * @return value
    */
@@ -81,7 +108,7 @@ public final class StrSeq extends NativeSeq {
    * @return value
    * @throws QueryException query exception
    */
-  static Value get(final int size, final Value... values) throws QueryException {
+  public static Value get(final long size, final Value... values) throws QueryException {
     final TokenList tmp = new TokenList(size);
     for(final Value value : values) {
       // speed up construction, depending on input

@@ -5,6 +5,7 @@ import static org.basex.core.Text.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.Map.*;
 
 import org.basex.api.client.*;
 import org.basex.core.*;
@@ -18,7 +19,7 @@ import org.basex.util.*;
  * This is the starter class for running the database server. It handles
  * concurrent requests from multiple users.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Andreas Weiler
  */
@@ -61,8 +62,9 @@ public final class BaseXServer extends CLI implements Runnable {
    */
   public BaseXServer(final String... args) throws IOException {
     this(new Context(), args);
-    // start persistent jobs
-    new Jobs(context).run();
+
+    // initialize persistent jobs
+    new Jobs(context).init();
   }
 
   /**
@@ -75,7 +77,7 @@ public final class BaseXServer extends CLI implements Runnable {
     super(ctx, args);
 
     // do not output header if called by HTTP server
-    if(!quiet && !daemon) Util.outln(header());
+    if(!quiet && !daemon) Util.println(header());
 
     final StaticOptions sopts = context.soptions;
     final int port = sopts.get(StaticOptions.SERVERPORT);
@@ -85,7 +87,7 @@ public final class BaseXServer extends CLI implements Runnable {
     // stop server
     if(stop) {
       stop();
-      if(!quiet) Util.outln(SRV_STOPPED_PORT_X, port);
+      if(!quiet) Util.println(SRV_STOPPED_PORT_X, port);
       // keep message visible for a while
       Performance.sleep(1000);
       return;
@@ -94,7 +96,7 @@ public final class BaseXServer extends CLI implements Runnable {
     // start server in a new Java process
     if(service) {
       start(port, args);
-      if(!quiet) Util.outln(SRV_STARTED_PORT_X, port);
+      if(!quiet) Util.println(SRV_STARTED_PORT_X, port);
       Performance.sleep(1000);
       return;
     }
@@ -120,14 +122,14 @@ public final class BaseXServer extends CLI implements Runnable {
 
     // show info that server has been started
     final String startX = Util.info(SRV_STARTED_PORT_X, port);
-    if(!quiet) Util.outln(startX);
+    if(!quiet) Util.println(startX);
     context.log.writeServer(LogType.OK, startX);
 
     // show info when server is aborted
     Runtime.getRuntime().addShutdownHook(new Thread(this::close));
 
     // execute initial command-line arguments
-    for(final Pair<String, String> cmd : commands) {
+    for(final Entry<String, String> cmd : commands) {
       if(!execute(cmd)) return;
     }
   }
@@ -208,7 +210,7 @@ public final class BaseXServer extends CLI implements Runnable {
 
     final int port = context.soptions.get(StaticOptions.SERVERPORT);
     final String stopX = Util.info(SRV_STOPPED_PORT_X, port);
-    if(!quiet) Util.outln(stopX);
+    if(!quiet) Util.println(stopX);
     context.log.writeServer(LogType.OK, stopX);
 
     // close database context
@@ -226,9 +228,11 @@ public final class BaseXServer extends CLI implements Runnable {
     while(arg.more()) {
       if(arg.dash()) {
         switch(arg.next()) {
-          case 'c': // gather up database commands
-            // evaluate commands
-            commands.add(input(arg.string()));
+          case 'c': // database command
+            commands.add(commands(arg.string()));
+            break;
+          case 'C': // command script
+            commands.add(script(arg.string()));
             break;
           case 'd': // activate debug mode
             Prop.debug = true;
@@ -241,6 +245,9 @@ public final class BaseXServer extends CLI implements Runnable {
             break;
           case 'p': // parse server port
             context.soptions.set(StaticOptions.SERVERPORT, arg.number());
+            break;
+          case 'P': // default admin password
+            context.user().password(arg.string());
             break;
           case 'q': // quiet flag (hidden)
             quiet = true;
@@ -257,12 +264,10 @@ public final class BaseXServer extends CLI implements Runnable {
           default:
             throw arg.usage();
         }
+      } else if(S_STOP.equalsIgnoreCase(arg.string())) {
+        stop = true;
       } else {
-        if(S_STOP.equalsIgnoreCase(arg.string())) {
-          stop = true;
-        } else {
-          throw arg.usage();
-        }
+        throw arg.usage();
       }
     }
     // do not evaluate command if additional service will be started

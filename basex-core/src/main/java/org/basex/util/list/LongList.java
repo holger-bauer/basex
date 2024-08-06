@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Resizable-array implementation for native long values.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class LongList extends ElementList {
@@ -37,9 +37,11 @@ public class LongList extends ElementList {
   public final LongList add(final long element) {
     long[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Arrays.copyOf(lst, newCapacity());
+    if(s == lst.length) {
+      lst = Arrays.copyOf(lst, newCapacity());
+      list = lst;
+    }
     lst[s] = element;
-    list = lst;
     size = s + 1;
     return this;
   }
@@ -52,9 +54,11 @@ public class LongList extends ElementList {
   public final LongList add(final long... elements) {
     long[] lst = list;
     final int l = elements.length, s = size, ns = s + l;
-    if(ns > lst.length) lst = Arrays.copyOf(lst, newCapacity(ns));
+    if(ns > lst.length) {
+      lst = Arrays.copyOf(lst, newCapacity(ns));
+      list = lst;
+    }
     Array.copyFromStart(elements, l, lst, s);
-    list = lst;
     size = ns;
     return this;
   }
@@ -123,11 +127,12 @@ public class LongList extends ElementList {
   }
 
   /**
-   * Removes duplicate entries.
+   * Sorts the data and removes distinct values.
    * @return self reference
    */
-  public LongList distinct() {
+  public LongList ddo() {
     if(!isEmpty()) {
+      sort();
       int i = 1;
       for(int j = 1; j < size; ++j) {
         while(j < size && list[i - 1] == list[j]) j++;

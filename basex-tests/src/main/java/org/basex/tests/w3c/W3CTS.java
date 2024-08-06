@@ -14,19 +14,18 @@ import org.basex.io.*;
 import org.basex.io.out.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
-import org.basex.query.func.fn.*;
+import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
-import org.basex.util.options.Options.YesNo;
 
 /**
  * XQuery Test Suite wrapper.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class W3CTS extends Main {
@@ -79,8 +78,6 @@ public abstract class W3CTS extends Main {
   private int timer = Integer.MAX_VALUE;
   /** Minimum conformance. */
   private boolean minimum;
-  /** Print compilation steps. */
-  private boolean compile;
   /** test-group to use. */
   private String group;
 
@@ -125,7 +122,6 @@ public abstract class W3CTS extends Main {
 
     final SerializerOptions sopts = new SerializerOptions();
     sopts.set(SerializerOptions.METHOD, SerialMethod.XML);
-    sopts.set(SerializerOptions.INDENT, YesNo.NO);
     context.options.set(MainOptions.SERIALIZER, sopts);
   }
 
@@ -142,34 +138,32 @@ public abstract class W3CTS extends Main {
       System.exit(1);
     }
 
+    final Performance perf = new Performance();
+
     if(!new IOFile(path).isAbsolute()) path = new IOFile(".", path + '/').path();
     queries = path + "Queries/XQuery/";
     expected = path + "ExpectedTestResults/";
     results = path + "ReportingResults/Results/";
     final String report = path + "ReportingResults/";
     final String sources = path + "TestSources/";
-
-    final Performance perf = new Performance();
-    context.options.set(MainOptions.CHOP, false);
-
     data = new DBNode(new IOFile(path + input)).data();
 
     final DBNode root = new DBNode(data, 0);
-    Util.outln(NL + Util.className(this) + " Test Suite " + text("/*:test-suite/@version", root));
+    Util.println(NL + Util.className(this) + " Test Suite " + text("/*:test-suite/@version", root));
 
-    Util.outln("Caching Sources...");
+    Util.println("Caching Sources...");
     for(final Item node : nodes("//*:source", root)) {
       final String val = (path + text("@FileName", node)).replace('\\', '/');
       srcs.put(text("@ID", node), val);
     }
 
-    Util.outln("Caching Modules...");
+    Util.println("Caching Modules...");
     for(final Item node : nodes("//*:module", root)) {
       final String val = (path + text("@FileName", node)).replace('\\', '/');
       mods.put(text("@ID", node), val);
     }
 
-    Util.outln("Caching Collections...");
+    Util.println("Caching Collections...");
     for(final Item node : nodes("//*:collection", root)) {
       final String cname = text("@ID", node);
       final StringList dl = new StringList();
@@ -181,28 +175,28 @@ public abstract class W3CTS extends Main {
     init(root);
 
     if(reporting) {
-      Util.outln("Delete old results...");
+      Util.println("Delete old results...");
       new IOFile(results).delete();
     }
 
-    if(verbose) Util.outln();
+    if(verbose) Util.println("");
     final Value nodes = minimum ?
       nodes("//*:test-group[starts-with(@name, 'Minim')]//*:test-case", root) :
       nodes(group != null ? "//*:test-group[@name eq '" + group +
         "']//*:test-case" : "//*:test-case", root);
 
     long total = nodes.size();
-    Util.out("Parsing " + total + " Queries");
+    Util.print("Parsing " + total + " Queries");
     int t = 0;
     for(final Item node : nodes) {
       if(!parse(node)) break;
-      if(!verbose && t++ % 500 == 0) Util.out(".");
+      if(!verbose && t++ % 500 == 0) Util.print(".");
     }
-    Util.outln();
+    Util.println("");
     total = ok + ok2 + err + err2;
 
     final String time = perf.getTime();
-    Util.outln("Writing log file..." + NL);
+    Util.println("Writing log file..." + NL);
     try(PrintOutput po = new PrintOutput(new IOFile(path + pathlog))) {
       po.println("TEST RESULTS ________________________________________________");
       po.println(NL + "Total #Queries: " + total);
@@ -229,11 +223,11 @@ public abstract class W3CTS extends Main {
       }
     }
 
-    Util.outln("Total #Queries: " + total);
-    Util.outln("Correct / Empty results: " + ok + " / " + ok2);
-    Util.out("Conformance (w/empty results): ");
-    Util.outln(pc(ok, total) + " / " + pc(ok + ok2, total));
-    Util.outln("Total Time: " + time);
+    Util.println("Total #Queries: " + total);
+    Util.println("Correct / Empty results: " + ok + " / " + ok2);
+    Util.print("Conformance (w/empty results): ");
+    Util.println(pc(ok, total) + " / " + pc(ok + ok2, total));
+    Util.println("Total Time: " + time);
 
     context.close();
     sandbox().delete();
@@ -262,11 +256,12 @@ public abstract class W3CTS extends Main {
     if(single != null && !outname.startsWith(single)) return true;
 
     final Performance perf = new Performance();
-    if(verbose) Util.out("- " + outname);
+    if(verbose) Util.print("- " + outname);
 
     boolean inspect = false;
     boolean correct = true;
 
+    final DeepEqual deep = new DeepEqual();
     final Value states = states(root);
     final long ss = states.size();
     for(int s = 0; s < ss; s++) {
@@ -285,8 +280,7 @@ public abstract class W3CTS extends Main {
         curr = DBNodeSeq.get(d.resources.docs(), d, true, true);
       }
 
-      context.options.set(MainOptions.QUERYINFO, compile);
-      try(QueryProcessor qp = new QueryProcessor(in, query.path(), context)) {
+      try(QueryProcessor qp = new QueryProcessor(in, query.path(), context, null)) {
         if(curr != null) qp.context(curr);
         context.options.set(MainOptions.QUERYINFO, false);
 
@@ -332,13 +326,6 @@ public abstract class W3CTS extends Main {
           // unexpected error - dump stack trace
         }
 
-        // print compilation steps
-        if(compile) {
-          Util.errln("---------------------------------------------------------");
-          Util.err(qp.info());
-          Util.errln(in);
-        }
-
         final Value expOut = nodes("*:output-file/text()", state);
         final TokenList result = new TokenList();
         for(final Item item : expOut) {
@@ -363,7 +350,7 @@ public abstract class W3CTS extends Main {
         log.append(NL);
 
         // Remove comments.
-        log.append(norm(in)).append(NL);
+        log.append(removeComments(in)).append(NL);
         final String logStr = log.toString();
         // skip queries with variable results
         final boolean print = currTime || !logStr.contains("current-");
@@ -384,7 +371,7 @@ public abstract class W3CTS extends Main {
           if(print) {
             logOK.append(logStr);
             logOK.append("[Right] ");
-            logOK.append(norm(er));
+            logOK.append(removeComments(er));
             logOK.append(NL);
             logOK.append(NL);
             addLog(pth, outname + ".log", er);
@@ -404,8 +391,7 @@ public abstract class W3CTS extends Main {
             if(xml || frag) {
               try {
                 final Value val = toValue(expect.replaceAll("^<\\?xml.*?\\?>", "").trim(), frag);
-                if(new DeepEqual().equal(value.iter(), val.iter())) break;
-                if(new DeepEqual().equal(toValue(actual, frag).iter(), val.iter())) break;
+                if(deep.equal(value, val) || deep.equal(toValue(actual, frag), val)) break;
               } catch(final Throwable ex) {
                 Util.errln('\n' + outname + ':');
                 Util.stack(ex);
@@ -417,10 +403,10 @@ public abstract class W3CTS extends Main {
               if(expOut.isEmpty()) result.add(error(pth + outname, expError));
               logErr.append(logStr);
               logErr.append('[').append(testid).append(" ] ");
-              logErr.append(norm(string(result.get(0))));
+              logErr.append(removeComments(string(result.get(0))));
               logErr.append(NL);
               logErr.append("[Wrong] ");
-              logErr.append(norm(ao.toString()));
+              logErr.append(removeComments(ao.toString()));
               logErr.append(NL);
               logErr.append(NL);
               addLog(pth, outname + (xml ? IO.XMLSUFFIX : ".txt"), ao.toString());
@@ -431,42 +417,40 @@ public abstract class W3CTS extends Main {
             if(print) {
               logOK.append(logStr);
               logOK.append("[Right] ");
-              logOK.append(norm(ao.toString()));
+              logOK.append(removeComments(ao.toString()));
               logOK.append(NL);
               logOK.append(NL);
               addLog(pth, outname + (xml ? IO.XMLSUFFIX : ".txt"), ao.toString());
             }
             ++ok;
           }
-        } else {
-          if(expOut.isEmpty() || !expError.isEmpty()) {
-            if(print) {
-              logOK2.append(logStr);
-              logOK2.append('[').append(testid).append(" ] ");
-              logOK2.append(norm(expError));
-              logOK2.append(NL);
-              logOK2.append("[Rght?] ");
-              logOK2.append(norm(er));
-              logOK2.append(NL);
-              logOK2.append(NL);
-              addLog(pth, outname + ".log", er);
-            }
-            ++ok2;
-          } else {
-            if(print) {
-              logErr2.append(logStr);
-              logErr2.append('[').append(testid).append(" ] ");
-              logErr2.append(norm(string(result.get(0))));
-              logErr2.append(NL);
-              logErr2.append("[Wrong] ");
-              logErr2.append(norm(er));
-              logErr2.append(NL);
-              logErr2.append(NL);
-              addLog(pth, outname + ".log", er);
-            }
-            correct = false;
-            ++err2;
+        } else if(expOut.isEmpty() || !expError.isEmpty()) {
+          if(print) {
+            logOK2.append(logStr);
+            logOK2.append('[').append(testid).append(" ] ");
+            logOK2.append(removeComments(expError));
+            logOK2.append(NL);
+            logOK2.append("[Rght?] ");
+            logOK2.append(removeComments(er));
+            logOK2.append(NL);
+            logOK2.append(NL);
+            addLog(pth, outname + ".log", er);
           }
+          ++ok2;
+        } else {
+          if(print) {
+            logErr2.append(logStr);
+            logErr2.append('[').append(testid).append(" ] ");
+            logErr2.append(removeComments(string(result.get(0))));
+            logErr2.append(NL);
+            logErr2.append("[Wrong] ");
+            logErr2.append(removeComments(er));
+            logErr2.append(NL);
+            logErr2.append(NL);
+            addLog(pth, outname + ".log", er);
+          }
+          correct = false;
+          ++err2;
         }
       }
     }
@@ -485,10 +469,10 @@ public abstract class W3CTS extends Main {
     final long nano = perf.ns();
     final boolean slow = nano / 1000000 > timer;
     if(verbose) {
-      if(slow) Util.out(": " + Performance.getTime(nano, 1));
-      Util.outln();
+      if(slow) Util.print(": " + Performance.getTime(nano, 1));
+      Util.println("");
     } else if(slow) {
-      Util.out(NL + "- " + outname + ": " + Performance.getTime(nano, 1));
+      Util.print(NL + "- " + outname + ": " + Performance.getTime(nano, 1));
     }
 
     return single == null || !outname.equals(single);
@@ -518,8 +502,8 @@ public abstract class W3CTS extends Main {
    * @param in input string
    * @return result
    */
-  private String norm(final String in) {
-    return QueryProcessor.removeComments(in, maxout);
+  private String removeComments(final String in) {
+    return QueryParser.removeComments(in, maxout);
   }
 
   /**
@@ -555,7 +539,7 @@ public abstract class W3CTS extends Main {
       }
 
       final Value value = qp.qc.resources.doc(new QueryInput(src, qp.sc), null);
-      qp.bind(string(vars.itemAt(n).string(null)), value);
+      qp.variable(string(vars.itemAt(n).string(null)), value);
     }
     return tb.finish();
   }
@@ -575,7 +559,7 @@ public abstract class W3CTS extends Main {
       final String nm = string(nodes.itemAt(n).string(null));
       final String src = srcs.get(nm);
       final Item item = src == null ? coll(nm, qp) : Str.get(src);
-      qp.bind(string(vars.itemAt(n).string(null)), item);
+      qp.variable(string(vars.itemAt(n).string(null)), item);
     }
   }
 
@@ -588,7 +572,7 @@ public abstract class W3CTS extends Main {
    */
   private Uri coll(final String name, final QueryProcessor qp) throws QueryException {
     qp.qc.resources.addCollection(name, colls.get(name), qp.sc);
-    return Uri.uri(name);
+    return Uri.get(name);
   }
 
   /**
@@ -607,8 +591,8 @@ public abstract class W3CTS extends Main {
     for(int n = 0; n < ns; ++n) {
       final String file = pth + string(nodes.itemAt(n).string(null)) + IO.XQSUFFIX;
       final IO io = new IOFile(queries, file);
-      try(QueryProcessor xq = new QueryProcessor(io.string(), io.path(), context)) {
-        qp.bind(string(vars.itemAt(n).string(null)), xq.value());
+      try(QueryProcessor xq = new QueryProcessor(io.string(), io.path(), context, null)) {
+        qp.variable(string(vars.itemAt(n).string(null)), xq.value());
       }
     }
   }
@@ -670,8 +654,8 @@ public abstract class W3CTS extends Main {
    * @throws QueryException query exception
    */
   protected Value nodes(final String qu, final Value root) throws QueryException {
-    try(QueryProcessor qp = new QueryProcessor(qu, context)) {
-      return qp.context(root).value();
+    try(QueryProcessor qp = new QueryProcessor(qu, context).context(root)) {
+      return qp.value();
     }
   }
 
@@ -734,8 +718,6 @@ public abstract class W3CTS extends Main {
           currTime = true;
         } else if(c == 'C') {
           currTime = true;
-        } else if(c == 'c') {
-          compile = true;
         } else if(c == 'd') {
           Prop.debug = true;
         } else if(c == 'm') {

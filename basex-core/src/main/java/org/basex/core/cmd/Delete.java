@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 
 import org.basex.core.users.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.query.up.atomic.*;
 import org.basex.util.list.*;
@@ -11,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'delete' command and deletes resources from a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Delete extends ACreate {
@@ -26,35 +27,29 @@ public final class Delete extends ACreate {
   @Override
   protected boolean run() {
     final Data data = context.data();
-    final String target = args[0];
-    return update(data, new Code() {
-      @Override
-      boolean run() {
-        // delete XML documents
-        final IntList docs = data.resources.docs(target);
+    final String path = MetaData.normPath(args[0]);
+    if(path == null) return error(PATH_INVALID_X, args[0]);
+
+    return update(data, () -> {
+      context.invalidate();
+
+      // delete XML documents
+      final IntList docs = data.resources.docs(path);
+      int size = docs.size();
+      if(size != 0) {
         final AtomicUpdateCache auc = new AtomicUpdateCache(data);
-        final int ds = docs.size();
-        for(int d = 0; d < ds; d++) auc.addDelete(docs.get(d));
+        for(int d = 0; d < size; d++) auc.addDelete(docs.get(d));
         auc.execute(false);
-        context.invalidate();
-
-        // delete binaries
-        final TokenList bins = data.resources.binaries(target);
-        deleteBinary(data, target);
-
-        return info(RES_DELETED_X_X, docs.size() + bins.size(), jc().performance);
       }
+      // delete file resources
+      for(final ResourceType type : Resources.BINARIES) {
+        final IOFile bin = data.meta.file(path, type);
+        if(bin != null && bin.exists()) {
+          size += bin.isDir() ? bin.descendants().size() : 1;
+          bin.delete();
+        }
+      }
+      return info(RES_DELETED_X_X, size, jc().performance);
     });
-  }
-
-  /**
-   * Deletes the specified binaries.
-   * @param data data reference
-   * @param path resource to be deleted
-   */
-  public static void deleteBinary(final Data data, final String path) {
-    if(data.inMemory()) return;
-    final IOFile file = data.meta.binary(path);
-    if(file != null) file.delete();
   }
 }

@@ -9,31 +9,31 @@ import org.basex.util.*;
 /**
  * Query job specification.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QueryJobSpec {
   /** Variable bindings. */
-  public final HashMap<String, Value> bindings;
+  final HashMap<String, Value> bindings;
   /** Options. */
-  public final JobsOptions options;
+  final JobOptions options;
   /** Query. */
-  public final String query;
+  final String query;
   /** Simple query without URI. */
-  public final boolean simple;
+  final boolean simple;
 
   /**
    * Constructor.
-   * @param options options
+   * @param options job options
    * @param bindings variable bindings
-   * @param io query
+   * @param content query content
    */
-  public QueryJobSpec(final JobsOptions options, final HashMap<String, Value> bindings,
-      final IOContent io) {
+  public QueryJobSpec(final JobOptions options, final HashMap<String, Value> bindings,
+      final IOContent content) {
     this.options = options;
     this.bindings = bindings;
-    query = Token.string(io.read());
-    simple = io.url().isEmpty();
+    this.query = content.toString();
+    simple = content.url().isEmpty();
   }
 
   @Override

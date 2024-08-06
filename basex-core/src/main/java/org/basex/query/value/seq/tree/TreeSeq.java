@@ -1,14 +1,11 @@
 package org.basex.query.value.seq.tree;
 
-import static org.basex.query.QueryError.*;
-
 import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -16,7 +13,7 @@ import org.basex.util.*;
 /**
  * A tree storing {@link Item}s.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class TreeSeq extends Seq {
@@ -33,11 +30,11 @@ public abstract class TreeSeq extends Seq {
 
   /**
    * Default constructor.
-   * @param size number of elements in this sequence
-   * @param type type of all items in this sequence, can be {@code null}
+   * @param size number of items in this sequence
+   * @param type type of all items in this sequence
    */
   TreeSeq(final long size, final Type type) {
-    super(size, type == null ? AtomType.ITEM : type);
+    super(size, type);
   }
 
   @Override
@@ -63,7 +60,7 @@ public abstract class TreeSeq extends Seq {
       tsb.add(subsequence(pos, right, qc), qc);
     }
 
-    return tsb.seq(type.union(value.type));
+    return tsb.sequence(type.union(value.type));
   }
 
   /**
@@ -90,32 +87,6 @@ public abstract class TreeSeq extends Seq {
   @Override
   public abstract BasicIter<Item> iter();
 
-  @Override
-  public final void cache(final boolean lazy, final InputInfo ii) throws QueryException {
-    for(final Item item : this) item.cache(lazy, ii);
-  }
-
-  @Override
-  public final Value atomValue(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ValueBuilder vb = new ValueBuilder(qc);
-    for(final Item item : this) vb.add(item.atomValue(qc, ii));
-    return vb.value(AtomType.ANY_ATOMIC_TYPE);
-  }
-
-  @Override
-  public final long atomSize() {
-    long sz = 0;
-    for(final Item item : this) sz += item.atomSize();
-    return sz;
-  }
-
-  @Override
-  public final Item ebv(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item head = itemAt(0);
-    if(head instanceof ANode) return head;
-    throw EBV_X.get(ii, this);
-  }
-
   /**
    * Prepends the given elements to this sequence.
    * @param seq small sequence
@@ -130,8 +101,8 @@ public abstract class TreeSeq extends Seq {
    * If {@code to > arr.length} then the last {@code to - arr.length} entries are {@code null}.
    * If {@code from == 0 && to == arr.length}, the original items are returned.
    * @param items input sequence
-   * @param from first index, inclusive (may be negative)
-   * @param to last index, exclusive (may be greater than length of input sequence)
+   * @param from first index, inclusive (can be negative)
+   * @param to last index, exclusive (can be greater than length of input sequence)
    * @return resulting items
    */
   static Item[] slice(final Item[] items, final int from, final int to) {

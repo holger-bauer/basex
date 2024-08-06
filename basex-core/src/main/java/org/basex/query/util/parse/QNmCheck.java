@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Cache for checking QNames after their construction.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class QNmCheck {
@@ -17,14 +17,14 @@ final class QNmCheck {
   private final QNm name;
   /** Flag for assigning default element namespace. */
   private final boolean nsElem;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
   /**
    * Constructor.
    * @param name qname
    * @param nsElem default check
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   QNmCheck(final QNm name, final boolean nsElem, final InputInfo info) {
     this.name = name;
@@ -44,7 +44,7 @@ final class QNmCheck {
 
     if(name.hasPrefix()) {
       name.uri(parser.sc.ns.uri(name.prefix()));
-      if(check && !name.hasURI()) throw parser.error(NOURI_X, info, name.string());
+      if(check && !name.hasURI()) throw parser.error(NOURI_X, info, name.prefix());
     } else if(nsElem) {
       name.uri(parser.sc.elemNS);
     }

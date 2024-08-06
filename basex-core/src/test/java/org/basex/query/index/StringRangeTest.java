@@ -2,9 +2,9 @@ package org.basex.query.index;
 
 import java.util.*;
 
+import org.basex.*;
 import org.basex.core.cmd.*;
-import org.basex.core.parse.Commands.CmdIndex;
-import org.basex.query.ast.*;
+import org.basex.core.parse.Commands.*;
 import org.basex.query.expr.*;
 import org.basex.query.expr.index.*;
 import org.basex.util.*;
@@ -14,10 +14,10 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests if string range queries are correctly evaluated with(out) the index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class StringRangeTest extends QueryPlanTest {
+public final class StringRangeTest extends SandboxTest {
   /**
    * Initializes the tests.
    */

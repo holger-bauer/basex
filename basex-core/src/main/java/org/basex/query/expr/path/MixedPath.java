@@ -2,7 +2,6 @@ package org.basex.query.expr.path;
 
 import static org.basex.query.QueryError.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
@@ -18,13 +17,13 @@ import org.basex.util.hash.*;
 /**
  * Mixed path expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MixedPath extends Path {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param root root expression; can be a {@code null} reference
    * @param steps axis steps
    */
@@ -34,14 +33,9 @@ public final class MixedPath extends Path {
 
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Expr rt = root != null ? root : ctxValue(qc);
+    final Value rt = root != null ? root.value(qc) : ctxValue(qc);
     Iter iter = rt.iter(qc);
     long size = iter.size();
-    // if result size is unknown, root is fully evaluated (required for requests on query focus)
-    if(size < 0) {
-      iter = iter.value(qc, rt).iter();
-      size = iter.size();
-    }
 
     final QueryFocus focus = qc.focus, qf = new QueryFocus();
     qc.focus = qf;
@@ -92,11 +86,6 @@ public final class MixedPath extends Path {
   @Override
   public boolean ddo() {
     return seqType().type instanceof NodeType;
-  }
-
-  @Override
-  public Data data() {
-    return steps[steps.length - 1].data();
   }
 
   @Override

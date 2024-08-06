@@ -8,13 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class LazyIsCached extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = toAtomItem(exprs[0], qc);
-    return Bln.get(item instanceof Lazy && ((Lazy) item).isCached());
+    final Item value = toAtomItem(arg(0), qc);
+    return Bln.get(value instanceof Lazy && ((Lazy) value).isCached());
   }
 }

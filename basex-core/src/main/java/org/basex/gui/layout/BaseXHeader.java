@@ -1,13 +1,11 @@
 package org.basex.gui.layout;
 
-import javax.swing.border.*;
-
 import org.basex.gui.*;
 
 /**
  * Header label.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXHeader extends BaseXLabel {
@@ -19,6 +17,6 @@ public final class BaseXHeader extends BaseXLabel {
     super(string, true, false);
     setForeground(GUIConstants.dgray);
     resize(1.7f);
-    setBorder(new EmptyBorder(-2, 0, 8, 2));
+    border(0, 0, 4, 4);
   }
 }

@@ -1,11 +1,11 @@
 (:~
  : Settings page.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/settings';
 
-import module namespace options = 'dba/options' at '../lib/options.xqm';
+import module namespace config = 'dba/config' at '../lib/config.xqm';
 import module namespace html = 'dba/html' at '../lib/html.xqm';
 
 (:~ Top category :)
@@ -23,67 +23,59 @@ declare
   %rest:query-param('error', '{$error}')
   %rest:query-param('info',  '{$info}')
   %output:method('html')
+  %output:html-version('5')
 function dba:settings(
   $error  as xs:string?,
   $info   as xs:string?
 ) as element(html) {
   let $system := html:properties(db:system())
-  let $table-row := function($items) {
-    <tr><td>{ $items }</td></tr>
+  let $table-row := fn($label, $items) {
+    <tr><td>{ $label, <br/>, $items }</td></tr>
   }
-  let $number := function($key, $label) {
-    $table-row((
-      $label,
-      <br/>,
-      <input name='{ $key }' type='number' value='{ options:get($key) }'/>
-    ))
+  let $option := fn($key, $values, $label) {
+    $table-row($label,
+      <select name='{ $key }'>{
+        let $selected := config:get($key)
+        for $value in $values
+        return element option { attribute selected { }[$value = $selected], $value }
+      }</select>
+    )
   }
-  let $string := function($key, $label) {
-    $table-row((
-      $label,
-      <br/>,
-      <input name='{ $key }' type='text' value='{ options:get($key) }'/>
-    ))
+  let $number := fn($key, $label) {
+    $table-row($label, <input type='number' name='{ $key }' value='{ config:get($key) }'/>)
   }
-  return html:wrap(map { 'header': $dba:CAT, 'info': $info, 'error': $error },
+  let $string := fn($key, $label) {
+    $table-row($label, <input type='text' name='{ $key }' value='{ config:get($key) }'/>)
+  }
+  return html:wrap({ 'header': $dba:CAT, 'info': $info, 'error': $error },
     <tr>
       <td width='33%'>
-        <form action='settings' method='post'>
-          <h2>Settings » { html:button('save', 'Save') }</h2>
+        <form method='post'>
+          <h2>Settings » { html:button('settings-save', 'Save') }</h2>
           <h3>Queries</h3>
           <table>
             {
-              $number($options:TIMEOUT, 'Timeout, in seconds (0 = disabled)'),
-              $number($options:MEMORY, 'Memory limit, in MB (0 = disabled)'),
-              $number($options:MAXCHARS, 'Maximum output size')
+              $number($config:TIMEOUT, 'Timeout, in seconds (0 = disabled)'),
+              $number($config:MEMORY, 'Memory limit, in MB (0 = disabled)'),
+              $number($config:MAXCHARS, 'Maximum output size'),
+              $option($config:PERMISSION, $config:PERMISSIONS, 'Permission'),
+              $option($config:INDENT, $config:INDENTS, 'Indent results')
             }
-            <tr>
-              <td colspan='2'>Permission:</td>
-            </tr>
-            <tr>
-              <td>
-                <select name='permission'>{
-                  let $pm := options:get($options:PERMISSION)
-                  for $p in $options:PERMISSIONS
-                  return element option { attribute selected { }[$p = $pm], $p }
-                }</select>
-              </td>
-            </tr>
           </table>
           <h3>Tables</h3>
           <table>{
-            $number($options:MAXROWS,  'Displayed table rows')
+            $number($config:MAXROWS,  'Displayed table rows')
           }</table>
           <h3>Logs</h3>
           <table>{
-            $string($options:IGNORE-LOGS, <span>Ignore entries (e.g. <code>/dba</code>):</span>)
+            $string($config:IGNORE-LOGS, <span>Ignore entries (e.g. <code>/dba</code>):</span>)
           }</table>
         </form>
       </td>
       <td class='vertical'/>
       <td width='33%'>
-        <form action='settings-gc' method='post'>
-          <h2>Global Options » { html:button('gc', 'GC') }</h2>
+        <form method='post'>
+          <h2>Global Options » { html:button('settings-gc', 'GC') }</h2>
           <table>{
             $system/tr[th][3]/preceding-sibling::tr[not(th)]
           }</table>
@@ -106,9 +98,9 @@ function dba:settings(
  :)
 declare
   %rest:POST
-  %rest:path('/dba/settings')
+  %rest:path('/dba/settings-save')
 function dba:settings-save(
 ) as element(rest:response) {
-  options:save(html:parameters()),
-  web:redirect($dba:CAT, map { 'info': 'Settings were saved.' })
+  config:save(html:parameters()),
+  web:redirect($dba:CAT, { 'info': 'Settings were saved.' })
 };

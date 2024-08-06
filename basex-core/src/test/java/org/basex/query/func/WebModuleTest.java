@@ -10,7 +10,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the Web Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebModuleTest extends SandboxTest {
@@ -25,16 +25,16 @@ public final class WebModuleTest extends SandboxTest {
   /** Test method. */
   @Test public void createUrl() {
     final Function func = _WEB_CREATE_URL;
-    query(func.args("http://x.com", " map {}"), "http://x.com");
+    query(func.args("http://x.com", " map { }"), "http://x.com");
     query(func.args("url", " map { 'a': 'b' }"), "url?a=b");
-    query(func.args("url", " map { 'a': ('b','c') }"), "url?a=b&a=c");
+    query(func.args("url", " map { 'a': ('b', 'c') }"), "url?a=b&a=c");
     query(func.args("url", " map { 12: true() }"), "url?12=true");
 
     query(func.args("url", " map { }", "a"), "url#a");
 
     error(func.args("url", " map { (): 'a' }"), EMPTYFOUND);
-    error(func.args("url", " map { ('a','b'): () }"), SEQFOUND_X);
-    error(func.args("url", " map { 'a': true#0 }"), FIATOM_X);
+    error(func.args("url", " map { ('a', 'b'): () }"), SEQFOUND_X);
+    error(func.args("url", " map { 'a': true#0 }"), FIATOMIZE_X);
   }
 
   /** Test method. */
@@ -58,8 +58,12 @@ public final class WebModuleTest extends SandboxTest {
   /** Test method. */
   @Test public void error() {
     final Function func = _WEB_ERROR;
-    query("try { " + func.args(400, "x") + " } catch rest:error { 'x' }", "x");
+    query("try { " + func.args(1, "x") + " } catch rest:status1 { 'x' }", "x");
+    query("try { " + func.args(400, "x") + " } catch rest:status400 { 'x' }", "x");
+    query("try { " + func.args(999, "x") + " } catch rest:* { 'x' }", "x");
     error(func.args(-1, "x"), WEB_STATUS_X);
+    error(func.args(0, "x"), WEB_STATUS_X);
+    error(func.args(1000, "x"), WEB_STATUS_X);
   }
 
   /** Test method. */
@@ -77,7 +81,7 @@ public final class WebModuleTest extends SandboxTest {
     query(func.args("a/b") + "/*:response/@status = 302", true);
     query(func.args("a/b", " map { }", "a") + "/*:response/*:header/@value = 'a/b#a'", true);
 
-    query(func.args("a/b", " map { 'a':'b' }") +
+    query(func.args("a/b", " map { 'a': 'b' }") +
         "/*:response/*:header[@name = 'Location']/@value/string()", "a/b?a=b");
 
     // GH-1585
@@ -98,14 +102,14 @@ public final class WebModuleTest extends SandboxTest {
         "/output:serialization-parameters/*)", 0);
 
     // overwrite header
-    query(func.args(" map {}", " map { 'Cache-Control': 'X' }") +
+    query(func.args(" map { }", " map { 'Cache-Control': 'X' }") +
         "/http:response/http:header[@name = 'Cache-Control']/@value/string()", "X");
     // header is not generated if value is empty
-    query("count(" + func.args(" map {}", " map { 'Cache-Control': '' }") +
+    query("count(" + func.args(" map { }", " map { 'Cache-Control': '' }") +
         "/http:response/*)", 0);
 
     // status/message arguments
-    query(func.args(" map {}", " map {}", " map { 'status': 200, 'message': 'OK' }") +
+    query(func.args(" map { }", " map { }", " map { 'status': 200, 'message': 'OK' }") +
         "/http:response ! (@status, @message) ! string()", "200\nOK");
 
     // GH-1585

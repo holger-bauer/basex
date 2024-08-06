@@ -7,13 +7,13 @@ import org.basex.query.value.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class UpdateCache extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final boolean reset = exprs.length > 0 && toBoolean(exprs[0], qc);
+    final boolean reset = toBooleanOrFalse(arg(0), qc);
     return qc.updates().output(reset);
   }
 }

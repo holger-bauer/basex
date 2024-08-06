@@ -13,6 +13,7 @@ import org.basex.core.*;
 import org.basex.core.MainOptions.MainParser;
 import org.basex.core.cmd.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.value.node.*;
@@ -22,41 +23,41 @@ import org.basex.util.*;
 /**
  * Contains helper methods for adding documents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DBNew {
   /** Inputs to be added. */
   public final List<NewInput> inputs;
-  /** New database nodes. */
-  public Data data;
 
   /** Query context. */
   private final QueryContext qc;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
   /** Main options for all inputs to be added. */
-  private final List<DBOptions> dboptions;
+  private final List<MainOptions> options;
+  /** New database nodes. */
+  private Data data;
 
   /**
    * Constructor.
    * @param qc query context
-   * @param options database options
-   * @param info input info
-   * @param list list of inputs
+   * @param opts main options
+   * @param info input info (can be {@code null})
+   * @param inputs list of inputs
    */
-  public DBNew(final QueryContext qc, final DBOptions options, final InputInfo info,
-      final NewInput... list) {
+  public DBNew(final QueryContext qc, final MainOptions opts, final InputInfo info,
+      final NewInput... inputs) {
 
     this.qc = qc;
     this.info = info;
 
-    final int is = list.length;
-    inputs = new ArrayList<>(is);
-    dboptions = new ArrayList<>(is);
-    for(final NewInput input : list) {
-      inputs.add(input);
-      dboptions.add(options);
+    final int il = inputs.length;
+    this.inputs = new ArrayList<>(il);
+    options = new ArrayList<>(il);
+    for(final NewInput input : inputs) {
+      this.inputs.add(input);
+      options.add(opts);
     }
   }
 
@@ -66,50 +67,55 @@ public final class DBNew {
    */
   public void merge(final DBNew add) {
     inputs.addAll(add.inputs);
-    dboptions.addAll(add.dboptions);
+    options.addAll(add.options);
   }
 
   /**
    * Inserts all documents to be added to a temporary database.
    * @param name name of database
    * @param create create new database
+   * @return resulting data clip (can be {@code null})
    * @throws QueryException query exception
    */
-  public void prepare(final String name, final boolean create) throws QueryException {
-    final long is = inputs.size();
-    if(is == 0) return;
-
-    // check if new resources will be cached on disk
-    final boolean cache = cache(create);
+  public DataClip prepare(final String name, final boolean create) throws QueryException {
     try {
-      if(is == 1) {
-        // single input: create temporary database
-        data = tmpData(name, 0, cache);
-      } else {
-        // multiple input: create temporary database and insert inputs
-        final Context ctx = qc.context;
-        final MainOptions mopts = ctx.options;
-        final StaticOptions sopts = ctx.soptions;
-        final String dbname = cache ? sopts.createRandomDb(name) : name;
-        data = cache ? CreateDB.create(dbname, Parser.emptyParser(mopts), ctx, mopts) :
-          new MemData(mopts);
-        data.startUpdate(mopts);
-        try {
-          for(int i = 0; i < is; i++) {
-            final Data tmpData = tmpData(dbname, i, cache);
-            try {
-              copy(tmpData, data);
-            } finally {
-              DropDB.drop(tmpData, sopts);
+      final long is = inputs.size();
+      if(is > 0) {
+        // check if new resources will be cached on disk
+        final boolean cache = cache(create);
+        if(is == 1) {
+          // single input: create temporary database
+          data = tmpData(name, 0, cache);
+        } else {
+          // multiple input: create temporary database and insert inputs
+          final Context ctx = qc.context;
+          final MainOptions mopts = ctx.options;
+          final StaticOptions sopts = ctx.soptions;
+          final String dbname = cache ? sopts.createTempDb(name) : name;
+          data = cache ? CreateDB.create(dbname, Parser.emptyParser(mopts), ctx, mopts) :
+            new MemData(mopts);
+          data.startUpdate(mopts);
+          try {
+            for(int i = 0; i < is; i++) {
+              final Data tmpData = tmpData(dbname, i, cache);
+              try {
+                copy(tmpData, data);
+              } finally {
+                DropDB.drop(tmpData, sopts);
+              }
             }
+          } finally {
+            data.finishUpdate(mopts);
           }
-        } finally {
-          data.finishUpdate(mopts);
         }
       }
-    } catch(final IOException ex) {
-      finish();
+      return data == null ? null : new DataClip(data).context(qc.context);
+    } catch(final IOException | QueryException ex) {
+      if(data != null) new DataClip(data).context(qc.context).finish();
       throw UPDBERROR_X.get(info, ex);
+    } finally {
+      options.clear();
+      inputs.clear();
     }
   }
 
@@ -118,28 +124,11 @@ public final class DBNew {
    * @param target database instance
    * @throws QueryException exception
    */
-  public void add(final Data target) throws QueryException {
+  public void addTo(final Data target) throws QueryException {
     try {
       copy(data, target);
     } catch(final IOException ex) {
       throw UPDBERROR_X.get(info, ex);
-    } finally {
-      finish();
-    }
-  }
-
-  /**
-   * Drops a temporary database instance.
-   */
-  public void finish() {
-    if(data != null) {
-      final Context ctx = qc.context;
-      Close.close(data, ctx);
-      DropDB.drop(data, ctx.soptions);
-      // free memory
-      dboptions.clear();
-      inputs.clear();
-      data = null;
     }
   }
 
@@ -149,13 +138,13 @@ public final class DBNew {
    * @return result of check
    */
   private boolean cache(final boolean create) {
-    for(final DBOptions dbopts : dboptions) {
-      Object v = dbopts.get(MainOptions.ADDCACHE);
-      if(v instanceof Boolean && (Boolean) v) return true;
+    for(final MainOptions dbopts : options) {
+      Boolean b = dbopts.get(MainOptions.ADDCACHE);
+      if(b != null && b) return true;
       if(create) {
         if(dbopts.get(MainOptions.PARSER) == MainParser.RAW) return true;
-        v = dbopts.get(MainOptions.ADDRAW);
-        if(v instanceof Boolean && (Boolean) v) return true;
+        b = dbopts.get(MainOptions.ADDRAW);
+        if(b != null && b) return true;
       }
     }
     return false;
@@ -168,18 +157,20 @@ public final class DBNew {
    * @param cache cache data to disk
    * @return database
    * @throws IOException I/O exception
+   * @throws QueryException query exception
    */
-  private Data tmpData(final String name, final int i, final boolean cache) throws IOException {
+  private Data tmpData(final String name, final int i, final boolean cache)
+      throws IOException, QueryException {
     // free memory: clear list entries after retrieval
     final NewInput input = inputs.get(i);
-    final MainOptions mopts = dboptions.get(i).assignTo(new MainOptions(qc.context.options, true));
+    final MainOptions mopts = options.get(i);
     inputs.set(i, null);
-    dboptions.set(i, null);
+    options.set(i, null);
 
     // existing node: create data clip for copied instance
     ANode node = input.node;
     if(node != null) {
-      if(node.type != NodeType.DOCUMENT_NODE) node = new FDoc(name).add(node);
+      if(node.type != NodeType.DOCUMENT_NODE) node = FDoc.build(token(name)).add(node).finish();
       final MemData mdata = (MemData) node.copy(mopts, qc).data();
       mdata.update(0, Data.DOC, token(input.path));
       return mdata;
@@ -190,13 +181,14 @@ public final class DBNew {
 
     // create temporary database on disk if requested, or if binary data needs to be written
     final Builder builder;
-    final String dbname = cache ? sopts.createRandomDb(name) : name;
+    final String dbname = cache ? sopts.createTempDb(name) : name;
     if(cache) {
       builder = new DiskBuilder(dbname, parser, sopts, mopts);
     } else {
       builder = new MemBuilder(dbname, parser);
     }
-    return builder.binaryDir(sopts.dbPath(dbname)).build();
+    builder.binariesDir(sopts.dbPath(dbname));
+    return builder.build();
   }
 
   /**
@@ -208,16 +200,17 @@ public final class DBNew {
   private static void copy(final Data source, final Data target) throws IOException {
     // insert documents
     target.insert(target.meta.size, -1, new DataClip(source));
-    // move binary resources
-    final IOFile srcDir = source.meta.binaryDir(), trgDir = target.meta.binaryDir();
-    if(srcDir != null && srcDir.exists()) {
-      trgDir.md();
-      for(final String file : srcDir.descendants()) {
-        final IOFile srcFile = new IOFile(srcDir, file);
-        final IOFile trgFile = new IOFile(trgDir, file);
-        trgFile.delete();
-        trgFile.parent().md();
-        Files.move(Paths.get(srcFile.path()), Paths.get(trgFile.path()));
+    // move file resources
+    for(final ResourceType type : Resources.BINARIES) {
+      final IOFile srcDir = source.meta.dir(type), trgDir = target.meta.dir(type);
+      if(srcDir != null && srcDir.exists()) {
+        trgDir.md();
+        for(final String path : srcDir.descendants()) {
+          final IOFile srcFile = new IOFile(srcDir, path), trgFile = new IOFile(trgDir, path);
+          trgFile.delete();
+          trgFile.parent().md();
+          Files.move(Paths.get(srcFile.path()), Paths.get(trgFile.path()));
+        }
       }
     }
   }

@@ -7,7 +7,7 @@ import org.basex.util.list.*;
 /**
  * Convenience functions for handling arrays; serves as an extension to Java's {@link Arrays} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Array {
@@ -17,8 +17,8 @@ public final class Array {
   public static final int INITIAL_CAPACITY = 8;
   /** Maximum capacity for new arrays. */
   public static final int MAX_CAPACITY = 1 << 20;
-  /** Default factor for resizing dynamic arrays. */
-  public static final double RESIZE_CAPACITY = 1.5;
+  /** Default factor for resizing dynamic arrays (default: 50%). */
+  public static final byte RESIZE_FACTOR = 15;
 
   /** Private constructor. */
   private Array() { }
@@ -194,7 +194,7 @@ public final class Array {
   public static int[] createOrder(final byte[][] values, final boolean numeric,
       final boolean ascending) {
     final IntList il = number(values.length);
-    il.sort(values, numeric, ascending);
+    il.sort(values, ascending, numeric);
     return il.finish();
   }
 
@@ -246,42 +246,6 @@ public final class Array {
   }
 
   /**
-   * Reverses the order of the entries in the given array.
-   * @param array array
-   */
-  public static void reverse(final byte[] array) {
-    reverse(array, 0, array.length);
-  }
-
-  /**
-   * Reverses the order of all entries in the given interval.
-   * @param array array
-   * @param index index of first entry of the interval
-   * @param length length of the interval
-   */
-  private static void reverse(final byte[] array, final int index, final int length) {
-    for(int l = index, r = index + length - 1; l < r; l++, r--) {
-      final byte tmp = array[l];
-      array[l] = array[r];
-      array[r] = tmp;
-    }
-  }
-
-  /**
-   * Reverses the order of all entries in the given interval.
-   * @param array array
-   * @param index index of first entry of the interval
-   * @param length length of the interval
-   */
-  public static void reverse(final Object[] array, final int index, final int length) {
-    for(int l = index, r = index + length - 1; l < r; l++, r--) {
-      final Object tmp = array[l];
-      array[l] = array[r];
-      array[r] = tmp;
-    }
-  }
-
-  /**
    * Returns an initial array capacity, which will not exceed {@link #MAX_CAPACITY}.
    * @param size size expected result size (ignored if negative)
    * @return capacity
@@ -298,7 +262,7 @@ public final class Array {
    * @return new capacity
    */
   public static int newCapacity(final int size) {
-    return newCapacity(size, RESIZE_CAPACITY);
+    return newCapacity(size, RESIZE_FACTOR);
   }
 
   /**
@@ -306,11 +270,11 @@ public final class Array {
    * The returned value will not exceed the maximum allowed array size.
    * If the maximum is reached, an exception is thrown.
    * @param size old array capacity
-   * @param factor resize factor; must be larger than or equal to 1
+   * @param factor resize factor; must be 10 or larger
    * @return new capacity
    */
-  public static int newCapacity(final int size, final double factor) {
-    return (int) Math.min(MAX_SIZE, factor * checkCapacity(size + 1));
+  public static int newCapacity(final int size, final byte factor) {
+    return (int) Math.min(MAX_SIZE, (long) checkCapacity(size + 1) * factor / 10);
   }
 
   /**

@@ -9,16 +9,16 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BinNot extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final B64 b64 = toB64(exprs[0], qc, true);
-    if(b64 == null) return Empty.VALUE;
+    final Bin binary = toBinOrNull(arg(0), qc);
+    if(binary == null) return Empty.VALUE;
 
-    final byte[] bytes = b64.binary(info);
+    final byte[] bytes = binary.binary(info);
     final int bl = bytes.length;
     if(bl == 1) return B64.get((byte) ~bytes[0]);
 

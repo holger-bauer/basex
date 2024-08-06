@@ -12,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * GFLWOR {@code count} clause.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Count extends Clause {
@@ -109,12 +109,12 @@ public final class Count extends Clause {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.attachVariable(plan.create(this), var, false));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(COUNT).token(var);
   }
 }

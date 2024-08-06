@@ -21,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * Abstract inspector class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Inspect {
@@ -35,18 +35,32 @@ public abstract class Inspect {
   /** Documentation: return tag. */
   public static final byte[] DOC_RETURN = token("return");
 
+  /** QName. */
+  static final QNm Q_OCCURRENCE = new QNm("occurrence");
+  /** QName. */
+  static final QNm Q_TAG = new QNm("tag");
+  /** QName. */
+  static final QNm Q_PREFIX = new QNm("prefix");
+  /** QName. */
+  static final QNm Q_ARITY = new QNm("arity");
+  /** QName. */
+  static final QNm Q_EXTERNAL = new QNm("external");
+  /** QName. */
+  static final QNm Q_NAME = new QNm("name");
+  /** QName. */
+  static final QNm Q_URI = new QNm("uri");
+  /** QName. */
+  static final QNm Q_TYPE = new QNm("type");
+
   /** Query context. */
   final QueryContext qc;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   final InputInfo info;
-
-  /** Parsed main module. */
-  AModule module;
 
   /**
    * Constructor.
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   Inspect(final QueryContext qc, final InputInfo info) {
     this.qc = qc;
@@ -55,27 +69,23 @@ public abstract class Inspect {
 
   /**
    * Parses a module and returns an inspection element.
-   * @param io input reference
+   * @param content module content
    * @return inspection element
    * @throws QueryException query exception
    */
-  public abstract FElem parse(IO io) throws QueryException;
+  public abstract FNode parse(IOContent content) throws QueryException;
 
   /**
    * Parses a module.
-   * @param io input reference
-   * @return query parser
+   * @param content module content
+   * @return module
    * @throws QueryException query exception
    */
-  final QueryParser parseQuery(final IO io) throws QueryException {
+  final AModule parseModule(final IO content) throws QueryException {
     try(QueryContext qctx = new QueryContext(qc.context)) {
-      final String input = string(io.read());
-      // parse query
-      final QueryParser qp = new QueryParser(input, io.path(), qctx, null);
-      module = QueryProcessor.isLibrary(input) ? qp.parseLibrary(true) : qp.parseMain();
-      return qp;
-    } catch(final IOException | QueryException ex) {
-      throw IOERR_X.get(info, ex);
+      return qctx.parse(content.toString(), content.path());
+    } catch(final QueryException ex) {
+      throw INSPECT_PARSE_X.get(info, ex);
     }
   }
 
@@ -83,10 +93,16 @@ public abstract class Inspect {
    * Creates a comment sub element.
    * @param tags map with tags
    * @param parent parent element
+   * @throws QueryException query exception
    */
-  final void comment(final TokenObjMap<TokenList> tags, final FElem parent) {
+  final void comment(final TokenObjMap<TokenList> tags, final FBuilder parent)
+      throws QueryException {
     for(final byte[] tag : tags) {
-      for(final byte[] name : tags.get(tag)) add(name, elem(tag, parent));
+      for(final byte[] value : tags.get(tag)) {
+        final FBuilder elem = element(tag);
+        add(value, elem);
+        parent.add(elem);
+      }
     }
   }
 
@@ -97,47 +113,47 @@ public abstract class Inspect {
    * @param uri include uri
    * @throws QueryException query exception
    */
-  final void annotation(final AnnList anns, final FElem parent, final boolean uri)
+  final void annotation(final AnnList anns, final FBuilder parent, final boolean uri)
       throws QueryException {
 
     for(final Ann ann : anns) {
-      final FElem annotation = elem("annotation", parent);
+      final FBuilder annotation = element("annotation");
       final QNm name = ann.name();
-      annotation.add("name", name.string());
-      if(uri) annotation.add("uri", name.uri());
+      annotation.add(Q_NAME, name.string());
+      if(uri) annotation.add(Q_URI, name.uri());
 
-      for(final Item arg : ann.args()) {
-        elem("literal", annotation).add("type", arg.type.toString()).add(arg.string(null));
+      for(final Item arg : ann.value()) {
+        annotation.add(element("literal").add(Q_TYPE, arg.type).add(arg.string(null)));
       }
+      parent.add(annotation);
     }
   }
 
   /**
-   * Creates a new element.
+   * Creates an element.
    * @param name element name
-   * @param parent parent element
    * @return element
    */
-  protected abstract FElem elem(byte[] name, FElem parent);
+  protected abstract FBuilder element(byte[] name);
 
   /**
    * Creates an element.
    * @param name name of element
-   * @param parent parent element
    * @return element node
    */
-  protected abstract FElem elem(String name, FElem parent);
+  protected abstract FBuilder element(String name);
 
   /**
    * Parses a string as XML and adds the resulting nodes to the specified parent.
    * @param value string to parse
    * @param elem element
+   * @throws QueryException query exception
    */
-  public static void add(final byte[] value, final FElem elem) {
+  public static void add(final byte[] value, final FBuilder elem) throws QueryException {
     try {
-      final MainOptions mopts = MainOptions.get();
       if(contains(value, '<')) {
         // contains angle brackets: add as XML structure
+        final MainOptions mopts = new MainOptions();
         final ANode node = new DBNode(new XMLParser(new IOContent(value), mopts, true));
         for(final ANode child : node.childIter()) {
           elem.add(child.copy(mopts, null));

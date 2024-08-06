@@ -23,11 +23,10 @@ public class ModuleDemo extends QueryModule {
    * Creates a new example node.
    * @return node
    */
-  public ANode create() {
-    FDoc doc = new FDoc("http://www.example.com");
-    FElem elem = new FElem("root").add("attr", "value");
-    doc.add(elem);
-    return doc;
+  public FNode create() {
+    FBuilder doc = FDoc.build();
+    FBuilder elem = FElem.build(new QNm("root")).add(new QNm("attr"), "value");
+    return doc.add(elem).finish();
   }
 
   /**
@@ -44,11 +43,11 @@ public class ModuleDemo extends QueryModule {
    * @return resulting value
    */
   public Value sequence() {
-    FElem elem1 = new FElem("root1");
-    FElem elem2 = new FElem("root2");
+    FBuilder elem1 = FElem.build(new QNm("root1"));
+    FBuilder elem2 = FElem.build(new QNm("root2"));
     ValueBuilder vb = new ValueBuilder(queryContext);
-    vb.add(elem1);
-    vb.add(elem2);
+    vb.add(elem1.finish());
+    vb.add(elem2.finish());
     return vb.value();
   }
 

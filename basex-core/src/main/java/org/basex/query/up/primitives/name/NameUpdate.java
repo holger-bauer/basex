@@ -10,11 +10,11 @@ import org.basex.util.list.*;
 /**
  * Update operation that references databases by their name.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public abstract class NameUpdate extends Update implements Comparable<NameUpdate> {
-  /** Name of the database. */
+  /** Name of the database (empty string for general data). */
   final String name;
   /** Query context. */
   final QueryContext qc;
@@ -22,9 +22,9 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
   /**
    * Constructor.
    * @param type type of this operation
-   * @param name name of database
+   * @param name name of database (empty string for general data)
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   NameUpdate(final UpdateType type, final String name, final QueryContext qc,
       final InputInfo info) {
@@ -80,7 +80,7 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
 
   @Override
   public final int compareTo(final NameUpdate o) {
-    return type.ordinal() - o.type.ordinal();
+    return Integer.signum(type.ordinal() - o.type.ordinal());
   }
 
   /**
@@ -95,15 +95,15 @@ public abstract class NameUpdate extends Update implements Comparable<NameUpdate
    * Closes an existing database.
    * @param name name of database
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  static void close(final String name, final QueryContext qc, final InputInfo ii)
+  static void close(final String name, final QueryContext qc, final InputInfo info)
       throws QueryException {
 
     // close data instance in query processor
     qc.resources.remove(name);
     // check if database is stilled pinned by another process
-    if(qc.context.pinned(name)) throw DB_LOCK1_X.get(ii, name);
+    if(qc.context.pinned(name)) throw DB_LOCK1_X.get(info, name);
   }
 }

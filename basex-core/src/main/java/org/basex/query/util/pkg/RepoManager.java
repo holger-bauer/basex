@@ -20,7 +20,7 @@ import org.basex.util.list.*;
 /**
  * Repository manager.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class RepoManager {
@@ -28,7 +28,7 @@ public final class RepoManager {
   private static final Pattern MAIN_CLASS = Pattern.compile("^Main-Class: *(.+?) *$");
   /** Context. */
   private final Context context;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
   /**
@@ -42,7 +42,7 @@ public final class RepoManager {
   /**
    * Constructor.
    * @param context database context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public RepoManager(final Context context, final InputInfo info) {
     this.context = context;
@@ -58,18 +58,18 @@ public final class RepoManager {
   public boolean install(final String path) throws QueryException {
     // check if package exists, and cache contents
     final IO io = IO.get(path);
-    final byte[] cont;
+    final byte[] content;
     try {
-      cont = io.read();
+      content = io.read();
     } catch(final IOException ex) {
       Util.debug(ex);
       throw REPO_NOTFOUND_X.get(info, path);
     }
 
     try {
-      if(io.hasSuffix(IO.XQSUFFIXES)) return installXQ(cont, path);
-      if(io.hasSuffix(IO.JARSUFFIX)) return installJAR(cont, path);
-      return installXAR(cont);
+      if(io.hasSuffix(IO.XQSUFFIXES)) return installXQ(content, path);
+      if(io.hasSuffix(IO.JARSUFFIX)) return installJAR(content, path);
+      return installXAR(content);
     } catch(final IOException ex) {
       throw REPO_PARSE_X_X.get(info, io.name(), ex);
     }
@@ -223,7 +223,7 @@ public final class RepoManager {
   private boolean installJAR(final byte[] content, final String path)
       throws QueryException, IOException {
 
-    final byte[] manifest = new Zip(new IOContent(content)).read(MANIFEST_MF);
+    final byte[] manifest = new RepoArchive(content).read(MANIFEST_MF);
     try(NewlineInput nli = new NewlineInput(manifest)) {
       for(String s; (s = nli.readLine()) != null;) {
         // write file to rewritten file path
@@ -284,9 +284,9 @@ public final class RepoManager {
    * @throws IOException I/O exception
    */
   private boolean installXAR(final byte[] content) throws QueryException, IOException {
-    final Zip zip = new Zip(new IOContent(content));
+    final RepoArchive repoArchive = new RepoArchive(content);
     // parse and validate descriptor file
-    final IOContent dsc = new IOContent(zip.read(DESCRIPTOR));
+    final IOContent dsc = new IOContent(repoArchive.read(DESCRIPTOR));
     final Pkg pkg = new PkgParser(info).parse(dsc);
 
     // remove existing package
@@ -298,7 +298,7 @@ public final class RepoManager {
 
     // choose unique directory, unzip files and register repository
     final IOFile file = uniqueDir(id.replaceAll("[^\\w.-]+", "-"));
-    zip.unzip(file);
+    repoArchive.unzip(file);
 
     // adds package to the repository after assigning its path
     repo.add(pkg.path(file.name()));
@@ -313,11 +313,11 @@ public final class RepoManager {
   private IOFile uniqueDir(final String name) {
     String nm = name;
     int c = 0;
-    do {
+    while(true) {
       final IOFile io = context.repo.path(nm);
       if(!io.exists()) return io;
       nm = name + '-' + ++c;
-    } while(true);
+    }
   }
 
   /**

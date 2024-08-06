@@ -5,6 +5,7 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.nio.charset.*;
+import java.util.*;
 
 import org.basex.core.jobs.*;
 import org.basex.query.*;
@@ -17,18 +18,18 @@ import org.basex.util.list.*;
 /**
  * Process function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class ProcFn extends StandardFunc {
-  /** Name: result. */
-  static final String RESULT = "result";
-  /** Name: standard output. */
-  static final String OUTPUT = "output";
-  /** Name: standard error. */
-  static final String ERROR = "error";
-  /** Name: code. */
-  static final String CODE = "code";
+  /** QName: result. */
+  static final QNm Q_RESULT = new QNm("result");
+  /** QName: output. */
+  static final QNm Q_OUTPUT = new QNm("output");
+  /** QName: error. */
+  static final QNm Q_ERROR = new QNm("error");
+  /** QName: code. */
+  static final QNm Q_CODE = new QNm("code");
 
   /**
    * Returns the result of a command.
@@ -38,20 +39,17 @@ abstract class ProcFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final ProcResult exec(final QueryContext qc, final boolean fork) throws QueryException {
-    checkAdmin(qc);
-
     // arguments
-    final StringList sl = new StringList();
-    sl.add(toToken(exprs[0], qc));
-    if(exprs.length > 1) {
-      final Iter iter = exprs[1].iter(qc);
-      for(Item item; (item = qc.next(iter)) != null;) sl.add(toToken(item));
+    final String command = toString(arg(0), qc);
+    final StringList args = new StringList().add(command);
+    final Iter iter = arg(1).iter(qc);
+    for(Item item; (item = qc.next(iter)) != null;) {
+      args.add(toString(item));
     }
-    final String[] args = sl.finish();
 
     // options
-    final ProcOptions opts = toOptions(2, new ProcOptions(), qc);
-    final String encoding = opts.get(ProcOptions.ENCODING);
+    final ProcOptions options = toOptions(arg(2), new ProcOptions(), qc);
+    final String encoding = options.get(ProcOptions.ENCODING);
     final Charset cs;
     try {
       cs = Charset.forName(encoding);
@@ -59,14 +57,20 @@ abstract class ProcFn extends StandardFunc {
       Util.debug(ex);
       throw PROC_ENCODING_X.get(info, encoding);
     }
-    final long seconds = opts.get(ProcOptions.TIMEOUT);
-    final String dir = opts.get(ProcOptions.DIR);
-    final String input = opts.get(ProcOptions.INPUT);
+    final long seconds = options.get(ProcOptions.TIMEOUT);
+    final String dir = options.get(ProcOptions.DIR);
+    final Map<String, String> env = options.get(ProcOptions.ENVIRONMENT).free();
+    final String input = options.get(ProcOptions.INPUT);
 
     final ProcResult result = new ProcResult();
     final Process proc;
-    final ProcessBuilder pb = new ProcessBuilder(args);
-    if(dir != null) pb.directory(toPath(token(dir)).toFile());
+    final ProcessBuilder pb = new ProcessBuilder(args.finish());
+    if(dir != null) pb.directory(toPath(dir).toFile());
+    if(!env.isEmpty()) {
+      pb.environment().clear();
+      pb.environment().putAll(env);
+    }
+
     try {
       proc = pb.start();
     } catch(final IOException ex) {

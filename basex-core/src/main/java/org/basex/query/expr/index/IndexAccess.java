@@ -1,6 +1,5 @@
 package org.basex.query.expr.index;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
@@ -11,7 +10,7 @@ import org.basex.util.*;
 /**
  * This abstract class retrieves values from an index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class IndexAccess extends Simple {
@@ -21,12 +20,13 @@ public abstract class IndexAccess extends Simple {
   /**
    * Constructor.
    * @param db index database
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param type type
    */
   IndexAccess(final IndexDb db, final InputInfo info, final Type type) {
     super(info, SeqType.get(type, Occ.ZERO_OR_MORE));
     this.db = db;
+    exprType.data(db);
   }
 
   @Override
@@ -70,11 +70,6 @@ public abstract class IndexAccess extends Simple {
   @Override
   public final boolean ddo() {
     return true;
-  }
-
-  @Override
-  public final Data data() {
-    return db.data();
   }
 
   @Override

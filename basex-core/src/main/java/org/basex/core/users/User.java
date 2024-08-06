@@ -3,21 +3,22 @@ package org.basex.core.users;
 import static org.basex.core.users.UserText.*;
 import static org.basex.util.Strings.*;
 import static org.basex.util.Token.*;
-import static org.basex.util.Token.eq;
 import static org.basex.util.XMLAccess.*;
 
 import java.util.*;
 import java.util.Map.Entry;
 
 import org.basex.core.*;
+import org.basex.io.*;
 import org.basex.query.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 
 /**
  * This class contains information on a single user.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class User {
@@ -26,104 +27,115 @@ public final class User {
       new EnumMap<>(Algorithm.class);
   /** Database patterns for local permissions. */
   private final LinkedHashMap<String, Perm> patterns = new LinkedHashMap<>();
-  /** User name. */
-  private String name;
   /** Permission. */
-  private Perm perm;
+  private Perm perm = Perm.NONE;
+  /** Name. */
+  private String name;
   /** Info node (can be {@code null}). */
   private ANode info;
 
   /**
    * Constructor.
-   * @param name user name
+   * @param name username
+   */
+  public User(final String name) {
+    this.name = name;
+  }
+
+  /**
+   * Constructor with password.
+   * @param name username
    * @param password password
    */
   public User(final String name, final String password) {
-    this.name = name;
-    perm = Perm.NONE;
-    for(final Algorithm algo : Algorithm.values()) {
-      passwords.put(algo, new EnumMap<>(Code.class));
-    }
+    this(name);
     password(password);
+  }
+
+  /**
+   * Indicates if passwords are stored for a user.
+   * @return result of check
+   */
+  public boolean enabled() {
+    return !passwords.isEmpty();
   }
 
   /**
    * Parses a single user from the specified node.
    * @param user user node
+   * @param file input file
    * @throws BaseXException database exception
    */
-  User(final ANode user) throws BaseXException {
-    name = string(attribute("Root", user, NAME));
-    perm = attribute(name, user, PERMISSION, Perm.values());
+  User(final ANode user, final IOFile file) throws BaseXException {
+    name = string(attribute(user, Q_NAME, "Root"));
+    perm = attribute(name, user, Q_PERMISSION, Perm.values());
 
     for(final ANode child : children(user)) {
-      if(eq(child.qname().id(), PASSWORD)) {
+      final QNm qname = child.qname();
+      if(qname.eq(Q_PASSWORD)) {
         final EnumMap<Code, String> ec = new EnumMap<>(Code.class);
-        final Algorithm algo = attribute(name, child, ALGORITHM, Algorithm.values());
-        if(passwords.containsKey(algo)) throw new BaseXException(
-            name + ": Algorithm \"" + algo + "\" supplied more than once.");
-        passwords.put(algo, ec);
+        final Algorithm algorithm = attribute(name, child, Q_ALGORITHM, Algorithm.values());
+        if(passwords.containsKey(algorithm)) throw new BaseXException(
+            "%: Algorithm % supplied more than once.", name, algorithm);
+        passwords.put(algorithm, ec);
 
         for(final ANode code : children(child)) {
-          final Code cd = value(name, code.qname().id(), algo.codes);
+          final Code cd = value(name, code.qname().unique(), algorithm.codes);
           if(ec.containsKey(cd)) throw new BaseXException(
-              name + ", " + algo + ": Code \"" + code + "\" supplied more than once.");
+              "%, %: Code % supplied more than once.", name, algorithm, code);
           ec.put(cd, string(code.string()));
         }
-        for(final Code code : algo.codes) {
+        for(final Code code : algorithm.codes) {
           if(ec.get(code) == null)
-            throw new BaseXException(name + ", " + algo + ": Code \"" + code + "\" missing.");
+            throw new BaseXException("%, %: Code '%' missing.", name, algorithm, code);
         }
-      } else if(eq(child.qname().id(), DATABASE)) {
+      } else if(qname.eq(Q_DATABASE)) {
         // parse local permissions
-        final String nm = string(attribute(name, child, PATTERN));
-        final Perm prm = attribute(name, child, PERMISSION, Perm.values());
+        final String nm = string(attribute(child, Q_PATTERN, name));
+        final Perm prm = attribute(name, child, Q_PERMISSION, Perm.values());
         patterns.put(nm, prm);
-      } else if(eq(child.qname().id(), INFO)) {
+      } else if(qname.eq(Q_INFO)) {
+        if(info != null) throw new BaseXException("%: <%/> occurs more than once.", file, qname);
         info = child.finish();
       } else {
-        throw new BaseXException(name + ": invalid element: <" + child.qname() + "/>.");
+        throw new BaseXException("%: invalid element <%/>.", file, qname);
       }
-    }
-
-    // create missing entries
-    for(final Algorithm algo : Algorithm.values()) {
-      if(passwords.get(algo) == null) throw new BaseXException(
-          name + ": Algorithm \"" + algo + "\" missing.");
     }
   }
 
   /**
    * Returns user information as XML.
    * @param qc query context ({@code null} if element will only be created for serialization)
+   * @param ii input info (can be {@code null})
    * @return user element
+   * @throws QueryException query exception
    */
-  public synchronized FElem toXML(final QueryContext qc) {
-    final FElem user = new FElem(USER).add(NAME, name).add(PERMISSION, perm.toString());
+  public synchronized FNode toXml(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final FBuilder user = FElem.build(Q_USER).add(Q_NAME, name).add(Q_PERMISSION, perm);
     passwords.forEach((key, value) -> {
-      final FElem pw = new FElem(PASSWORD).add(ALGORITHM, key.toString());
+      final FBuilder pw = FElem.build(Q_PASSWORD).add(Q_ALGORITHM, key);
       value.forEach((k, v) -> {
-        if(!v.isEmpty()) pw.add(new FElem(k.toString()).add(v));
+        if(!v.isEmpty()) pw.add(FElem.build(new QNm(k.toString())).add(v));
       });
-      user.add(pw);
+      user.add(pw.finish());
     });
-    patterns.forEach((key, value) -> user.add(new FElem(DATABASE).add(PATTERN, key).
-        add(PERMISSION, value.toString())));
+    patterns.forEach((key, value) -> user.add(FElem.build(Q_DATABASE).add(Q_PATTERN, key).
+        add(Q_PERMISSION, value).finish()));
     if(info != null) {
       if(qc != null) {
         // create copy of the info node if query context is available
-        user.add(info.materialize(qc, true));
+        user.add(info.materialize(n -> false, ii, qc));
       } else {
         // otherwise, referenced original info node and invalidate parent reference
         user.add(info);
         info.parent(null);
       }
     }
-    return user;
+    return user.finish();
   }
 
   /**
-   * Sets the user name.
+   * Sets the username.
    * @param nm name
    */
   public synchronized void name(final String nm) {
@@ -139,7 +151,7 @@ public final class User {
   }
 
   /**
-   * Returns the user name.
+   * Returns the username.
    * @return name
    */
   public synchronized String name() {
@@ -151,23 +163,27 @@ public final class User {
    * @param password password (plain text)
    */
   public synchronized void password(final String password) {
-    EnumMap<Code, String> codes = passwords.get(Algorithm.DIGEST);
-    codes.put(Code.HASH, digest(name, password));
-
-    codes = passwords.get(Algorithm.SALTED_SHA256);
-    final String salt = Long.toString(System.nanoTime());
-    codes.put(Code.SALT, salt);
-    codes.put(Code.HASH, sha256(salt + password));
+    for(final Algorithm algorithm : Algorithm.values()) {
+      final EnumMap<Code, String> codes = passwords.computeIfAbsent(algorithm,
+          k -> new EnumMap<>(Code.class));
+      if(algorithm == Algorithm.SALTED_SHA256) {
+        final String salt = Long.toString(System.nanoTime());
+        codes.put(Code.SALT, salt);
+        codes.put(Code.HASH, sha256(salt + password));
+      } else {
+        codes.put(Code.HASH, digest(name, password));
+      }
+    }
   }
 
   /**
    * Returns the specified code.
-   * @param alg used algorithm
+   * @param algorithm used algorithm
    * @param code code to be returned
    * @return code, or {@code null} if code does not exist
    */
-  public synchronized String code(final Algorithm alg, final Code code) {
-    return passwords.get(alg).get(code);
+  public synchronized String code(final Algorithm algorithm, final Code code) {
+    return passwords.get(algorithm).get(code);
   }
 
   /**
@@ -245,15 +261,16 @@ public final class User {
    * @return name
    */
   public synchronized boolean matches(final String password) {
-    final EnumMap<Code, String> alg = passwords.get(Algorithm.SALTED_SHA256);
-    return sha256(alg.get(Code.SALT) + password).equals(alg.get(Code.HASH));
+    if(!enabled()) return false;
+    final EnumMap<Code, String> algorithm = passwords.get(Algorithm.SALTED_SHA256);
+    return sha256(algorithm.get(Code.SALT) + password).equals(algorithm.get(Code.HASH));
   }
 
   /**
    * Returns the info element.
    * @return info element (can be {@code null})
    */
-  public ANode info() {
+  public synchronized ANode info() {
     return info;
   }
 
@@ -261,17 +278,17 @@ public final class User {
    * Sets the info element.
    * @param elem info element
    */
-  public void info(final ANode elem) {
-    info = elem.hasChildren() || elem.attributeIter().size() != 0 ? elem : null;
+  public synchronized void info(final ANode elem) {
+    info = elem.hasChildren() || elem.hasAttributes() ? elem : null;
   }
 
   /**
    * Returns the digest hash value.
-   * @param name user name
+   * @param name username
    * @param password password
    * @return digest digest hash
    */
-  static String digest(final String name, final String password) {
+  private static String digest(final String name, final String password) {
     return md5(name + ':' + Prop.NAME + ':' + password);
   }
 }

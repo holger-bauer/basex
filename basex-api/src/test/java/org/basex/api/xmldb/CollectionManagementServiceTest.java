@@ -9,7 +9,7 @@ import org.xmldb.api.modules.*;
 /**
  * This class tests the XMLDB/API CollectionManagementService implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CollectionManagementServiceTest extends XMLDBBaseTest {
@@ -34,7 +34,7 @@ public final class CollectionManagementServiceTest extends XMLDBBaseTest {
     createDB();
     final Class<?> c = Class.forName(DRIVER);
     db = (Database) c.getDeclaredConstructor().newInstance();
-    collection = db.getCollection(PATH, LOGIN, PW);
+    collection = db.getCollection(PATH, USERNAME, PASSWORD);
     service = (CollectionManagementService) collection.getService(CMS, "1.0");
   }
 

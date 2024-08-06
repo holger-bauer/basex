@@ -9,12 +9,12 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RestWadl extends ApiFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return WebModules.get(qc.context).wadl(request(qc));
+    return WebModules.get(qc.context).wadl(request(qc), qc.context);
   }
 }

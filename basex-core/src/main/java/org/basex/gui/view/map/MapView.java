@@ -21,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * This view is a TreeMap implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Joerg Hauser
  * @author Bastian Lemke
@@ -246,7 +246,7 @@ public final class MapView extends View {
     if(gui.updating || mainRects == null) return false;
 
     /*
-     * Loop through all rectangles. As the rectangles are sorted by pre order
+     * Loop through all rectangles. As the rectangles are sorted by PRE order
      * and small rectangles are descendants of bigger ones, the focused
      * rectangle can be found by simply parsing the array backwards.
      */
@@ -357,7 +357,7 @@ public final class MapView extends View {
       g.setFont(font);
       BaseXLayout.antiAlias(g);
       if(data.kind(f.pre) == Data.ELEM) BaseXLayout.drawTooltip(g,
-          Token.string(ViewData.namedText(gopts, data, f.pre)), x, y, getWidth(), f.level + 5);
+          Token.string(ViewData.label(gopts, data, f.pre)), x, y, getWidth(), f.level + 5);
 
       if(f.thumb) {
         // draw tooltip for thumbnail
@@ -411,7 +411,7 @@ public final class MapView extends View {
         xe += (zr.x + xe * zr.w / tw - xe) * s / MAXZS;
         ye += (zr.y + ye * zr.h / th - ye) * s / MAXZS;
       } else {
-        final long s = 10000 - (ZS[zoomIn ? -zs : ZOOMSIZE + zs]);
+        final long s = 10000 - ZS[zoomIn ? -zs : ZOOMSIZE + zs];
         if(zr.w == 0) zr.w = 1;
         if(zr.h == 0) zr.h = 1;
         xs = -xe * zr.x / zr.w * s / MAXZS;
@@ -463,8 +463,8 @@ public final class MapView extends View {
       gui.notify.mark(1, null);
     } else if(sc(e) && SwingUtilities.isLeftMouseButton(e)) {
       gui.notify.mark(2, null);
-    } else {
-      if(!marked.contains(gui.context.focused)) gui.notify.mark(0, null);
+    } else if(!marked.contains(gui.context.focused)) {
+      gui.notify.mark(0, null);
     }
   }
 
@@ -473,10 +473,7 @@ public final class MapView extends View {
     if(gui.updating || ++dragTol < 8 || mainRects.sorted != mainRects.list) return;
 
     // refresh mouse focus
-    int mx = mouseX;
-    int my = mouseY;
-    int mw = e.getX() - mx;
-    int mh = e.getY() - my;
+    int mx = mouseX, my = mouseY, mw = e.getX() - mx, mh = e.getY() - my;
     if(mw < 0) mx -= mw = -mw;
     if(mh < 0) my -= mh = -mh;
     selBox = new MapRect(mx, my, mw, mh);

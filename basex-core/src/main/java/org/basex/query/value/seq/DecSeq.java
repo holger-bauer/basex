@@ -1,7 +1,13 @@
 package org.basex.query.value.seq;
 
+import static org.basex.util.Token.*;
+
+import java.io.*;
 import java.math.*;
 
+import org.basex.core.*;
+import org.basex.io.in.DataInput;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -11,7 +17,7 @@ import org.basex.util.*;
 /**
  * Sequence of items of type {@link Int xs:decimal}, containing at least two of them.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DecSeq extends NativeSeq {
@@ -25,6 +31,28 @@ public final class DecSeq extends NativeSeq {
   private DecSeq(final BigDecimal[] values) {
     super(values.length, AtomType.DECIMAL);
     this.values = values;
+  }
+
+  /**
+   * Creates a value from the input stream. Called from {@link Store#read(DataInput, QueryContext)}.
+   * @param in data input
+   * @param type type
+   * @param qc query context
+   * @return value
+   * @throws IOException I/O exception
+   */
+  public static Value read(final DataInput in, final Type type, final QueryContext qc)
+      throws IOException {
+    final int size = in.readNum();
+    final BigDecimal[] values = new BigDecimal[size];
+    for(int s = 0; s < size; s++) values[s] = new BigDecimal(Token.string(in.readToken()));
+    return get(values);
+  }
+
+  @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeNum((int) size);
+    for(final BigDecimal v : values) out.writeToken(chopNumber(token(v.toPlainString())));
   }
 
   @Override
@@ -54,7 +82,7 @@ public final class DecSeq extends NativeSeq {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Creates a sequence with the specified items.
+   * Creates a sequence with the specified values.
    * @param values values
    * @return value
    */
@@ -70,8 +98,8 @@ public final class DecSeq extends NativeSeq {
    * @return value
    * @throws QueryException query exception
    */
-  static Value get(final int size, final Value... values) throws QueryException {
-    final BigDecimal[] tmp = new BigDecimal[size];
+  public static Value get(final long size, final Value... values) throws QueryException {
+    final BigDecimal[] tmp = new BigDecimal[Array.checkCapacity(size)];
     int t = 0;
     for(final Value value : values) {
       // speed up construction, depending on input

@@ -9,6 +9,7 @@ import java.util.concurrent.ThreadPoolExecutor.*;
 
 import javax.xml.xquery.*;
 
+import org.basex.util.*;
 import org.junit.jupiter.api.*;
 
 import com.xqj2.*;
@@ -30,7 +31,7 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
   /** Total number of documents to insert when writing. */
   private static final int DOCS_TO_INSERT = CONCURRENT_WRITE_THREADS * 30;
   /** BaseX insert strategy for inserting documents. */
-  private static final BaseXXQInsertOptions INSERT_STRATEGY = options(REPLACE);
+  private static final BaseXXQInsertOptions INSERT_STRATEGY = options(PUT);
 
   /**
    * Runs read concurrency test.
@@ -96,16 +97,14 @@ public final class XQJConcurrencyTest extends XQJBaseTest {
     if(conn != null) {
       try {
         conn.close();
-      } catch(final XQException ignored) {
-        /* ... superfluous ... */
+      } catch(final XQException ex) {
+        Util.debug(ex);
       }
     }
   }
 
-  /**
-   * Query Thread.
-   */
-  private class SimpleQueryThread extends Thread {
+  /** Query Thread. */
+  private final class SimpleQueryThread extends Thread {
     /** Thrown exception or error. */
     Throwable thrown;
 

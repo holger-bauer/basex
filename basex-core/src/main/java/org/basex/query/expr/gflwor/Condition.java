@@ -19,7 +19,7 @@ import org.basex.util.hash.*;
 /**
  * A window {@code start} of {@code end} condition.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Condition extends Single {
@@ -41,12 +41,12 @@ public final class Condition extends Single {
    * @param pos position variable (can be {@code null})
    * @param prev previous variable (can be {@code null})
    * @param next next variable (can be {@code null})
-   * @param cond condition
-   * @param info input info
+   * @param expr condition
+   * @param info input info (can be {@code null})
    */
   public Condition(final boolean start, final Var item, final Var pos, final Var prev,
-      final Var next, final Expr cond, final InputInfo info) {
-    super(info, cond, SeqType.ITEM_ZM);
+      final Var next, final Expr expr, final InputInfo info) {
+    super(info, expr, SeqType.ITEM_ZM);
     this.start = start;
     this.item = item;
     this.pos = pos;
@@ -142,7 +142,7 @@ public final class Condition extends Single {
     // bind variables
     bind(qc, it, ps, pr, nx);
     // evaluate as effective boolean value
-    return expr.ebv(qc, info).bool(info);
+    return expr.test(qc, info, 0);
   }
 
   /**
@@ -186,15 +186,15 @@ public final class Condition extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.create(start ? START : END, item);
-    if(pos  != null) plan.addElement(elem, plan.create(AT, pos));
-    if(prev != null) plan.addElement(elem, plan.create(PREVIOUS, prev));
-    if(next != null) plan.addElement(elem, plan.create(NEXT, next));
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.create(start ? START : END, item);
+    if(pos  != null) elem.add(plan.create(AT, pos));
+    if(prev != null) elem.add(plan.create(PREVIOUS, prev));
+    if(next != null) elem.add(plan.create(NEXT, next));
     plan.add(elem, expr);
   }
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(start ? START : END);
     if(item != null) qs.token(item);
     if(pos  != null) qs.token(AT).token(pos);

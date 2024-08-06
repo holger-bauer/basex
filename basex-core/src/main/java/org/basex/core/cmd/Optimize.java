@@ -16,7 +16,7 @@ import org.basex.util.list.*;
  * the currently opened database. Indexes and statistics are refreshed,
  * which is especially helpful after updates.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Optimize extends ACreate {
@@ -38,18 +38,15 @@ public final class Optimize extends ACreate {
     final MetaData meta = data.meta;
     size = meta.size;
 
-    return update(data, new Code() {
-      @Override
-      boolean run() throws IOException {
-        // reassign autooptimize flag
-        final boolean autooptimize = options.get(MainOptions.AUTOOPTIMIZE);
-        if(autooptimize != data.meta.autooptimize) {
-          data.meta.autooptimize = autooptimize;
-          data.meta.dirty = true;
-        }
-        optimize(data, Optimize.this);
-        return info(DB_OPTIMIZED_X, meta.name, jc().performance);
+    return update(data, () -> {
+      // reassign autooptimize flag
+      final boolean autooptimize = options.get(MainOptions.AUTOOPTIMIZE);
+      if(autooptimize != data.meta.autooptimize) {
+        data.meta.autooptimize = autooptimize;
+        data.meta.dirty = true;
       }
+      optimize(data, Optimize.this);
+      return info(DB_OPTIMIZED_X, meta.name, jc().performance);
     });
   }
 
@@ -85,7 +82,7 @@ public final class Optimize extends ACreate {
   /**
    * Optimizes the structures of a database.
    * @param data data
-   * @param cmd calling command instance (may be {@code null})
+   * @param cmd calling command instance (can be {@code null})
    * @throws IOException I/O Exception during index rebuild
    */
   public static void optimize(final Data data, final Optimize cmd) throws IOException {
@@ -99,7 +96,7 @@ public final class Optimize extends ACreate {
    * @param enforceAttr enforce creation or deletion of attribute index
    * @param enforceToken enforce creation or deletion of token index
    * @param enforceFt enforce creation or deletion of full-text index
-   * @param cmd calling command instance (may be {@code null})
+   * @param cmd calling command instance (can be {@code null})
    * @throws IOException I/O Exception during index rebuild
    */
   public static void optimize(final Data data, final boolean enforceText, final boolean enforceAttr,

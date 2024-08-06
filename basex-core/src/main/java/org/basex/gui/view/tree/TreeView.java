@@ -23,7 +23,7 @@ import org.basex.util.list.*;
 /**
  * This class offers a real tree view.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Wolfgang Miller
  */
 public final class TreeView extends View {
@@ -1096,10 +1096,8 @@ public final class TreeView extends View {
         gui.notify.context(gui.context.marked, false, this);
         refreshContext(false, false);
       }
-    } else {
-      if(!marked(mousePosX, mousePosY)) {
-        gui.notify.mark(0, null);
-      }
+    } else if(!marked(mousePosX, mousePosY)) {
+      gui.notify.mark(0, null);
     }
   }
 

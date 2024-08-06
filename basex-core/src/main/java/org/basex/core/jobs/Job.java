@@ -1,6 +1,7 @@
 package org.basex.core.jobs;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 import org.basex.core.*;
 import org.basex.core.users.*;
@@ -9,12 +10,12 @@ import org.basex.util.*;
 /**
  * Job class. This abstract class is implemented by all command and query instances.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Job {
   /** Child jobs. */
-  private final List<Job> children = Collections.synchronizedList(new ArrayList<>(0));
+  private final List<Job> children = new CopyOnWriteArrayList<>();
   /** Job context. */
   private JobContext jc = new JobContext(this);
   // state and control flags must be volatile so that all threads see the actual non-cached values
@@ -128,7 +129,7 @@ public abstract class Job {
    * Sends a new job state.
    * @param js new state
    */
-  public void state(final JobState js) {
+  public final void state(final JobState js) {
     for(final Job job : children) job.state(js);
     state = js;
     if(js == JobState.STOPPED || js == JobState.TIMEOUT || js == JobState.MEMORY) {
@@ -138,7 +139,7 @@ public abstract class Job {
   }
 
   /**
-   * Adds the strings (databases, special identifiers) for which locks need to be acquired.
+   * Collects lock strings (databases, special identifiers) when registering a query.
    */
   public void addLocks() {
     // default (worst case): lock all databases

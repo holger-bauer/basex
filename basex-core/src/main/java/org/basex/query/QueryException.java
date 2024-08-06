@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Thrown to indicate an exception during the parsing or evaluation of a query.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class QueryException extends Exception {
@@ -33,8 +33,6 @@ public class QueryException extends Exception {
   private Value value = Empty.VALUE;
   /** Error reference ({@code null} for dynamic error messages). */
   private QueryError error;
-  /** Code suggestions. */
-  private StringList suggest;
   /** Error line and column. */
   private InputInfo info;
   /** Marked error column. */
@@ -82,7 +80,7 @@ public class QueryException extends Exception {
   public QueryException(final InputInfo info, final QNm name, final String message,
       final Object... ext) {
 
-    super(message(message, ext));
+    super(message(message, ext, info));
     this.name = name;
     if(info != null) info(info);
     for(final Object o : ext) {
@@ -126,28 +124,18 @@ public class QueryException extends Exception {
   }
 
   /**
-   * Returns suggestions for code suggestions.
-   * @return suggestions
-   */
-  public final StringList suggest() {
-    return suggest == null ? new StringList() : suggest;
-  }
-
-  /**
    * Sets code suggestions.
    * @param qp query parser
-   * @param sug code suggestions
    * @return self reference
    */
-  public final QueryException suggest(final InputParser qp, final StringList sug) {
-    suggest = sug;
+  public final QueryException suggest(final InputParser qp) {
     pos(qp);
     return this;
   }
 
   /**
    * Adds an input info to the stack.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return self reference
    */
   public final QueryException add(final InputInfo ii) {
@@ -157,7 +145,7 @@ public class QueryException extends Exception {
 
   /**
    * Sets input info.
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @return self reference
    */
   public final QueryException info(final InputInfo ii) {
@@ -167,7 +155,7 @@ public class QueryException extends Exception {
 
   /**
    * Returns the input info.
-   * @return input info
+   * @return input info (can be {@code null})
    */
   public final InputInfo info() {
     return info;
@@ -175,7 +163,7 @@ public class QueryException extends Exception {
 
   /**
    * Sets the error value.
-   * @param val error value
+   * @param val error value (can be {@code null})
    * @return self reference
    */
   public final QueryException value(final Value val) {
@@ -202,7 +190,7 @@ public class QueryException extends Exception {
     if(info != null) return;
     // check if line/column information has already been added
     parser.pos = Math.min(parser.mark, parser.length);
-    info = new InputInfo(parser);
+    info = parser.info();
   }
 
   /**
@@ -249,6 +237,17 @@ public class QueryException extends Exception {
   }
 
   /**
+   * Returns a stack trace.
+   * @return stack trace
+   */
+  public byte[][] stack() {
+    final TokenList list = new TokenList();
+    if(info != null) list.add(info.toString());
+    for(final InputInfo ii : stack) list.add(ii.toString());
+    return list.finish();
+  }
+
+  /**
    * Checks if this exception can be caught by a {@code try/catch} expression.
    * @return result of check
    */
@@ -267,17 +266,16 @@ public class QueryException extends Exception {
 
   /**
    * Creates the error message from the specified text and extension array.
+   * @param info input info (can be {@code null})
    * @param text text message with optional placeholders
    * @param ext info extensions
    * @return argument
    */
-  private static String message(final String text, final Object[] ext) {
-    final int el = ext.length;
-    for(int e = 0; e < el; e++) {
-      if(ext[e] instanceof ExprInfo) {
-        ext[e] = normalize(((ExprInfo) ext[e]).toErrorString(), null);
-      }
+  private static String message(final String text, final Object[] ext, final InputInfo info) {
+    final TokenList list = new TokenList(ext.length);
+    for(final Object e : ext) {
+      list.add(normalize(e instanceof ExprInfo ? ((ExprInfo) e).toErrorString() : e, info));
     }
-    return Util.info(text, ext);
+    return Util.info(text, (Object[]) list.finish());
   }
 }

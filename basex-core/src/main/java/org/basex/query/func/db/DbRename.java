@@ -5,6 +5,7 @@ import static org.basex.util.Token.*;
 
 import org.basex.core.cmd.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.up.*;
@@ -18,36 +19,33 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbRename extends DbAccess {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Data data = checkData(qc);
-    final String source = path(1, qc);
-    final String target = path(2, qc);
+    final Data data = toData(qc);
+    final String source = toDbPath(arg(1), qc), target = toDbPath(arg(2), qc);
 
-    // the first step of the path should be the database name
-    final Updates updates = qc.updates();
-    final IntList il = data.resources.docs(source);
-    final int is = il.size();
-    for(int i = 0; i < is; i++) {
-      final int pre = il.get(i);
-      final String trg = Rename.target(data, pre, source, target);
-      if(trg.isEmpty() || Strings.endsWith(trg, '/') || Strings.endsWith(trg, '.'))
-        throw DB_PATH_X.get(info, trg);
-      updates.add(new ReplaceValue(pre, data, info, token(trg)), qc);
-    }
-
-    // rename raw data
-    if(!data.inMemory()) {
-      final IOFile src = data.meta.binary(source);
-      final IOFile trg = data.meta.binary(target);
-      if(src == null || trg == null) throw DB_PATH_X.get(info, src);
-      if(!src.eq(trg)) {
-        rename(data, src, trg, qc);
-        updates.add(new DBDelete(data, source, info), qc);
+    if(!IO.equals(source, target)) {
+      // rename XML resources
+      final Updates updates = qc.updates();
+      final IntList docs = data.resources.docs(source);
+      final int ds = docs.size();
+      for(int d = 0; d < ds; d++) {
+        final int pre = docs.get(d);
+        final String trg = Rename.target(data, pre, source, target);
+        if(trg.isEmpty() || Strings.endsWith(trg, '/')) throw DB_PATH_X.get(info, trg);
+        updates.add(new ReplaceValue(pre, data, info, token(trg)), qc);
+      }
+      // rename file resources
+      for(final ResourceType type : Resources.BINARIES) {
+        final IOFile src = data.meta.file(source, type), trg = data.meta.file(target, type);
+        if(src != null && trg != null) {
+          rename(data, src, trg, qc);
+          updates.add(new DBDelete(data, src, info), qc);
+        }
       }
     }
     return Empty.VALUE;

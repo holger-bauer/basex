@@ -9,7 +9,7 @@ import org.basex.util.*;
  * This class simplifies the composition of the string representation of
  * a database command.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CmdBuilder {
@@ -17,17 +17,17 @@ public final class CmdBuilder {
   private final TokenBuilder tb = new TokenBuilder();
   /** Command to be output. */
   private final Command cmd;
-  /** Confidential flag. */
-  private final boolean conf;
+  /** Password flag. */
+  private final boolean password;
 
   /**
    * Constructor.
    * @param cmd command
-   * @param conf confidential flag
+   * @param password password flag
    */
-  public CmdBuilder(final Command cmd, final boolean conf) {
+  public CmdBuilder(final Command cmd, final boolean password) {
     this.cmd = cmd;
-    this.conf = conf;
+    this.password = password;
   }
 
   /**
@@ -71,11 +71,11 @@ public final class CmdBuilder {
   }
 
   /**
-   * Returns the confidential flag.
+   * Returns the password flag.
    * @return flag
    */
-  public boolean conf() {
-    return conf;
+  public boolean password() {
+    return password;
   }
 
   /**
@@ -90,7 +90,7 @@ public final class CmdBuilder {
 
   /**
    * Adds an argument with an optional prefix.
-   * @param key optional keyword prefix
+   * @param key keyword prefix (can be {@code null})
    * @param arg argument index
    * @return self instance
    */
@@ -100,7 +100,7 @@ public final class CmdBuilder {
 
   /**
    * Adds an argument with an optional prefix.
-   * @param key optional keyword prefix
+   * @param key keyword prefix (can be {@code null})
    * @param arg argument string
    * @return self instance
    */
@@ -109,7 +109,7 @@ public final class CmdBuilder {
       if(key != null) tb.add(' ').add(key);
       tb.add(' ');
       if(arg.indexOf(' ') != -1 || arg.indexOf(';') != -1) {
-        tb.add('"').add(arg.replaceAll("\"", "\\\"")).add('"');
+        tb.add('"').add(arg.replace('"', '"')).add('"');
       } else {
         tb.add(arg);
       }

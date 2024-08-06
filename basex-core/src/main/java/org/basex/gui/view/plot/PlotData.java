@@ -14,15 +14,15 @@ import org.basex.util.list.*;
 /**
  * An additional layer which prepares the data for the scatter plot.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class PlotData {
   /** Database context. */
   final Context context;
-  /** The x axis of the plot. */
+  /** The x-axis of the plot. */
   final PlotAxis xAxis;
-  /** The y axis of the plot. */
+  /** The y-axis of the plot. */
   final PlotAxis yAxis;
   /** Items pre values. */
   int[] pres;

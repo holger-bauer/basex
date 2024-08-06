@@ -11,13 +11,13 @@ import org.basex.util.hash.*;
 /**
  * Cached map expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CachedMap extends SimpleMap {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   public CachedMap(final InputInfo info, final Expr... exprs) {

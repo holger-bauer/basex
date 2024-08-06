@@ -13,7 +13,7 @@ import org.basex.util.*;
  * it can also be explicitly set by calling {@link #encoding()}.
  * UTF-8 will be used as default encoding.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class TextInput extends BufferInput {
@@ -130,7 +130,7 @@ public class TextInput extends BufferInput {
   public int read() throws IOException {
     final int cp = decoder.read(this);
     if(cp != -1 && !XMLToken.valid(cp)) {
-      if(validate) throw new InputException("Invalid XML character: #" + cp);
+      if(validate) throw new InputException(cp);
       return Token.REPLACEMENT;
     }
     return cp;

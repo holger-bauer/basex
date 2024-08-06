@@ -10,16 +10,16 @@ import org.basex.util.http.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebRedirect extends WebFn {
   @Override
-  public FElem item(final QueryContext qc, final InputInfo ii) throws QueryException {
+  public FNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final String location = createUrl(qc);
 
     final HashMap<String, String> headers = new HashMap<>();
-    headers.put(HttpText.LOCATION, location);
+    headers.put(HTTPText.LOCATION, location);
     final ResponseOptions response = new ResponseOptions();
     response.set(ResponseOptions.STATUS, 302);
     return createResponse(response, headers, null);

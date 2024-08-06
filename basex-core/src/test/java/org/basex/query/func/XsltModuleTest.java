@@ -9,10 +9,16 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the XSLT Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XsltModuleTest extends SandboxTest {
+  /** Test method. */
+  @Test public void init() {
+    final Function func = _XSLT_INIT;
+    assertTrue(query(func.args()).isEmpty());
+  }
+
   /** Test method. */
   @Test public void processor() {
     final Function func = _XSLT_PROCESSOR;
@@ -31,21 +37,6 @@ public final class XsltModuleTest extends SandboxTest {
         "<X><xsl:value-of select='$t'/></X></xsl:template>");
     query(func.args(doc, ' ' + style, " map { 't': '1' }"), "<X>1</X>");
     query(func.args(doc, ' ' + style, " map { 't' : text { '1' } }"), "<X>1</X>");
-
-    // catalog manager (via option declaration); requires resolver in lib/ directory
-    final String dir = "src/test/resources/catalog/";
-    query("declare option db:catfile '" + dir + "catalog.xml';" +
-        func.args(" <dummy/>", dir + "document.xsl"),
-        "<x>X</x>");
-    query("declare option db:catfile '" + dir + "catalog.xml';" +
-        func.args(" <dummy/>", " doc('" + dir + "document.xsl')"),
-        "<x>X</x>");
-
-    // catalog manager (via pragma); requires resolver in lib/ directory
-    query("(# db:catfile " + dir + "catalog.xml #) { " +
-        func.args(" <dummy/>", dir + "document.xsl") + " }",
-        "<x>X</x>");
-
   }
 
   /** Test method. */
@@ -60,6 +51,18 @@ public final class XsltModuleTest extends SandboxTest {
     style = wrap("<xsl:param name='t'/><xsl:output omit-xml-declaration='yes'/>" +
       "<xsl:template match='/'><xsl:value-of select='$t'/></xsl:template>");
     query(func.args(doc, ' ' + style, " map { 't': '1' }"), 1);
+  }
+
+  /** Test method. */
+  @Test public void transformReport() {
+    final Function func = _XSLT_TRANSFORM_REPORT;
+    final String doc = " <a/>";
+    final String style = wrap("<xsl:template match='/'>" +
+        "<xsl:output omit-xml-declaration='yes'/>1</xsl:template>");
+    query(func.args(doc, ' ' + style) + "?result", 1);
+    query(func.args(doc, ' ' + style) + "?error => exists()", false);
+    query(func.args(doc, ' ' + wrap("")) + "?error => exists()", false);
+    query(func.args(doc, ' ' + wrap("<xsl:x/>")) + "?error => exists()", true);
   }
 
   /** Test method. */

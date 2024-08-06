@@ -1,0 +1,64 @@
+name: Bug Report
+description: Report a confirmed and reproducible bug with BaseX.
+labels:
+- 'type: bug'
+- 'status: needs-triage'
+body:
+- type: markdown
+  attributes:
+    value: |
+      ## Welcome!
+
+      We appreciate your feedback on BaseX. Please mind the following guidelines:
+
+      * Our issue tracker is used to discuss confirmed bugs and issues.
+      * For unconfirmed bugs, feature requests and questions, please write to our **basex-talk** mailing list: https://basex.org/open-source/.
+      * You may as well find it helpful to browse through our documentation: https://docs.basex.org/.
+      * Other helpful resources are:
+         * Stack Overflow: https://stackoverflow.com/questions/tagged/basex
+         * The mailing list archive: https://www.mail-archive.com/basex-talk@mailman.uni-konstanz.de/
+
+      Thanks for your understanding.
+- type: textarea
+  id: description
+  attributes:
+    label: Description of the Problem
+    description: |
+      In this section, please concentrate on observations. Only describe what you observed directly.
+  validations:
+    required: true
+- type: textarea
+  id: expected-behavior
+  attributes:
+    label: Expected Behavior
+    description: |
+      Explain why you consider the described behavior to be wrong. What did you expect instead?
+  validations:
+    required: true
+- type: textarea
+  id: steps
+  attributes:
+    label: Steps to Reproduce the Behavior
+    description: |
+      The more time you spend describing an easy way to reproduce the behavior, the easier it is for the developers to fix it.
+    placeholder: |
+      1.
+      2.
+      3.
+  validations:
+    required: true
+- type: textarea
+  id: possible-solution
+  attributes:
+    label: Do you have an idea how to solve the issue?
+    description: |
+      This field is optional.
+- type: textarea
+  id: configuration
+  attributes:
+    label: What is your configuration?
+    description: |
+      - Include as much configuration as possible, including global and default sections.
+      - Don’t forget to remove confidential data.
+  validations:
+    required: true

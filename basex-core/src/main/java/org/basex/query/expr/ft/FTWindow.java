@@ -15,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * FTWindow expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTWindow extends FTFilter {
@@ -24,7 +24,7 @@ public final class FTWindow extends FTFilter {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param win window
    * @param unit unit
@@ -63,9 +63,10 @@ public final class FTWindow extends FTFilter {
     for(final FTStringMatch sm : match) {
       if(sm.exclude) continue;
       if(first == null) first = sm;
-      first.gaps |= sm.end - first.end > 1;
-      first.end = sm.end;
-      if(pos(first.end, lexer) - pos(first.start, lexer) > n) return false;
+      final int fend = first.end, send = sm.end;
+      first.gaps |= send - fend > 1;
+      first.end = send;
+      if(pos(send, lexer) - pos(first.start, lexer) > n) return false;
     }
     if(first == null) return false;
 
@@ -126,12 +127,12 @@ public final class FTWindow extends FTFilter {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, WINDOW, unit), win, exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(exprs[0]).token(WINDOW).token(win).token(unit);
   }
 }

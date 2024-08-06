@@ -25,7 +25,7 @@ import org.basex.util.*;
  * command to the server.</li>
  * </ul>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class ClientSession extends Session {
@@ -40,7 +40,7 @@ public class ClientSession extends Session {
   /**
    * Constructor, specifying login data.
    * @param context database context
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @throws IOException I/O exception
    */
@@ -52,7 +52,7 @@ public class ClientSession extends Session {
   /**
    * Constructor, specifying login data and an output stream.
    * @param context database context
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @param output client output; if set to {@code null}, results will be returned as strings
    * @throws IOException I/O exception
@@ -67,7 +67,7 @@ public class ClientSession extends Session {
    * Constructor, specifying the server host:port combination and login data.
    * @param host server name
    * @param port server port
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @throws IOException I/O exception
    */
@@ -80,7 +80,7 @@ public class ClientSession extends Session {
    * Constructor, specifying the server host:port combination, login data and an output stream.
    * @param host server name
    * @param port server port
-   * @param username user name
+   * @param username username
    * @param password password (plain text)
    * @param output client output; if set to {@code null}, results will be returned as strings
    * @throws IOException I/O exception
@@ -113,7 +113,7 @@ public class ClientSession extends Session {
       nonce = response[0];
     }
 
-    // send user name and hashed password
+    // send username and hashed password
     sout = PrintOutput.get(socket.getOutputStream());
     send(username);
     send(Strings.md5(Strings.md5(code) + nonce));
@@ -134,13 +134,13 @@ public class ClientSession extends Session {
   }
 
   @Override
-  public void replace(final String path, final InputStream input) throws IOException {
-    send(ServerCmd.REPLACE, input, path);
+  public void put(final String path, final InputStream input) throws IOException {
+    send(ServerCmd.PUT, input, path);
   }
 
   @Override
-  public void store(final String path, final InputStream input) throws IOException {
-    send(ServerCmd.STORE, input, path);
+  public void putBinary(final String path, final InputStream input) throws IOException {
+    send(ServerCmd.PUTBINARY, input, path);
   }
 
   @Override

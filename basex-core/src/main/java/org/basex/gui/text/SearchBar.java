@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * This panel provides search and replace facilities.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SearchBar extends BaseXBack {
@@ -72,9 +72,9 @@ public final class SearchBar extends BaseXBack {
     setVisible(false);
 
     find = new BaseXCombo(gui, true).history(GUIOptions.SEARCHED, gui.gopts);
-    find.hint(Text.FIND + Text.DOTS);
+    find.hint(Text.FIND + "\u2026");
     replace = new BaseXCombo(gui, true).history(GUIOptions.REPLACED, gui.gopts);
-    replace.hint(Text.REPLACE_WITH + Text.DOTS);
+    replace.hint(Text.REPLACE_WITH + "\u2026");
 
     final ActionListener al = e -> search();
     mcase = button("f_case", BaseXLayout.addShortcut(Text.MATCH_CASE, MATCHCASE.toString()), al);
@@ -83,6 +83,7 @@ public final class SearchBar extends BaseXBack {
     multi = button("f_multi", BaseXLayout.addShortcut(Text.MULTI_LINE, MULTILINE.toString()), al);
 
     rplc  = BaseXButton.get("f_replace", Text.REPLACE_ALL, false, gui);
+    rplc.setFocusable(true);
     cls = BaseXButton.get("f_close", BaseXLayout.addShortcut(Text.CLOSE, ESCAPE.toString()),
         false, gui);
 
@@ -160,7 +161,7 @@ public final class SearchBar extends BaseXBack {
     final boolean editable = text.isEditable();
     if(editor == null || editable != editor.isEditable()) {
       removeAll();
-      final BaseXBack west = new BaseXBack(false).layout(new ColumnLayout(1));
+      final BaseXToolBar west = new BaseXToolBar();
       west.add(mcase);
       west.add(word);
       west.add(regex);
@@ -170,7 +171,7 @@ public final class SearchBar extends BaseXBack {
       center.add(find);
       if(editable) center.add(replace);
 
-      final BaseXBack east = new BaseXBack(false).layout(new ColumnLayout(1));
+      final BaseXToolBar east = new BaseXToolBar();
       if(editable) east.add(rplc);
       east.add(cls);
 
@@ -263,7 +264,7 @@ public final class SearchBar extends BaseXBack {
   /**
    * Searches text in the current editor.
    */
-  public void search() {
+  private void search() {
     final boolean sel = regex.isSelected();
     multi.setEnabled(sel);
     word.setEnabled(!sel);
@@ -279,7 +280,7 @@ public final class SearchBar extends BaseXBack {
     final boolean hits = sc.nr != 0, empty = sc.string.isEmpty();
     rplc.setEnabled(hits && !empty);
     find.highlight(hits || empty);
-    if(isVisible()) gui.status.setText(Util.info(Text.STRINGS_FOUND_X, sc.nr()));
+    if(isVisible()) gui.status.setText(Util.info(Text.STRINGS_FOUND_X, sc.nr()), true);
     if(jump) editor.jump(SearchDir.CURRENT, false);
   }
 
@@ -300,7 +301,7 @@ public final class SearchBar extends BaseXBack {
    */
   private void search(final boolean jump) {
     final String text = isVisible() ? find.getText() : "";
-    if(!text.isEmpty()) gui.status.setText(Text.SEARCHING + Text.DOTS);
+    if(!text.isEmpty()) gui.status.setText(Text.SEARCHING + Text.DOTS, true);
     editor.search(new SearchContext(this, text), jump);
   }
 
@@ -341,9 +342,10 @@ public final class SearchBar extends BaseXBack {
           if(ch != '\\') sb.append(ch);
         }
         bs = false;
+      } else if(ch == '\\') {
+        bs = true;
       } else {
-        if(ch == '\\') bs = true;
-        else sb.append(ch);
+        sb.append(ch);
       }
     }
     if(bs) sb.append('\\');

@@ -3,6 +3,9 @@ package org.basex.query;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
+import javax.xml.transform.*;
+import javax.xml.transform.sax.*;
+
 import org.basex.core.*;
 import org.basex.io.*;
 import org.basex.query.util.*;
@@ -12,11 +15,12 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
+import org.xml.sax.*;
 
 /**
  * This class contains the static context of an expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StaticContext {
@@ -53,8 +57,10 @@ public final class StaticContext {
 
   /** Static type of context value. */
   SeqType contextType;
-  /** Sets a module URI resolver. */
+  /** Sets a custom URI resolver. */
   UriResolver resolver;
+  /** Sets an XML catalog URI resolver. */
+  private final URIResolver uriResolver;
 
   /** Static Base URI. */
   private Uri baseURI = Uri.EMPTY;
@@ -64,8 +70,10 @@ public final class StaticContext {
    * @param qc query context
    */
   public StaticContext(final QueryContext qc) {
-    mixUpdates = qc.context.options.get(MainOptions.MIXUPDATES);
-    withdb = qc.context.options.get(MainOptions.WITHDB);
+    final MainOptions mopts = qc.context.options;
+    mixUpdates = mopts.get(MainOptions.MIXUPDATES);
+    withdb = mopts.get(MainOptions.WITHDB);
+    uriResolver = Resolver.uris(mopts);
   }
 
   /**
@@ -96,7 +104,7 @@ public final class StaticContext {
 
   /**
    * Sets the static base URI.
-   * @param uri uri to be set: an empty URI will be ignored, {@code null} invalidates the URI
+   * @param uri URI to be set: an empty URI will be ignored, {@code null} invalidates the URI
    */
   public void baseURI(final String uri) {
     String string = "";
@@ -109,7 +117,7 @@ public final class StaticContext {
       if(!Strings.endsWith(string, '/') &&
         (Strings.endsWith(uri, '.') || Strings.endsWith(uri, '/'))) string += '/';
     }
-    baseURI = Uri.uri(string);
+    baseURI = Uri.get(string);
   }
 
   /**
@@ -126,8 +134,7 @@ public final class StaticContext {
    * @return resulting path
    */
   public IO resolve(final String path) {
-    final IO baseIO = baseIO();
-    return baseIO == null ? IO.get(path) : baseIO.merge(path);
+    return resolve(path, null);
   }
 
   /**
@@ -138,21 +145,40 @@ public final class StaticContext {
    * @return io reference
    */
   public IO resolve(final String path, final String uri) {
-    return resolver == null ? resolve(path) : resolver.resolve(path, uri, baseURI);
+    if(resolver != null) return resolver.resolve(path, uri, baseURI);
+
+    final IO baseIO = baseIO();
+    if(baseIO == null) return IO.get(path);
+
+    // try to resolve the path against the registered URI resolver
+    if(uriResolver != null) {
+      try {
+        final Source s = uriResolver.resolve(path, baseIO.path());
+        final InputSource is = s instanceof SAXSource ? ((SAXSource) s).getInputSource() : null;
+        final String id = is != null ? is.getSystemId() : null;
+        if(id != null) return IO.get(id);
+      } catch(final TransformerException ex) {
+        Util.debug(ex);
+      }
+    }
+    return baseIO.merge(path);
   }
 
   /**
    * Returns a decimal format.
-   * @param id format id
+   * @param name name
+   * @param info input info (can be {@code null})
    * @return decimal format or {@code null}
    * @throws QueryException query exception
    */
-  public DecFormatter decFormat(final byte[] id) throws QueryException {
+  public synchronized DecFormatter decFormat(final QNm name, final InputInfo info)
+      throws QueryException {
+    final byte[] id = name.unique();
     DecFormatter df = decFormats.get(id);
-    if(df == null && eq(id, EMPTY)) {
+    if(df == null) {
       // lazy instantiation of default decimal format
-      df = new DecFormatter(null, null);
-      decFormats.put(id, df);
+      df = eq(id, EMPTY) ? new DecFormatter() : DecFormatter.forLanguage(id, info);
+      if(df != null) decFormats.put(id, df);
     }
     return df;
   }

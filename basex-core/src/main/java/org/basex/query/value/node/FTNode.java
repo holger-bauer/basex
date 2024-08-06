@@ -7,9 +7,9 @@ import org.basex.query.value.type.*;
 import org.basex.util.ft.*;
 
 /**
- * Disk-based full-text Node item.
+ * Database node with full-text matches.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTNode extends DBNode {
@@ -19,6 +19,8 @@ public final class FTNode extends DBNode {
   private final int is;
   /** Full-text matches. */
   private FTMatches matches;
+  /** Score value. */
+  private Double score;
 
   /**
    * Constructor, called by the sequential variant.
@@ -33,7 +35,7 @@ public final class FTNode extends DBNode {
   /**
    * Constructor, called by the index variant.
    * @param matches full-text matches
-   * @param data data reference
+   * @param data data reference (can be {@code null})
    * @param pre pre value
    * @param tl token length
    * @param is number of indexed results
@@ -72,9 +74,17 @@ public final class FTNode extends DBNode {
     return score;
   }
 
+  /**
+   * Sets a new score value.
+   * @param s score value
+   */
+  public void score(final double s) {
+    score = s;
+  }
+
   @Override
-  public void plan(final QueryString qs) {
-    super.plan(qs);
+  public void toString(final QueryString qs) {
+    super.toString(qs);
     if(matches != null) qs.paren(matches.size());
   }
 }

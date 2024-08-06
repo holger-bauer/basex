@@ -14,14 +14,13 @@ import org.basex.core.parse.Commands.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
-import org.basex.util.list.*;
 import org.basex.util.similarity.*;
 
 /**
  * This is a parser for command strings, creating {@link Command} instances.
  * Several commands can be formulated in one string and separated by semicolons.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class StringParser extends CommandParser {
@@ -64,7 +63,7 @@ final class StringParser extends CommandParser {
       case CREATE:
         switch(consume(CmdCreate.class, cmd)) {
           case BACKUP:
-            return new CreateBackup(glob(cmd));
+            return new CreateBackup(glob(null), string(null));
           case DATABASE: case DB:
             return new CreateDB(name(cmd), remaining(null, true));
           case INDEX:
@@ -88,23 +87,29 @@ final class StringParser extends CommandParser {
         }
         break;
       case OPEN:
-        return new Open(name(cmd), string(null));
+        return new Open(name(cmd));
       case CHECK:
         return new Check(string(cmd));
       case ADD:
         final String aa = key(S_TO, null) ? string(cmd) : null;
         return new Add(aa, remaining(cmd, true));
-      case STORE:
-        final String sa = key(S_TO, null) ? string(cmd) : null;
-        return new Store(sa, remaining(cmd, true));
-      case RETRIEVE:
-        return new Retrieve(string(cmd));
+      case GET:
+        return new Get(string(cmd));
+      case BINARY:
+        switch(consume(CmdBinary.class, cmd)) {
+          case GET:
+            return new BinaryGet(string(cmd));
+          case PUT:
+            final String sa = key(S_TO, null) ? string(cmd) : null;
+            return new BinaryPut(sa, remaining(cmd, true));
+        }
+        break;
       case DELETE:
         return new Delete(string(cmd));
       case RENAME:
         return new Rename(string(cmd), string(cmd));
-      case REPLACE:
-        return new Replace(string(cmd), remaining(cmd, true));
+      case PUT:
+        return new Put(string(cmd), remaining(cmd, true));
       case INFO:
         switch(consume(CmdInfo.class, cmd)) {
           case NULL:
@@ -125,6 +130,8 @@ final class StringParser extends CommandParser {
         return new Close();
       case LIST:
         return new List(name(null), string(null));
+      case DIR:
+        return new Dir(string(null));
       case DROP:
         switch(consume(CmdDrop.class, cmd)) {
           case DATABASE: case DB:
@@ -134,7 +141,7 @@ final class StringParser extends CommandParser {
           case USER:
             return new DropUser(glob(cmd), key(ON, null) ? glob(cmd) : null);
           case BACKUP:
-            return new DropBackup(glob(cmd));
+            return new DropBackup(glob(null));
         }
         break;
       case OPTIMIZE:
@@ -157,8 +164,6 @@ final class StringParser extends CommandParser {
         return new Execute(remaining(cmd, true));
       case FIND:
         return new Find(remaining(cmd, true));
-      case GET:
-        return new Get(name(null));
       case SET:
         return new Set(name(cmd), remaining(null, true));
       case PASSWORD:
@@ -173,17 +178,7 @@ final class StringParser extends CommandParser {
       case KILL:
         return new Kill(string(cmd));
       case RESTORE:
-        return new Restore(name(cmd));
-      case JOBS:
-        switch(consume(CmdJobs.class, cmd)) {
-          case LIST:
-            return new JobsList();
-          case STOP:
-            return new JobsStop(name(cmd));
-          case RESULT:
-            return new JobsResult(name(cmd));
-        }
-        break;
+        return new Restore(name(null));
       case SHOW:
         switch(consume(CmdShow.class, cmd)) {
           case SESSIONS:
@@ -192,6 +187,8 @@ final class StringParser extends CommandParser {
             return new ShowUsers(key(ON, null) ? name(cmd) : null);
           case BACKUPS:
             return new ShowBackups();
+          case OPTIONS:
+            return new ShowOptions(name(null));
         }
         break;
       case GRANT:
@@ -203,9 +200,9 @@ final class StringParser extends CommandParser {
       case REPO:
         switch(consume(CmdRepo.class, cmd)) {
           case INSTALL:
-            return new RepoInstall(string(cmd), new InputInfo(parser));
+            return new RepoInstall(string(cmd), parser.info());
           case DELETE:
-            return new RepoDelete(string(cmd), new InputInfo(parser));
+            return new RepoDelete(string(cmd), parser.info());
           case LIST:
             return new RepoList();
         }
@@ -222,22 +219,21 @@ final class StringParser extends CommandParser {
    * @throws QueryException query exception
    */
   private String string(final Cmd cmd) throws QueryException {
-    final StringBuilder sb = new StringBuilder();
+    final TokenBuilder tb = new TokenBuilder();
     consumeWS();
     boolean more = true, quoted = false;
     while(more && parser.more()) {
-      final char ch = parser.curr();
+      final int cp = parser.current();
       if(quoted) {
-        if(ch == '"') more = false;
-      } else if(ch <= ' ' || eoc()) {
+        if(cp == '"') more = false;
+      } else if(cp <= ' ' || eoc()) {
         break;
-      } else if(ch == '"' && sb.length() == 0) {
+      } else if(cp == '"' && tb.isEmpty()) {
         quoted = true;
       }
-      sb.append(ch);
-      parser.consume();
+      tb.add(parser.consume());
     }
-    return finish(sb.toString().replaceAll("^\"|\"$", ""), cmd);
+    return finish(tb.toString().replaceAll("^\"|\"$", ""), cmd);
   }
 
   /**
@@ -249,9 +245,9 @@ final class StringParser extends CommandParser {
    */
   private String remaining(final Cmd cmd, final boolean quotes) throws QueryException {
     consumeWS();
-    final StringBuilder sb = new StringBuilder();
-    while(parser.more()) sb.append(parser.consume());
-    final String str = sb.toString();
+    final TokenBuilder tb = new TokenBuilder();
+    while(parser.more()) tb.add(parser.consume());
+    final String str = tb.toString();
     return finish(quotes ? str.replaceAll("^\"|\"$", "") : str, cmd);
   }
 
@@ -262,9 +258,9 @@ final class StringParser extends CommandParser {
    */
   private String command() throws QueryException {
     consumeWS();
-    final StringBuilder sb = new StringBuilder();
-    while(!eoc() && !ws(parser.curr())) sb.append(parser.consume());
-    return finish(sb, null);
+    final TokenBuilder tb = new TokenBuilder();
+    while(!eoc() && !ws(parser.current())) tb.add(parser.consume());
+    return finish(tb.toString(), null);
   }
 
   /**
@@ -309,16 +305,16 @@ final class StringParser extends CommandParser {
    */
   private String name(final Cmd cmd, final boolean glob) throws QueryException {
     consumeWS();
-    final StringBuilder sb = new StringBuilder();
-    char last = 0;
+    final TokenBuilder tb = new TokenBuilder();
+    int last = 0;
     while(true) {
-      final char ch = parser.curr();
-      if(!Databases.validChar(ch, sb.length() == 0) &&
-          (!glob || ch != '*' && ch != '?' && ch != ',')) {
-        return finish((eoc() || ws(ch)) && last != '.' ? sb : null, cmd);
+      final int cp = parser.current();
+      if(!Databases.validChar(cp, tb.isEmpty()) &&
+          (!glob || cp != '*' && cp != '?' && cp != ',')) {
+        return finish((eoc() || ws(cp)) && last != '.' ? tb.toString() : null, cmd);
       }
-      sb.append(parser.consume());
-      last = ch;
+      tb.add(parser.consume());
+      last = cp;
     }
   }
 
@@ -333,7 +329,7 @@ final class StringParser extends CommandParser {
     consumeWS();
     final int p = parser.pos;
     final boolean ok = (parser.consume(key) || parser.consume(
-        key.toLowerCase(Locale.ENGLISH))) && (parser.curr(0) || ws(parser.curr()));
+        key.toLowerCase(Locale.ENGLISH))) && (parser.current(0) || ws(parser.current()));
     if(!ok) {
       parser.pos = p;
       if(cmd != null) throw help(null, cmd);
@@ -361,19 +357,18 @@ final class StringParser extends CommandParser {
    */
   private String number() throws QueryException {
     consumeWS();
-    final StringBuilder sb = new StringBuilder();
-    if(parser.curr() == '-') sb.append(parser.consume());
-    while(digit(parser.curr())) sb.append(parser.consume());
-    return finish(eoc() || ws(parser.curr()) ? sb : null, null);
+    final TokenBuilder tb = new TokenBuilder();
+    if(parser.current() == '-') tb.add(parser.consume());
+    while(digit(parser.current())) tb.add(parser.consume());
+    return finish(eoc() || ws(parser.current()) ? tb.toString() : null, null);
   }
 
   /**
-   * Consumes all whitespace characters from the beginning of the remaining
-   * query.
+   * Consumes all whitespace characters from the beginning of the remaining query.
    */
   private void consumeWS() {
     final int pl = parser.length;
-    while(parser.pos < pl && parser.input.charAt(parser.pos) <= ' ') ++parser.pos;
+    while(parser.pos < pl && parser.input[parser.pos] <= ' ') ++parser.pos;
     parser.mark = parser.pos - 1;
   }
 
@@ -393,7 +388,9 @@ final class StringParser extends CommandParser {
       try {
         // return command reference; allow empty strings as input ("NULL")
         return Enum.valueOf(complete, token == null ? "NULL" : token.toUpperCase(Locale.ENGLISH));
-      } catch(final IllegalArgumentException ignore) { }
+      } catch(final IllegalArgumentException ex) {
+        Util.debug(ex);
+      }
     }
 
     final Enum<?>[] alt = startWith(complete, token);
@@ -405,9 +402,9 @@ final class StringParser extends CommandParser {
     }
 
     // output error for similar commands
-    final byte[] name = uc(token(token)), similar = Levenshtein.similar(name, list -> {
-      for(final Enum<?> s : startWith(complete, null)) list.add(s.name());
-    });
+    final byte[] name = uc(token(token));
+    final Object similar = Levenshtein.similar(name, startWith(complete, null),
+        o -> ((Enum<?>) o).name());
     if(similar != null) throw error(alt, UNKNOWN_SIMILAR_X_X, name, similar);
 
     // show unknown command error or available command extensions
@@ -422,7 +419,7 @@ final class StringParser extends CommandParser {
    * @return QueryException query exception
    */
   private QueryException help(final Enum<?>[] alt, final Cmd cmd) {
-    return error(alt, SYNTAX_X, cmd.help(true));
+    return error(alt, SYNTAX + COLS + cmd.help(true));
   }
 
   /**
@@ -433,7 +430,7 @@ final class StringParser extends CommandParser {
    * @return completions
    */
   private static <T extends Enum<T>> Enum<?>[] startWith(final Class<T> en, final String prefix) {
-    Enum<?>[] list = new Enum<?>[0];
+    Enum<?>[] list = { };
     final String t = prefix == null ? "" : prefix.toUpperCase(Locale.ENGLISH);
     for(final Enum<?> e : en.getEnumConstants()) {
       if(e.name().startsWith(t)) {
@@ -450,31 +447,18 @@ final class StringParser extends CommandParser {
    * @return true if command has ended
    */
   private boolean eoc() {
-    return !parser.more() || parser.curr() == ';';
+    return !parser.more() || parser.current() == ';';
   }
 
   /**
    * Returns a query exception instance.
-   * @param complete input completions
+   * @param complete input completions (can be {@code null})
    * @param msg message
    * @param ext extension
    * @return query exception
    */
   private QueryException error(final Enum<?>[] complete, final String msg, final Object... ext) {
-    return new QueryException(parser.info(), QNm.EMPTY, msg, ext).suggest(parser, list(complete));
-  }
-
-  /**
-   * Converts the specified commands into a string list.
-   * @param complete input completions
-   * @return string list
-   */
-  private static StringList list(final Enum<?>[] complete) {
-    final StringList list = new StringList();
-    if(complete != null) {
-      for(final Enum<?> c : complete) list.add(c.name().toLowerCase(Locale.ENGLISH));
-    }
-    return list;
+    completions = complete;
+    return new QueryException(parser.info(), QNm.EMPTY, msg, ext).suggest(parser);
   }
 }
-

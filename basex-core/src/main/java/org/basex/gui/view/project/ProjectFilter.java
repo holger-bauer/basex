@@ -15,7 +15,7 @@ import org.basex.io.*;
 /**
  * Project filter.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class ProjectFilter extends BaseXBack {
@@ -117,6 +117,7 @@ final class ProjectFilter extends BaseXBack {
         final String pattern = files.isEmpty() ? view.gui.gopts.get(GUIOptions.FILES) : files;
         return view.files.filter(pattern, contents, view.root.file);
       }
+
       @Override
       protected void done(final String[] list) {
         view.list.setElements(list, contents);

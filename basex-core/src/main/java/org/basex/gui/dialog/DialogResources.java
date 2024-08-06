@@ -13,13 +13,15 @@ import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.data.*;
 import org.basex.gui.*;
+import org.basex.gui.dialog.DialogInput.Action;
 import org.basex.gui.layout.*;
+import org.basex.index.resource.*;
 
 /**
- * Combination of a JTree and a text field. The tree visualizes the database content including raw
- * files and documents. The search field allows to quickly access specific files/documents.
+ * Combination of a JTree and a text field. The tree visualizes the database contents.
+ * The search field allows to quickly access specific resources.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class DialogResources extends BaseXBack {
@@ -57,10 +59,10 @@ final class DialogResources extends BaseXBack {
     tree.setCellRenderer(new TreeNodeRenderer());
 
     // add default children to tree
-    final Context context = dialog.gui.context;
-    final Data data = context.data();
+    final GUI gui = dialog.gui();
+    final Data data = gui.context.data();
     final String label = data.meta.name + " (/)";
-    root = new ResourceRootFolder(token(label), token("/"), tree, context);
+    root = new ResourceRootFolder(token(label), token("/"), tree, data);
     ((DefaultTreeModel) tree.getModel()).insertNodeInto(root, rootNode, 0);
 
     filter = new BaseXButton(dialog, FILTER);
@@ -69,7 +71,7 @@ final class DialogResources extends BaseXBack {
     clear.setEnabled(false);
 
     // popup menu for node interaction
-    new BaseXPopup(tree, dialog.gui, new DeleteCmd(), new RenameCmd());
+    new BaseXPopup(tree, gui, new DeleteCmd(), new RenameCmd());
 
     // button panel
     final BaseXBack buttons = new BaseXBack();
@@ -168,28 +170,30 @@ final class DialogResources extends BaseXBack {
       return;
     }
 
-    final Context context = dialog.gui.context;
+    final Context context = dialog.gui().context;
     final Data data = context.data();
     // clear tree to append filtered nodes
     root.removeAllChildren();
 
     int cmax = ResourceFolder.MAXC;
     // check if there's a directory
-    // create a folder if there's either a raw or document folder
-    if(data.resources.isDir(filterPath)) {
-      root.add(new ResourceFolder(ResourceFolder.name(filterPath), ResourceFolder.path(filterPath),
-          tree, context));
+    // create a folder if there's either a files or document folder
+    if(data.resources.isDir(string(filterPath))) {
+      final byte[] name = ResourceFolder.name(filterPath), path = ResourceFolder.path(filterPath);
+      root.add(new ResourceFolder(name, path, tree, data));
       cmax--;
     }
 
     // now add the actual files (if there are any)
     final byte[] name = ResourceFolder.name(filterPath);
     final byte[] sub = ResourceFolder.path(filterPath);
-    cmax = new ResourceFolder(ResourceFolder.name(sub), ResourceFolder.path(sub), tree, context).
+    cmax = new ResourceFolder(ResourceFolder.name(sub), ResourceFolder.path(sub), tree, data).
         addLeaves(name, cmax, root);
 
     // add dummy node if maximum number of nodes is exceeded
-    if(cmax <= 0) root.add(new ResourceLeaf(token(DOTS), sub, false, true, tree, context));
+    if(cmax <= 0) {
+      root.add(new ResourceLeaf(token(DOTS), sub, ResourceType.XML, true, tree, data));
+    }
 
     ((DefaultTreeModel) tree.getModel()).nodeStructureChanged(root);
   }
@@ -224,8 +228,8 @@ final class DialogResources extends BaseXBack {
   }
 
   /**
-   * Custom tree cell renderer to distinguish between raw and xml leaf nodes.
-   * @author BaseX Team 2005-20, BSD License
+   * Custom tree cell renderer to distinguish between resource types.
+   * @author BaseX Team 2005-24, BSD License
    * @author Lukas Kircher
    */
   private static final class TreeNodeRenderer extends DefaultTreeCellRenderer {
@@ -235,7 +239,7 @@ final class DialogResources extends BaseXBack {
         final boolean focus) {
 
       super.getTreeCellRendererComponent(tree, val, sel, exp, leaf, row, focus);
-      if(leaf) setIcon(BaseXImages.text(((ResourceLeaf) val).raw));
+      if(leaf) setIcon(BaseXImages.resource(((ResourceLeaf) val).type));
       return this;
     }
   }
@@ -248,7 +252,7 @@ final class DialogResources extends BaseXBack {
     @Override
     public void execute() {
       final ResourceNode n = selection();
-      if(n == null || !BaseXDialog.confirm(dialog.gui, DELETE_NODES)) return;
+      if(n == null || !BaseXDialog.confirm(dialog.gui(), DELETE_NODES)) return;
 
       final Runnable run = () -> refreshNewFolder(n.path());
       DialogProgress.execute(dialog, run, new Delete(n.path()));
@@ -271,10 +275,10 @@ final class DialogResources extends BaseXBack {
       final ResourceNode n = selection();
       if(n == null) return;
 
-      final DialogInput d = new DialogInput(n.path(), RENAME, dialog, 0);
-      if(!d.ok()) return;
+      final DialogInput input = new DialogInput(n.path(), dialog, Action.RENAME_DOCUMENT);
+      if(!input.ok()) return;
 
-      final String p = string(ResourceNode.preparePath(token(d.input())));
+      final String p = string(ResourceNode.preparePath(token(input.input())));
       final Runnable run = () -> refreshNewFolder(p);
       DialogProgress.execute(dialog, run, new Rename(n.path(), p));
     }

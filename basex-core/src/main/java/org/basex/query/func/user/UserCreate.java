@@ -16,25 +16,23 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserCreate extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkAdmin(qc);
-    final String name = toSafeName(0, qc);
-    final String pw = toString(1, qc);
-    final ArrayList<Perm> perms = toPerms(2, qc);
-    final StringList patterns = toPatterns(3, qc);
+    final String name = toInactiveName(arg(0), qc);
+    final String password = toString(arg(1), qc);
+    final ArrayList<Perm> perms = toPermissions(arg(2), qc);
+    final StringList patterns = toPatterns(arg(3), qc);
 
-    final User user = new User(name, pw);
+    final User user = new User(name, password);
     if(name.equals(UserText.ADMIN)) throw USER_ADMIN.get(info);
 
-    if(exprs.length > 4) {
-      final ANode node = toElem(exprs[4], qc);
-      if(!T_INFO.matches(node)) throw ELM_X_X.get(info, Q_INFO.prefixId(), node);
-      user.info(node.materialize(qc, true));
+    if(defined(4)) {
+      final ANode node = toElem(arg(4), Q_INFO, qc, ELM_X_X_X);
+      user.info(node.materialize(n -> false, info, qc));
     }
 
     qc.updates().add(new Create(user, perms, patterns, qc, info), qc);
@@ -49,7 +47,7 @@ public final class UserCreate extends UserFn {
      * @param perms permissions
      * @param patterns database patterns
      * @param qc query context
-     * @param info input info
+     * @param info input info (can be {@code null})
      * @throws QueryException query exception
      */
     private Create(final User user, final ArrayList<Perm> perms, final StringList patterns,
@@ -59,13 +57,15 @@ public final class UserCreate extends UserFn {
 
     @Override
     public void apply() {
-      final User olduser = users.get(user.name());
-      if(olduser != null) users.drop(olduser);
+      final User old = users.get(user.name());
+      if(old != null) users.drop(old);
       users.add(user);
       grant();
     }
 
     @Override
-    public String operation() { return "created"; }
+    public String operation() {
+      return "created";
+    }
   }
 }

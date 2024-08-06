@@ -14,12 +14,12 @@ import org.basex.query.up.primitives.node.*;
  * expression. It especially keeps track of all nodes that are copied in the
  * 'copy' statement of a transform expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class TransformModifier extends ContextModifier {
   /** Holds all data references created by the copy clause of a transform
-   * expression. Adding an update primitive that is declared within the modify
+   * expression. Adding an update primitive that is declared within the MODIFY
    * clause of this transform expression will cause a query exception
    * (XUDY0014) if the data reference of the corresponding target node is not
    * part of this set, hence the target node has not been copied. */

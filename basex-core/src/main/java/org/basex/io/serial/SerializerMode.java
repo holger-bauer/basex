@@ -5,7 +5,7 @@ import org.basex.util.options.Options.*;
 /**
  * Pre-defined serialization parameters.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public enum SerializerMode {
@@ -15,11 +15,11 @@ public enum SerializerMode {
     void init(final SerializerOptions options) {
     }
   },
-  /** Default serialization, but no indentation. */
-  NOINDENT {
+  /** Default serialization with indentation. */
+  INDENT {
     @Override
     void init(final SerializerOptions options) {
-      options.set(SerializerOptions.INDENT, YesNo.NO);
+      options.set(SerializerOptions.INDENT, YesNo.YES);
     }
   },
   /** Debugging (adaptive method). */

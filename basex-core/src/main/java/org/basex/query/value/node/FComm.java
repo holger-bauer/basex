@@ -3,6 +3,9 @@ package org.basex.query.value.node;
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -11,20 +14,15 @@ import org.w3c.dom.*;
 /**
  * Comment node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FComm extends FNode {
   /** Two dashes, marking the start/end of a comment. */
   private static final byte[] DASHES = { '-', '-' };
 
-  /**
-   * Constructor.
-   * @param value text value
-   */
-  public FComm(final String value) {
-    this(token(value));
-  }
+  /** String value. */
+  private final byte[] value;
 
   /**
    * Constructor.
@@ -41,28 +39,40 @@ public final class FComm extends FNode {
    * @param comment DOM node
    */
   public FComm(final Comment comment) {
-    this(comment.getData());
+    this(token(comment.getData()));
   }
 
   @Override
-  public FComm materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FComm(value) : this;
+  public byte[] string() {
+    return value;
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public FComm materialize(final Predicate<Data> test, final InputInfo ii,
+      final QueryContext qc) {
+    return materialized(test, ii) ? this : new FComm(value);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FComm && Token.eq(value, ((FComm) obj).value) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void toString(final QueryString qs) {
     qs.concat("<!--", QueryString.toValue(value), "-->");
   }
 
   /**
    * Checks the specified token for validity.
    * @param str token to be checked
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return token
    * @throws QueryException query exception
    */
-  public static byte[] parse(final byte[] str, final InputInfo ii) throws QueryException {
-    if(contains(str, DASHES) || endsWith(str, '-')) throw COMINVALID.get(ii);
+  public static byte[] parse(final byte[] str, final InputInfo info) throws QueryException {
+    if(contains(str, DASHES) || endsWith(str, '-')) throw COMINVALID.get(info);
     return str;
   }
 }

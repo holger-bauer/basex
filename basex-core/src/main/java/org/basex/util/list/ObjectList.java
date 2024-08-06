@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * This is an abstract class for storing objects of any kind in an array-based list.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <E> generic object type
  * @param <L> generic object type
@@ -77,9 +77,11 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
   public L add(final E element) {
     E[] lst = list;
     final int s = size;
-    if(s == lst.length) lst = Array.copy(lst, newArray(newCapacity()));
+    if(s == lst.length) {
+      lst = Array.copy(lst, newArray(newCapacity()));
+      list = lst;
+    }
     lst[s] = element;
-    list = lst;
     size = s + 1;
     return (L) this;
   }
@@ -90,12 +92,14 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
    * @return self reference
    */
   @SuppressWarnings("unchecked")
-  public final L add(final E... elements) {
+  public L add(final E... elements) {
     E[] lst = list;
     final int l = elements.length, s = size, ns = s + l;
-    if(ns > lst.length) lst = Array.copy(lst, newArray(newCapacity(ns)));
+    if(ns > lst.length) {
+      lst = Array.copy(lst, newArray(newCapacity(ns)));
+      list = lst;
+    }
     Array.copyFromStart(elements, l, lst, s);
-    list = lst;
     size = ns;
     return (L) this;
   }
@@ -106,7 +110,7 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
    * @return self reference
    */
   @SuppressWarnings("unchecked")
-  public final L add(final L elements) {
+  public L add(final L elements) {
     for(final E e : elements) add(e);
     return (L) this;
   }
@@ -120,11 +124,13 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
   @SuppressWarnings("unchecked")
   public final L set(final int index, final E element) {
     E[] lst = list;
-    final int sz = size;
-    if(index >= lst.length) lst = Array.copy(lst, newArray(newCapacity(index + 1)));
+    final int s = size, ns = index + 1;
+    if(ns > lst.length) {
+      lst = Array.copy(lst, newArray(newCapacity(ns)));
+      list = lst;
+    }
     lst[index] = element;
-    list = lst;
-    size = Math.max(sz, index + 1);
+    size = Math.max(s, ns);
     return (L) this;
   }
 
@@ -132,18 +138,22 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
    * Inserts the given elements at the specified position.
    * @param index inserting position
    * @param elements elements to insert
+   * @return self reference
    */
   @SuppressWarnings("unchecked")
-  public final void insert(final int index, final E... elements) {
+  public final L insert(final int index, final E... elements) {
     final int l = elements.length;
-    if(l == 0) return;
-
-    E[] lst = list;
-    final int sz = size;
-    if(sz + l > lst.length) lst = Array.copy(lst, newArray(newCapacity(sz + l)));
-    Array.insert(lst, index, l, sz, elements);
-    list = lst;
-    size = sz + l;
+    if(l != 0) {
+      E[] lst = list;
+      final int s = size, ns = s + l;
+      if(ns > lst.length) {
+        lst = Array.copy(lst, newArray(newCapacity(ns)));
+        list = lst;
+      }
+      Array.insert(lst, index, l, s, elements);
+      size = ns;
+    }
+    return (L) this;
   }
 
   /**
@@ -166,14 +176,14 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
    */
   public boolean removeAll(final E element) {
     final E[] lst = list;
-    final int sz = size;
-    int s = 0;
-    for(int i = 0; i < sz; ++i) {
-      if(!equals(lst[i], element)) lst[s++] = lst[i];
+    final int s = size;
+    int ns = 0;
+    for(int i = 0; i < s; ++i) {
+      if(!equals(lst[i], element)) lst[ns++] = lst[i];
     }
-    for(int i = s; i < sz; i++) lst[i] = null;
-    size = s;
-    return sz != s;
+    for(int i = ns; i < s; i++) lst[i] = null;
+    size = ns;
+    return s != ns;
   }
 
   /**
@@ -216,6 +226,21 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
   }
 
   /**
+   * Reverses the order of the elements.
+   * @return self reference
+   */
+  @SuppressWarnings("unchecked")
+  public L reverse() {
+    final E[] lst = list;
+    for(int l = 0, r = size - 1; l < r; l++, r--) {
+      final E tmp = lst[l];
+      lst[l] = lst[r];
+      lst[r] = tmp;
+    }
+    return (L) this;
+  }
+
+  /**
    * Returns an array with all elements.
    * @return array
    */
@@ -228,7 +253,7 @@ public abstract class ObjectList<E, L extends ObjectList<E, ?>> extends ElementL
    * Warning: the function must only be called if the list is discarded afterwards.
    * @return array (internal representation!)
    */
-  public final E[] finish() {
+  public E[] finish() {
     final E[] lst = list;
     list = null;
     final int s = size;

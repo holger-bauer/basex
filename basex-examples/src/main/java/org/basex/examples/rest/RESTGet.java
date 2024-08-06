@@ -9,7 +9,7 @@ import org.basex.*;
  * This class is a simple example to demonstrate the REST implementation.
  * It shows the function of the HTTP GET method.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class RESTGet {
   /**
@@ -20,7 +20,7 @@ public final class RESTGet {
     System.out.println("=== GET: execute a query ===");
 
     // The java URL connection to the resource
-    String base = "http://localhost:8984/rest/";
+    String base = "http://localhost:8080/rest/";
 
     URL url = new URL(base + "factbook?query=(//city/name)[position()=1+to+5]");
     System.out.println("\n* URL: " + url);

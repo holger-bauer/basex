@@ -4,6 +4,9 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -11,9 +14,9 @@ import org.basex.util.*;
 import org.w3c.dom.*;
 
 /**
- * PI node fragment.
+ * Processing instruction node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FPI extends FNode {
@@ -24,15 +27,8 @@ public final class FPI extends FNode {
 
   /** PI name. */
   private final QNm name;
-
-  /**
-   * Constructor for creating a processing instruction.
-   * @param name name
-   * @param value value
-   */
-  public FPI(final String name, final String value) {
-    this(new QNm(name), token(value));
-  }
+  /** PI value. */
+  private final byte[] value;
 
   /**
    * Constructor for creating a processing instruction.
@@ -51,7 +47,7 @@ public final class FPI extends FNode {
    * @param pi DOM node
    */
   public FPI(final ProcessingInstruction pi) {
-    this(pi.getTarget(), pi.getData());
+    this(new QNm(pi.getTarget()), token(pi.getData()));
   }
 
   @Override
@@ -65,34 +61,42 @@ public final class FPI extends FNode {
   }
 
   @Override
-  public FPI materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FPI(name, value) : this;
+  public byte[] string() {
+    return value;
+  }
+
+  @Override
+  public FPI materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc) {
+    return materialized(test, ii) ? this : new FPI(name, value);
   }
 
   @Override
   public boolean equals(final Object obj) {
-    return this == obj || obj instanceof FPI && name.eq(((FPI) obj).name) && super.equals(obj);
+    if(this == obj) return true;
+    if(!(obj instanceof FPI)) return false;
+    final FPI f = (FPI) obj;
+    return name.eq(f.name) && Token.eq(value, f.value) && super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name.string(), VALUEE, value));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.concat(OPEN, name.string(), " ", QueryString.toValue(value), CLOSE);
   }
 
   /**
    * Checks the specified token for validity.
    * @param atom token to be checked
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return token
    * @throws QueryException query exception
    */
-  public static byte[] parse(final byte[] atom, final InputInfo ii) throws QueryException {
-    if(contains(atom, CLOSE)) throw CPICONT_X.get(ii, atom);
+  public static byte[] parse(final byte[] atom, final InputInfo info) throws QueryException {
+    if(contains(atom, CLOSE)) throw CPICONT_X.get(info, atom);
     return atom;
   }
 }

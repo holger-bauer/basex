@@ -14,14 +14,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnParseIetfDate extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = exprs[0].atomItem(qc, info);
-    return item == Empty.VALUE ? Empty.VALUE : new DateParser(toToken(item), info).parse();
+    final Item value = arg(0).atomItem(qc, info);
+    return value.isEmpty() ? Empty.VALUE : new DateParser(toToken(value), info).parse();
   }
 
   @Override
@@ -51,7 +51,7 @@ public final class FnParseIetfDate extends StandardFunc {
 
     /** Original string. */
     private final byte[] original;
-    /** Input info. */
+    /** Input info (can be {@code null}). */
     private final InputInfo info;
 
     /** Day. */
@@ -72,7 +72,7 @@ public final class FnParseIetfDate extends StandardFunc {
     /**
      * Constructor.
      * @param input input
-     * @param info input info
+     * @param info input info (can be {@code null})
      */
     private DateParser(final byte[] input, final InputInfo info) {
       super(string(lc(input)).trim());
@@ -259,9 +259,9 @@ public final class FnParseIetfDate extends StandardFunc {
       if(d == -1) return false;
       BigDecimal bd = BigDecimal.valueOf(d);
       if(consume('.')) {
-        if(!digit(curr())) throw error("digit");
+        if(!digit(current())) throw error("digit");
         BigDecimal f = BigDecimal.TEN;
-        while(digit(curr())) {
+        while(digit(current())) {
           bd = bd.add(BigDecimal.valueOf(number()).divide(f, MathContext.DECIMAL64));
           f = f.multiply(BigDecimal.TEN);
         }
@@ -312,17 +312,17 @@ public final class FnParseIetfDate extends StandardFunc {
     private boolean tzoffset() throws QueryException {
       final int s = consume('-') ? -1 : 1;
       if(s == 1 && !consume('+')) return false;
-      if(!digit(curr())) throw error("timezone digits");
+      if(!digit(current())) throw error("timezone digits");
 
       int h = number(), m = 0;
       if(consume(':')) {
         final int n = twoDigits();
         if(n != -1) m = n;
-      } else if(digit(curr())) {
+      } else if(digit(current())) {
         final int n = number();
-        if(digit(curr())) {
+        if(digit(current())) {
           final int n2 = number();
-          if(digit(curr())) {
+          if(digit(current())) {
             h = h * 10 + n;
             m = n2 * 10 + number();
           } else {
@@ -347,7 +347,7 @@ public final class FnParseIetfDate extends StandardFunc {
      * @return number or {@code -1}
      */
     private int twoDigits() {
-      return digit(curr()) && digit(next()) ? number() * 10 + number() : -1;
+      return digit(current()) && digit(next()) ? number() * 10 + number() : -1;
     }
 
     /**
@@ -355,9 +355,9 @@ public final class FnParseIetfDate extends StandardFunc {
      * @return number or {@code -1}
      */
     private int oneOrTwoDigits() {
-      if(!digit(curr())) return -1;
+      if(!digit(current())) return -1;
       final int d = number();
-      return digit(curr()) ? d * 10 + number() : d;
+      return digit(current()) ? d * 10 + number() : d;
     }
 
     /**
@@ -365,8 +365,8 @@ public final class FnParseIetfDate extends StandardFunc {
      * @return success flag
      */
     private boolean skipWs() {
-      if(!more() || !ws(curr())) return false;
-      do consume(); while(more() && ws(curr()));
+      if(!more() || !ws(current())) return false;
+      do consume(); while(more() && ws(current()));
       return true;
     }
 
@@ -389,7 +389,7 @@ public final class FnParseIetfDate extends StandardFunc {
      * @return error
      */
     private QueryException error(final String msg) {
-      return QueryError.IETF_PARSE_X_X_X.get(info, msg, curr(), original);
+      return QueryError.IETF_PARSE_X_X_X.get(info, msg, current(), original);
     }
 
     /**

@@ -9,7 +9,7 @@ import org.basex.io.*;
 /**
  * This class is a stream-wrapper for textual data encoded in UTF8.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class PrintOutput extends OutputStream {
@@ -19,6 +19,8 @@ public class PrintOutput extends OutputStream {
   protected long max = Long.MAX_VALUE;
   /** Number of bytes written. */
   protected long size;
+  /** Number of codepoints in the current line. */
+  protected long lineLength;
 
   /**
    * Constructor, given a filename.
@@ -64,25 +66,28 @@ public class PrintOutput extends OutputStream {
   }
 
   /**
-   * Prints a single codepoint.
+   * Prints a single codepoint, and keeps track of the current line length.
    * @param cp codepoint to be printed
    * @throws IOException I/O exception
    */
   public void print(final int cp) throws IOException {
     if(cp <= 0x7F) {
       write(cp);
-    } else if(cp <= 0x7FF) {
-      write(cp >>  6 & 0x1F | 0xC0);
-      write(cp & 0x3F | 0x80);
-    } else if(cp <= 0xFFFF) {
-      write(cp >> 12 & 0x0F | 0xE0);
-      write(cp >>  6 & 0x3F | 0x80);
-      write(cp & 0x3F | 0x80);
+      lineLength = cp == '\n' ? 0 : lineLength + 1;
     } else {
-      write(cp >> 18 & 0x07 | 0xF0);
-      write(cp >> 12 & 0x3F | 0x80);
-      write(cp >>  6 & 0x3F | 0x80);
+      if(cp <= 0x7FF) {
+        write(cp >>  6 & 0x1F | 0xC0);
+      } else {
+        if(cp <= 0xFFFF) {
+          write(cp >> 12 & 0x0F | 0xE0);
+        } else {
+          write(cp >> 18 & 0x07 | 0xF0);
+          write(cp >> 12 & 0x3F | 0x80);
+        }
+        write(cp >>  6 & 0x3F | 0x80);
+      }
       write(cp & 0x3F | 0x80);
+      ++lineLength;
     }
   }
 
@@ -133,17 +138,23 @@ public class PrintOutput extends OutputStream {
     return size;
   }
 
-  @Override
-  public final void flush() throws IOException {
-    if(os != null) os.flush();
+  /**
+   * Returns the length of the current line in codepoints.
+   * @return the number of codepoints in the current line
+   */
+  public long lineLength() {
+    return lineLength;
   }
 
   @Override
-  public final void close() throws IOException {
-    if(os != null) {
-      if(os == System.out || os == System.err) os.flush();
-      else os.close();
-    }
+  public void flush() throws IOException {
+    os.flush();
+  }
+
+  @Override
+  public void close() throws IOException {
+    if(os == System.out || os == System.err) flush();
+    else os.close();
   }
 
   /**

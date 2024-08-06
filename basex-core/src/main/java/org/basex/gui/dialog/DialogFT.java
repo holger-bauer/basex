@@ -7,14 +7,14 @@ import javax.swing.*;
 import org.basex.core.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
-import org.basex.gui.layout.BaseXFileChooser.Mode;
+import org.basex.gui.layout.BaseXFileChooser.*;
 import org.basex.io.*;
 import org.basex.util.ft.*;
 
 /**
  * Full-text creation dialog.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogFT extends DialogIndex {
@@ -51,7 +51,7 @@ final class DialogFT extends DialogIndex {
     super(dialog);
     layout(new TableLayout(create ? 10 : 16, 1));
 
-    final MainOptions opts = dialog.gui.context.options;
+    final MainOptions opts = dialog.gui().context.options;
     add(new BaseXLabel(H_FULLTEXT_INDEX, true, false).border(0, 0, 6, 0));
 
     ftinc = new BaseXTextField(dialog, opts.get(MainOptions.FTINCLUDE)).hint(QNAME_INPUT);
@@ -80,10 +80,9 @@ final class DialogFT extends DialogIndex {
     b1.add(check[F_LANG]);
     final String[] langs = FTLexer.languages().finish();
     language = new BaseXCombo(dialog, langs);
-    final Language ln = Language.get(opts);
-    for(final String l : langs) {
-      final String s = l.replaceFirst(" \\(.*", "");
-      if(s.equals(ln.toString())) language.setSelectedItem(l);
+    final String ln = Language.get(opts).toString();
+    for(final String lang : langs) {
+      if(lang.replaceFirst(" \\(.*", "").equals(ln)) language.setSelectedItem(lang);
     }
 
     b1.add(language);
@@ -99,7 +98,7 @@ final class DialogFT extends DialogIndex {
     add(Box.createVerticalStrut(4));
     final BaseXBack b3 = new BaseXBack(new ColumnLayout(8));
     swpath = new BaseXTextField(
-        dialog, sw.isEmpty() ? dialog.gui.gopts.get(GUIOptions.DATAPATH) : sw);
+        dialog, sw.isEmpty() ? dialog.gui().gopts.get(GUIOptions.DATAPATH) : sw);
     b3.add(swpath);
 
     swbrowse = new BaseXButton(dialog, BROWSE_D);
@@ -113,7 +112,7 @@ final class DialogFT extends DialogIndex {
    * Opens a file dialog to choose a stopword list.
    */
   private void chooseStop() {
-    final GUIOptions gopts = dialog.gui.gopts;
+    final GUIOptions gopts = dialog.gui().gopts;
     final BaseXFileChooser fc = new BaseXFileChooser(dialog,
         FILE_OR_DIR, gopts.get(GUIOptions.DATAPATH));
     final IOFile file = fc.select(Mode.FOPEN);
@@ -135,12 +134,12 @@ final class DialogFT extends DialogIndex {
     final String sw = swpath.getText().trim();
     final IO file = IO.get(sw);
     final boolean exists = !sw.isEmpty() && file.exists();
-    if(exists) dialog.gui.gopts.set(GUIOptions.DATAPATH, sw);
+    if(exists) dialog.gui().gopts.set(GUIOptions.DATAPATH, sw);
   }
 
   @Override
   void setOptions() {
-    final GUI gui = dialog.gui;
+    final GUI gui = dialog.gui();
     gui.set(MainOptions.LANGUAGE, check[F_LANG].isSelected() ?
         Language.get(language.getSelectedItem().replaceFirst(" \\(.*", "")).code() : "");
     gui.set(MainOptions.STEMMING, check[F_STEM].isSelected());

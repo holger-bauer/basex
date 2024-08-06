@@ -1,12 +1,12 @@
 package org.basex.gui.view.project;
 
+import org.basex.gui.layout.*;
 import org.basex.io.*;
-import org.basex.util.*;
 
 /**
  * Single leaf node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class ProjectFile extends ProjectNode {
@@ -32,21 +32,6 @@ final class ProjectFile extends ProjectNode {
 
   @Override
   public String toString() {
-    return toString(file, false);
-  }
-
-  /**
-   * Returns a string representation for the specified file.
-   * @param file file
-   * @param full full path
-   * @return string
-   */
-  static String toString(final IOFile file, final boolean full) {
-    final StringBuilder sb = new StringBuilder();
-    if(file != null) {
-      sb.append(full ? file.path() : file.name());
-      if(file.exists()) sb.append(" (").append(Performance.format(file.length())).append(')');
-    }
-    return sb.toString();
+    return BaseXLayout.info(file, false);
   }
 }

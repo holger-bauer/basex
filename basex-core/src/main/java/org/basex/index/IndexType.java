@@ -2,16 +2,15 @@ package org.basex.index;
 
 import static org.basex.query.QueryError.*;
 
-import java.util.*;
-
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.util.*;
+import org.basex.util.options.*;
 
 /**
  * This enumeration lists available index types.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public enum IndexType {
@@ -32,16 +31,16 @@ public enum IndexType {
 
   @Override
   public String toString() {
-    return name().toLowerCase(Locale.ENGLISH);
+    return EnumOption.string(this);
   }
 
   /**
    * Checks if the specified database has this index.
    * @param data data reference
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public void check(final Data data, final InputInfo ii) throws QueryException {
-    if(!data.meta.index(this)) throw DB_NOINDEX_X_X.get(ii, data.meta.name, this);
+  public void check(final Data data, final InputInfo info) throws QueryException {
+    if(!data.meta.index(this)) throw DB_NOINDEX_X_X.get(info, data.meta.name, this);
   }
 }

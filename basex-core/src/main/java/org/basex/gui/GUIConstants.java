@@ -4,7 +4,6 @@ import static org.basex.gui.GUIMenuCmd.*;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.nio.charset.*;
 
 import javax.swing.*;
 
@@ -13,6 +12,8 @@ import org.basex.gui.layout.*;
 import org.basex.gui.view.*;
 import org.basex.gui.view.map.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
+import org.basex.util.list.*;
 
 /**
  * GUI Constants used in different views.
@@ -41,11 +42,11 @@ import org.basex.util.*;
  *  <li> optionally add localized translations in the .lang files
  *    (e.g. {@code c_showmap} and {@code c_showmaptt})</li>
  *  <li> add a corresponding command in the {@link GUIMenuCmd} class
- *   (e.g. {@link GUIMenuCmd#C_SHOWMAP})and add a reference in the
+ *   (e.g. {@link GUIMenuCmd#C_SHOW_MAP})and add a reference in the
  *   {@link #MENUITEMS} menu structure</li>
  * </ul>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class GUIConstants {
@@ -86,10 +87,11 @@ public final class GUIConstants {
 
   /** Toolbar entries, containing the button commands. */
   static final GUIMenuCmd[] TOOLBAR = {
-    C_CREATE, C_OPEN_MANAGE, C_INFO, C_CLOSE, null,
-    C_GOHOME, C_GOBACK, C_GOUP, C_GOFORWARD, null,
-    C_SHOWEDITOR, C_SHOWRESULT, C_SHOWINFO, null,
-    C_SHOWMAP, C_SHOWTREE, C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE, C_SHOWEXPLORE
+    C_CREATE, C_OPEN_MANAGE, C_PROPERTIES, C_CLOSE, null,
+    C_SHOW_EDITOR, C_SHOW_RESULT, C_INDENT_RESULT, C_SHOW_INFO, null,
+    C_SHOW_MAP, C_SHOW_TREE, C_SHOW_FOLDER, C_SHOW_PLOT, C_SHOW_TABLE, C_SHOW_EXPLORE, null,
+    C_GO_HOME, C_GO_BACK, C_GO_UP, C_GO_FORWARD, C_FILTER_NODES, null,
+    C_PREFERENCES
   };
 
   // MENUBARS =====================================================================================
@@ -104,31 +106,36 @@ public final class GUIConstants {
    * {@link GUIPopupCmd#SEPARATOR} references serve as menu separators.
    */
   static final GUICommand[][] MENUITEMS = { {
-    C_CREATE, C_OPEN_MANAGE, SEPARATOR, C_INFO, C_EXPORT, C_CLOSE,
+    C_CREATE, C_OPEN_MANAGE, SEPARATOR, C_PROPERTIES, C_EXPORT, C_CLOSE,
     Prop.MAC ? null : SEPARATOR, Prop.MAC ? null : C_EXIT
   }, {
-    C_EDITNEW, C_EDITOPEN, C_EDITREOPEN, C_EDITSAVE, C_EDITSAVEAS, C_EDITCLOSE, C_EDITCLOSEALL,
-    SEPARATOR, C_FORMAT, C_COMMENT, C_SORT,
-    SEPARATOR, C_LOWERCASE, C_UPPERCASE, C_TITLECASE,
-    SEPARATOR, C_BRACKET, C_JUMPFILE, C_NEXTERROR,
-    SEPARATOR, C_VARS
+    C_EDIT_NEW, C_EDIT_OPEN, C_EDIT_REOPEN, C_EDIT_SAVE, C_EDIT_SAVE_AS, C_EDIT_CLOSE,
+    C_EDIT_CLOSE_ALL, SEPARATOR,
+    C_GO, C_INDENT_RESULT, C_EXTERNAL_VARIABLES, SEPARATOR,
+    C_FORMAT, C_COMMENT, C_SORT, SEPARATOR,
+    C_LOWER_CASE, C_UPPER_CASE, C_TITLE_CASE, SEPARATOR,
+    C_JUMP_TO_BRACKET, C_JUMP_TO_FILE, C_NEXT_ERROR, SEPARATOR
   }, {
-    C_SHOWEDITOR, C_SHOWPROJECT, C_FILESEARCH, SEPARATOR,
-    C_SHOWRESULT, C_SHOWINFO, SEPARATOR, C_SHOWBUTTONS, C_SHOWINPUT, C_SHOWSTATUS,
-    Prop.MAC ? null : C_FULL
+    C_SHOW_EDITOR, C_SHOW_PROJECT, C_FIND_CONTENTS, SEPARATOR,
+    C_SHOW_RESULT, C_SHOW_INFO, SEPARATOR,
+    C_SHOW_BUTTONS, C_SHOW_INPUT_BAR, C_SHOW_STATUS_BAR, Prop.MAC ? null : C_FULLSCREEN
   }, {
-    C_SHOWMAP, C_SHOWTREE, C_SHOWFOLDER, C_SHOWPLOT, C_SHOWTABLE, C_SHOWEXPLORE,
+    C_SHOW_MAP, C_SHOW_TREE, C_SHOW_FOLDER, C_SHOW_PLOT, C_SHOW_TABLE, C_SHOW_EXPLORE,
   }, {
-    C_RTEXEC, C_RTFILTER, SEPARATOR, C_COLOR, C_FONTS, SEPARATOR, C_PACKAGES,
-    Prop.MAC ? null : SEPARATOR, Prop.MAC ? null : C_PREFS
+    C_INDENT_RESULT, SEPARATOR,
+    C_RT_EXECUTION, C_RT_FILTERING, SEPARATOR,
+    C_PACKAGES, Prop.MAC ? null : SEPARATOR,
+    C_COLOR, C_FONTS, Prop.MAC ? null : C_PREFERENCES
   }, {
-    C_HELP, SEPARATOR, C_COMMUNITY, C_UPDATES,
-    SEPARATOR, C_SHOWMEM, Prop.MAC ? null : C_ABOUT
+    C_HELP, SEPARATOR, C_COMMUNITY, C_CHECK_FOR_UPDATES, SEPARATOR,
+    C_SHOW_MEM, Prop.MAC ? null : C_ABOUT
   }};
 
   /** Context menu entries. */
   public static final GUIMenuCmd[] POPUP = {
-    C_GOBACK, C_FILTER, null, C_COPY, C_PASTE, C_DELETE, C_INSERT, C_EDIT, null, C_COPYPATH
+    C_GO_BACK, C_GO_UP, C_GO_FORWARD, C_FILTER_NODES, null,
+    C_COPY_NODES, C_PASTE_NODES, C_DELETE_NODES, C_NEW_NODES, C_EDIT_NODES, null,
+    C_COPY_PATH
   };
 
   // CURSORS ======================================================================================
@@ -193,25 +200,23 @@ public final class GUIConstants {
   /** Panel color. */
   public static final Color PANEL = new Color(LABEL.getBackground().getRGB());
 
+  /** Dark theme. */
+  private static final boolean INVERT = BACK.getRed() + BACK.getGreen() + BACK.getBlue() < 384;
+
   /** Color: red. */
   public static final Color RED = color(224, 0, 0);
   /** Color: light red. */
   public static final Color LRED = color(255, 216, 216);
   /** Color: green. */
-  public static final Color GREEN = color(0, 160, 0);
-  /** Color: blue. */
-  public static final Color BLUE = color(0, 64, 192);
-
-  /** Color: keywords. */
-  public static final Color KEYWORD = color(32, 96, 176);
-  /** Color: comments. */
-  public static final Color COMMENT = color(0, 160, 160);
-  /** Color: digits. */
-  public static final Color DIGIT = color(192, 112, 32);
-  /** Color: variables. */
-  public static final Color VARIABLE = color(32, 160, 32);
-  /** Color: names. */
-  public static final Color VALUE = color(112, 112, 112);
+  public static final Color GREEN = color(32, 160, 32);
+  /** Color: cyan. */
+  public static final Color BLUE = color(32, 96, 192);
+  /** Color: purple. */
+  public static final Color PURPLE = color(160, 32, 160);
+  /** Color: gray. */
+  public static final Color GRAY = color(0, 160, 160);
+  /** Color: dark gray. */
+  public static final Color DGRAY = color(112, 112, 112);
 
   /** Cell color. */
   public static Color lgray;
@@ -224,8 +229,6 @@ public final class GUIConstants {
 
   /** Cached color gradient. */
   private static final Color[] COLORS = new Color[100];
-  /** Dark theme. */
-  private static final boolean INVERT = BACK.getRed() + BACK.getGreen() + BACK.getBlue() < 384;
 
   /** Second bright GUI color. */
   public static Color color1;
@@ -256,18 +259,10 @@ public final class GUIConstants {
   /** Second mark color, custom alpha value. */
   public static Color colormark2A;
 
-  // ENCODING =====================================================================================
-
-  /** Available encodings. */
-  public static final String[] ENCODINGS;
-
-  // initialize encodings
-  static {
-    ENCODINGS = Charset.availableCharsets().keySet().toArray(new String[0]);
-  }
-
   // FONTS ========================================================================================
 
+  /** Name of monospace font. */
+  public static final String MONOFONT = Prop.WIN ? "Consolas" : Font.MONOSPACED;
   /** Font. */
   public static Font font;
   /** Bold Font. */
@@ -278,6 +273,62 @@ public final class GUIConstants {
   public static Font dmfont;
   /** Current font size. */
   public static int fontSize;
+
+  /** Names of available fonts. */
+  private static volatile String[] fonts;
+  /** Characters for monospace detection. */
+  private static final char[] MONOSPACE =  " !,-.01:<ILMWilmw".toCharArray();
+
+  /**
+   * Returns the names of all fonts that are available on the system.
+   * @return fonts
+   */
+  public static String[] fonts() {
+    if(fonts == null) {
+      final StringList list = new StringList();
+      for(final String name : GraphicsEnvironment.getLocalGraphicsEnvironment().
+          getAvailableFontFamilyNames()) {
+        boolean add = true;
+        final Font f = new Font(name, Font.PLAIN, 100);
+        for(final char ch : MONOSPACE) {
+          if(!f.canDisplay(ch)) {
+            add = false;
+            break;
+          }
+        }
+        if(add) list.add(name);
+      }
+      fonts = list.finish();
+    }
+    return fonts;
+  }
+
+  /**
+   * Returns the names of all monospace fonts that are available on the system.
+   * @return fonts
+   */
+  public static String[] monoFonts() {
+    final StringList monos = new StringList();
+    for(final String name : fonts()) {
+      if(isMono(LABEL.getFontMetrics(new Font(name, Font.PLAIN, 100)))) monos.add(name);
+    }
+    return monos.finish();
+  }
+
+  /**
+   * Checks if the font metrics refer to a monospaced font.
+   * Slight deviations are tolerated.
+   * @param fm font metrics
+   * @return result of check
+   */
+  public static boolean isMono(final FontMetrics fm) {
+    final IntSet set = new IntSet(4);
+    for(final char ch : MONOSPACE) {
+      final int w = fm.charWidth(ch);
+      if(w == 0 || set.add(w) && set.size() > 2) return false;
+    }
+    return true;
+  }
 
   // KEYS =========================================================================================
 
@@ -335,13 +386,12 @@ public final class GUIConstants {
     colormark2A = color(darker(r, 12), darker(g, 60), darker(b, 120), 100);
 
     final String name = opts.get(GUIOptions.FONT);
-    final int type = opts.get(GUIOptions.FONTTYPE);
 
     fontSize = opts.get(GUIOptions.FONTSIZE);
-    font  = new Font(name, type, fontSize);
-    mfont = new Font(opts.get(GUIOptions.MONOFONT), type, fontSize);
+    font  = new Font(name, Font.PLAIN, fontSize);
+    mfont = new Font(opts.get(GUIOptions.MONOFONT), Font.PLAIN, fontSize);
     bfont = new Font(name, Font.BOLD, fontSize);
-    dmfont = new Font(opts.get(GUIOptions.MONOFONT), 0, fontSize());
+    dmfont = new Font(opts.get(GUIOptions.MONOFONT), 0, LABEL.getFont().getSize());
   }
 
   /**
@@ -351,14 +401,6 @@ public final class GUIConstants {
    */
   public static Color color(final int i) {
     return COLORS[Math.min(COLORS.length - 1, i)];
-  }
-
-  /**
-   * Returns the standard font size.
-   * @return font size
-   */
-  public static int fontSize() {
-    return LABEL.getFont().getSize();
   }
 
   // PRIVATE METHODS ==============================================================================

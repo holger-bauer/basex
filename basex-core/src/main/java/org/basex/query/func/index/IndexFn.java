@@ -9,23 +9,38 @@ import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 
 /**
  * Index function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class IndexFn extends StandardFunc {
-  /** Name: count. */
-  static final String COUNT = "count";
-  /** Name: value. */
-  static final String ENTRY = "entry";
+  /** QName. */
+  static final QNm Q_NAME = new QNm("name");
+  /** QName. */
+  static final QNm Q_TYPE = new QNm("type");
+  /** QName. */
+  static final QNm Q_COUNT = new QNm("count");
+  /** QName. */
+  static final QNm Q_ENTRY = new QNm("entry");
+  /** QName. */
+  static final QNm Q_MIN = new QNm("min");
+  /** QName. */
+  static final QNm Q_MAX = new QNm("max");
+  /** QName. */
+  static final QNm Q_ELEMENT = new QNm("element");
+  /** QName. */
+  static final QNm Q_ATTRIBUTE = new QNm("attribute");
+  /** Flag: flat output. */
+  static final byte[] FLAT = token("flat");
 
   @Override
   public final boolean accept(final ASTVisitor visitor) {
-    return dataLock(visitor, 0) && super.accept(visitor);
+    return dataLock(arg(0), false, visitor) && super.accept(visitor);
   }
 
   /**
@@ -40,7 +55,7 @@ public abstract class IndexFn extends StandardFunc {
       throws QueryException {
 
     final IndexType type = entries.type();
-    type.check(data, call.info);
+    type.check(data, call.info());
     return entries(data.index(type), entries);
   }
 
@@ -51,12 +66,27 @@ public abstract class IndexFn extends StandardFunc {
    * @return entry iterator
    */
   static Iter entries(final Index index, final IndexEntries entries) {
-    return new Iter() {
-      final EntryIterator ei = index.entries(entries);
+    final EntryIterator ei = index.entries(entries);
+
+    return new BasicIter<FNode>(ei.size()) {
       @Override
-      public FElem next() {
+      public FNode next() {
         final byte[] token = ei.next();
-        return token == null ? null : new FElem(ENTRY).add(COUNT, token(ei.count())).add(token);
+        return token == null ? null : get(token);
+      }
+
+      @Override
+      public FNode get(final long i) {
+        return get(ei.get((int) i));
+      }
+
+      /**
+       * Returns an entry element with the specified token.
+       * @param token token
+       * @return element
+       */
+      private FNode get(final byte[] token) {
+        return FElem.build(Q_ENTRY).add(Q_COUNT, ei.count()).add(token).finish();
       }
     };
   }

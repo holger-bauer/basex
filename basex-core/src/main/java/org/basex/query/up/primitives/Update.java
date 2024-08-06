@@ -6,19 +6,19 @@ import org.basex.util.*;
 /**
  * Abstract class for an update operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public abstract class Update {
   /** Type of update primitive. */
   public final UpdateType type;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   protected final InputInfo info;
 
   /**
    * Constructor.
    * @param type update primitive
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   protected Update(final UpdateType type, final InputInfo info) {
     this.type = type;
@@ -40,7 +40,7 @@ public abstract class Update {
 
   /**
    * Input info.
-   * @return input info
+   * @return input info (can be {@code null})
    */
   public final InputInfo info() {
     return info;

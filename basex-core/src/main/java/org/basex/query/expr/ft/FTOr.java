@@ -16,14 +16,14 @@ import org.basex.util.hash.*;
 /**
  * FTOr expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
 public final class FTOr extends FTExpr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   public FTOr(final InputInfo info, final FTExpr[] exprs) {
@@ -66,7 +66,7 @@ public final class FTOr extends FTExpr {
     return new FTIter() {
       @Override
       public FTNode next() throws QueryException {
-        // find item with smallest pre value
+        // find item with the smallest pre value
         int p = -1;
         for(int e = 0; e < el; ++e) {
           if(nodes[e] != null && (p == -1 || nodes[p].pre() > nodes[e].pre())) p = e;
@@ -124,7 +124,7 @@ public final class FTOr extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.tokens(exprs, ' ' + FTOR + ' ', true);
   }
 }

@@ -11,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * FTExtensionSelection expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class FTExtension extends FTExpr {
@@ -20,7 +20,7 @@ public final class FTExtension extends FTExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param pragma pragma
    * @param expr enclosed FTSelection
    */
@@ -51,12 +51,12 @@ public final class FTExtension extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), pragma, exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(pragma).brace(exprs[0]);
   }
 }

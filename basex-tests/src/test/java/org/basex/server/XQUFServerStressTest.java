@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Testing concurrent XQUF statements on a single database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class XQUFServerStressTest extends SandboxTest {
@@ -131,7 +131,7 @@ public final class XQUFServerStressTest extends SandboxTest {
       try {
         for(int i = 0; i < runs; ++i) {
           Performance.sleep(100);
-          session.execute("xquery " + query);
+          session.execute("XQUERY " + query);
         }
         session.close();
       } catch(final Exception ex) {

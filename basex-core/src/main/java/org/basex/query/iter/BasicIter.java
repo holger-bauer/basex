@@ -11,7 +11,7 @@ import org.basex.util.*;
  * This class also implements the {@link Iterable} interface. Hence, all values can also be
  * retrieved via an enhanced for-loop. Using {@link #next()} is faster.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <I> generic item type
  */
@@ -45,7 +45,7 @@ public abstract class BasicIter<I extends Item> extends Iter implements Iterable
 
   @Override
   public final Iterator<I> iterator() {
-    return new Iterator<I>() {
+    return new Iterator<>() {
       private I item;
 
       @Override

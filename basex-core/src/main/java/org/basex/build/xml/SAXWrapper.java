@@ -21,7 +21,7 @@ import org.xml.sax.*;
  * DBLP documents contain too many entities and cause an out of memory error.
  * The internal {@link XMLParser} can be used as alternative.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SAXWrapper extends SingleParser {
@@ -38,10 +38,10 @@ public final class SAXWrapper extends SingleParser {
   /**
    * Constructor.
    * @param source input source
-   * @param opts database options
+   * @param options main options
    */
-  public SAXWrapper(final IO source, final MainOptions opts) {
-    super(source, opts);
+  public SAXWrapper(final IO source, final MainOptions options) {
+    super(source, options);
   }
 
   @Override
@@ -53,12 +53,11 @@ public final class SAXWrapper extends SingleParser {
       if(reader == null) {
         reader = XmlParser.reader(options.get(MainOptions.DTD), options.get(MainOptions.XINCLUDE));
       }
+      final EntityResolver er = Resolver.entities(options);
+      if(er != null) reader.setEntityResolver(er);
 
-      saxh = new SAXHandler(builder, options.get(MainOptions.CHOP),
+      saxh = new SAXHandler(builder, options.get(MainOptions.STRIPWS),
           options.get(MainOptions.STRIPNS));
-      final CatalogWrapper cw = CatalogWrapper.get(options.get(MainOptions.CATFILE));
-      if(cw != null) reader.setEntityResolver(cw.getEntityResolver());
-
       reader.setDTDHandler(saxh);
       reader.setContentHandler(saxh);
       reader.setProperty("http://xml.org/sax/properties/lexical-handler", saxh);
@@ -72,10 +71,9 @@ public final class SAXWrapper extends SingleParser {
     } catch(final JobException ex) {
       throw ex;
     } catch(final Exception ex) {
-      // occurs, e.g. if document encoding is invalid:
-      // prefix message with source id
-      // wrap and return original message
-      throw new IOException('"' + source.path() + '"' + Util.message(ex), ex);
+      // invalid document encoding, catalog raises an error, ...
+      final String msg = ex.getCause() != null ? ex.getCause().getMessage() : Util.message(ex);
+      throw new IOException(source.path() + ": " + msg, ex);
     } finally {
       try(Reader r = is.getCharacterStream()) { /* no action */ }
       try(InputStream ist = is.getByteStream()) { /* no action */ }
@@ -103,8 +101,8 @@ public final class SAXWrapper extends SingleParser {
 
     // create input source with wrapped input stream
     final InputStream wrapped = new InputStream() {
-      final InputStream buffer = input instanceof ByteArrayInputStream ||
-          input instanceof ArrayInput ? input : BufferInput.get(input);
+      final InputStream buffer = input instanceof ByteArrayInputStream ? input :
+        BufferInput.get(input);
 
       @Override
       public int read() throws IOException {
@@ -121,6 +119,7 @@ public final class SAXWrapper extends SingleParser {
     };
 
     final InputSource is = new InputSource(wrapped);
+    is.setEncoding(source.encoding());
     is.setSystemId(source.url());
     return is;
   }

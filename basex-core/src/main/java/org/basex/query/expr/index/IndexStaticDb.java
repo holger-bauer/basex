@@ -11,21 +11,18 @@ import org.basex.util.hash.*;
 /**
  * This class defines a static database source for index operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IndexStaticDb extends IndexDb {
-  /** Data reference. */
-  private final Data data;
-
   /**
    * Constructor.
    * @param data data reference
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public IndexStaticDb(final Data data, final InputInfo info) {
     super(info);
-    this.data = data;
+    exprType.data(data);
   }
 
   @Override
@@ -69,31 +66,27 @@ public final class IndexStaticDb extends IndexDb {
 
   @Override
   public IndexDb copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new IndexStaticDb(data, info));
-  }
-
-  @Override
-  public Data data() {
-    return data;
+    return copyType(new IndexStaticDb(data(), info));
   }
 
   @Override
   Data data(final QueryContext qc) {
-    return data;
+    return data();
   }
 
   @Override
   public boolean equals(final Object obj) {
-    return obj instanceof IndexStaticDb && data == ((IndexStaticDb) obj).data && super.equals(obj);
+    return obj instanceof IndexStaticDb && data() == ((IndexStaticDb) obj).data() &&
+        super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this));
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.quoted(Token.token(data.meta.name));
+  public void toString(final QueryString qs) {
+    qs.quoted(Token.token(data().meta.name));
   }
 }

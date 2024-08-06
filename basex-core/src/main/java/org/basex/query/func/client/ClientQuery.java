@@ -12,12 +12,11 @@ import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
-import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ClientQuery extends ClientFn {
@@ -26,13 +25,12 @@ public final class ClientQuery extends ClientFn {
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
     final ClientSession cs = session(qc, false);
-    final String query = Token.string(toToken(exprs[1], qc));
+    final String query = toString(arg(1), qc);
     final ValueBuilder vb = new ValueBuilder(qc);
     try(org.basex.api.client.ClientQuery cq = cs.query(query)) {
       // bind variables and context value
-      for(final Entry<String, Value> binding : toBindings(2, qc).entrySet()) {
+      for(final Entry<String, Value> binding : toBindings(arg(2), qc).entrySet()) {
         final String key = binding.getKey();
         final Value value = binding.getValue();
         if(key.isEmpty()) cq.context(value);
@@ -41,10 +39,10 @@ public final class ClientQuery extends ClientFn {
       // evaluate query
       cq.cache(true);
       while(cq.more()) {
-        final String result = cq.next();
+        final String value = cq.next();
         final Type type = cq.type();
-        if(type instanceof FuncType) throw CLIENT_FITEM_X.get(info, result);
-        vb.add(cq.type().castString(result, qc, sc, info));
+        if(type instanceof FType) throw CLIENT_FITEM_X.get(info, value);
+        vb.add(type.cast(value, qc, info));
       }
       return vb.value();
     } catch(final QueryIOException ex) {

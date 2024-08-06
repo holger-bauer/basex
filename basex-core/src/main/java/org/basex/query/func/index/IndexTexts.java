@@ -1,7 +1,5 @@
 package org.basex.query.func.index;
 
-import static org.basex.util.Token.*;
-
 import org.basex.data.*;
 import org.basex.index.*;
 import org.basex.index.query.*;
@@ -12,17 +10,18 @@ import org.basex.query.value.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class IndexTexts extends IndexFn {
   @Override
   public final Iter iter(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
-    final byte[] entry = exprs.length < 2 ? EMPTY : toToken(exprs[1], qc);
+    final Data data = toData(qc);
+    final byte[] prefix = toZeroToken(arg(1), qc);
+    final Boolean ascending = defined(2) ? toBoolean(arg(2), qc) : null;
 
-    final IndexEntries entries = exprs.length < 3 ? new IndexEntries(entry, type()) :
-      new IndexEntries(entry, toBoolean(exprs[2], qc), type());
+    final IndexEntries entries = ascending != null ? new IndexEntries(prefix, ascending, type()) :
+      new IndexEntries(prefix, type());
     return entries(data, entries, this);
   }
 

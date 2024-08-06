@@ -10,6 +10,7 @@ import org.basex.query.func.Function;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -18,7 +19,7 @@ import org.basex.util.hash.*;
 /**
  * Abstract array expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Arr extends ParseExpr {
@@ -27,7 +28,7 @@ public abstract class Arr extends ParseExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param seqType sequence type
    * @param exprs expressions
    */
@@ -75,24 +76,6 @@ public abstract class Arr extends ParseExpr {
   }
 
   /**
-   * Inlines an expression (see {@link Expr#inline(InlineContext)}).
-   * @param ic inlining context
-   * @param context function for context inlining; yields {@code null} if no inlining is required
-   * @return resulting expression if something changed, {@code null} otherwise
-   * @throws QueryException query exception
-   */
-  public Expr inline(final InlineContext ic, final QuerySupplier<Expr> context)
-      throws QueryException {
-
-    // inline arguments
-    final boolean changed = ic.inline(exprs);
-    // context reference: create new expression with inlined context
-    final Expr expr = ic.var == null && !(ic.expr instanceof ContextValue) ? context.get() : null;
-    // new expression exists and/or arguments were inlined: optimize expression
-    return expr != null ? expr.optimize(ic.cc) : changed ? optimize(ic.cc) : null;
-  }
-
-  /**
    * Creates a deep copy of the given array.
    * @param <T> element type
    * @param cc compilation context
@@ -115,9 +98,9 @@ public abstract class Arr extends ParseExpr {
    * @param limit check if result size of any expression exceeds {@link CompileContext#MAX_PREEVAL}
    * @return result of check
    */
-  protected final boolean allAreValues(final boolean limit) {
+  protected boolean allAreValues(final boolean limit) {
     for(final Expr expr : exprs) {
-      if(!(expr instanceof Value) || (limit && expr.size() > CompileContext.MAX_PREEVAL))
+      if(!(expr instanceof Value) || limit && expr.size() > CompileContext.MAX_PREEVAL)
         return false;
     }
     return true;
@@ -127,29 +110,27 @@ public abstract class Arr extends ParseExpr {
    * Simplifies all expressions for requests of the specified type.
    * @param mode mode of simplification
    * @param cc compilation context
-   * @return {@code true} if at least one expression has changed
+   * @return simplified or original expressions
    * @throws QueryException query exception
    */
-  protected boolean simplifyAll(final Simplify mode, final CompileContext cc)
+  protected final Expr[] simplifyAll(final Simplify mode, final CompileContext cc)
       throws QueryException {
 
     boolean changed = false;
-    final int el = exprs.length;
-    for(int e = 0; e < el; e++) {
-      final Expr expr = exprs[e].simplifyFor(mode, cc);
-      if(expr != exprs[e]) {
-        exprs[e] = expr;
-        changed = true;
-      }
+    final ExprList list = new ExprList(exprs.length);
+    for(final Expr expr : exprs) {
+      final Expr ex = expr.simplifyFor(mode, cc);
+      if(ex != expr) changed = true;
+      list.add(ex);
     }
-    return changed;
+    return changed ? list.finish() : exprs;
   }
 
   /**
    * Flattens nested expressions.
    * @param cc compilation context
    */
-  protected void flatten(final CompileContext cc) {
+  protected final void flatten(final CompileContext cc) {
     // flatten nested expressions
     final ExprList list = new ExprList(exprs.length);
     final Class<? extends Arr> clazz = getClass();
@@ -161,6 +142,21 @@ public abstract class Arr extends ParseExpr {
         list.add(expr);
       }
     }
+    exprs = list.finish();
+  }
+
+  /**
+   * Removes empty expressions.
+   * @param cc compilation context
+   */
+  protected final void removeEmpty(final CompileContext cc) {
+    if(!((Checks<Expr>) expr -> expr == Empty.VALUE).any(exprs)) return;
+
+    final ExprList list = new ExprList(exprs.length - 1);
+    for(final Expr expr : exprs) {
+      if(expr != Empty.VALUE) list.add(expr);
+    }
+    cc.info(QueryText.OPTREMOVE_X_X, Empty.VALUE, (Supplier<?>) this::description);
     exprs = list.finish();
   }
 
@@ -180,21 +176,21 @@ public abstract class Arr extends ParseExpr {
   /**
    * Tries to merge consecutive EBV tests.
    * @param or union or intersection
-   * @param positional consider positional tests
+   * @param predicate predicate test
    * @param cc compilation context
    * @return {@code true} if evaluation can be skipped
    * @throws QueryException query exception
    */
-  boolean optimizeEbv(final boolean or, final boolean positional, final CompileContext cc)
+  final boolean optimizeEbv(final boolean or, final boolean predicate, final CompileContext cc)
       throws QueryException {
 
     final ExprList list = new ExprList(exprs.length);
     boolean pos = false;
     for(final Expr expr : exprs) {
       // pre-evaluate values
-      if(expr instanceof Value) {
+      if(expr instanceof Value && (!predicate || !expr.seqType().mayBeNumber())) {
         // skip evaluation: true() or $bool  ->  true()
-        if(expr.ebv(cc.qc, info).bool(info) ^ !or) return true;
+        if(expr.test(cc.qc, info, 0) == or) return true;
         // ignore result: true() and $bool  ->  $bool
         cc.info(QueryText.OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
       } else if(!pos && list.contains(expr) && !expr.has(Flag.NDT)) {
@@ -203,15 +199,15 @@ public abstract class Arr extends ParseExpr {
       } else {
         list.add(expr);
         // preserve entries after positional predicates
-        if(positional && !pos) pos = mayBePositional(expr);
+        if(predicate && !pos) pos = mayBePositional(expr);
       }
     }
     exprs = list.next();
 
-    if(!(positional && has(Flag.POS))) {
+    if(!(predicate && has(Flag.POS))) {
       final Class<? extends Arr> clazz = or ? And.class : Or.class;
       final QueryBiFunction<Boolean, Expr[], Expr> func = (invert, args) ->
-        (invert != or) ? new Or(info, args) : new And(info, args);
+        invert == or ? new And(info, args) : new Or(info, args);
       final Expr tmp = rewrite(clazz, func, cc);
       if(tmp != null) {
         exprs = new Expr[] { tmp };
@@ -223,7 +219,7 @@ public abstract class Arr extends ParseExpr {
     for(int l = 0; l < list.size(); l++) {
       for(int m = l + 1; m < list.size(); m++) {
         final Expr expr1 = list.get(l), expr2 = list.get(m);
-        if(!(positional && expr1.has(Flag.POS))) {
+        if(!expr1.has(Flag.NDT) && !(predicate && expr1.has(Flag.POS))) {
           // A or not(A)  ->  true()
           // A[not(B)][B]  ->  ()
           // empty(A) or exists(A)  ->  true()
@@ -244,17 +240,13 @@ public abstract class Arr extends ParseExpr {
 
     // not($a) and not($b)  ->  not($a or $b)
     final Function not = NOT;
-    final Checks<Expr> fnNot = ex -> not.is(ex) && !(positional && ex.has(Flag.POS));
+    final Checks<Expr> fnNot = ex -> not.is(ex) && !(predicate && ex.has(Flag.POS));
     if(exprs.length > 1 && fnNot.all(exprs)) {
       final ExprList tmp = new ExprList(exprs.length);
       for(final Expr expr : exprs) tmp.add(expr.arg(0));
       final Expr expr = or ? new And(info, tmp.finish()) : new Or(info, tmp.finish());
-      list.add(cc.function(not, info, expr.optimize(cc)));
-    } else {
-      list.add(exprs);
+      exprs = list.add(cc.function(not, info, expr.optimize(cc))).finish();
     }
-
-    exprs = list.finish();
     return false;
   }
 
@@ -265,7 +257,7 @@ public abstract class Arr extends ParseExpr {
    * @param ebv consider ebv checks
    * @return result of check
    */
-  final boolean contradict(final Expr expr1, final Expr expr2, final boolean ebv) {
+  static boolean contradict(final Expr expr1, final Expr expr2, final boolean ebv) {
     // boolean(A), not(A)
     Expr arg = BOOLEAN.is(expr1) ? expr1.arg(0) : expr1;
     if(NOT.is(expr2) && expr2.arg(0).equals(arg)) return true;
@@ -287,7 +279,7 @@ public abstract class Arr extends ParseExpr {
    * @return optimized expression or null
    * @throws QueryException query exception
    */
-  Expr rewrite(final Class<? extends Arr> inverse,
+  final Expr rewrite(final Class<? extends Arr> inverse,
       final QueryBiFunction<Boolean, Expr[], Expr> newExpr, final CompileContext cc)
       throws QueryException {
 
@@ -321,7 +313,7 @@ public abstract class Arr extends ParseExpr {
         // A intersect (A union B)  ->  A
         // (A and B) or (A and B and C)  ->  A
         return left.seqType().type instanceof NodeType && !left.ddo() ?
-          cc.function(Function._UTIL_DDO, info, left) : left;
+          cc.function(Function.DISTINCT_ORDERED_NODES, info, left) : left;
       } else if(curr.size() == 1) {
         // single additional test: add this test
         // (A and B) or (A and C)  ->  A and (B or C)
@@ -350,8 +342,19 @@ public abstract class Arr extends ParseExpr {
   }
 
   @Override
-  public Expr[] args() {
+  public final Expr[] args() {
     return exprs;
+  }
+
+  /**
+   * Re-assigns the rewritten version of an argument/operand.
+   * @param a index of argument
+   * @param rewrite function for rewriting the argument
+   * @throws QueryException query exception
+   */
+  public final void arg(final int a, final QueryFunction<Expr, Expr> rewrite)
+      throws QueryException {
+    exprs[a] = rewrite.apply(arg(a));
   }
 
   @Override
@@ -371,7 +374,7 @@ public abstract class Arr extends ParseExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), exprs);
   }
 }

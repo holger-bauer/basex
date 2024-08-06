@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * Tests for {@link WesternTokenizer}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class WesternTokenizerTest {
@@ -30,12 +30,12 @@ public final class WesternTokenizerTest {
   /** Test text to tokenize. */
   private static final byte[] TEXT = token("\\T\u00e9st.*\\t\u00c4Ste\\\\Toast\\.");
 
-  /** Test case insensitive. */
+  /** Test case-insensitive. */
   @Test public void cI() {
     run(TEXT, "test", "taste", "toast");
   }
 
-  /** Test case sensitive. */
+  /** Test case-sensitive. */
   @Test public void cS() {
     setFTFlags(FTCS);
     run(TEXT, "Test", "tASte", "Toast");
@@ -77,13 +77,13 @@ public final class WesternTokenizerTest {
     run(TEXT, "T\u00c9ST", "T\u00c4STE", "TOAST");
   }
 
-  /** Test wild cards + case insensitive. */
+  /** Test wild cards + case-insensitive. */
   @Test public void wildCardsCI() {
     setFTFlags(FTWC);
     run(TEXT, "\\test.*\\taste", "toast");
   }
 
-  /** Test wild cards + case sensitive. */
+  /** Test wild cards + case-sensitive. */
   @Test public void wildCardsCS() {
     setFTFlags(FTWC | FTCS);
     run(TEXT, "\\Test.*\\tASte", "Toast");

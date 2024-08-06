@@ -4,7 +4,9 @@ import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
 import java.util.*;
+import java.util.function.*;
 
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
@@ -17,197 +19,130 @@ import org.w3c.dom.*;
 /**
  * Element node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FElem extends FNode {
   /** Element name. */
   private final QNm name;
-
-  /** Child nodes (may be set {@code null}). */
-  private ANodeList children;
-  /** Attributes (may be set {@code null}). */
-  private ANodeList atts;
-  /** Namespaces (may be set {@code null}). */
-  private Atts ns;
+  /** Namespaces. */
+  private Atts namespaces;
+  /** Attributes. */
+  private ANode[] attributes;
+  /** Children. */
+  private ANode[] children;
 
   /**
-   * Convenience constructor for creating an element.
+   * Constructor.
    * @param name element name
    */
-  public FElem(final String name) {
-    this(token(name));
-  }
-
-  /**
-   * Convenience constructor for creating an element.
-   * @param name element name
-   */
-  public FElem(final byte[] name) {
-    this(new QNm(name));
-  }
-
-  /**
-   * Convenience constructor for creating an element with a new namespace.
-   * @param local local name
-   * @param uri namespace uri
-   */
-  public FElem(final byte[] local, final byte[] uri) {
-    this(EMPTY, local, uri);
-  }
-
-  /**
-   * Convenience constructor for creating an element with a new namespace.
-   * @param local local name
-   * @param uri namespace uri
-   */
-  public FElem(final String local, final String uri) {
-    this(EMPTY, token(local), token(uri));
-  }
-
-  /**
-   * Convenience constructor for creating an element with a new namespace.
-   * @param prefix prefix (a default namespace will be created if the string is empty)
-   * @param local local name
-   * @param uri namespace uri
-   */
-  public FElem(final String prefix, final String local, final String uri) {
-    this(token(prefix), token(local), token(uri));
-  }
-
-  /**
-   * Convenience constructor for creating an element with a new namespace.
-   * @param prefix prefix (a default namespace will be created if the string is empty)
-   * @param local local name
-   * @param uri namespace uri
-   */
-  public FElem(final byte[] prefix, final byte[] local, final byte[] uri) {
-    this(new QNm(prefix, local, uri));
-  }
-
-  /**
-   * Constructor for creating an element.
-   * @param name element name
-   */
-  public FElem(final QNm name) {
-    this(name, null, null, null);
-  }
-
-  /**
-   * Constructor for creating an element with nodes, attributes and
-   * namespace declarations.
-   * @param name element name
-   * @param ns namespaces, may be {@code null}
-   * @param children children, may be {@code null}
-   * @param atts attributes, may be {@code null}
-   */
-  public FElem(final QNm name, final Atts ns, final ANodeList children, final ANodeList atts) {
+  private FElem(final QNm name) {
     super(NodeType.ELEMENT);
     this.name = name;
-    this.children = children;
-    this.atts = atts;
-    this.ns = ns;
+  }
+
+  /**
+   * Convenience constructor for creating an element.
+   * @param name element name
+   * @return element builder
+   */
+  public static FBuilder build(final QNm name) {
+    return new FBuilder(new FElem(name));
   }
 
   /**
    * Constructor for creating an element from a DOM node.
    * Originally provided by Erdal Karaca.
    * @param elem DOM node
-   * @param parent parent reference (can be {@code null})
-   * @param nss namespaces in scope
+   * @param nsMap namespaces in scope
+   * @return element builder
    */
-  public FElem(final Element elem, final FNode parent, final TokenMap nss) {
-    super(NodeType.ELEMENT);
+  public static FBuilder build(final Element elem, final TokenMap nsMap) {
+    final String nsUri = elem.getNamespaceURI();
+    final QNm name = new QNm(elem.getNodeName(), nsUri == null ? Token.EMPTY : token(nsUri));
 
-    this.parent = parent;
-    final String nu = elem.getNamespaceURI();
-    name = new QNm(elem.getNodeName(), nu == null ? EMPTY : token(nu));
-    ns = new Atts();
+    final FBuilder builder = build(name);
+    final Atts nspaces = new Atts();
 
     // attributes and namespaces
     final NamedNodeMap at = elem.getAttributes();
-    final int as = at.getLength();
+    final int al = at.getLength();
 
-    for(int i = 0; i < as; ++i) {
-      final Attr att = (Attr) at.item(i);
-      final byte[] nm = token(att.getName()), uri = token(att.getValue());
+    for(int a = 0; a < al; ++a) {
+      final Attr attr = (Attr) at.item(a);
+      final byte[] nm = token(attr.getName()), uri = token(attr.getValue());
       if(Token.eq(nm, XMLNS)) {
-        ns.add(EMPTY, uri);
+        nspaces.add(Token.EMPTY, uri);
       } else if(startsWith(nm, XMLNS_COLON)) {
-        ns.add(local(nm), uri);
+        nspaces.add(local(nm), uri);
       } else {
-        add(new FAttr(att));
+        builder.add(new FAttr(attr));
       }
     }
 
-    // add all new namespaces
-    final int nl = ns.size();
-    for(int n = 0; n < nl; n++) nss.put(ns.name(n), ns.value(n));
+    // add new namespaces
+    final int ns = nspaces.size();
+    for(int n = 0; n < ns; n++) nsMap.put(nspaces.name(n), nspaces.value(n));
 
     // no parent, so we have to add all namespaces in scope
-    if(parent == null) {
-      nsScope(elem.getParentNode(), nss);
-      for(final byte[] pref : nss) {
-        if(!ns.contains(pref)) ns.add(pref, nss.get(pref));
+    TokenMap namespaces = nsMap;
+    if(namespaces == null) {
+      namespaces = new TokenMap();
+      nsScope(elem.getParentNode(), namespaces);
+      for(final byte[] prefix : namespaces) {
+        if(!nspaces.contains(prefix)) nspaces.add(prefix, namespaces.get(prefix));
       }
     }
-
-    final byte[] pref = name.prefix();
-    final byte[] uri = name.uri();
-    final byte[] old = nss.get(pref);
+    final byte[] prefix = name.prefix(), uri = name.uri(), old = namespaces.get(prefix);
     if(old == null || !Token.eq(uri, old)) {
-      ns.add(pref, uri);
-      nss.put(pref, uri);
+      nspaces.add(prefix, uri);
+      nsMap.put(prefix, uri);
     }
+    if(!nspaces.isEmpty()) builder.namespaces = nspaces;
+    children(elem, builder, new TokenMap());
+    return builder;
+  }
 
-    // children
-    final NodeList ch = elem.getChildNodes();
-    for(int i = 0; i < ch.getLength(); ++i) {
-      final Node child = ch.item(i);
-
-      switch(child.getNodeType()) {
-        case Node.TEXT_NODE:
-          add(new FTxt((Text) child));
-          break;
-        case Node.COMMENT_NODE:
-          add(new FComm((Comment) child));
-          break;
-        case Node.PROCESSING_INSTRUCTION_NODE:
-          add(new FPI((ProcessingInstruction) child));
-          break;
-        case Node.ELEMENT_NODE:
-          add(new FElem((Element) child, this, nss));
-          break;
-        default:
-          break;
-      }
-    }
-    optimize();
+  /**
+   * Finalizes the node.
+   * @param ns namespaces
+   * @param at attributes
+   * @param ch children
+   * @return self reference
+   */
+  FElem finish(final Atts ns, final ANode[] at, final ANode[] ch) {
+    namespaces = ns;
+    attributes = at;
+    children = ch;
+    return this;
   }
 
   /**
    * Gathers all defined namespaces in the scope of the given DOM element.
    * @param elem DOM element
-   * @param nss map
+   * @param nsMap map
    */
-  private static void nsScope(final Node elem, final TokenMap nss) {
+  private static void nsScope(final Node elem, final TokenMap nsMap) {
     Node n = elem;
     // only elements can declare namespaces
     while(n instanceof Element) {
       final NamedNodeMap atts = n.getAttributes();
-      final byte[] pref = token(n.getPrefix());
-      if(nss.get(pref) != null) nss.put(pref, token(n.getNamespaceURI()));
+      final String prefix = n.getPrefix();
+      if(prefix != null) {
+        final byte[] pref = token(prefix);
+        if(nsMap.get(pref) != null) nsMap.put(pref, token(n.getNamespaceURI()));
+      }
       final int len = atts.getLength();
       for(int i = 0; i < len; ++i) {
         final Attr a = (Attr) atts.item(i);
         final byte[] name = token(a.getName()), val = token(a.getValue());
         if(Token.eq(name, XMLNS)) {
           // default namespace
-          if(nss.get(EMPTY) == null) nss.put(EMPTY, val);
+          if(nsMap.get(Token.EMPTY) == null) nsMap.put(Token.EMPTY, val);
         } else if(startsWith(name, XMLNS)) {
           // prefixed namespace
           final byte[] ln = local(name);
-          if(nss.get(ln) == null) nss.put(ln, val);
+          if(nsMap.get(ln) == null) nsMap.put(ln, val);
         }
       }
       n = n.getParentNode();
@@ -215,146 +150,19 @@ public final class FElem extends FNode {
   }
 
   @Override
-  public FElem optimize() {
-    // update parent references and invalidate empty arrays
-    if(children != null) {
-      for(final ANode node : children) node.parent(this);
-      if(children.isEmpty()) children = null;
-    }
-    if(atts != null) {
-      for(final ANode node : atts) node.parent(this);
-      if(atts.isEmpty()) atts = null;
-    }
-    if(ns != null && ns.isEmpty()) ns = null;
-    return this;
-  }
-
-  /**
-   * Adds a namespace declaration for the QName of this element.
-   * @return self reference
-   */
-  public FElem declareNS() {
-    namespaces().add(name.prefix(), name.uri());
-    return this;
-  }
-
-  /**
-   * Adds a node and updates its parent reference.
-   * @param node node to be added
-   * @return self reference
-   */
-  public FElem add(final ANode node) {
-    if(node.type == NodeType.ATTRIBUTE) {
-      if(atts == null) atts = new ANodeList();
-      atts.add(node);
-    } else {
-      if(children == null) children = new ANodeList();
-      children.add(node);
-    }
-    node.parent(this);
-    return this;
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final String nm, final String val) {
-    return add(token(nm), token(val));
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final byte[] nm, final String val) {
-    return add(nm, token(val));
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final String nm, final byte[] val) {
-    return add(token(nm), val);
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final byte[] nm, final byte[] val) {
-    return add(new FAttr(nm, val));
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final QNm nm, final String val) {
-    return add(nm, token(val));
-  }
-
-  /**
-   * Adds an attribute and updates its parent reference.
-   * @param nm attribute name
-   * @param val attribute value
-   * @return self reference
-   */
-  public FElem add(final QNm nm, final byte[] val) {
-    return add(new FAttr(nm, val));
-  }
-
-  /**
-   * Creates and adds a text node if the specified value is not empty.
-   * Converts the specified string to a token and calls {@link #add(byte[])}.
-   * @param text value of text node
-   * @return self reference
-   */
-  public FElem add(final String text) {
-    return add(token(text));
-  }
-
-  /**
-   * Creates and adds a text node if the specified value is not empty.
-   * @param text value of text node
-   * @return self reference
-   */
-  public FElem add(final byte[] text) {
-    if(text.length != 0) {
-      final FTxt txt = new FTxt(text);
-      if(children == null) children = new ANodeList();
-      children.add(txt);
-      txt.parent(this);
-    }
-    return this;
-  }
-
-  @Override
   public Atts namespaces() {
-    if(ns == null) ns = new Atts();
-    return ns;
+    return namespaces;
   }
 
   @Override
   public byte[] string() {
-    return children == null ? EMPTY : string(children);
+    return string(children);
   }
 
   @Override
   public byte[] baseURI() {
-    final byte[] base = attribute(QNm.XML_BASE);
-    return base != null ? base : EMPTY;
+    final byte[] base = attribute(XML_BASE);
+    return base != null ? base : Token.EMPTY;
   }
 
   @Override
@@ -369,39 +177,36 @@ public final class FElem extends FNode {
 
   @Override
   public BasicNodeIter attributeIter() {
-    return atts != null ? atts.iter() : BasicNodeIter.EMPTY;
+    return ANodeList.iter(attributes);
   }
 
   @Override
   public BasicNodeIter childIter() {
-    return children != null ? children.iter() : BasicNodeIter.EMPTY;
+    return ANodeList.iter(children);
   }
 
   @Override
   public boolean hasChildren() {
-    return children != null && !children.isEmpty();
+    return children.length != 0;
   }
 
   @Override
-  public FElem materialize(final QueryContext qc, final boolean copy) {
-    if(!copy) return this;
+  public boolean hasAttributes() {
+    return attributes.length != 0;
+  }
 
-    // nodes must be added after root constructor in order to ensure ascending node ids
-    final ANodeList ch = children != null ? new ANodeList(children.size()) : null;
-    final ANodeList at = atts != null ? new ANodeList(atts.size()) : null;
-    final Atts as = ns != null ? new Atts() : null;
-    final FElem node = new FElem(name, as, ch, at);
-    if(as != null) {
-      final int nl = ns.size();
-      for(int n = 0; n < nl; ++n) as.add(ns.name(n), ns.value(n));
-    }
-    if(at != null) {
-      for(final ANode nd : atts) at.add(nd.materialize(qc, true));
-    }
-    if(ch != null) {
-      for(final ANode nd : children) ch.add(nd.materialize(qc, true));
-    }
-    return node.optimize();
+  @Override
+  public FNode materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+
+    if(materialized(test, ii)) return this;
+
+    final FBuilder elem = build(name);
+    final int ns = namespaces.size();
+    for(int n = 0; n < ns; n++) elem.addNS(namespaces.name(n), namespaces.value(n));
+    for(final ANode attribute : attributes) elem.add(attribute.materialize(test, ii, qc));
+    for(final ANode child : children) elem.add(child.materialize(test, ii, qc));
+    return elem.finish();
   }
 
   @Override
@@ -409,33 +214,30 @@ public final class FElem extends FNode {
     if(this == obj) return true;
     if(!(obj instanceof FElem)) return false;
     final FElem f = (FElem) obj;
-    return name.eq(f.name) && Objects.equals(children, f.children) &&
-        Objects.equals(atts, f.atts) && Objects.equals(ns, f.ns) && super.equals(obj);
+    return name.eq(f.name) && Arrays.equals(children, f.children) &&
+        Arrays.equals(attributes, f.attributes) && Objects.equals(namespaces, f.namespaces) &&
+        super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name.string()));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final byte[] nm = name.string();
     final TokenBuilder tb = new TokenBuilder().add('<').add(nm);
-    if(ns != null) {
-      final int nl = ns.size();
-      for(int n = 0; n < nl; n++) {
-        tb.add(' ').add(new FNSpace(ns.name(n), ns.value(n)));
-      }
+    final int ns = namespaces.size();
+    for(int n = 0; n < ns; n++) {
+      tb.add(' ').add(new FNSpace(namespaces.name(n), namespaces.value(n)));
     }
-    if(atts != null) {
-      for(final ANode att : atts) tb.add(' ').add(att);
-    }
+    for(final ANode attr : attributes) tb.add(' ').add(attr);
     if(hasChildren()) {
       tb.add('>');
-      final ANode child = children.get(0);
-      if(child.type == NodeType.TEXT && children.size() == 1) {
-        tb.add(QueryString.toValue(child.value));
+      final ANode child = children[0];
+      if(child.type == NodeType.TEXT && children.length == 1) {
+        tb.add(QueryString.toValue(child.string()));
       } else {
         tb.add(DOTS);
       }

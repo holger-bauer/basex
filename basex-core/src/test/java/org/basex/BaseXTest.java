@@ -5,33 +5,27 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.*;
 
 import org.basex.core.*;
+import org.basex.io.*;
 import org.basex.util.*;
 import org.junit.jupiter.api.*;
 
 /**
  * Tests the command-line arguments of the starter class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public abstract class BaseXTest extends MainTest {
+public abstract class BaseXTest extends SandboxTest {
+  /** Input file. */
+  static final IOFile INPUT = new IOFile(Prop.TEMPDIR + NAME + ".in");
+
   /**
    * Deletes the test files.
    * @throws IOException I/O exception
    */
   @AfterEach public void clean() throws IOException {
     assertTrue(!INPUT.exists() || INPUT.delete(), "Could not delete input file.");
-    run("-cdrop db " + NAME);
-  }
-
-  /**
-   * Tests a query file.
-   * @throws IOException I/O exception
-   */
-  @Test public void queryFile() throws IOException {
-    final String query = "1";
-    INPUT.write(query);
-    equals(query, INPUT.path());
+    run("-cDROP DB " + NAME);
   }
 
   /**
@@ -50,8 +44,8 @@ public abstract class BaseXTest extends MainTest {
     equals("5,6;7'", "-ba=5,6;7'", "-qdeclare variable $a external; $a");
 
     // bind variables with namespaces
-    equals("8", "-b{}a=8", "-qdeclare variable $a external; $a");
-    equals("9", "-b{URI}a=9", "-qdeclare namespace a='URI'; declare variable $a:a external; $a:a");
+    equals("8", "-bQ{}a=8", "-qdeclare variable $a external; $a");
+    equals("9", "-bQ{URI}a=9", "-qdeclare namespace a='URI'; declare variable $a:a external; $a:a");
 
     // check if parameters are evaluated in given order
     equals("12", "-ba=1", "-qdeclare variable $a external; $a",
@@ -89,8 +83,8 @@ public abstract class BaseXTest extends MainTest {
    * @throws IOException I/O exception
    */
   @Test public void command() throws IOException {
-    equals("1", "-cxquery 1");
-    equals("\t", "-cxquery '&#x9;'");
+    equals("1", "-cXQUERY 1");
+    equals("\t", "-cXQUERY '&#x9;'");
   }
 
   /**
@@ -101,12 +95,20 @@ public abstract class BaseXTest extends MainTest {
   }
 
   /**
-   * Tests command scripts.
+   * Tests commands.
    * @throws IOException I/O exception
    */
   @Test public void commands() throws IOException {
+    equals("12", "-c XQUERY 1", "-c XQUERY 2");
+  }
+
+  /**
+   * Tests command scripts.
+   * @throws IOException I/O exception
+   */
+  @Test public void commandFile() throws IOException {
     INPUT.write("xquery 1" + Prop.NL + "xquery 2" + Prop.NL);
-    equals("12", "-c" + INPUT.path());
+    equals("12", "-C" + INPUT.path());
   }
 
   /**
@@ -115,6 +117,15 @@ public abstract class BaseXTest extends MainTest {
    */
   @Test public void query() throws IOException {
     equals("3", "-q1+2");
+  }
+
+  /**
+   * Tests a query file.
+   * @throws IOException I/O exception
+   */
+  @Test public void queryFile() throws IOException {
+    INPUT.write("1");
+    equals("1", "-Q", INPUT.path());
   }
 
   /**
@@ -159,13 +170,13 @@ public abstract class BaseXTest extends MainTest {
   }
 
   /**
-   * Turn off whitespace chopping.
+   * Turn on whitespace stripping.
    * @throws IOException I/O exception
    */
-  @Test public void chop() throws IOException {
-    final String in = "<a> CHOP </a>";
+  @Test public void stripws() throws IOException {
+    final String in = "<a> </a>";
     INPUT.write(in);
-    equals(in, "-w", "-i" + INPUT, "-q.");
+    equals("<a/>", "-w", "-i" + INPUT, "-q.");
   }
 
   /**
@@ -174,5 +185,34 @@ public abstract class BaseXTest extends MainTest {
    */
   @Test public void noSerialization() throws IOException {
     equals("", "-z", "-q1");
+  }
+  /**
+   * Runs a request with the specified arguments.
+   * @param args command-line arguments
+   * @return result
+   * @throws IOException I/O exception
+   */
+  protected abstract String run(String... args) throws IOException;
+
+  /**
+   * Runs a request and compares the result with the expected result.
+   * @param expected expected result
+   * @param args command-line arguments
+   * @throws IOException I/O exception
+   */
+  final void equals(final String expected, final String... args) throws IOException {
+    assertEquals(expected, run(args));
+  }
+
+  /**
+   * Runs a request and checks if the expected string is contained in the
+   * result.
+   * @param expected expected result
+   * @param args command-line arguments
+   * @throws IOException I/O exception
+   */
+  final void contains(final String expected, final String... args) throws IOException {
+    final String result = run(args);
+    if(!result.contains(expected)) fail('\'' + expected + "' not contained in '" + result + "'.");
   }
 }

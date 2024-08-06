@@ -1,7 +1,6 @@
 package org.basex.query.expr.path;
 
 import org.basex.data.*;
-import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -10,7 +9,7 @@ import org.basex.util.*;
 /**
  * Name test.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NameTest extends Test {
@@ -52,25 +51,25 @@ public final class NameTest extends Test {
   }
 
   @Override
-  public boolean noMatches(final Data data) {
+  public Test optimize(final Data data) {
     // skip optimizations if data reference is not known at compile time
-    if(data == null) return false;
+    if(data == null) return this;
 
     // skip optimizations if more than one namespace is defined in the database
     final byte[] dataNs = data.defaultNs();
-    if(dataNs == null) return false;
+    if(dataNs == null) return this;
 
     // check if test may yield results
     if(part == NamePart.FULL && !qname.hasURI()) {
       // element and db default namespaces are different: no results
-      if(type != NodeType.ATTRIBUTE && !Token.eq(dataNs, defaultNs)) return true;
+      if(type != NodeType.ATTRIBUTE && !Token.eq(dataNs, defaultNs)) return null;
       // namespace is irrelevant/identical: only check local name
       simple = true;
     }
 
     // check existence of local element/attribute names
-    return !(type == NodeType.PROCESSING_INSTRUCTION || part() != NamePart.LOCAL ||
-      (type == NodeType.ELEMENT ? data.elemNames : data.attrNames).contains(local));
+    return type == NodeType.PROCESSING_INSTRUCTION || part() != NamePart.LOCAL ||
+      (type == NodeType.ELEMENT ? data.elemNames : data.attrNames).contains(local) ? this : null;
   }
 
   @Override
@@ -107,6 +106,18 @@ public final class NameTest extends Test {
     }
   }
 
+  @Override
+  public Boolean matches(final SeqType seqType) {
+    final Type tp = seqType.type;
+    if(tp.intersect(type) == null) return Boolean.FALSE;
+    final Test test = seqType.test();
+    if(tp == type && test instanceof NameTest) {
+      final NameTest np = (NameTest) test;
+      if(np.part == NamePart.FULL || np.part == part) return matches(np.qname);
+    }
+    return null;
+  }
+
   /**
    * Returns the name part relevant at runtime.
    * @return name part
@@ -114,7 +125,6 @@ public final class NameTest extends Test {
   public NamePart part() {
     return simple ? NamePart.LOCAL : part;
   }
-
 
   @Override
   public boolean instanceOf(final Test test) {
@@ -129,10 +139,22 @@ public final class NameTest extends Test {
   public Test intersect(final Test test) {
     if(test instanceof NameTest) {
       final NameTest nt = (NameTest) test;
-      return type == nt.type && qname.eq(nt.qname) ? this : null;
+      if(type == nt.type) {
+        if(part == nt.part || part == NamePart.FULL) {
+          if(nt.matches(qname)) return this;
+        } else if(nt.part == NamePart.FULL) {
+          return test.intersect(this);
+        } else {
+          final boolean lcl = part == NamePart.LOCAL;
+          final QNm qnm = new QNm(lcl ? local : nt.local, lcl ? nt.qname.uri() : qname.uri());
+          return new NameTest(qnm, NamePart.FULL, type, defaultNs);
+        }
+      }
+    } else if(test instanceof KindTest) {
+      if(type.instanceOf(test.type)) return this;
+    } else if(test instanceof UnionTest) {
+      return test.intersect(this);
     }
-    if(test instanceof KindTest) return type.instanceOf(test.type) ? this : null;
-    if(test instanceof UnionTest) return test.intersect(this);
     // DocTest, InvDocTest
     return null;
   }
@@ -146,9 +168,8 @@ public final class NameTest extends Test {
 
   @Override
   public String toString(final boolean full) {
-    final TokenBuilder tb = new TokenBuilder();
     final boolean pi = type == NodeType.PROCESSING_INSTRUCTION;
-    if(full || pi) tb.add(type.name).add('(');
+    final TokenBuilder tb = new TokenBuilder();
 
     // add URI part
     final byte[] prefix = qname.prefix(), uri = qname.uri();
@@ -157,7 +178,7 @@ public final class NameTest extends Test {
     } else if(prefix.length > 0) {
       tb.add(prefix).add(':');
     } else if(uri.length != 0) {
-      tb.add(QueryText.EQNAME).add(uri).add('}');
+      tb.add("Q{").add(uri).add('}');
     }
     // add local part
     if(part == NamePart.URI) {
@@ -165,8 +186,7 @@ public final class NameTest extends Test {
     } else {
       tb.add(qname.local());
     }
-
-    if(full || pi) tb.add(')');
-    return tb.toString();
+    final String test = tb.toString();
+    return full || pi ? type.toString(test) : test;
   }
 }

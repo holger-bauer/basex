@@ -2,21 +2,18 @@ package org.basex.query.value.seq;
 
 import java.util.*;
 
-import org.basex.core.Context;
 import org.basex.data.*;
-import org.basex.query.*;
 import org.basex.query.util.ft.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.util.list.*;
 
 /**
- * This class stores database nodes in an ascending order.
- * Instances of this class will be returned by the method {@link QueryProcessor#cache(int)} method.
- * They are used in the GUI and in the {@link Context} class to reference currently opened,
- * marked, and copied database nodes.
+ * This class stores full-text positions and database nodes in ascending order.
+ * Instances of this class are processed in the GUI to reference currently opened, marked,
+ * and copied database nodes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DBNodes extends DBNodeSeq {
@@ -60,6 +57,11 @@ public final class DBNodes extends DBNodeSeq {
    */
   public FTPosData ftpos() {
     return ftpos;
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return size() == 0;
   }
 
   /**

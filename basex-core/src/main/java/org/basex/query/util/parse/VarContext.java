@@ -2,18 +2,17 @@ package org.basex.query.util.parse;
 
 import java.util.*;
 
-import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.var.*;
 
 /**
  * Variable context for resolving local variables.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class VarContext {
-  /** Stack of local variables. */
+final class VarContext {
+  /** Stack of local variables (can be {@code null}). */
   final VarStack stack = new VarStack();
   /** Non-local variable bindings for closures. */
   final HashMap<Var, Expr> bindings;
@@ -22,12 +21,11 @@ public final class VarContext {
 
   /**
    * Constructor.
-   * @param bindings non-local variable bindings for closures
-   * @param sc static context
+   * @param bindings non-local variable bindings for closures (can be {@code null})
    */
-  VarContext(final HashMap<Var, Expr> bindings, final StaticContext sc) {
+  VarContext(final HashMap<Var, Expr> bindings) {
     this.bindings = bindings;
-    vs = new VarScope(sc);
+    vs = new VarScope();
   }
 
   /**

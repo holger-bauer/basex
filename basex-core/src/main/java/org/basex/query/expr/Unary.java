@@ -15,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * Unary expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Unary extends Single {
@@ -24,7 +24,7 @@ public final class Unary extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param minus minus flag
    */
@@ -52,7 +52,7 @@ public final class Unary extends Single {
     // --123  ->  123
     // --$byte  ->  xs:byte($byte)
     if(!minus && st.instanceOf(SeqType.NUMERIC_ZO)) {
-      final Expr cast = new Cast(cc.sc(), info, expr, SeqType.get(type, st.occ)).optimize(cc);
+      final Expr cast = new Cast(info, expr, SeqType.get(type, st.occ)).optimize(cc);
       return cc.replaceWith(this, cast);
     }
 
@@ -62,7 +62,7 @@ public final class Unary extends Single {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
     final Item item = expr.atomItem(qc, info);
-    if(item == Empty.VALUE) return Empty.VALUE;
+    if(item.isEmpty()) return Empty.VALUE;
 
     final Type type = item.type;
     if(type.isUntyped()) {
@@ -97,12 +97,12 @@ public final class Unary extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, VALUEE, minus), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     if(minus) qs.token("-");
     qs.token(expr);
   }

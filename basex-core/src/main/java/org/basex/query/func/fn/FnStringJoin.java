@@ -1,5 +1,7 @@
 package org.basex.query.func.fn;
 
+import static org.basex.query.func.Function.*;
+
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
@@ -11,36 +13,41 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnStringJoin extends StandardFunc {
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Iter iter = exprs[0].atomIter(qc, info);
-    final byte[] token = exprs.length == 2 ? toToken(exprs[1], qc) : Token.EMPTY;
+    final Iter values = arg(0).atomIter(qc, info);
+    final byte[] separator = toZeroToken(arg(1), qc);
 
     // no results: empty string
-    Item item = iter.next();
+    Item item = values.next();
     if(item == null) return Str.EMPTY;
 
     // single result
     final byte[] first = item.string(info);
-    if((item = iter.next()) == null) return Str.get(first);
+    if((item = values.next()) == null) return Str.get(first);
 
     // join multiple strings
     final TokenBuilder tb = new TokenBuilder().add(first);
     do {
-      tb.add(token).add(item.string(info));
-    } while((item = qc.next(iter)) != null);
+      tb.add(separator).add(item.string(info));
+    } while((item = qc.next(values)) != null);
     return Str.get(tb.finish());
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final SeqType st1 = exprs[0].seqType();
-    final SeqType st2 = (exprs.length > 1 ? exprs[1] : Str.WILDCARD).seqType();
-    return (st1.zero() || st1.one() && st1.type.isStringOrUntyped()) &&
-        st2.type.isStringOrUntyped() ? cc.function(Function.STRING, info, exprs[0]) : this;
+    final Expr values = arg(0), separator = defined(1) ? arg(1) : Str.EMPTY;
+
+    // string-join(characters(A))  ->  string(A)
+    if(CHARACTERS.is(values) && separator == Str.EMPTY)
+      return cc.function(STRING, info, values.args());
+
+    final SeqType st = values.seqType(), stSep = separator.seqType();
+    return (st.zero() || st.one() && st.type.isStringOrUntyped()) &&
+        stSep.type.isStringOrUntyped() ? cc.function(Function.STRING, info, values) : this;
   }
 }

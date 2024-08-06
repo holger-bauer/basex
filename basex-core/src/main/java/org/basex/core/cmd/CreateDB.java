@@ -20,7 +20,7 @@ import org.basex.util.*;
 /**
  * Evaluates the 'create db' command and creates a new database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CreateDB extends ACreate {
@@ -97,9 +97,10 @@ public final class CreateDB extends ACreate {
 
         // create disk-based instance
         final DiskBuilder builder = new DiskBuilder(name, parser, soptions, options);
+        builder.binariesDir(soptions.dbPath(name));
         pushJob(builder);
         try {
-          builder.binaryDir(soptions.dbPath(name)).build().close();
+          builder.build().close();
         } finally {
           popJob();
         }
@@ -111,12 +112,9 @@ public final class CreateDB extends ACreate {
         data = context.data();
       }
 
-      if(!update(data, new Code() {
-        @Override
-        boolean run() throws IOException {
-          CreateIndex.create(data, CreateDB.this);
-          return info(parser.info() + DB_CREATED_X_X, name, jc().performance);
-        }
+      if(!update(data, () -> {
+        CreateIndex.create(data, CreateDB.this);
+        return info(parser.info() + DB_CREATED_X_X, name, jc().performance);
       })) return false;
 
       if(options.get(MainOptions.CREATEONLY)) Close.close(context);
@@ -130,7 +128,7 @@ public final class CreateDB extends ACreate {
       // known exceptions:
       // - IllegalArgumentException (UTF8, zip files)
       Util.stack(ex);
-      return error(NOT_PARSED_X, parser.source);
+      return error(NOT_PARSED_X, parser.source());
     }
   }
 
@@ -179,7 +177,7 @@ public final class CreateDB extends ACreate {
       // database is currently locked by another job
       if(ctx.pinned(name)) throw new BaseXException(DB_PINNED_X, name);
       new DiskBuilder(name, parser, ctx.soptions, options).build().close();
-      data = Open.open(name, ctx, options);
+      data = Open.open(name, ctx, options, true, true);
     }
 
     CreateIndex.create(data, null);

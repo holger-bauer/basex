@@ -7,7 +7,7 @@ import org.basex.util.list.*;
 /**
  * <p>This class can be used to iterate through all codepoints of a token.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class TokenParser {
@@ -57,12 +57,12 @@ public class TokenParser {
 
   /**
    * Tries to consume the specified codepoint.
-   * @param ch codepoint to be consumed
+   * @param cp codepoint to be consumed
    * @return indicates if the codepoint was consumed
    */
-  public final boolean consume(final int ch) {
+  public final boolean consume(final int cp) {
     final int p = pos;
-    if(p >= size || cp(token, p) != ch) return false;
+    if(p >= size || cp(token, p) != cp) return false;
     pos += cl(token, p);
     return true;
   }

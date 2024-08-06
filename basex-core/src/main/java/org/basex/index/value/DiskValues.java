@@ -22,7 +22,7 @@ import org.basex.util.list.*;
  * This class provides access to attribute values and text contents stored on disk.
  * The data structure is described in the {@link DiskValuesBuilder} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class DiskValues extends ValueIndex {
@@ -54,13 +54,13 @@ public class DiskValues extends ValueIndex {
    * Constructor, initializing the index structure.
    * @param data data reference
    * @param type index type
-   * @param pref file prefix
+   * @param prefix file prefix
    * @throws IOException I/O Exception
    */
-  DiskValues(final Data data, final IndexType type, final String pref) throws IOException {
+  DiskValues(final Data data, final IndexType type, final String prefix) throws IOException {
     super(data, type);
-    idxl = new DataAccess(data.meta.dbFile(pref + 'l'));
-    idxr = new DataAccess(data.meta.dbFile(pref + 'r'));
+    idxl = new DataAccess(data.meta.dbFile(prefix + 'l'));
+    idxr = new DataAccess(data.meta.dbFile(prefix + 'r'));
     size.set(idxl.read4());
   }
 
@@ -111,14 +111,23 @@ public class DiskValues extends ValueIndex {
     }
 
     return new IndexIterator() {
-      final int s = pres.size();
-      int p;
+      final int sz = pres.size();
+      int c;
+
       @Override
-      public boolean more() { return p < s; }
+      public boolean more() {
+        return c < sz;
+      }
+
       @Override
-      public int pre() { return pres.get(p++); }
+      public int pre() {
+        return pres.get(c++);
+      }
+
       @Override
-      public int size() { return s; }
+      public int size() {
+        return sz;
+      }
     };
   }
 
@@ -148,9 +157,12 @@ public class DiskValues extends ValueIndex {
   @Override
   public final EntryIterator entries(final IndexEntries entries) {
     final byte[] token = entries.token();
-    if(token.length == 0) return allKeys(entries.descending);
-    if(entries.prefix) return keysWithPrefix(token);
-    return keysFrom(token, entries.descending);
+    if(token.length == 0) return keys(0, size(), entries.descending);
+    if(entries.prefix) return keys(token);
+
+    int i = get(token);
+    if(i < 0) i = -i - 1;
+    return entries.descending ? keys(0, i, true) : keys(i, size(), false);
   }
 
   @Override
@@ -192,7 +204,7 @@ public class DiskValues extends ValueIndex {
       while(l <= h) {
         final int m = l + h >>> 1;
         final byte[] txt = indexEntry(m).key;
-        final int d = diff(txt, key);
+        final int d = compare(txt, key);
         if(d == 0) return m;
         if(d < 0) l = m + 1;
         else h = m - 1;
@@ -206,15 +218,15 @@ public class DiskValues extends ValueIndex {
   /**
    * Returns an index entry.
    * <p><em>Important:</em> This method is thread-safe.</p>
-   * @param token token to be found or cached
+   * @param value token to be found or cached
    * @return cache entry
    */
-  private IndexEntry entry(final byte[] token) {
-    final IndexEntry entry = cache.get(token);
+  private IndexEntry entry(final byte[] value) {
+    final IndexEntry entry = cache.get(value);
     if(entry != null) return entry;
 
-    final long index = get(token);
-    if(index < 0) return new IndexEntry(token, 0, 0);
+    final long index = get(value);
+    if(index < 0) return new IndexEntry(value, 0, 0);
 
     final int count;
     final long offset;
@@ -226,30 +238,7 @@ public class DiskValues extends ValueIndex {
       offset = idxl.cursor();
     }
 
-    return cache.add(token, count, offset);
-  }
-
-  /**
-   * Returns all index entries.
-   * @param reverse return in a reverse order
-   * @return entries
-   */
-  private EntryIterator allKeys(final boolean reverse) {
-    final int s = size() - 1;
-    return reverse ? keysWithinReverse(0, s) : keysWithin(0, s);
-  }
-
-  /**
-   * Returns all index entries, starting from the specified key.
-   * @param key key
-   * @param reverse return in a reverse order
-   * @return entries
-   */
-  private EntryIterator keysFrom(final byte[] key, final boolean reverse) {
-    final int s = size() - 1;
-    int i = get(key);
-    if(i < 0) i = -i - 1;
-    return reverse ? keysWithinReverse(0, i - 1) : keysWithin(i, s);
+    return cache.add(value, count, offset);
   }
 
   /**
@@ -257,31 +246,27 @@ public class DiskValues extends ValueIndex {
    * @param prefix prefix
    * @return entries
    */
-  private EntryIterator keysWithPrefix(final byte[] prefix) {
-    final int i = get(prefix);
+  private EntryIterator keys(final byte[] prefix) {
+    final int first = get(prefix), sz = size();
+
     return new EntryIterator() {
-      final int s = size();
-      // -1 in order to use the faster ++ix operator
-      int ix = (i < 0 ? -i - 1 : i) - 1, count = -1;
+      int c = first < 0 ? -first - 1 : first;
+      IndexEntry entry;
 
       @Override
       public byte[] next() {
-        if(++ix < s) {
+        if(c < sz) {
           synchronized(monitor) {
-            final IndexEntry entry = indexEntry(ix);
-            if(startsWith(entry.key, prefix)) {
-              count = entry.size;
-              return entry.key;
-            }
+            entry = indexEntry(c++);
+            if(startsWith(entry.key, prefix)) return entry.key;
           }
         }
-        count = -1;
         return null;
       }
 
       @Override
       public int count() {
-        return count;
+        return entry.size;
       }
     };
   }
@@ -289,61 +274,37 @@ public class DiskValues extends ValueIndex {
   /**
    * Returns all index entries within the given range.
    * @param first first entry to be returned
-   * @param last last entry to be returned
+   * @param last last entry to be returned (exclusive)
+   * @param reverse return in reverse order
    * @return entries
    */
-  private EntryIterator keysWithin(final int first, final int last) {
+  private EntryIterator keys(final int first, final int last, final boolean reverse) {
+    final int sz = last - first;
     return new EntryIterator() {
-      int ix = first - 1;
-      int count = -1;
+      int c;
+      IndexEntry entry;
 
       @Override
       public byte[] next() {
-        if(++ix <= last) {
-          synchronized(monitor) {
-            final IndexEntry entry = indexEntry(ix);
-            count = entry.size;
-            return entry.key;
-          }
-        }
-        count = -1;
-        return null;
+        return c < sz ? get(c++) : null;
       }
 
       @Override
       public int count() {
-        return count;
+        return entry.size;
       }
-    };
-  }
-
-  /**
-   * Returns all index entries within the given range in a reverse order.
-   * @param first first entry to be returned
-   * @param last last entry to be returned
-   * @return entries
-   */
-  private EntryIterator keysWithinReverse(final int first, final int last) {
-    return new EntryIterator() {
-      int ix = last + 1;
-      int count = -1;
 
       @Override
-      public byte[] next() {
-        if(--ix >= first) {
-          synchronized(monitor) {
-            final IndexEntry entry = indexEntry(ix);
-            count = entry.size;
-            return entry.key;
-          }
+      public byte[] get(final int i) {
+        synchronized(monitor) {
+          entry = indexEntry(reverse ? last - i - 1 : first + i);
+          return entry.key;
         }
-        count = -1;
-        return null;
       }
 
       @Override
-      public int count() {
-        return count;
+      public int size() {
+        return sz;
       }
     };
   }
@@ -409,7 +370,7 @@ public class DiskValues extends ValueIndex {
         final int count = idxl.readNum(idxr.read5(index * 5L));
         int id = idxl.readNum();
         // skip traversal if value is too large
-        final int diff = diff(key(id), tok.max);
+        final int diff = compare(key(id), tok.max);
         if(diff > 0 || !tok.mxi && diff == 0) break;
         // add pre values
         for(int c = 0; c < count; c++) {

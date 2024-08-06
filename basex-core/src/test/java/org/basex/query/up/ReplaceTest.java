@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests on the various replace operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ReplaceTest extends SandboxTest {
@@ -18,9 +18,9 @@ public final class ReplaceTest extends SandboxTest {
    */
   @Test public void lazyReplace() {
     prepare("<a/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "a.xml", " <a/>"));
+    query(_DB_PUT.args(NAME, " <a/>", "a.xml"));
     query("a, c", "<a/>\n<c/>");
-    query(_DB_REPLACE.args(NAME, "c.xml", " <c/>"));
+    query(_DB_PUT.args(NAME, " <c/>", "c.xml"));
     query("a, c", "<a/>\n<c/>");
   }
 
@@ -29,10 +29,10 @@ public final class ReplaceTest extends SandboxTest {
    */
   @Test public void rapidReplace() {
     prepare("<a/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "a.xml", " <a><b/></a>"));
-    query("a, c", "<a>\n<b/>\n</a>\n<c/>");
-    query(_DB_REPLACE.args(NAME, "c.xml", " <c>\n<d/>\n</c>"));
-    query("a, c", "<a>\n<b/>\n</a>\n<c>\n<d/>\n</c>");
+    query(_DB_PUT.args(NAME, " <a><b/></a>", "a.xml"));
+    query("a, c", "<a><b/></a>\n<c/>");
+    query(_DB_PUT.args(NAME, " <c><d/></c>", "c.xml"));
+    query("a, c", "<a><b/></a>\n<c><d/></c>");
   }
 
   /**
@@ -41,28 +41,28 @@ public final class ReplaceTest extends SandboxTest {
   @Test public void replaceWithNs() {
     // first document: introduce namespace
     prepare("<a/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "a.xml", " <a xmlns='a'/>"));
+    query(_DB_PUT.args(NAME, " <a xmlns='a'/>", "a.xml"));
     query("*:a, *:c", "<a xmlns=\"a\"/>\n<c/>");
     // first document: remove namespace
     prepare("<a xmlns='a'/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "a.xml", " <a/>"));
+    query(_DB_PUT.args(NAME, " <a/>", "a.xml"));
     query("*:a, *:c", "<a/>\n<c/>");
     // first document: keep namespace
     prepare("<a xmlns='a'/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "a.xml", " <a xmlns='a'/>"));
+    query(_DB_PUT.args(NAME, " <a xmlns='a'/>", "a.xml"));
     query("*:a, *:c", "<a xmlns=\"a\"/>\n<c/>");
 
     // second document: introduce namespace
     prepare("<a/>", "<c/>");
-    query(_DB_REPLACE.args(NAME, "c.xml", " <c xmlns='c'/>"));
+    query(_DB_PUT.args(NAME, " <c xmlns='c'/>", "c.xml"));
     query("*:a, *:c", "<a/>\n<c xmlns=\"c\"/>");
     // second document: remove namespace
     prepare("<a/>", "<c xmlns=\"c\"/>");
-    query(_DB_REPLACE.args(NAME, "c.xml", " <c/>"));
+    query(_DB_PUT.args(NAME, " <c/>", "c.xml"));
     query("*:a, *:c", "<a/>\n<c/>");
     // second document: keep namespace
     prepare("<a/>", "<c xmlns=\"c\"/>");
-    query(_DB_REPLACE.args(NAME, "c.xml", " <c xmlns='c'/>"));
+    query(_DB_PUT.args(NAME, " <c xmlns='c'/>", "c.xml"));
     query("*:a, *:c", "<a/>\n<c xmlns=\"c\"/>");
   }
 

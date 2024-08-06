@@ -10,10 +10,13 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the User Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserModuleTest extends SandboxTest {
+  /** Invalid characters for database names. */
+  private static final char[] INVALID = ",*?;\\/:\"<>|".toCharArray();
+
   /** Initialize tests. */
   @BeforeAll public static void beforeClass() {
     // create database
@@ -46,9 +49,11 @@ public final class UserModuleTest extends SandboxTest {
     // admin cannot be modified
     error(func.args(UserText.ADMIN, NAME), USER_ADMIN);
     error(func.args(NAME, UserText.ADMIN), USER_ADMIN);
-    // invalid name
-    error(func.args("", NAME), USER_NAME_X);
+    // invalid names
     error(func.args(NAME, ""), USER_NAME_X);
+    error(func.args("", NAME), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(NAME, ch), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, NAME), USER_NAME_X);
     // redundant operations
     error(func.args(NAME, "X") + ',' + func.args(NAME, "X"), USER_UPDATE1_X_X);
     // redundant operations
@@ -58,10 +63,15 @@ public final class UserModuleTest extends SandboxTest {
   /** Test method. */
   @Test public void check() {
     final Function func = _USER_CHECK;
-    query(func.args(UserText.ADMIN, UserText.ADMIN));
+    error(func.args(UserText.ADMIN, UserText.ADMIN), USER_PASSWORD_X);
+    error(func.args(UserText.ADMIN, ""), USER_PASSWORD_X);
+
+    query(_USER_PASSWORD.args(UserText.ADMIN, NAME));
+    query(func.args(UserText.ADMIN, NAME));
     error(func.args("", "x"), USER_NAME_X);
     error(func.args("x", "x"), USER_UNKNOWN_X);
     error(func.args(UserText.ADMIN, "x"), USER_PASSWORD_X);
+    error(func.args(UserText.ADMIN, ""), USER_PASSWORD_X);
   }
 
   /** Test method. */
@@ -71,21 +81,23 @@ public final class UserModuleTest extends SandboxTest {
     query(func.args(NAME, ""));
     // specify permissions
     query(func.args(NAME, NAME, Perm.ADMIN));
-    query(func.args(NAME, NAME, " ('admin','none')", " ('','x')"));
-    query(func.args(NAME, NAME, " ('admin','none')", " ('','x')", " <info a='x'/>"));
+    query(func.args(NAME, NAME, " ('admin', 'none')", " ('', 'x')"));
+    query(func.args(NAME, NAME, " ('admin', 'none')", " ('', 'x')", " <info a='x'/>"));
 
     // invalid permission
     error(func.args(NAME, NAME, ""), USER_PERMISSION_X);
     // admin cannot be modified
     error(func.args(UserText.ADMIN, ""), USER_ADMIN);
-    // invalid name
+    // invalid names
     error(func.args("", ""), USER_NAME_X);
     error(func.args("", "", Perm.ADMIN), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, ch), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, ch, Perm.ADMIN), USER_NAME_X);
 
     // redundant operations
     error(func.args(NAME, "") + ',' + func.args(NAME, ""), USER_UPDATE1_X_X);
-    error(func.args(NAME, "", " ('admin','admin')", " ('','')"), USER_UPDATE3_X_X);
-    error(func.args(NAME, "", " ('admin','admin')", " ('x','x')"), USER_UPDATE2_X);
+    error(func.args(NAME, "", " ('admin', 'admin')", " ('', '')"), USER_UPDATE3_X_X);
+    error(func.args(NAME, "", " ('admin', 'admin')", " ('x', 'x')"), USER_UPDATE2_X);
   }
 
   /** Test method. */
@@ -117,10 +129,13 @@ public final class UserModuleTest extends SandboxTest {
 
     // admin cannot be modified
     error(func.args(UserText.ADMIN), USER_ADMIN);
-    // invalid name
+    // unknown user
     error(func.args(NAME, ""), USER_UNKNOWN_X);
+    // invalid names
     error(func.args(""), USER_NAME_X);
     error(func.args("", NAME), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, NAME), USER_NAME_X);
   }
 
   /** Test method. */
@@ -130,8 +145,9 @@ public final class UserModuleTest extends SandboxTest {
     query(func.args(NAME), true);
     query(func.args("unknown"), false);
 
-    // invalid name
+    // invalid names
     error(func.args(""), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch), USER_NAME_X);
   }
 
   /** Test method. */
@@ -148,7 +164,7 @@ public final class UserModuleTest extends SandboxTest {
         "write");
 
     // grant list of permissions
-    query(func.args(NAME, " ('admin','none')", " ('','x')"));
+    query(func.args(NAME, " ('admin', 'none')", " ('', 'x')"));
 
     // admin permission can only be set globally
     error(func.args(NAME, Perm.ADMIN, NAME), USER_LOCAL);
@@ -159,6 +175,8 @@ public final class UserModuleTest extends SandboxTest {
     // invalid names and permissions
     error(func.args("", Perm.ADMIN), USER_NAME_X);
     error(func.args("", Perm.ADMIN, NAME), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, Perm.ADMIN), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, Perm.ADMIN, NAME), USER_NAME_X);
     error(func.args(NAME, Perm.ADMIN, ";"), USER_PATTERN_X);
     error(func.args(NAME, "x"), USER_PERMISSION_X);
 
@@ -203,10 +221,11 @@ public final class UserModuleTest extends SandboxTest {
   @Test public void password() {
     final Function func = _USER_PASSWORD;
     query(func.args(NAME, ""));
-    query(func.args(NAME, "string-join((1 to 1000)!'x')"));
+    query(func.args(NAME, "string-join((1 to 1000) ! 'x')"));
 
-    // invalid name
+    // invalid names
     error(func.args("", ""), USER_NAME_X);
+    for(final char ch : INVALID) error(func.args(ch, ""), USER_NAME_X);
     // redundant operations
     error(func.args(NAME, "") + ',' + func.args(NAME, ""), USER_UPDATE1_X_X);
   }
@@ -223,6 +242,6 @@ public final class UserModuleTest extends SandboxTest {
     query(func.args(" <info/>", "admin"));
 
     // invalid input
-    error(func.args(" <abc/>"), ELM_X_X);
+    error(func.args(" <abc/>"), ELM_X_X_X);
   }
 }

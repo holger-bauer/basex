@@ -10,14 +10,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnNamespaceUriFromQName extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final QNm qname = toQNm(exprs[0], qc, true);
-    return qname == null ? Empty.VALUE : Uri.uri(qname.uri());
+    final QNm value = toQNmOrNull(arg(0), qc);
+    return value == null ? Empty.VALUE : Uri.get(value.uri());
   }
 
   @Override

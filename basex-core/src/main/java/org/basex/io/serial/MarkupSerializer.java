@@ -11,6 +11,7 @@ import java.io.*;
 import org.basex.query.*;
 import org.basex.query.util.ft.*;
 import org.basex.query.util.hash.*;
+import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
@@ -22,10 +23,13 @@ import org.basex.util.options.*;
 /**
  * This class serializes items to in a markup language.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class MarkupSerializer extends StandardSerializer {
+  /** Token. */
+  private static final QNm Q_HTTP_EQUIV = new QNm(HTTP_EQUIV);
+
   /** System document type. */
   String docsys;
   /** Public document type. */
@@ -46,9 +50,14 @@ abstract class MarkupSerializer extends StandardSerializer {
   final boolean content;
   /** Undeclare prefixes. */
   private final boolean undecl;
-
+  /** Suppress indentation elements. */
+  private QNmSet suppress;
   /** Media type. */
   private final String media;
+  /** Indent attributes. */
+  private final boolean indAttr;
+  /** Attribute indentation length. */
+  protected long indAttrLength;
 
   /**
    * Constructor.
@@ -62,9 +71,10 @@ abstract class MarkupSerializer extends StandardSerializer {
 
     super(os, sopts);
 
-    final String ver = supported(VERSION, sopts, versions);
-    final String htmlver = supported(HTML_VERSION, sopts, V40, V401, V50);
-    html5 = htmlver.equals(V50) || ver.equals(V50);
+    final String version = supported(VERSION, sopts.get(VERSION), versions);
+    String hv = sopts.get(HTML_VERSION);
+    if(hv.matches("\\d+(\\.\\d+)?")) hv = Double.toString(Double.parseDouble(hv));
+    html5 = version.equals(V50) || supported(HTML_VERSION, hv, V40, V401, V50).equals(V50);
 
     final boolean omitDecl = sopts.yes(OMIT_XML_DECLARATION);
     final YesNoOmit sa = sopts.get(STANDALONE);
@@ -76,6 +86,7 @@ abstract class MarkupSerializer extends StandardSerializer {
     escuri  = sopts.yes(ESCAPE_URI_ATTRIBUTES);
     content = sopts.yes(INCLUDE_CONTENT_TYPE);
     undecl  = sopts.yes(UNDECLARE_PREFIXES);
+    indAttr = sopts.yes(INDENT_ATTRIBUTES);
 
     if(docsys.isEmpty()) docsys = null;
     if(docpub.isEmpty()) docpub = null;
@@ -83,14 +94,14 @@ abstract class MarkupSerializer extends StandardSerializer {
     final boolean html = this instanceof HTMLSerializer;
     final boolean xml = this instanceof XMLSerializer || this instanceof XHTMLSerializer;
     if(xml || html) {
-      if(undecl && ver.equals(V10)) throw SERUNDECL.getIO();
+      if(undecl && version.equals(V10)) throw SERUNDECL.getIO();
       if(xml) {
         if(omitDecl) {
-          if(!saomit || !ver.equals(V10) && docsys != null) throw SERSTAND.getIO();
+          if(!saomit || !version.equals(V10) && docsys != null) throw SERSTAND.getIO();
         } else {
           out.print(PI_O);
           out.print(DOCDECL1);
-          out.print(ver);
+          out.print(version);
           out.print(DOCDECL2);
           out.print(sopts.get(ENCODING));
           if(!saomit) {
@@ -99,9 +110,18 @@ abstract class MarkupSerializer extends StandardSerializer {
           }
           out.print(ATT2);
           out.print(PI_C);
-          out.print('\n');
+          if(indent) out.print('\n');
         }
       }
+    }
+  }
+
+  @Override
+  public void serialize(final Item item) throws IOException {
+    if(item instanceof XQArray) {
+      for(final Item it : flatten((XQArray) item)) super.serialize(it);
+    } else {
+      super.serialize(item);
     }
   }
 
@@ -117,10 +137,10 @@ abstract class MarkupSerializer extends StandardSerializer {
   protected void attribute(final byte[] name, final byte[] value, final boolean standalone)
       throws IOException {
 
-    if(!standalone) out.print(' ');
+    if(!standalone) delimitAttribute();
     out.print(name);
     out.print(ATT1);
-    final byte[] val = norm(value);
+    final byte[] val = normalize(value, form);
     final int vl = val.length;
     for(int k = 0; k < vl; k += cl(val, k)) {
       final int cp = cp(val, k);
@@ -135,14 +155,28 @@ abstract class MarkupSerializer extends StandardSerializer {
     out.print(ATT2);
   }
 
+  /**
+   * Print the delimiter preceding an attribute inside of an opening or empty
+   * tag. This is attribute indentation, if enabled, for all but the first
+   * attribute, but at least a single space.
+   * @throws IOException I/O exception
+   */
+  protected void delimitAttribute() throws IOException {
+    if(indAttr && out.lineLength() > indAttrLength) {
+      out.print('\n');
+      for(int i = 0; i < indAttrLength; ++i) out.print(' ');
+    }
+    out.print(' ');
+  }
+
   @Override
   protected void text(final byte[] value, final FTPos ftp) throws IOException {
-    if(elems.isEmpty()) checkRoot(null);
-    final byte[] val = norm(value);
+    if(opened.isEmpty()) checkRoot(null);
+    final byte[] val = normalize(value, form);
     if(ftp == null) {
       final QNmSet qnames = cdata();
       final int vl = val.length;
-      if(qnames.isEmpty() || elems.isEmpty() || !qnames.contains(elems.peek())) {
+      if(qnames.isEmpty() || opened.isEmpty() || !qnames.contains(opened.peek())) {
         for(int k = 0; k < vl; k += cl(val, k)) {
           printChar(cp(val, k));
         }
@@ -204,10 +238,11 @@ abstract class MarkupSerializer extends StandardSerializer {
 
   @Override
   protected void startOpen(final QNm name) throws IOException {
-    if(elems.isEmpty()) checkRoot(name.string());
+    if(opened.isEmpty()) checkRoot(name.string());
     if(sep) indent();
     out.print(ELEM_O);
     out.print(name.string());
+    indAttrLength = out.lineLength();
     sep = true;
   }
 
@@ -246,7 +281,7 @@ abstract class MarkupSerializer extends StandardSerializer {
 
   @Override
   protected void atomic(final Item item) throws IOException {
-    if(elems.isEmpty()) checkRoot(null);
+    if(opened.isEmpty()) checkRoot(null);
     super.atomic(item);
   }
 
@@ -282,7 +317,7 @@ abstract class MarkupSerializer extends StandardSerializer {
   @Override
   protected boolean skipElement(final ANode node) {
     if(node.type == NodeType.ELEMENT && eq(node.name(), META)) {
-      final byte[] value = node.attribute(HTTP_EQUIV);
+      final byte[] value = node.attribute(Q_HTTP_EQUIV);
       return value != null && eq(trim(value), CONTENT_TYPE);
     }
     return false;
@@ -316,11 +351,9 @@ abstract class MarkupSerializer extends StandardSerializer {
     if(atomic) {
       atomic = false;
     } else if(indent) {
-      final QNmSet qnames = suppress();
-      if(!qnames.isEmpty()) {
-        for(final QNm qname : elems) {
-          if(qnames.contains(qname)) return;
-        }
+      if(inline()) return;
+      for(final QNm qname : opened) {
+        if(suppressIndentation(qname)) return;
       }
       super.indent();
     }
@@ -342,12 +375,7 @@ abstract class MarkupSerializer extends StandardSerializer {
     attribute(HTTP_EQUIV, CONTENT_TYPE, false);
     attribute(CONTENT, concat(media.isEmpty() ? MediaType.TEXT_HTML : media, "; ",
       CHARSET, "=", encoding), false);
-    if(html) {
-      out.print(ELEM_C);
-    } else {
-      out.print(' ');
-      out.print(ELEM_SC);
-    }
+    out.print(html ? ELEM_C : ELEM_SC);
     level--;
     if(empty) finishClose();
     return true;
@@ -358,19 +386,16 @@ abstract class MarkupSerializer extends StandardSerializer {
   /**
    * Retrieves a value from the specified option and checks for supported values.
    * @param option option
-   * @param opts options
+   * @param string value
    * @param allowed allowed values
    * @return value
    * @throws QueryIOException query I/O exception
    */
-  private static String supported(final StringOption option, final Options opts,
+  private static String supported(final StringOption option, final String string,
       final String... allowed) throws QueryIOException {
 
-    final String string = opts.get(option);
     if(string.isEmpty()) return allowed.length > 0 ? allowed[0] : string;
-    for(final String value : allowed) {
-      if(value.equals(string)) return string;
-    }
+    if(Strings.eq(string, allowed)) return string;
     throw SERNOTSUPP_X.getIO(Options.allowed(option, string, (Object[]) allowed));
   }
 
@@ -383,53 +408,46 @@ abstract class MarkupSerializer extends StandardSerializer {
    * @throws QueryIOException query I/O exception
    */
   private QNmSet cdata() throws QueryIOException {
-    QNmSet list = cdata;
-    if(list == null) {
-      list = new QNmSet();
+    if(cdata == null) {
+      cdata = new QNmSet();
       final boolean html = this instanceof HTMLSerializer;
-      final String cdse = sopts.get(CDATA_SECTION_ELEMENTS);
-      for(final byte[] name : split(normalize(token(cdse)), ' ')) {
-        if(name.length == 0) continue;
-        final QNm qnm = resolve(name);
-        if(!html || contains(name, ':') && (!html5 || !string(name).contains("html:"))) {
-          list.add(qnm);
-        }
+      for(final QNm name : qnames(CDATA_SECTION_ELEMENTS)) {
+        final byte[] uri = name.uri();
+        if(!html || uri.length != 0 && (!html5 || !eq(uri, XHTML_URI))) cdata.add(name);
       }
-      cdata = list;
     }
-    return list;
-  }
-
-  /** Suppress indentation elements. */
-  private QNmSet suppress;
-
-  /**
-   * Initializes and returns the elements whose contents must not be indented.
-   * @return list
-   * @throws QueryIOException query I/O exception
-   */
-  private QNmSet suppress() throws QueryIOException {
-    QNmSet list = suppress;
-    if(list == null) {
-      list = new QNmSet();
-      final String supp = sopts.get(SUPPRESS_INDENTATION);
-      for(final byte[] name : split(normalize(token(supp)), ' ')) {
-        if(name.length != 0) list.add(resolve(name));
-      }
-      suppress = list;
-    }
-    return list;
+    return cdata;
   }
 
   /**
-   * Resolves a QName.
-   * @param name name to be resolved
-   * @return list
+   * Checks if the next element should be rendered inline with its context, i.e.
+   * without indentation adjacent to it.
+   * @return result of check
+   */
+  boolean inline() {
+    return false;
+  }
+
+  /**
+   * Checks if indentation is to be suppressed for the the specified QName.
+   * @param qname qname to check
+   * @return result of check
    * @throws QueryIOException query I/O exception
    */
-  private QNm resolve(final byte[] name) throws QueryIOException {
+  boolean suppressIndentation(final QNm qname) throws QueryIOException {
+    if(suppress == null) suppress = qnames(SUPPRESS_INDENTATION);
+    return suppress.contains(qname);
+  }
+
+  /**
+   * Returns the values of an option as QNames.
+   * @param option option to be found
+   * @return set of QNames
+   * @throws QueryIOException query I/O exception
+   */
+  private QNmSet qnames(final StringOption option) throws QueryIOException {
     try {
-      return QNm.resolve(name, sc == null ? null : sc.elemNS, sc, null);
+      return QNm.set(sopts.get(option), sc);
     } catch(final QueryException ex) {
       throw new QueryIOException(ex);
     }

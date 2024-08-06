@@ -5,6 +5,7 @@ import static org.basex.query.QueryText.*;
 import static org.basex.query.func.Function.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -17,13 +18,13 @@ import org.basex.util.hash.*;
 /**
  * Map constructor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class CMap extends Arr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr key and value expression, interleaved
    */
   public CMap(final InputInfo info, final Expr[] expr) {
@@ -32,15 +33,19 @@ public final class CMap extends Arr {
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    // determine static key type (all keys must be single items)
+    // map { <_>A</_>: 1 }  ->  map { 'A': 1 }
     final int el = exprs.length;
+    for(int e = 0; e < el; e += 2) exprs[e] = exprs[e].simplifyFor(Simplify.DATA, cc);
+
+    // map { $a: $b }  ->  map:entry($a, $b)
     if(el == 2) return cc.function(_MAP_ENTRY, info, exprs);
 
-    Type kt = null;
+    // determine static key type (all keys must be single items)
+    AtomType kt = null;
     for(int e = 0; e < el; e += 2) {
       final SeqType st = exprs[e].seqType();
-      final Type type = st.type.atomic();
-      if(type == null || !st.one()) {
+      final AtomType type = st.type.atomic();
+      if(type == null || !st.one() || st.mayBeArray()) {
         kt = null;
         break;
       }
@@ -49,29 +54,27 @@ public final class CMap extends Arr {
     if(kt == null) kt = AtomType.ANY_ATOMIC_TYPE;
 
     // determine static value type
-    SeqType dt = null;
+    SeqType vt = null;
     for(int e = 1; e < el; e += 2) {
       final SeqType dst = exprs[e].seqType();
-      dt = dt == null ? dst : dt.union(dst);
+      vt = vt == null ? dst : vt.union(dst);
     }
-    dt = dt != null ? dt.union(SeqType.EMPTY_SEQUENCE_Z) : SeqType.ITEM_ZM;
-
-    exprType.assign(MapType.get((AtomType) kt, dt));
+    exprType.assign(MapType.get(kt, vt != null ? vt : SeqType.ITEM_ZM));
 
     return allAreValues(true) ? cc.preEval(this) : this;
   }
 
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    XQMap map = XQMap.EMPTY;
+  public XQMap item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final MapBuilder mb = new MapBuilder();
     final int el = exprs.length;
     for(int e = 0; e < el; e += 2) {
       final Item key = toAtomItem(exprs[e], qc);
       final Value value = exprs[e + 1].value(qc);
-      if(map.contains(key, info)) throw MAPDUPLKEY_X_X_X.get(info, key, map.get(key, info), value);
-      map = map.put(key, value, info);
+      if(mb.contains(key)) throw MAPDUPLKEY_X_X_X.get(info, key, mb.get(key), value);
+      mb.put(key, value);
     }
-    return map;
+    return mb.map();
   }
 
   @Override
@@ -90,8 +93,8 @@ public final class CMap extends Arr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.token(MAP).token(" { ");
+  public void toString(final QueryString qs) {
+    qs.token("{ ");
     final int el = exprs.length;
     for(int e = 0; e < el; e += 2) {
       if(e != 0) qs.token(',');

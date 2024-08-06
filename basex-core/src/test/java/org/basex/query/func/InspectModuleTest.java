@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the Inspection Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InspectModuleTest extends SandboxTest {
@@ -60,22 +60,10 @@ public final class InspectModuleTest extends SandboxTest {
     query(query + "/return/@occurrence/data()", "");
 
     // unknown annotation
-    query("declare namespace pref='uri';" +
-        func.args(" %pref:x function() {()}") + "/annotation/@name/data()", "pref:x");
-    query("declare namespace pref='uri';" +
-        func.args(" %pref:x function() {()}") + "/annotation/@uri/data()", "uri");
-  }
-
-  /** Test method. */
-  @Test public void functionAnnotations() {
-    final Function func = _INSPECT_FUNCTION_ANNOTATIONS;
-    // queries
-    query(func.args(" true#0"), "map {\n}");
-    query(func.args(" %local:x function() { }") +
-        "=> " + _MAP_CONTAINS.args(" xs:QName('local:x')"), true);
-    query(func.args(" %Q{uri}name('a','b') function() {}") +
-        " (QName('uri','name'))", "a\nb");
-    query(_MAP_SIZE.args(func.args(" %basex:inline %basex:lazy function() {}")), 2);
+    query("declare namespace prefix = 'uri';" +
+        func.args(" %prefix:x function() {()}") + "/annotation/@name/data()", "prefix:x");
+    query("declare namespace prefix = 'uri';" +
+        func.args(" %prefix:x function() {()}") + "/annotation/@uri/data()", "uri");
   }
 
   /** Test method. */
@@ -94,17 +82,21 @@ public final class InspectModuleTest extends SandboxTest {
 
     // ensure that closures will be compiled (GH-1194)
     query(func.args(url)
-        + "[function-name(.) = QName('world','closure')]()", 1);
+        + "[function-name(.) = QName('world', 'closure')]()", 1);
     query("import module namespace hello='world' at '" + url + "';"
         + func.args() + "[function-name(.) = xs:QName('hello:closure')]()", 1);
+
+    // ensure that a module will only be parsed once
+    query(VOID.args(func.args(url)), "");
+    query(VOID.args(" (" + func.args(url) + ", " + func.args(url) + ')'), "");
+
+    error(func.args("non-existent"), WHICHRES_X);
+    error(func.args("src/test/resources/error.xqm"), INSPECT_PARSE_X);
   }
 
   /** Test method. */
   @Test public void module() {
     final Function func = _INSPECT_MODULE;
-    // queries
-    error(func.args("src/test/resources/non-existent.xqm"), WHICHRES_X);
-
     final String module = "src/test/resources/hello.xqm";
     final String result = query(func.args(module)).replace("{", "{{").replace("}", "}}");
 
@@ -133,6 +125,9 @@ public final class InspectModuleTest extends SandboxTest {
 
     final String query3 = query(result + "/function[@name = 'hello:ext']");
     query(query3 + "/@external/data()", true);
+
+    error(func.args("non-existent"), WHICHRES_X);
+    error(func.args("src/test/resources/error.xqm"), INSPECT_PARSE_X);
   }
 
   /** Test method. */
@@ -170,22 +165,42 @@ public final class InspectModuleTest extends SandboxTest {
     query(func.args(1), "xs:integer");
     query(func.args(" 1 to 2"), "xs:integer+");
     query(func.args(" <_/>"), "element(_)");
-    query(func.args(" map { 'a': (1, 2)[. = 1] }"), "map(xs:string, xs:integer*)");
+    query(func.args(" map { 'a': (1, 2)[. = 1] }"), "map(xs:string, xs:integer)");
     query(func.args(" map { 'a': 'b' }"), "map(xs:string, xs:string)");
     query(func.args(" array { 1, <a/> }"), "array(item())");
     query(func.args(" array { 1, 2 }"), "array(xs:integer)");
-    query(func.args(" function() { 1 }"), "function() as xs:integer");
+    query(func.args(" function() { 1 }"), "fn() as xs:integer");
+
+    query(func.args(" 1 to 2", " map { 'item': true() }"), "xs:integer");
+    query(func.args(" (<a/>, <b/>)[name() = 'a']", " map { 'mode': 'expression' }"),
+        "(element(a)|element(b))*");
+    query(func.args(" ('z' cast as enum('x', 'a', 'z'), 'a' cast as (enum('a')|enum('b')))"),
+        "enum(\"z\", \"a\")+");
+
+    String expr = " (<a/>, <b/>)[name() = 'a']";
+    String result = "element()";
+    query(func.args(expr), result);
+    query(func.args(expr, " map { 'mode': 'computed' }"), result);
+    query(func.args(expr, " map { 'mode': 'value' }"), result);
+    query(func.args(expr, " map { 'mode': 'expression' }"), "(element(a)|element(b))*");
+
+    expr = " map:put(map { 1: text { 2 } }, 2, text { 2 })";
+    result = "map(xs:integer, text())";
+    query(func.args(expr), result);
+    query(func.args(expr, " map { 'mode': 'computed' }"), result);
+    query(func.args(expr, " map { 'mode': 'value' }"), result);
+    query(func.args(expr, " map { 'mode': 'expression' }"), result);
   }
 
   /** Test method. */
   @Test public void xqdoc() {
     final Function func = _INSPECT_XQDOC;
-    // queries
-    error(func.args("src/test/resources/non-existent.xqm"), WHICHRES_X);
-
     // validate against xqDoc schema
     final String result = query(func.args("src/test/resources/hello.xqm")).
         replace("{", "{{").replace("}", "}}");
     query(_VALIDATE_XSD.args(' ' + result, "src/test/resources/xqdoc.xsd"));
+
+    error(func.args("non-existent"), WHICHRES_X);
+    error(func.args("src/test/resources/error.xqm"), INSPECT_PARSE_X);
   }
 }

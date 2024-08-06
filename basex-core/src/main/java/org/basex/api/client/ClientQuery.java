@@ -5,7 +5,6 @@ import java.io.*;
 import org.basex.api.dom.*;
 import org.basex.core.*;
 import org.basex.io.in.*;
-import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -19,7 +18,7 @@ import org.basex.util.*;
  * client/server architecture. All sent data is received by the
  * {@link ClientListener} and interpreted by the {@link ServerQuery}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class ClientQuery extends Query {
@@ -74,11 +73,12 @@ public class ClientQuery extends Query {
         for(final Item item : val) {
           if(!tb.isEmpty()) tb.addByte((byte) 1);
           if(item instanceof ANode) {
-            tb.add(item.serialize(SerializerMode.NOINDENT.get()).finish());
+            tb.add(item.serialize().finish());
           } else {
             tb.add(item.string(null));
           }
-          if(item.type != tp) tb.addByte((byte) 2).add(item.type);
+          final Type it = item.type;
+          if(it != tp) tb.addByte((byte) 2).add(it);
         }
         v = tb.toString();
       } catch(final QueryException ex) {

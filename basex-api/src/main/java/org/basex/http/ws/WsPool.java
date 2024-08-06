@@ -8,13 +8,14 @@ import java.util.concurrent.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.*;
+import org.basex.query.value.item.*;
 import org.basex.util.list.*;
 import org.eclipse.jetty.websocket.api.*;
 
 /**
  * This class defines a pool for WebSockets. It manages all connected WebSockets.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Johannes Finckh
  */
 public final class WsPool {
@@ -43,7 +44,7 @@ public final class WsPool {
    * @param socket WebSocket
    * @return client id
    */
-  public static String add(final WebSocket socket) {
+  static String add(final WebSocket socket) {
     final String id = createId();
     CLIENTS.put(id, socket);
     return id;
@@ -62,7 +63,7 @@ public final class WsPool {
    * @param message message
    * @throws QueryException query exception
    */
-  public static void emit(final Value message) throws QueryException {
+  public static void emit(final Item message) throws QueryException {
     send(message, new ArrayList<>(CLIENTS.values()));
   }
 
@@ -72,7 +73,7 @@ public final class WsPool {
    * @param client client id
    * @throws QueryException query exception
    */
-  public static void broadcast(final Value message, final String client) throws QueryException {
+  public static void broadcast(final Item message, final String client) throws QueryException {
     final List<WebSocket> list = new ArrayList<>();
     for(final Entry<String, WebSocket> entry : CLIENTS.entrySet()) {
       if(!client.equals(entry.getKey())) list.add(entry.getValue());
@@ -127,9 +128,9 @@ public final class WsPool {
       final RemoteEndpoint remote = ws.getSession().getRemote();
       for(final Object value : values) {
         if(value instanceof ByteBuffer) {
-          remote.sendBytesByFuture((ByteBuffer) value);
+          remote.sendBytes((ByteBuffer) value, WriteCallback.NOOP);
         } else {
-          remote.sendStringByFuture((String) value);
+          remote.sendString((String) value, WriteCallback.NOOP);
         }
       }
     }

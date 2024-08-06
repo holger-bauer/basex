@@ -13,27 +13,26 @@ import org.basex.util.*;
 /**
  * Archive reader.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class ArchiveIn implements Closeable {
   /**
    * Returns a new instance of an archive reader.
    * @param bi buffer input
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return reader
    * @throws QueryException query exception
    */
-  static ArchiveIn get(final BufferInput bi, final InputInfo ii) throws QueryException {
+  static ArchiveIn get(final BufferInput bi, final InputInfo info) throws QueryException {
     try {
       final LookupInput li = new LookupInput(bi);
       if(li.lookup() == 0x50) return new ZIPIn(li);
       if(li.lookup() == 0x1f) return new GZIPIn(li);
     } catch(final IOException ex) {
-      try { bi.close(); } catch(final IOException ignore) { }
-      throw ARCHIVE_ERROR_X.get(ii, ex);
+      throw ARCHIVE_ERROR_X.get(info, ex);
     }
-    throw ARCHIVE_FORMAT.get(ii);
+    throw ARCHIVE_FORMAT.get(info);
   }
 
   /**
@@ -69,6 +68,7 @@ abstract class ArchiveIn implements Closeable {
    * @throws IOException I/O exception
    */
   final void write(final OutputStream out) throws IOException {
+    // keep streams open
     final byte[] data = new byte[IO.BLOCKSIZE];
     for(int c; (c = read(data)) != -1;) out.write(data, 0, c);
   }

@@ -1,6 +1,7 @@
 package org.basex.gui.layout;
 
 import java.awt.*;
+import java.awt.image.*;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -9,6 +10,7 @@ import javax.imageio.*;
 import javax.swing.*;
 import javax.swing.filechooser.*;
 
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
@@ -16,10 +18,12 @@ import org.basex.util.http.*;
 /**
  * Organizes icons used all over the GUI.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXImages {
+  /** Cached images. */
+  private static final HashMap<String, Image> IMAGES = new HashMap<>();
   /** Cached image icons. */
   private static final HashMap<String, ImageIcon> ICONS = new HashMap<>();
 
@@ -28,25 +32,23 @@ public final class BaseXImages {
   /** System icons. */
   private static final FileSystemView FS = FileSystemView.getFileSystemView();
 
-  /** Icon for xml files. */
-  private static final Icon XMLTEXT = icon("text_xml");
-  /** Icon for raw files. */
-  private static final Icon RAWTEXT = icon("text_raw");
+  /** Icon for XML resources. */
+  private static final Icon DB_XML = icon("db_xml");
+  /** Icon for binary resources. */
+  private static final Icon DB_BIN = icon("db_bin");
+  /** Icon for value resources. */
+  private static final Icon DB_VAL = icon("db_val");
 
   /** Icon for closed directories. */
-  private static final Icon DIR1 = icon("file_dir1");
+  private static final Icon DIR_CLOSED = icon("dir_closed");
   /** Icon for opened directories. */
-  private static final Icon DIR2 = icon("file_dir2");
+  private static final Icon DIR_OPENED = icon("dir_opened");
   /** Icon for textual files. */
-  private static final Icon TEXT = icon("file_text");
+  private static final Icon FILE_TEXT = icon("file_text");
   /** Icon for XML/XQuery file types. */
-  private static final Icon XML = icon("file_xml");
+  private static final Icon FILE_XML = icon("file_xml");
   /** Icon for XML/XQuery file types. */
-  private static final Icon XQUERY = icon("file_xquery");
-  /** Icon for BaseX file types. */
-  private static final Icon BASEX = icon("file_basex");
-  /** Icon for unknown file types. */
-  private static final Icon UNKNOWN = icon("file_unknown");
+  private static final Icon FILE_XQUERY = icon("file_xquery");
 
   /** Private constructor. */
   private BaseXImages() { }
@@ -57,20 +59,22 @@ public final class BaseXImages {
    * @return image
    */
   public static Image get(final String name) {
-    return get(url(name));
-  }
-
-  /**
-   * Returns the specified image.
-   * @param url image url
-   * @return image
-   */
-  public static Image get(final URL url) {
-    try {
-      return ImageIO.read(url);
-    } catch(final IOException ex) {
-      throw Util.notExpected(ex);
+    if(!IMAGES.containsKey(name)) {
+      final int n = 5;
+      final Image[] images = new Image[n];
+      for(int i = 0; i < n; i++) {
+        final String path = "/img/" + name + '-' + i + ".png";
+        final URL url = BaseXImages.class.getResource(path);
+        if(url == null) throw Util.notExpected("Image missing: " + path);
+        try {
+          images[i] = ImageIO.read(url);
+        } catch(final IOException ex) {
+          throw Util.notExpected(ex);
+        }
+      }
+      IMAGES.put(name, new BaseMultiResolutionImage(images));
     }
+    return IMAGES.get(name);
   }
 
   /**
@@ -83,36 +87,21 @@ public final class BaseXImages {
   }
 
   /**
-   * Returns the image url.
-   * @param name name of image
-   * @return url
-   */
-  private static URL url(final String name) {
-    final String path = "/img/" + name + ".png";
-    URL url = BaseXImages.class.getResource(path);
-    if(url == null) {
-      Util.stack("Image not found: " + path);
-      url = BaseXImages.class.getResource("/img/warn.png");
-    }
-    return url;
-  }
-
-  /**
    * Returns a directory icon.
-   * @param expanded expanded state (open/closed)
+   * @param opened expanded state (open/closed)
    * @return icon
    */
-  public static Icon dir(final boolean expanded) {
-    return expanded ? DIR2 : DIR1;
+  public static Icon dir(final boolean opened) {
+    return opened ? DIR_OPENED : DIR_CLOSED;
   }
 
   /**
    * Returns an icon for the specified text.
-   * @param raw raw/xml text
+   * @param type resource type
    * @return icon
    */
-  public static Icon text(final boolean raw) {
-    return raw ? RAWTEXT : XMLTEXT;
+  public static Icon resource(final ResourceType type) {
+    return type == ResourceType.XML ? DB_XML : type == ResourceType.BINARY ? DB_BIN : DB_VAL;
   }
 
   /**
@@ -121,14 +110,13 @@ public final class BaseXImages {
    * @return icon
    */
   public static Icon file(final IOFile file) {
-    if(file == null) return UNKNOWN;
+    if(file == null) return FILE_TEXT;
 
     // fallback code for displaying icons
     final String path = file.path();
     final MediaType type = MediaType.get(path);
-    if(type.isXML()) return XML;
-    if(type.isXQuery()) return XQUERY;
-    if(path.contains(IO.BASEXSUFFIX)) return BASEX;
+    if(type.isXml()) return FILE_XML;
+    if(type.isXQuery()) return FILE_XQUERY;
 
     if(Prop.WIN) {
       // retrieve system icons (only supported on Windows)
@@ -142,7 +130,7 @@ public final class BaseXImages {
       }
       return icon;
     }
-    // default icon chooser
-    return type.isText() ? TEXT : UNKNOWN;
+    // default icon
+    return FILE_TEXT;
   }
 }

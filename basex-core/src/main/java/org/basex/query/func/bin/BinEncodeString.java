@@ -13,18 +13,18 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BinEncodeString extends BinFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] token = token(0, qc);
-    final String encoding = toEncodingOrNull(1, BIN_UE_X, qc);
-    if(token == null) return Empty.VALUE;
+    final byte[] string = toTokenOrNull(arg(0), qc);
+    final String encoding = toEncodingOrNull(arg(1), BIN_UE_X, qc);
+    if(string == null) return Empty.VALUE;
     try {
-      return B64.get(encoding == null || encoding == Strings.UTF8 ? token :
-        ConvertFn.toBinary(token, encoding));
+      return B64.get(encoding == null || encoding == Strings.UTF8 ? string :
+        ConvertFn.toBinary(string, encoding));
     } catch(final CharacterCodingException ex) {
       throw BIN_CE_X.get(info, ex);
     }

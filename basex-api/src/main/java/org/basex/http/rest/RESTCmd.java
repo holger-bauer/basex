@@ -1,10 +1,8 @@
 package org.basex.http.rest;
 
-import static org.basex.util.Token.*;
-
 import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
+import java.util.Map.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -12,23 +10,20 @@ import org.basex.core.locks.*;
 import org.basex.core.users.*;
 import org.basex.http.*;
 import org.basex.io.out.*;
-import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
-import org.basex.util.*;
-import org.basex.util.list.*;
+import org.basex.util.options.*;
 
 /**
  * Abstract class for performing REST operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class RESTCmd extends Command {
   /** REST session. */
   final RESTSession session;
 
-  /** Return code (may be {@code null}). */
-  HTTPCode code;
+  /** Response status (may be {@code null}). */
+  HTTPStatus status;
 
   /**
    * Constructor.
@@ -107,8 +102,8 @@ abstract class RESTCmd extends Command {
       final String info = cmd.info();
       error(info);
       if(!ok) {
-        if(cmd instanceof Open) code = HTTPCode.NOT_FOUND_X;
-        throw HTTPCode.BAD_REQUEST_X.get(info);
+        if(cmd instanceof Open) status = HTTPStatus.NOT_FOUND_X;
+        throw HTTPStatus.BAD_REQUEST_X.get(info);
       }
     } finally {
       popJob();
@@ -116,52 +111,41 @@ abstract class RESTCmd extends Command {
   }
 
   /**
-   * Lists the table contents.
-   * @param table table reference
-   * @param root root node
-   * @param header table header
-   * @param skip number of columns to skip
-   */
-  static void list(final Table table, final FElem root, final QNm header, final int skip) {
-    for(final TokenList list : table.contents) {
-      final FElem elem = new FElem(header);
-      // don't show last attribute (input path)
-      final int ll = list.size() - skip;
-      for(int l = 1; l < ll; l++) {
-        elem.add(new QNm(lc(table.header.get(l))), list.get(l));
-      }
-      elem.add(list.get(0));
-      root.add(elem);
-    }
-  }
-
-  /**
-   * Parses and sets database options.
+   * Assigns database options.
    * Throws an exception if an option is unknown.
    * @param session REST session
    * @throws IOException I/O exception
    */
-  static void parseOptions(final RESTSession session) throws IOException {
-    for(final Entry<String, String[]> param : session.conn.requestCtx.queryStrings().entrySet()) {
-      parseOption(session, param, true);
+  static void assignOptions(final RESTSession session) throws IOException {
+    final HTTPConnection conn = session.conn;
+    for(final Entry<String, String[]> entry : conn.requestCtx.queryStrings().entrySet()) {
+      assign(conn.context.options, entry, true);
     }
   }
 
   /**
-   * Parses and sets a single database option.
-   * @param session REST session
-   * @param param current parameter
-   * @param force force execution
-   * @return success flag, indicates if value was found
-   * @throws BaseXException database exception
+   * Assigns an option.
+   * @param options options
+   * @param entry current parameter
+   * @param enforce force assignment
+   * @return success flag
+   * @throws HTTPException HTTP exception
    */
-  static boolean parseOption(final RESTSession session, final Entry<String, String[]> param,
-      final boolean force) throws BaseXException {
+  static boolean assign(final Options options, final Entry<String, String[]> entry,
+      final boolean enforce) throws HTTPException {
 
-    final String key = param.getKey().toUpperCase(Locale.ENGLISH);
-    final MainOptions options = session.conn.context.options;
-    final boolean found = options.option(key) != null;
-    if(found || force) options.assign(key, param.getValue()[0]);
-    return found;
+    String key = entry.getKey();
+    if(options instanceof MainOptions) key = key.toUpperCase(Locale.ENGLISH);
+    if(options.option(key) == null) {
+      if(enforce) throw HTTPStatus.UNKNOWN_PARAM_X.get(key);
+      return false;
+    }
+
+    try {
+      options.assign(key, entry.getValue()[0]);
+      return true;
+    } catch(final BaseXException ex) {
+      throw HTTPStatus.BAD_REQUEST_X.get(ex);
+    }
   }
 }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.lang.reflect.*;
+import java.util.*;
 
 import org.basex.*;
 import org.basex.build.*;
@@ -18,7 +19,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the update functionality of the block storage.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Tim Petrowsky
  */
 public final class DiskTableTest extends SandboxTest {
@@ -62,7 +63,7 @@ public final class DiskTableTest extends SandboxTest {
     for(int i = 0; i < bc; ++i) {
       storage[i] = (byte) tda.read1(i >> IO.NODEPOWER, i % (1 << IO.NODEPOWER));
     }
-    nodes = IO.BLOCKSIZE >>> IO.NODEPOWER;
+    nodes = IO.ENTRIES;
     blocks = (int) Math.ceil((double) size / nodes);
   }
 
@@ -331,9 +332,8 @@ public final class DiskTableTest extends SandboxTest {
    * @return byte array containing the number of entries (all bytes 5)
    */
   private static byte[] getTestEntries(final int e) {
-    final int rl = e << IO.NODEPOWER;
-    final byte[] result = new byte[rl];
-    for(int r = 0; r < rl; ++r) result[r] = 5;
+    final byte[] result = new byte[e << IO.NODEPOWER];
+    Arrays.fill(result, (byte) 5);
     return result;
   }
 }

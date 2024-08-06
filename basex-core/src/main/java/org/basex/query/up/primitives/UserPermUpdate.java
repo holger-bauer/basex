@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Update that operates on a global user.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class UserPermUpdate extends UserUpdate {
@@ -28,7 +28,7 @@ public abstract class UserPermUpdate extends UserUpdate {
    * @param perms permissions (can be {@code null})
    * @param patterns patterns
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
   protected UserPermUpdate(final UpdateType type, final User user, final ArrayList<Perm> perms,

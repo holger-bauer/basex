@@ -12,7 +12,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class sends parallel PUT requests to the REST API.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RESTParallelPutTest extends HTTPTest {
@@ -40,7 +40,7 @@ public final class RESTParallelPutTest extends HTTPTest {
    * @throws Exception exception
    */
   @Test public void test() throws Exception {
-    put(NAME, new ArrayInput(""));
+    put(new ArrayInput(""), NAME);
 
     // start and join concurrent clients
     final Client[] clients = new Client[CLIENTS];
@@ -49,17 +49,17 @@ public final class RESTParallelPutTest extends HTTPTest {
     for(final Client c : clients) c.start();
     for(final Client c : clients) c.join();
 
-    delete(NAME);
+    delete(200, NAME);
     if(failed != null) fail(failed);
   }
 
   /** Client class. */
-  private static class Client extends Thread {
+  private static final class Client extends Thread {
     @Override
     public void run() {
       try {
         for(int i = 0; i < RUNS && failed == null; i++) {
-          put(NAME + '/' + i + ".xml", new ArrayInput("<x/>"));
+          put(new ArrayInput("<x/>"), NAME + '/' + i + ".xml");
         }
       } catch(final IOException ex) {
         failed = ex.getMessage();

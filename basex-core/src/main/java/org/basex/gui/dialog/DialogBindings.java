@@ -9,11 +9,13 @@ import java.util.Map.*;
 import org.basex.core.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
+import org.basex.gui.layout.BaseXFileChooser.*;
+import org.basex.io.*;
 
 /**
  * Dialog window for defining variable and context bindings.
 
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DialogBindings extends BaseXDialog {
@@ -34,29 +36,33 @@ public final class DialogBindings extends BaseXDialog {
     super(gui, EXTERNAL_VARIABLES);
     ((BorderLayout) panel.getLayout()).setHgap(4);
 
-    final BaseXBack west = new BaseXBack(new GridLayout(MAX + 2, 1, 0, 4));
-    west.add(new BaseXLabel(NAME + COLS, false, true));
-    for(int c = 0; c < MAX; c++) {
-      names[c] = new BaseXTextField(this);
-      BaseXLayout.setWidth(names[c], 100);
-      west.add(names[c]);
-    }
-    west.add(new BaseXLabel("Context item" + COLS));
-    set(west, BorderLayout.WEST);
+    ctxitem = new BaseXTextField(this).hint(gui.editor.context());
 
-    final BaseXBack center = new BaseXBack(new GridLayout(MAX + 2, 1, 0, 4));
-    center.add(new BaseXLabel(VALUE + COLS, false, true));
-    for(int c = 0; c < MAX; c++) {
-      values[c] = new BaseXTextField(this);
-      BaseXLayout.setWidth(values[c], 250);
-      center.add(values[c]);
+    final BaseXBack center = new BaseXBack(new RowLayout(4));
+    for(int c = -1; c < MAX + 1; c++) {
+      final BaseXBack row = new BaseXBack(new ColumnLayout(4));
+      if(c == -1) {
+        row.add(new BaseXLabel(NAME + COLS, false, true));
+        row.add(new BaseXLabel(VALUE + COLS, false, true));
+      } else if(c < MAX) {
+        names[c] = new BaseXTextField(this);
+        row.add(names[c]);
+        values[c] = new BaseXTextField(this);
+        row.add(values[c]);
+      } else {
+        row.add(new BaseXLabel("Context item" + COLS));
+        final BaseXBack ctx = new BaseXBack().layout(new BorderLayout(8, 0));
+        ctx.add(ctxitem, BorderLayout.CENTER);
+        final BaseXButton browse = new BaseXButton(this, BROWSE_D);
+        browse.addActionListener(e -> choose());
+        ctx.add(browse, BorderLayout.EAST);
+        row.add(ctx);
+      }
+      BaseXLayout.setWidth(row.getComponent(0), 120);
+      BaseXLayout.setWidth(row.getComponent(1), 480);
+      center.add(row);
     }
-    ctxitem = new BaseXTextField(this);
-    ctxitem.hint(gui.editor.context());
-
-    center.add(ctxitem);
     set(center, BorderLayout.CENTER);
-
     set(okCancel(), BorderLayout.SOUTH);
 
     fill();
@@ -87,10 +93,22 @@ public final class DialogBindings extends BaseXDialog {
     }
   }
 
+  /**
+   * Chooses and assigns a context file and closes the dialog window.
+   */
+  private void choose() {
+    final BaseXFileChooser fc = new BaseXFileChooser(gui, OPEN, gui.gopts.get(GUIOptions.WORKPATH));
+    fc.filter(XML_DOCUMENTS, true, gui.gopts.xmlSuffixes());
+    final IOFile file = fc.select(Mode.FOPEN);
+    if(file == null) return;
+
+    // close dialog, set context
+    close();
+    gui.editor.setContext(file);
+  }
+
   @Override
   public void close() {
-    if(!ok) return;
-
     final HashMap<String, String> map = new HashMap<>();
     for(int c = 0; c < MAX; c++) {
       final String name = names[c].getText().replaceAll("^\\s*\\$|\\s+$", "");
@@ -114,7 +132,7 @@ public final class DialogBindings extends BaseXDialog {
     for(final Entry<String, String> entry : map.entrySet()) {
       final String name = entry.getKey(), value = entry.getValue();
       if(sb.length() != 0) sb.append(',');
-      sb.append((name + '=' + value).replaceAll(",", ",,"));
+      sb.append((name + '=' + value).replace(",", ",,"));
     }
     gui.set(MainOptions.BINDINGS, sb.toString());
   }

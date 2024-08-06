@@ -12,7 +12,7 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileCopy extends FileFn {
@@ -32,15 +32,16 @@ public class FileCopy extends FileFn {
   final synchronized void relocate(final boolean copy, final QueryContext qc)
       throws QueryException, IOException {
 
-    final Path source = toPath(0, qc);
+    final Path source = toPath(arg(0), qc);
     if(!Files.exists(source)) throw FILE_NOT_FOUND_X.get(info, source.toAbsolutePath());
     final Path src = absolute(source);
-    Path trg = absolute(toPath(1, qc));
+    Path trg = absolute(toPath(arg(1), qc));
 
     if(Files.isDirectory(trg)) {
       // target is a directory: attach file name
       trg = trg.resolve(src.getFileName());
-      if(Files.isDirectory(trg)) throw FILE_IS_DIR_X.get(info, trg.toAbsolutePath());
+      if(!Files.isDirectory(src) && Files.isDirectory(trg))
+        throw FILE_IS_DIR_X.get(info, trg.toAbsolutePath());
     } else if(!Files.exists(trg)) {
       // target does not exist: ensure that parent exists
       if(!Files.isDirectory(trg.getParent())) throw FILE_NO_DIR_X.get(info, trg.toAbsolutePath());
@@ -65,7 +66,7 @@ public class FileCopy extends FileFn {
       final QueryContext qc) throws IOException {
 
     if(Files.isDirectory(src)) {
-      Files.createDirectory(trg);
+      if(!Files.exists(trg)) Files.createDirectory(trg);
       try(DirectoryStream<Path> children = Files.newDirectoryStream(src)) {
         qc.checkStop();
         for(final Path child : children) {

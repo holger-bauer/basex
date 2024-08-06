@@ -4,7 +4,6 @@ import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.value.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
@@ -16,22 +15,26 @@ import org.basex.util.*;
  * values can also be retrieved via enhanced for(for-each) loops. Note, however, that
  * the {@link #next()} method will give you better performance.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class BasicNodeIter extends NodeIter implements Iterable<ANode> {
   /** Empty iterator. */
   public static final BasicNodeIter EMPTY = new BasicNodeIter() {
-    @Override public ANode next() {
+    @Override
+    public ANode next() {
       return null;
     }
-    @Override public long size() {
+    @Override
+    public long size() {
       return 0;
     }
-    @Override public Value iterValue() {
-      return Empty.VALUE;
+    @Override
+    public boolean valueIter() {
+      return true;
     }
-    @Override public Value value(final QueryContext qc, final Expr expr) {
+    @Override
+    public Empty value(final QueryContext qc, final Expr expr) {
       return Empty.VALUE;
     }
   };
@@ -41,7 +44,7 @@ public abstract class BasicNodeIter extends NodeIter implements Iterable<ANode> 
 
   @Override
   public final Iterator<ANode> iterator() {
-    return new Iterator<ANode>() {
+    return new Iterator<>() {
       private ANode node;
 
       @Override

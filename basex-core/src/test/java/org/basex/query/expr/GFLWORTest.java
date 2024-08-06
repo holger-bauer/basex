@@ -4,7 +4,7 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.basex.query.ast.*;
+import org.basex.*;
 import org.basex.query.expr.constr.*;
 import org.basex.query.expr.gflwor.*;
 import org.basex.query.up.expr.*;
@@ -17,10 +17,10 @@ import org.junit.jupiter.api.*;
 /**
  * Test cases for FLWOR expressions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
-public final class GFLWORTest extends QueryPlanTest {
+public final class GFLWORTest extends SandboxTest {
   /** Tests shadowing of outer variables. */
   @Test public void shadowTest() {
     assertEquals("<x>1</x>",
@@ -46,8 +46,8 @@ public final class GFLWORTest extends QueryPlanTest {
         "a\na",
         empty(Let.class),
         empty(For.class),
-        root(IterMap.class),
-        exists(_UTIL_REPLICATE)
+        root(DualIterMap.class),
+        exists(REPLICATE)
     );
   }
 
@@ -98,8 +98,8 @@ public final class GFLWORTest extends QueryPlanTest {
         "<x/>\n<x/>",
         empty(Let.class),
         empty(For.class),
-        root(IterMap.class),
-        exists(_UTIL_REPLICATE)
+        root(DualIterMap.class),
+        exists(REPLICATE)
     );
 
     check("let $x := <x/> " +
@@ -109,8 +109,8 @@ public final class GFLWORTest extends QueryPlanTest {
         "<x/>\n<x/>",
         empty(Let.class),
         empty(For.class),
-        root(IterMap.class),
-        exists(_UTIL_REPLICATE)
+        root(DualIterMap.class),
+        exists(REPLICATE)
     );
   }
 
@@ -158,7 +158,7 @@ public final class GFLWORTest extends QueryPlanTest {
 
   /** Tests if multiple successive where clauses are merged into one. */
   @Test public void mergeWheresTest() {
-    check("let $rnd := random:double() where $rnd div 2 >= 0.2 where $rnd < 0.5 " +
+    check("let $rnd := " + _RANDOM_DOUBLE.args() + " where $rnd div 2 >= 0.2 where $rnd < 0.5 " +
         "where round(2 * $rnd) eq 1 return $rnd",
         null,
         root(IterFilter.class)
@@ -169,11 +169,11 @@ public final class GFLWORTest extends QueryPlanTest {
   @Test public void whereToPred() {
     check("for $i in 1 to 10 where <x/>[$i] and $i < 3 return $i",
         1,
-        exists("*[ends-with(name(), 'Filter')]/UtilItem")
+        exists("*[ends-with(name(), 'Filter')]/FnItemsAt")
     );
     check("for $i in 1 to 10 where (<a/>)[$i] return $i",
         1,
-        exists("*[ends-with(name(), 'Filter')]/UtilItem")
+        exists("*[ends-with(name(), 'Filter')]/FnItemsAt")
     );
     check("for $i in 1 to 3 " +
         "where count(for $j in 1 to $i group by $k := $j mod 2 return $k) > 1 " +
@@ -184,28 +184,29 @@ public final class GFLWORTest extends QueryPlanTest {
     );
   }
 
-  /** Tests if let clauses are moved out of any loop they don't depend on. */
+  /** Tests if let clauses are moved out of any loop they do not depend on. */
   @Test public void slideLet() {
     check("for $i in 0 to 3, $j in 0 to 3 where (<x/>)[$i + $j] " +
         "let $foo := $i * $i return $foo * $foo",
         "0\n1",
-        "every $let in //Let satisfies $let << exactly-one(//UtilItem)"
+        "every $let in //Let satisfies $let << exactly-one(//FnItemsAt)"
     );
     check("<x/>/(for $i in 1 to 3 let $x := . where $x return $x)",
         "<x/>",
         root(CElem.class)
     );
     check("for $len in 1 to 3 " +
-        "for sliding window $w in 1 to 3 start at $p when true() only " +
-        "end at $q when $q - $p + 1 eq $len " +
+        "for sliding window $w in 1 to 3 " +
+        "  start at $p when true() only " +
+        "  end at $q when $q - $p + 1 eq $len " +
         "let $x := $len div 2 " +
         "return count($w) div ($x + $x)",
         "1\n1\n1\n1\n1\n1",
-        empty(Let.class)
+        "//Let << //Window"
     );
   }
 
-  /** Tests if let clauses are moved out of any loop they don't depend on. */
+  /** Tests if let clauses are moved out of any loop they do not depend on. */
   @Test public void replicate() {
     check("for $r in 1 to 2 return (3, 4)",
         "3\n4\n3\n4",
@@ -215,12 +216,12 @@ public final class GFLWORTest extends QueryPlanTest {
     check("for $r in 1 to 2 return (3, 4)[. = 5]",
         "",
         empty(For.class),
-        exists(_UTIL_REPLICATE)
+        exists(REPLICATE)
     );
     check("let $n := for $r in 1 to 2 return <_>3</_> return $n[1] is $n[2]",
         false,
         empty(For.class),
-        exists(_UTIL_REPLICATE)
+        exists(REPLICATE)
     );
     check("for $r in 1 to 2 return 3[. = 4]",
         "",
@@ -242,17 +243,17 @@ public final class GFLWORTest extends QueryPlanTest {
     );
   }
 
-  /** Tests if where clauses containing non-deterministic expressions are left alone. */
+  /** Tests if where clauses containing nondeterministic expressions are left alone. */
   @Test public void dontSlideWhereNDT() {
-    check("for $x in 1 to 100 where random:double() gt 0.5 return $x",
+    check("for $x in 1 to 100 where " + _RANDOM_DOUBLE.args() + " gt 0.5 return $x",
         null,
         "exactly-one(//Where) >> exactly-one(//For)"
     );
   }
 
-  /** Tests if let clauses containing non-deterministic expressions are left alone. */
+  /** Tests if let clauses containing nondeterministic expressions are left alone. */
   @Test public void dontSlideLetNDT() {
-    check("for $i in 1 to 10 let $rnd := random:double() return $i * $rnd",
+    check("for $i in 1 to 10 let $rnd := " + _RANDOM_DOUBLE.args() + " return $i * $rnd",
         null,
         empty(Let.class),
         exists(ItemMap.class)
@@ -264,20 +265,20 @@ public final class GFLWORTest extends QueryPlanTest {
     check("for $i in 1 to 10 let $x := <x/> return ($i, $x, $x)",
         null,
         empty(Let.class),
-        exists(IterMap.class)
+        exists(DualIterMap.class)
     );
   }
 
   /** Tests is where clauses are rewritten to if. */
   @Test public void whereToIfTest() {
-    check("(1 to 3) ! (for $j in 1 to 5 where . eq 1 return $j)",
+    check("(1 to 6) ! (for $j in 1 to 5 where . eq 1 return $j)",
         "1\n2\n3\n4\n5",
-        exists(If.class),
+        exists(IterFilter.class),
         empty(GFLWOR.class)
     );
-    check("(1 to 3) ! (for $j at $p in 1 to 5 where . eq 1 return $j * $p)",
+    check("(1 to 6) ! (for $j at $p in 1 to 5 where . eq 1 return $j * $p)",
         "1\n4\n9\n16\n25",
-        exists(If.class),
+        exists(IterFilter.class),
         exists(GFLWOR.class)
     );
     check("let $x := 0 where $x != <x>0</x> return 42 idiv $x", "",
@@ -310,21 +311,21 @@ public final class GFLWORTest extends QueryPlanTest {
     );
   }
 
-  /** FLWOR expressions containing updates or non-determinism. */
+  /** FLWOR expressions containing updates or nondeterminism. */
   @Test public void updatesNdt() {
     check("copy $x := <x/> modify (" +
-        "  for $i in 1 to 3" +
+        "  for $i in 1 to 6" +
         "  let $y := <y>{ $i }</y>" +
         "  return insert node $y into $x" +
         ") return $x",
-        "<x>\n<y>1</y>\n<y>2</y>\n<y>3</y>\n</x>",
+        "<x><y>1</y><y>2</y><y>3</y><y>4</y><y>5</y><y>6</y></x>",
         empty(GFLWOR.class),
         exists(DualMap.class),
         exists(Insert.class)
     );
     check("for $i in 1 to 3 let $x := $i * $i return error()",
         null,
-        root(_UTIL_REPLICATE)
+        root(REPLICATE)
     );
   }
 
@@ -356,19 +357,19 @@ public final class GFLWORTest extends QueryPlanTest {
     );
   }
 
-  /** Ensures that non-deterministic expressions are rewritten to a simple map. */
+  /** Ensures that nondeterministic expressions are rewritten to a simple map. */
   @Test public void inlineNDTTest() {
-    check("let $rnd := random:double() return (1 to 10) ! $rnd",
+    check("let $rnd := " + _RANDOM_DOUBLE.args() + " return (1 to 10) ! $rnd",
         null,
         empty(Let.class),
-        root(IterMap.class),
-        exists(_UTIL_REPLICATE)
+        root(DualIterMap.class),
+        exists(REPLICATE)
     );
   }
 
   /** Checks that clauses can be removed during inlining. */
   @Test public void gh1150() {
-    check("for $i in 1 to xs:integer(random:double()) "
+    check("for $i in 1 to xs:integer(" + _RANDOM_DOUBLE.args() + ") "
         + "let $x := 'does-not-exist.xml' "
         + "for $x in try { doc($x) } catch * { 1 }"
         + "let $x := count($x) "
@@ -382,17 +383,17 @@ public final class GFLWORTest extends QueryPlanTest {
   /** Tests flattening. */
   @Test public void flattening1() {
     check("for $a at $p in " +
-        "  for $x in (1 to 2) " +
+        "  for $x in (1 to 6) " +
         "  return $x * 2 " +
         "return $a",
-        "2\n4",
+        "2\n4\n6\n8\n10\n12",
         root(DualMap.class)
     );
     check("for $a at $p in " +
-        "  for $x in (1 to 2) " +
+        "  for $x in (1 to 6) " +
         "  return $x * 2 " +
         "return $p",
-        "1\n2",
+        "1\n2\n3\n4\n5\n6",
         root(RangeSeq.class)
     );
   }
@@ -407,7 +408,9 @@ public final class GFLWORTest extends QueryPlanTest {
   @Test public void inlineLetTest() {
     check("let $x := 1 let $b := $x + 2 return $b + 3", 6, empty(Let.class));
     check("let $x := <x>0</x> let $b := $x/text() return $b + 1", 1, empty(Let.class));
-    error("let $x := <x>false</x> let $b as xs:boolean := $x/text() return $b", INVTREAT_X_X_X);
+    check("let $x := <x>false</x> let $b as xs:boolean := $x/text() return $b", false,
+        empty(Let.class));
+    error("let $x := <x>42</x> let $b as xs:boolean := $x/text() return $b", FUNCCAST_X_X_X);
   }
 
   /** Tests flattening. */
@@ -431,6 +434,82 @@ public final class GFLWORTest extends QueryPlanTest {
   /** Allowing empty. */
   @Test public void allowingEmpty() {
     check("for $x allowing empty in () return $x", "", empty());
-    check("for $x allowing empty in prof:void(1) return $x", "", exists(GFLWOR.class));
+    check("for $x allowing empty in" + VOID.args(1) + " return $x", "", exists(GFLWOR.class));
+  }
+
+  /** Merge for/let clauses. */
+  @Test public void gh1995() {
+    check("let $a := (<a/> | <b/>) for $b in $a/* return <c/> ! <d>{ $b, . }</d>", "",
+        empty(Let.class), count(For.class, 1));
+    check("for $a in (<a/> | <b/>) for $b in $a/* return <c/> ! <d>{ $b, . }</d>", "",
+        count(For.class, 1));
+
+    query("for $a in (<a/>, <b/>) for $b at $c in $a/self::* return $c", "1\n1");
+    query("for $a in (<a/>, <b/>) for $b at $c in $a return $c", "1\n1");
+
+    check("for $e in (<a/>, <b/>) let $n := $e/name() order by $n return $n", "a\nb", root(SORT));
+    error("for $a in (1, 4, 2) let $i := (1, $a, 2) order by $i return $i + 1", SEQFOUND_X);
+  }
+
+  /** Remove clauses that will never be executed. */
+  @Test public void gh1999() {
+    check("for $a in () return delete node a", "", empty());
+    check("for $a in" + VOID.args(1) + " return delete node a", "", root(VOID));
+  }
+
+  /** Sliding windows. */
+  @Test public void gh2252() {
+    query("for sliding window $w in 1 to 3 start at $p when true()"
+        + "only end when $p = 2 return <w>{ $w }</w>", "<w>2</w>");
+  }
+
+  /** Merge where clauses. */
+  @Test public void mergeWhere() {
+    check("for $i at $p in (1 to 4) where $i <= 3 return $p",
+        "1\n2\n3", count(Where.class, 1));
+    check("for $i at $p in (1 to 4) where $i <= 3 where $i >= 2 return $p",
+        "2\n3", count(Where.class, 1));
+    check("for $i at $p in (1 to 4) where $i <= 3 where $i >= 2 where $p < 5 return $p",
+        "2\n3", count(Where.class, 1));
+
+    check("for $i at $p in (1 to 4) where $i <= 3 where $p < 5 "
+        + "for $j at $q in ($i to 2) return $q",
+        "1\n2\n1", count(Where.class, 1));
+    check("for $i at $p in (1 to 4) where $i <= 3 where $p < 5 "
+        + "for $j at $q in ($i to 2) where $q < 5 return $q",
+        "1\n2\n1", count(Where.class, 2));
+    check("for $i at $p in (1 to 4) where $i <= 3 where $p < 5 "
+        + "for $j at $q in ($i to 2) where $j > 1 where $p < 5 return $q",
+        "2\n1", count(Where.class, 2));
+  }
+
+  /** Merge where clauses. */
+  @Test public void mergeWhile() {
+    check("for $i at $p in (1 to 4) while $i <= 3 return $p",
+        "1\n2\n3", count(While.class, 1));
+    check("for $i at $p in (1 to 4) while $i <= 3 while $i >= 0 return $p",
+        "1\n2\n3", count(While.class, 1));
+    check("for $i at $p in (1 to 4) while $i <= 3 while $i >= 0 while $p < 5 return $p",
+        "1\n2\n3", count(While.class, 1));
+
+    check("for $i at $p in (1 to 4) while $i <= 3 while $p < 5 "
+        + "for $j at $q in ($i to 2) return $q",
+        "1\n2\n1", count(While.class, 1));
+    check("for $i at $p in (1 to 4) while $i <= 3 while $p < 5 "
+        + "for $j at $q in ($i to 2) while $q < 5 return $q",
+        "1\n2\n1", count(While.class, 2));
+    check("for $i at $p in (1 to 4) while $i <= 3 while $p < 5 "
+        + "for $j at $q in ($i to 2) while $j >= 1 while $p < 5 return $q",
+        "1\n2\n1", count(While.class, 2));
+  }
+
+  /** While clause optimizations. */
+  @Test public void whilee() {
+    check("for $i in 1 to 6 while true() return $i", "1\n2\n3\n4\n5\n6", root(RangeSeq.class));
+    check("for $i in 1 to 6 while false() return $i", "", empty());
+
+    check("for $i in 1 to 6 let $j := text { $i } while $i < 2 return ($j, $j + 1)",
+        "1\n2", exists(DualIterMap.class));
+    check("let $a := <a/>[text()] while $a return $a", "", root(IterFilter.class));
   }
 }

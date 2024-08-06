@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_RESTORE} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class DBRestore extends NameUpdate {
@@ -22,10 +22,10 @@ public final class DBRestore extends NameUpdate {
 
   /**
    * Constructor.
-   * @param name database name
+   * @param name name of database (empty string for general data)
    * @param backup backup file
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public DBRestore(final String name, final String backup, final QueryContext qc,
       final InputInfo info) {
@@ -35,8 +35,12 @@ public final class DBRestore extends NameUpdate {
   }
 
   @Override
+  public void prepare() {
+  }
+
+  @Override
   public void apply() throws QueryException {
-    close();
+    if(!name.isEmpty()) close();
     // restore backup
     try {
       Restore.restore(name, backup, qc.context.soptions, null);
@@ -46,8 +50,7 @@ public final class DBRestore extends NameUpdate {
   }
 
   @Override
-  public void prepare() { }
-
-  @Override
-  public String operation() { return "restored"; }
+  public String operation() {
+    return "restored";
+  }
 }

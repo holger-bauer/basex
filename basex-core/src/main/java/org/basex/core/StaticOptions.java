@@ -4,17 +4,18 @@ import java.util.*;
 
 import org.basex.io.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 import org.basex.util.options.*;
 
 /**
  * This class defines options which are used all around the project.
  * The initial keys and values are also stored in the project's home directory.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StaticOptions extends Options {
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_GENERAL = new Comment("General Options");
 
   /** Debug mode. */
@@ -27,14 +28,14 @@ public final class StaticOptions extends Options {
   public static final StringOption REPOPATH = new StringOption("REPOPATH", Prop.HOMEDIR + "repo");
   /** Language name. */
   public static final StringOption LANG = new StringOption("LANG", Prop.language);
-  /** Flag to include key names in the language strings. */
-  public static final BooleanOption LANGKEYS = new BooleanOption("LANGKEYS", false);
   /** Locking strategy. */
   public static final BooleanOption FAIRLOCK = new BooleanOption("FAIRLOCK", false);
   /** Timeout (seconds) for remembering result of asynchronous queries. */
   public static final NumberOption CACHETIMEOUT = new NumberOption("CACHETIMEOUT", 3600);
+  /** Write store at shutdown. */
+  public static final BooleanOption WRITESTORE = new BooleanOption("WRITESTORE", true);
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_CLIENT = new Comment("Client/Server Architecture");
 
   /** Server: host, used for connecting new clients. */
@@ -57,8 +58,6 @@ public final class StaticOptions extends Options {
   public static final StringOption NONPROXYHOSTS = new StringOption("NONPROXYHOSTS", "");
   /** Ignore missing certificates. */
   public static final BooleanOption IGNORECERT = new BooleanOption("IGNORECERT", false);
-  /** Ignore verification of hostname in certificates. */
-  public static final BooleanOption IGNOREHOSTNAME = new BooleanOption("IGNOREHOSTNAME", false);
 
   /** Timeout (seconds) for processing client requests; deactivated if set to 0. */
   public static final NumberOption TIMEOUT = new NumberOption("TIMEOUT", 30);
@@ -70,10 +69,10 @@ public final class StaticOptions extends Options {
   public static final BooleanOption LOG = new BooleanOption("LOG", true);
   /** Log message cut-off. */
   public static final NumberOption LOGMSGMAXLEN = new NumberOption("LOGMSGMAXLEN", 1000);
-  /** Write trace output to logs. */
+  /** Write trace output to the logs. */
   public static final BooleanOption LOGTRACE = new BooleanOption("LOGTRACE", true);
 
-  /** Comment: written to options file. */
+  /** Comment: written to the options file. */
   public static final Comment C_HTTP = new Comment("HTTP Services");
 
   /** Web path (cannot be specified in web.xml). */
@@ -92,7 +91,7 @@ public final class StaticOptions extends Options {
   /** Local (embedded) mode. */
   public static final BooleanOption HTTPLOCAL = new BooleanOption("HTTPLOCAL", false);
   /** Port for stopping the web server. */
-  public static final NumberOption STOPPORT = new NumberOption("STOPPORT", 8985);
+  public static final NumberOption STOPPORT = new NumberOption("STOPPORT", 8081);
   /** Default authentication method. */
   public static final EnumOption<AuthMethod> AUTHMETHOD =
       new EnumOption<>("AUTHMETHOD", AuthMethod.BASIC);
@@ -125,7 +124,6 @@ public final class StaticOptions extends Options {
 
     // assigns static variables and system properties
     Prop.language = get(LANG);
-    Prop.langkeys = get(LANGKEYS);
     Prop.debug = get(DEBUG);
     final String ph = get(PROXYHOST);
     if(!ph.isEmpty()) {
@@ -141,43 +139,42 @@ public final class StaticOptions extends Options {
     if(!nph.isEmpty()) {
       Prop.setSystem("http.nonProxyHosts", nph);
     }
-    if(get(IGNORECERT)) IOUrl.ignoreCert();
-    if(get(IGNOREHOSTNAME)) IOUrl.ignoreHostname();
+    if(get(IGNORECERT)) IOUrl.ignoreCertificates();
   }
 
   /**
-   * Returns a reference to a file or database in the database directory.
-   * @param name name of the file or database
-   * @return database directory
-   */
-  public IOFile dbPath(final String name) {
-    return new IOFile(get(DBPATH), name);
-  }
-
-  /**
-   * Creates a random database directory and returns its name.
+   * Creates a temporary database directory and returns its name.
    * @param name name of the original database
    * @return name of random database
    */
-  public String createRandomDb(final String name) {
+  public String createTempDb(final String name) {
     String db;
     int c = 0;
-    do {
+    while(true) {
       db = name + '.' + c++;
       final IOFile io = dbPath(db);
       if(!io.exists()) {
         io.md();
         return db;
       }
-    } while(true);
+    }
   }
 
   /**
    * Returns the path to the directory that contains all databases.
-   * @return database filename
+   * @return database path
    */
   public IOFile dbPath() {
     return new IOFile(get(DBPATH));
+  }
+
+  /**
+   * Returns a reference to a file or database in the database directory.
+   * @param name name of the file or database (empty string for general data)
+   * @return database path
+   */
+  public IOFile dbPath(final String name) {
+    return name.isEmpty() ? dbPath() : new IOFile(get(DBPATH), name);
   }
 
   /**
@@ -187,5 +184,20 @@ public final class StaticOptions extends Options {
    */
   public boolean dbExists(final String db) {
     return !db.isEmpty() && dbPath(db).exists();
+  }
+
+  /**
+   * Returns relative paths to database files.
+   * @param db name of the database (empty string for general data)
+   * @return paths
+   */
+  public StringList dbFiles(final String db) {
+    if(db.isEmpty()) {
+      final StringList list = new StringList();
+      final String pattern = ".*(\\" + IO.XMLSUFFIX + "|\\" + IO.BASEXSUFFIX + ")$";
+      for(final IOFile file : dbPath().children(pattern)) list.add(file.name());
+      return list;
+    }
+    return dbPath(db).descendants();
   }
 }

@@ -16,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * This class defines a dynamic database source for index operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IndexDynDb extends IndexDb {
@@ -26,7 +26,7 @@ public final class IndexDynDb extends IndexDb {
   /**
    * Constructor.
    * @param expr expression
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public IndexDynDb(final Expr expr, final InputInfo info) {
     super(info);
@@ -39,7 +39,8 @@ public final class IndexDynDb extends IndexDb {
   }
 
   @Override
-  public Expr compile(final CompileContext cc) {
+  public Expr compile(final CompileContext cc) throws QueryException {
+    expr = expr.compile(cc);
     return this;
   }
 
@@ -96,12 +97,12 @@ public final class IndexDynDb extends IndexDb {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.function(Function._DB_NAME, expr);
   }
 }

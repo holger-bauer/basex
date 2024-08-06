@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This class caches sizes and offsets from index results.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class IndexCache {
@@ -203,14 +203,13 @@ public final class IndexCache {
   }
 
   /**
-   * Cache buckets entry. Used to implement a linked list of cache entries for
-   * each buckets. It also stores the hash of the current entry for better
-   * performance.
+   * Cache buckets entry. Used to implement a linked list of cache entries for each bucket.
+   * It also stores the hash of the current entry for better performance.
    */
   private static class BucketEntry extends SoftReference<IndexEntry> {
     /** Hash code of the stored cache entry key. */
     final int hash;
-    /** Next buckets entry or {@code null} if the last one for this buckets. */
+    /** Next bucket entry or {@code null} if the last one for this bucket. */
     BucketEntry next;
 
     /**

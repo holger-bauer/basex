@@ -6,7 +6,7 @@ import static org.basex.util.Token.*;
 import java.io.*;
 import java.util.*;
 
-import javax.servlet.http.*;
+import jakarta.servlet.http.*;
 
 import org.basex.core.*;
 import org.basex.http.*;
@@ -23,7 +23,7 @@ import org.basex.util.http.*;
 /**
  * This class caches RESTXQ modules found in the HTTP root directory.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebModules {
@@ -89,10 +89,16 @@ public final class WebModules {
   /**
    * Returns a WADL description for all available URIs.
    * @param request HTTP request
+   * @param ctx database context
    * @return WADL description
+   * @throws QueryException query exception
    */
-  public FElem wadl(final HttpServletRequest request) {
-    return new RestXqWadl(request).create(modules);
+  public FNode wadl(final HttpServletRequest request, final Context ctx) throws QueryException {
+    try {
+      return new RestXqWadl(request).create(cache(ctx));
+    } catch(final IOException ex) {
+      throw new QueryException(ex);
+    }
   }
 
   /**
@@ -107,20 +113,18 @@ public final class WebModules {
       throws QueryException, IOException {
 
     // collect all function candidates
-    List<RestXqFunction> funcs = find(conn, error, false);
+    final List<RestXqFunction> funcs = find(conn, error, false);
     if(funcs.isEmpty()) return null;
 
-    // remove functions with different specifity
-    final RestXqFunction first = funcs.get(0);
-    for(int l = funcs.size() - 1; l > 0; l--) {
-      if(first.compareTo(funcs.get(l)) != 0) funcs.remove(l);
-    }
-    // return single function
-    if(funcs.size() == 1) return first;
-
+    // multiple functions: check specifity
+    if(funcs.size() > 1) bestSpec(funcs);
     // multiple functions: check quality factors
-    funcs = bestQf(funcs, conn);
-    if(funcs.size() == 1) return funcs.get(0);
+    if(funcs.size() > 1) bestQf(funcs, conn);
+    // multiple functions: check consume filter
+    if(funcs.size() > 1) bestConsume(funcs, conn);
+
+    final RestXqFunction first = funcs.get(0);
+    if(funcs.size() == 1) return first;
 
     // show error if we are left with multiple function candidates
     throw first.path == null ?
@@ -142,8 +146,8 @@ public final class WebModules {
 
     // collect and sort all functions
     final ArrayList<RestXqFunction> list = new ArrayList<>();
-    for(final WebModule mod : cache(conn.context).values()) {
-      for(final RestXqFunction func : mod.functions()) {
+    for(final WebModule module : cache(conn.context).values()) {
+      for(final RestXqFunction func : module.functions()) {
         if(func.matches(conn, error, perm)) list.add(func);
       }
     }
@@ -217,15 +221,43 @@ public final class WebModules {
   }
 
   /**
-   * Returns the functions with media type whose quality factors match best.
+   * Filters functions by their consume filters.
    * @param funcs list of functions
    * @param conn HTTP connection
-   * @return list of matching functions
    */
-  private static List<RestXqFunction> bestQf(final List<RestXqFunction> funcs,
-      final HTTPConnection conn) {
+  private static void bestConsume(final List<RestXqFunction> funcs, final HTTPConnection conn) {
+    // retrieve most specific consume types from all functions
+    final MediaType mt = conn.mediaType();
+    final ArrayList<MediaType> types = new ArrayList<>(funcs.size());
+    for(final RestXqFunction func : funcs) types.add(func.consumedType(mt));
+    // find most specific type
+    MediaType spec = null;
+    for(final MediaType type : types) {
+      if(spec == null || spec.compareTo(type) > 0) spec = type;
+    }
+    // drop functions with more generic types
+    for(int f = funcs.size() - 1; f >= 0; f--) {
+      if(!types.get(f).is(spec)) funcs.remove(f);
+    }
+  }
 
-    // find highest matching quality factors
+  /**
+   * Filters functions by their specifity.
+   * @param funcs list of functions
+   */
+  private static void bestSpec(final List<RestXqFunction> funcs) {
+    for(int l = funcs.size() - 1; l > 0; l--) {
+      if(funcs.get(0).compareTo(funcs.get(l)) != 0) funcs.remove(l);
+    }
+  }
+
+  /**
+   * Filters functions by their quality factors.
+   * @param funcs list of functions
+   * @param conn HTTP connection
+   */
+  private static void bestQf(final List<RestXqFunction> funcs, final HTTPConnection conn) {
+    // find the highest matching quality factors
     final ArrayList<MediaType> accepts = conn.accepts();
     double cQf = 0, sQf = 0;
     for(final RestXqFunction func : funcs) {
@@ -243,25 +275,22 @@ public final class WebModules {
         }
       }
     }
-
-    // find matching functions
-    final List<RestXqFunction> list = bestQf(funcs, accepts, cQf, -1);
-    return list.size() > 1 ? bestQf(funcs, accepts, cQf, sQf) : list;
+    bestQf(funcs, accepts, cQf, -1);
+    if(funcs.size() > 1) bestQf(funcs, accepts, cQf, sQf);
   }
 
   /**
-   * Returns the functions with media type whose quality factors match best.
+   * Filters functions by their quality factors.
    * @param funcs list of functions
    * @param accepts accept media types
    * @param clientQf client quality factor
    * @param serverQf server quality factor (ignore if {@code -1})
-   * @return list of matching functions
    */
-  private static List<RestXqFunction> bestQf(final List<RestXqFunction> funcs,
-      final ArrayList<MediaType> accepts, final double clientQf, final double serverQf) {
+  private static void bestQf(final List<RestXqFunction> funcs, final ArrayList<MediaType> accepts,
+      final double clientQf, final double serverQf) {
 
-    final ArrayList<RestXqFunction> list = new ArrayList<>();
-    for(final RestXqFunction func : funcs) {
+    for(int fl = funcs.size() - 1; fl >= 0; fl--) {
+      final RestXqFunction func = funcs.get(fl);
       final Checks<MediaType> check = accept -> {
         if(func.produces.isEmpty()) return qf(accept, "q") == clientQf;
 
@@ -270,19 +299,18 @@ public final class WebModules {
           (serverQf == -1 || qf(produce, "qs") == serverQf);
         return checkProduce.any(func.produces);
       };
-      if(check.any(accepts)) list.add(func);
+      if(!check.any(accepts)) funcs.remove(fl);
     }
-    return list;
   }
 
   /**
    * Returns the quality factor of the specified media type.
-   * @param mt media type
-   * @param f quality factor string
+   * @param type media type
+   * @param factor quality factor string
    * @return quality factor
    */
-  private static double qf(final MediaType mt, final String f) {
-    final String qf = mt.parameters().get(f);
+  private static double qf(final MediaType type, final String factor) {
+    final String qf = type.parameter(factor);
     return qf != null ? toDouble(token(qf)) : 1;
   }
 
@@ -302,7 +330,7 @@ public final class WebModules {
       cache = modules;
     } else {
       // module cache needs to be updated
-      if(!path.exists()) throw HTTPCode.NO_RESTXQ.get();
+      if(!path.exists()) throw HTTPStatus.NO_RESTXQ_DIRECTORY.get();
 
       cache = new HashMap<>();
       parse(ctx, path, cache, modules);

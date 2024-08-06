@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for creating databases and adding documents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CreateTest extends SandboxTest {
@@ -75,6 +75,16 @@ public final class CreateTest extends SandboxTest {
       // check name of document
       assertEquals(NAMES[i], docName());
     }
+  }
+
+  /**
+   * CREATE DB {DB} {<?xml version='1.0' encoding='utf-16'?>INPUT}.
+   */
+  @Test public void createDBWithVersionDeclaration() {
+    execute(new CreateDB(NAME, "<xml/>"));
+    execute(new CreateDB(NAME, "<?xml version='1.0' encoding='UTF-8'?><xml/>"));
+    execute(new CreateDB(NAME, "<?xml version='1.0' encoding='utf-16'?><xml/>"));
+    execute(new CreateDB(NAME, "<?xml version='1.0' encoding='Shift-JIS'?><xml/>"));
   }
 
   /**

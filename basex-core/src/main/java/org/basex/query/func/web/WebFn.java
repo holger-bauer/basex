@@ -1,8 +1,5 @@
 package org.basex.query.func.web;
 
-import static org.basex.query.QueryError.*;
-import static org.basex.query.QueryText.*;
-
 import java.util.*;
 
 import org.basex.io.serial.*;
@@ -12,15 +9,16 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
+import org.basex.util.http.*;
 import org.basex.util.options.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-abstract class WebFn extends StandardFunc {
+public abstract class WebFn extends StandardFunc {
   /** Response options. */
   public static class ResponseOptions extends Options {
     /** Status. */
@@ -36,21 +34,37 @@ abstract class WebFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final String createUrl(final QueryContext qc) throws QueryException {
-    final byte[] path = toToken(exprs[0], qc);
-    final XQMap map = exprs.length < 2 ? XQMap.EMPTY : toMap(exprs[1], qc);
-    final byte[] anchor = exprs.length < 3 ? Token.EMPTY : toToken(exprs[2], qc);
+    final byte[] href = toToken(arg(0), qc);
+    final Item params = arg(1).item(qc, info);
+    final byte[] anchor = toZeroToken(arg(2), qc);
 
-    final TokenBuilder tb = new TokenBuilder().add(path);
+    final XQMap map = params.isEmpty() ? XQMap.empty() : toMap(params);
+    final TokenBuilder url = createUrl(href, map, info);
+    if(anchor.length > 0) url.add('#').add(Token.encodeUri(anchor, false, false));
+    return url.toString();
+  }
+
+  /**
+   * Creates a URL from the function arguments.
+   * @param href host and path
+   * @param params query parameters
+   * @param info input info
+   * @return supplied URL builder
+   * @throws QueryException query exception
+   */
+  public static final TokenBuilder createUrl(final byte[] href, final XQMap params,
+      final InputInfo info) throws QueryException {
+
+    final TokenBuilder url = new TokenBuilder().add(href);
     int c = 0;
-    for(final Item key : map.keys()) {
+    for(final Item key : params.keys()) {
       final byte[] name = key.string(info);
-      for(final Item value : map.get(key, info)) {
-        tb.add(c++ == 0 ? '?' : '&').add(Token.encodeUri(name, false));
-        tb.add('=').add(Token.encodeUri(value.string(info), false));
+      for(final Item item : params.get(key)) {
+        url.add(c++ == 0 ? '?' : '&').add(Token.encodeUri(name, false, false));
+        url.add('=').add(Token.encodeUri(item.string(info), false, false));
       }
     }
-    if(anchor.length > 0) tb.add('#').add(Token.encodeUri(anchor, false));
-    return tb.toString();
+    return url;
   }
 
   /**
@@ -61,37 +75,40 @@ abstract class WebFn extends StandardFunc {
    * @return response
    * @throws QueryException query exception
    */
-  final FElem createResponse(final ResponseOptions response, final HashMap<String, String> headers,
+  final FNode createResponse(final ResponseOptions response, final HashMap<String, String> headers,
       final HashMap<String, String> output) throws QueryException {
 
     // root element
-    final FElem rrest = new FElem(new QNm(REST_PREFIX, "response", REST_URI)).declareNS();
+    final FBuilder rrest = FElem.build(HTTPText.Q_REST_RESPONSE).declareNS();
 
     // HTTP response
-    final FElem hresp = new FElem(new QNm(HTTP_PREFIX, "response", HTTP_URI)).declareNS();
+    final FBuilder hresp = FElem.build(HTTPText.Q_HTTP_RESPONSE).declareNS();
     for(final Option<?> o : response) {
-      if(response.contains(o)) hresp.add(o.name(), response.get(o).toString());
+      if(response.contains(o)) hresp.add(new QNm(o.name()), response.get(o));
     }
     headers.forEach((name, value) -> {
-      if(!value.isEmpty()) hresp.add(new FElem(new QNm(HTTP_PREFIX, "header", HTTP_URI)).
-          add("name", name).add("value", value));
+      if(!value.isEmpty()) {
+        hresp.add(FElem.build(HTTPText.Q_HTTP_HEADER).add(HTTPText.Q_NAME, name).
+            add(HTTPText.Q_VALUE, value));
+      }
     });
     rrest.add(hresp);
 
     // serialization parameters
     if(output != null) {
-      final SerializerOptions so = SerializerMode.DEFAULT.get();
+      final SerializerOptions sopts = SerializerMode.DEFAULT.get();
       for(final String entry : output.keySet())
-        if(so.option(entry) == null) throw INVALIDOPTION_X.get(info, entry);
+        if(sopts.option(entry) == null) throw QueryError.INVALIDOPTION_X.get(info, entry);
 
-      final FElem oseri = new FElem(FuncOptions.Q_SPARAM).declareNS();
+      final FBuilder param = FElem.build(FuncOptions.Q_SERIALIZTION_PARAMETERS).declareNS();
       output.forEach((name, value) -> {
-        if(!value.isEmpty()) oseri.add(new FElem(new QNm(OUTPUT_PREFIX, name, OUTPUT_URI)).
-            add("value", value));
+        if(!value.isEmpty()) {
+          final QNm qnm = new QNm(QueryText.OUTPUT_PREFIX, name, QueryText.OUTPUT_URI);
+          param.add(FElem.build(qnm).add(HTTPText.Q_VALUE, value));
+        }
       });
-      rrest.add(oseri);
+      rrest.add(param);
     }
-
-    return rrest;
+    return rrest.finish();
   }
 }

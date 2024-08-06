@@ -3,21 +3,20 @@ package org.basex.query.util.index;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.expr.path.*;
-import org.basex.util.*;
 
 /**
  * Index predicate: context expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public class IndexContext extends IndexPred {
+class IndexContext extends IndexPred {
   /**
    * Constructor.
-   * @param ii index info
+   * @param info index info
    */
-  IndexContext(final IndexInfo ii) {
-    super(ii);
+  IndexContext(final IndexInfo info) {
+    super(info);
   }
 
   /**
@@ -30,7 +29,7 @@ public class IndexContext extends IndexPred {
    */
   @Override
   Step step() {
-    return ii.step;
+    return info.step;
   }
 
   /**
@@ -43,17 +42,16 @@ public class IndexContext extends IndexPred {
    */
   @Override
   Step qname() {
-    return ii.step;
+    return info.step;
   }
 
   @Override
   Expr invert(final Expr root) throws QueryException {
-    final Step st = ii.step;
-    if(ii.text || !(st.test instanceof NameTest || st.test instanceof UnionTest)) return root;
+    final Step st = info.step;
+    if(info.text || !(st.test instanceof NameTest || st.test instanceof UnionTest)) return root;
 
     // attribute index request: add attribute step
-    final InputInfo info = root instanceof ParseExpr ? ((ParseExpr) root).info : null;
-    final Expr step = Step.get(ii.cc, root, st.info, st.test);
-    return Path.get(info, root, step);
+    final Expr step = Step.get(info.cc, root, st.info(), st.test);
+    return Path.get(root.info(), root, step);
   }
 }

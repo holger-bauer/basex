@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * This class tests database locking inside BaseX. For this purpose, two queries are forced to be
  * executed in parallel. If this fails, locking prevents these queries to run in parallel.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class ServerLockingTest extends SandboxTest {
@@ -31,10 +31,10 @@ public final class ServerLockingTest extends SandboxTest {
   /** Queries to run in load test. */
   private static final String[] QUERIES = {
     "%2$s",
-    "(db:open('%1$s'), %2$s)",
-    "insert node %2$s into db:open('%1$s')",
-    "for $i in ('%1$s') return insert node %2$s into db:open($i)",
-    "for $i in ('%1$s') return (db:open($i), %2$s)"
+    "(db:get('%1$s'), %2$s)",
+    "insert nodes %2$s into db:get('%1$s')",
+    "for $i in ('%1$s') return insert nodes %2$s into db:get($i)",
+    "for $i in ('%1$s') return (db:get($i), %2$s)"
   };
   /** XQuery code for handling latches. */
   private static final String Q = "Q{" + ServerLockingTest.class.getName() + "}countDownAndWait()";
@@ -44,13 +44,13 @@ public final class ServerLockingTest extends SandboxTest {
 
   /**
    * Starts the server.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @BeforeAll public static void start() throws Exception {
     server = createServer();
     final CountDownLatch latch = new CountDownLatch(2);
-    new Client(new CreateDB(NAME, DOC), null, latch);
-    new Client(new CreateDB(NAME + '1', DOC), null, latch);
+    new SandboxClient(new CreateDB(NAME, DOC), null, latch);
+    new SandboxClient(new CreateDB(NAME + '1', DOC), null, latch);
     // wait for both databases being created
     latch.await();
   }
@@ -71,7 +71,7 @@ public final class ServerLockingTest extends SandboxTest {
   /**
    * Handle thread synchronization so both threads/queries have to be inside their locks
    * at the same time to count down {@code test} latch.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   public static void countDownAndWait() throws Exception {
     sync.countDown();
@@ -82,26 +82,29 @@ public final class ServerLockingTest extends SandboxTest {
    * Test parallel execution of given queries.
    * @param query1 first query
    * @param query2 second query
-   * @param parallel Should queries be executed in parallel?
-   * @throws Exception None expected
+   * @param parallel execute queries in parallel
+   * @throws Exception none expected
    */
   private static void testQueries(final String query1, final String query2, final boolean parallel)
       throws Exception {
 
     sync = new CountDownLatch(2);
     test = new CountDownLatch(2);
-    final Client cl1 = new Client(new XQuery(query1), null, null);
-    final Client cl2 = new Client(new XQuery(query2), null, null);
+    final SandboxClient cl1 = new SandboxClient(new XQuery(query1), null, null);
+    final SandboxClient cl2 = new SandboxClient(new XQuery(query2), null, null);
     final boolean await = test.await(2 * SLEEP + SYNC, TimeUnit.MILLISECONDS);
     assertNull(cl1.error, cl1.error);
     assertNull(cl2.error, cl2.error);
-    assertEquals(parallel, await, (parallel ? "Parallel" : "Serial") + " execution expected");
+    if(parallel != await) {
+      fail((parallel ? "Parallel" : "Serial") + " execution expected. Queries:\n" +
+          query1 + "\n" + query2);
+    }
   }
 
   /**
    * Encapsulates string formatter for convenience.
-   * @param formatString Format string
-   * @param args Objects to insert into format string
+   * @param formatString format string
+   * @param args objects to insert into format string
    * @return Formatted string
    */
   private static String f(final String formatString, final Object... args) {
@@ -110,7 +113,7 @@ public final class ServerLockingTest extends SandboxTest {
 
   /**
    * Query no databases.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void noDatabase() throws Exception {
     testQueries(Q, Q, true);
@@ -118,89 +121,89 @@ public final class ServerLockingTest extends SandboxTest {
 
     /**
    * Read same database.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void readDatabase() throws Exception {
     testQueries(
-        f("(db:open('%s'), %s)", NAME, Q),
-        f("(db:open('%s'), %s)", NAME, Q),
+        f("(db:get('%s'), %s)", NAME, Q),
+        f("(db:get('%s'), %s)", NAME, Q),
         true);
   }
 
   /**
    * Read two different databases.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void readDatabases() throws Exception {
     testQueries(
-        f("(db:open('%s'), %s)", NAME, Q),
-        f("(db:open('%s1'), %s)", NAME, Q),
+        f("(db:get('%s'), %s)", NAME, Q),
+        f("(db:get('%s1'), %s)", NAME, Q),
         true);
   }
 
   /**
    * Write to the same database twice.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void writeDatabase() throws Exception {
     testQueries(
-        f("insert node %s into db:open('%s')", Q, NAME),
-        f("insert node %s into db:open('%s')", Q, NAME),
+        f("insert nodes %s into db:get('%s')", Q, NAME),
+        f("insert nodes %s into db:get('%s')", Q, NAME),
         false);
   }
 
   /**
    * Write to different databases.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void writeDatabases() throws Exception {
     testQueries(
-        f("insert node %s into db:open('%s')", Q, NAME),
-        f("insert node %s into db:open('%s1')", Q, NAME),
+        f("insert nodes %s into db:get('%s')", Q, NAME),
+        f("insert nodes %s into db:get('%s1')", Q, NAME),
         true);
   }
 
   /**
    * Read from and write to the same database.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void readWriteDatabase() throws Exception {
     testQueries(
-        f("(db:open('%s'), %s)", NAME, Q),
-        f("insert node %s into db:open('%s')", Q, NAME),
+        f("(db:get('%s'), %s)", NAME, Q),
+        f("insert nodes %s into db:get('%s')", Q, NAME),
         false);
   }
 
   /**
    * Read from and write to different databases.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void readWriteDatabases() throws Exception {
     testQueries(
-        f("(db:open('%s'), %s)", NAME, Q),
-        f("insert node %s into db:open('%s1')", Q, NAME),
+        f("(db:get('%s'), %s)", NAME, Q),
+        f("insert nodes %s into db:get('%s1')", Q, NAME),
         true);
   }
 
   /**
    * Read from a database, perform global write lock.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void readDatabasesGlobalWrite() throws Exception {
     testQueries(
-        f("(db:open('%s'), %s)", NAME, Q),
-        f("for $i in ('%s') return insert node %s into db:open($i)", NAME, Q),
+        f("(db:get('%s'), %s)", NAME, Q),
+        f("for $i in ('%s') return insert nodes %s into db:get($i)", NAME, Q),
         false);
   }
 
   /**
    * Global write lock twice.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void globalWrites() throws Exception {
     testQueries(
-        f("for $i in ('%s') return insert node %s into db:open($i)", NAME, Q),
-        f("for $i in ('%s') return insert node %s into db:open($i)", NAME, Q),
+        f("for $i in ('%s') return insert nodes %s into db:get($i)", NAME, Q),
+        f("for $i in ('%s') return insert nodes %s into db:get($i)", NAME, Q),
         false);
   }
 
@@ -221,7 +224,7 @@ public final class ServerLockingTest extends SandboxTest {
    * @throws Exception none expected
    */
   @Test public void xqueryWrite() throws Exception {
-    final String prolog = "import module namespace qm='java:org.basex.query.func.QueryModuleTest';";
+    final String prolog = "import module namespace qm = 'org.basex.query.func.QueryModuleTest';";
     testQueries(
       f(prolog + "qm:write-lock(), %s", Q),
       f(prolog + "qm:write-lock(), %s", Q),
@@ -230,22 +233,22 @@ public final class ServerLockingTest extends SandboxTest {
 
   /**
    * Load test.
-   * @throws Exception None expected
+   * @throws Exception none expected
    */
   @Test public void loadTests() throws Exception {
     final int totalQueries = RUN_COUNT * QUERIES.length;
-    final ArrayList<Client> clients = new ArrayList<>(totalQueries);
+    final ArrayList<SandboxClient> sandboxClients = new ArrayList<>(totalQueries);
     final CountDownLatch allDone = new CountDownLatch(totalQueries);
 
     for(int i = 0; i < RUN_COUNT; i++) {
       for(final String query : QUERIES) {
-        clients.add(new Client(new XQuery(f(query, NAME, "1")), null, allDone));
+        sandboxClients.add(new SandboxClient(new XQuery(f(query, NAME, "1")), null, allDone));
       }
     }
 
     assertTrue(allDone.await(totalQueries * SLEEP, TimeUnit.MILLISECONDS));
-    for(final Client client : clients) {
-      assertNull(client.error, client.error);
+    for(final SandboxClient sandboxClient : sandboxClients) {
+      assertNull(sandboxClient.error, sandboxClient.error);
     }
   }
 }

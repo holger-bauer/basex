@@ -17,7 +17,7 @@ import org.junit.jupiter.params.provider.*;
 /**
  * Tests for {@code id} and {@code idref}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class IdIdrefTest extends QueryTest {
@@ -27,11 +27,11 @@ public final class IdIdrefTest extends QueryTest {
    */
   private static Stream<Arguments> testQueries() {
     return Stream.of(
-      Arguments.of(new int[] { 1 }, _DB_OPEN.args(NAME, "1.xml") + "/id('foo')"),
-      Arguments.of(new int[] { 1 }, _DB_OPEN.args(NAME, "1.xml") + "/id('foo')"),
-      Arguments.of(new int[] { 5 }, _DB_OPEN.args(NAME, "2.xml") + "/id('batz')"),
-      Arguments.of(new int[] { 3 }, _DB_OPEN.args(NAME, "1.xml") + "/idref('bar')"),
-      Arguments.of(new int[] { 7 }, _DB_OPEN.args(NAME, "2.xml") + "/idref('quix')"),
+      Arguments.of(new int[] { 1 }, _DB_GET.args(NAME, "1.xml") + "/id('foo')"),
+      Arguments.of(new int[] { 1 }, _DB_GET.args(NAME, "1.xml") + "/id('foo')"),
+      Arguments.of(new int[] { 5 }, _DB_GET.args(NAME, "2.xml") + "/id('batz')"),
+      Arguments.of(new int[] { 3 }, _DB_GET.args(NAME, "1.xml") + "/idref('bar')"),
+      Arguments.of(new int[] { 7 }, _DB_GET.args(NAME, "2.xml") + "/idref('quix')"),
       Arguments.of(new int[] { 3, 7 }, "collection('" + NAME + "')/idref('quix', .)")
     );
   }
@@ -70,9 +70,9 @@ public final class IdIdrefTest extends QueryTest {
       throws Exception {
 
     // set up environment
-    execute(new Set(MainOptions.MAINMEM, mainmem));
-    execute(new Set(MainOptions.UPDINDEX, updindex));
-    execute(new Set(MainOptions.TOKENINDEX, tokenindex));
+    set(MainOptions.MAINMEM, mainmem);
+    set(MainOptions.UPDINDEX, updindex);
+    set(MainOptions.TOKENINDEX, tokenindex);
     execute(new CreateDB(NAME));
     execute(new Add("1.xml", "<root1 id='foo' idref='bar quix' />"));
     execute(new Add("2.xml", "<root2 id='batz' idref2='quix' />"));
@@ -81,7 +81,7 @@ public final class IdIdrefTest extends QueryTest {
     final Value actual = run(query);
 
     assertTrue(eq(actual, expected), String.format(
-      "[E] %d result(s): %s\n[F] %d result(s): %s",
+      "[E] %d result(s): %s%n[F] %d result(s): %s",
       expected.size(), serialize(expected),
       actual.size(), serialize(actual)));
   }

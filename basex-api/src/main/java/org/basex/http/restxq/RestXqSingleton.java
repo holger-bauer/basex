@@ -1,6 +1,6 @@
 package org.basex.http.restxq;
 
-import javax.servlet.http.*;
+import jakarta.servlet.http.*;
 
 import org.basex.http.*;
 import org.basex.query.*;
@@ -9,14 +9,14 @@ import org.basex.util.*;
 /**
  * Information on RESTXQ singleton functions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RestXqSingleton {
   /** Mutex. */
   private static final Object MUTEX = new Object();
 
-  /** Id of singleton function. */
+  /** ID of singleton function. */
   private final String id;
   /** Query context. */
   private final QueryContext qc;
@@ -40,7 +40,7 @@ final class RestXqSingleton {
   /**
    * Waits until a running query has been stopped.
    */
-  void queue() {
+  private void queue() {
     final QueryContext oldQc = qc();
     if(oldQc != null) {
       oldQc.stop();
@@ -51,7 +51,7 @@ final class RestXqSingleton {
   /**
    * Registers a query.
    */
-  void register() {
+  private void register() {
     synchronized(MUTEX) {
       session.setAttribute(id, qc);
     }

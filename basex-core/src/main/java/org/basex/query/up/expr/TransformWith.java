@@ -5,7 +5,6 @@ import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.iter.*;
 import org.basex.query.up.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -19,120 +18,114 @@ import org.basex.util.hash.*;
 /**
  * Transform expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class TransformWith extends Arr {
+public final class TransformWith extends Copy {
   /**
    * Constructor.
-   * @param info input info
-   * @param source source expression
+   * @param info input info (can be {@code null})
+   * @param target target expression
    * @param modify modify expression
    */
-  public TransformWith(final InputInfo info, final Expr source, final Expr modify) {
-    super(info, SeqType.NODE_ZM, source, modify);
+  public TransformWith(final InputInfo info, final Expr target, final Expr modify) {
+    super(info, SeqType.NODE_ZM, modify, target);
   }
 
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
-    return cc.get(new Dummy(exprs[0].seqType().with(Occ.EXACTLY_ONE), null),
-        () -> super.compile(cc));
-  }
-
-  @Override
-  public Expr optimize(final CompileContext cc) {
-    // name of node may change
-    final SeqType st = exprs[0].seqType();
-    exprType.assign(st.type, st.occ);
-    return this;
+    arg(target(), arg -> arg.compile(cc));
+    cc.pushFocus(new Dummy(arg(target()).seqType(), null));
+    try {
+      arg(update(), arg -> arg.compile(cc));
+    } finally {
+      cc.removeFocus();
+    }
+    return optimize(cc);
   }
 
   @Override
   public void checkUp() throws QueryException {
-    checkNoUp(exprs[0]);
-    final Expr modify = exprs[1];
-    modify.checkUp();
-    if(!modify.vacuous() && !modify.has(Flag.UPD)) throw UPMODIFY.get(info);
+    checkNoUp(arg(target()));
+    super.checkUp();
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
+    final Value value = arg(target()).value(qc);
     final Updates tmp = qc.updates();
-    final QueryFocus qf = qc.focus;
-    final Value cv = qf.value;
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    qc.focus = qf;
 
     final ValueBuilder vb = new ValueBuilder(qc);
     try {
-      final Iter iter = exprs[0].iter(qc);
-      for(Item item; (item = qc.next(iter)) != null;) {
+      for(final Item item : value) {
         if(!(item instanceof ANode)) throw UPSOURCE_X.get(info, item);
 
         // create main memory copy of node
-        item = ((ANode) item).copy(qc);
+        final Item node = ((ANode) item).copy(qc);
         // set resulting node as context
-        qf.value = item;
+        qf.value = node;
 
         final Updates updates = new Updates(true);
         qc.updates = updates;
-        updates.addData(item.data());
+        updates.addData(node.data());
 
-        if(!exprs[1].value(qc).isEmpty()) throw UPMODIFY.get(info);
-
+        if(!arg(update()).value(qc).isEmpty()) throw UPMODIFY.get(info);
         updates.prepare(qc);
         updates.apply(qc);
-        vb.add(item);
+        vb.add(node);
+        qf.pos++;
       }
     } finally {
       qc.updates = tmp;
-      qf.value = cv;
+      qc.focus = focus;
     }
     return vb.value(this);
   }
 
   @Override
   public boolean has(final Flag... flags) {
-    if(Flag.CNS.in(flags)) return true;
-    final Flag[] flgs = Flag.UPD.remove(flags);
-    return flgs.length != 0 && super.has(flgs);
+    // Context dependency, positional access: only check first expression.
+    // Example: . update { delete node a }
+    return Flag.CNS.in(flags) ||
+        Flag.CTX.in(flags) && arg(target()).has(Flag.CTX) ||
+        Flag.POS.in(flags) && arg(target()).has(Flag.POS) ||
+        super.has(Flag.UPD.remove(Flag.POS.remove(Flag.CTX.remove(flags))));
   }
 
   @Override
   public boolean inlineable(final InlineContext ic) {
-    return exprs[0].inlineable(ic) && !(ic.expr instanceof ContextValue && exprs[1].uses(ic.var));
+    return arg(target()).inlineable(ic) &&
+        !(ic.expr instanceof ContextValue && arg(update()).uses(ic.var));
   }
 
   @Override
   public VarUsage count(final Var var) {
     // context reference check: only consider source expression
-    return var == null ? exprs[0].count(var) : super.count(var);
+    return var == null ? arg(target()).count(null) : super.count(var);
   }
 
   @Override
   public Expr inline(final InlineContext ic) throws QueryException {
-    final Expr inlined = exprs[0].inline(ic);
+    final Expr inlined = arg(target()).inline(ic);
     boolean changed = inlined != null;
-    if(changed) exprs[0] = inlined;
+    if(changed) arg(1, arg -> inlined);
 
     // do not inline context reference in updating expressions
-    changed |= ic.var != null && ic.cc.ok(exprs[0], () -> {
-      final Expr expr = exprs[1].inline(ic);
+    changed |= ic.var != null && ic.cc.ok(arg(target()), () -> {
+      final Expr expr = arg(update()).inline(ic);
       if(expr == null) return false;
-      exprs[1] = expr;
+      arg(update(), arg -> expr);
       return true;
     });
     return changed ? optimize(ic.cc) : null;
   }
 
   @Override
-  public int exprSize() {
-    int size = 1;
-    for(final Expr expr : exprs) size += expr.exprSize();
-    return size;
-  }
-
-  @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new TransformWith(info, exprs[0].copy(cc, vm), exprs[1].copy(cc, vm)));
+    return copyType(new TransformWith(info,
+        arg(target()).copy(cc, vm), arg(update()).copy(cc, vm)));
   }
 
   @Override
@@ -141,7 +134,7 @@ public final class TransformWith extends Arr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.token(exprs[0]).token(UPDATE).brace(exprs[1]);
+  public void toString(final QueryString qs) {
+    qs.token(target()).token(UPDATE).brace(update());
   }
 }

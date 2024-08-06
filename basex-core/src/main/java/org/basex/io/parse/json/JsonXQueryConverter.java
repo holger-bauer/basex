@@ -5,12 +5,13 @@ import static org.basex.query.QueryError.*;
 import java.util.*;
 
 import org.basex.build.json.*;
-import org.basex.build.json.JsonParserOptions.JsonDuplicates;
+import org.basex.build.json.JsonParserOptions.*;
 import org.basex.query.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
+import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.map.XQMap;
+import org.basex.query.value.map.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
 
@@ -30,56 +31,55 @@ import org.basex.util.*;
  *     <code>{'foo':42, 'bar':()}</code>)
  * </dl>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class JsonXQueryConverter extends JsonConverter {
   /** Stack for intermediate values. */
   private final Stack<Value> stack = new Stack<>();
-  /** Stack for intermediate array values. */
+  /** Stack for intermediate arrays. */
   private final Stack<ValueList> arrays = new Stack<>();
-  /** Stack for intermediate maps values. */
+  /** Stack for intermediate maps. */
   private final Stack<XQMap> maps = new Stack<>();
 
   /**
    * Constructor.
    * @param opts json options
-   * @throws QueryIOException query I/O exception
+   * @throws QueryException query exception
    */
-  JsonXQueryConverter(final JsonParserOptions opts) throws QueryIOException {
+  JsonXQueryConverter(final JsonParserOptions opts) throws QueryException {
     super(opts);
     final JsonDuplicates dupl = jopts.get(JsonParserOptions.DUPLICATES);
-    if(dupl == JsonDuplicates.RETAIN) throw new QueryIOException(
-        JSON_OPTIONS_X.get(null, JsonParserOptions.DUPLICATES.name(), dupl));
+    if(dupl == JsonDuplicates.RETAIN) {
+      throw JSON_OPTIONS_X.get(null, JsonParserOptions.DUPLICATES.name(), dupl);
+    }
   }
 
   @Override
-  public Item finish(final String uri) {
+  void init(final String uri) {
+  }
+
+  @Override
+  public Item finish() {
     final Value value = stack.pop();
     return value.isEmpty() ? Empty.VALUE : (Item) value;
   }
 
   @Override
   void openObject() {
-    maps.push(XQMap.EMPTY);
+    maps.push(XQMap.empty());
   }
 
   @Override
   void openPair(final byte[] key, final boolean add) {
-    stack.push(Str.get(key));
+    stack.push(Str.get(shared.token(key)));
   }
 
   @Override
-  void closePair(final boolean add) throws QueryIOException {
+  void closePair(final boolean add) throws QueryException {
     final Value value = stack.pop();
     final Item key = (Item) stack.pop();
-    if(add) {
-      try {
-        maps.push(maps.pop().put(key, value, null));
-      } catch(final QueryException ex) {
-        throw new QueryIOException(ex);
-      }
-    }
+    if(add) maps.push(maps.pop().put(key, value));
   }
 
   @Override
@@ -103,26 +103,24 @@ public final class JsonXQueryConverter extends JsonConverter {
 
   @Override
   void closeArray() {
-    stack.push(arrays.pop().array());
+    final ArrayBuilder ab = new ArrayBuilder();
+    for(final Value value : arrays.pop()) ab.append(value);
+    stack.push(ab.array());
   }
 
   @Override
-  public void numberLit(final byte[] value) throws QueryIOException {
-    try {
-      stack.push(Dbl.get(value, null));
-    } catch(final QueryException ex) {
-      throw new QueryIOException(ex);
-    }
+  public void numberLit(final byte[] value) throws QueryException {
+    stack.push(numberParser != null ? numberParser.apply(value) : Dbl.get(Dbl.parse(value, null)));
   }
 
   @Override
   public void stringLit(final byte[] value) {
-    stack.push(Str.get(value));
+    stack.push(Str.get(shared.token(value)));
   }
 
   @Override
   public void nullLit() {
-    stack.push(Empty.VALUE);
+    stack.push(nullValue);
   }
 
   @Override

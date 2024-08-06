@@ -12,13 +12,13 @@ import org.basex.util.*;
 /**
  * Evaluates the 'alter user' command and alters the name of a user.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class AlterUser extends AUser {
   /**
    * Default constructor.
-   * @param name user name
+   * @param name username
    * @param newname new name
    */
   public AlterUser(final String name, final String newname) {
@@ -45,6 +45,6 @@ public final class AlterUser extends AUser {
   @Override
   public void build(final CmdBuilder cb) {
     cb.init(Cmd.ALTER + " " + CmdAlter.USER).arg(0);
-    if(!cb.conf()) cb.arg(1);
+    if(!cb.password()) cb.arg(1);
   }
 }

@@ -1,9 +1,9 @@
 package org.basex.query.func.fn;
 
+import static org.basex.query.func.Function.*;
+
 import java.util.*;
 
-import org.basex.data.*;
-import org.basex.index.path.*;
 import org.basex.index.stats.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
@@ -14,30 +14,49 @@ import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.util.hash.*;
+import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
+import org.basex.util.hash.*;
+import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnDistinctValues extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Collation coll = toCollation(1, qc);
-    final Expr expr = exprs[0];
-    final Iter iter = expr.atomIter(qc, info);
+    final Iter values = arg(0).atomIter(qc, info);
+    final Collation collation = toCollation(arg(1), qc);
 
-    final ItemSet set = coll == null ? new HashItemSet(false) : new CollationItemSet(coll);
+    final ItemSet set = CollationItemSet.get(collation, info);
+    final IntSet ints = new IntSet();
+
     return new Iter() {
+      boolean intseq = seqType().instanceOf(SeqType.INTEGER_ZM);
+
       @Override
       public Item next() throws QueryException {
-        for(Item item; (item = qc.next(iter)) != null;) {
-          if(set.add(item, info)) return item;
+        for(Item item; (item = qc.next(values)) != null;) {
+          if(intseq) {
+            if(item.type == AtomType.INTEGER) {
+              final long l = item.itr(info);
+              final int i = (int) l;
+              if(i == l) {
+                if(ints.add(i)) return item;
+                continue;
+              }
+            }
+            // fallback (input is no 32bit integer)
+            intseq = false;
+            for(int i : ints.toArray()) set.add(Int.get(i));
+          }
+          if(set.add(item)) return item;
         }
         return null;
       }
@@ -46,74 +65,78 @@ public final class FnDistinctValues extends StandardFunc {
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return iter(qc).value(qc, this);
+    final Iter values = arg(0).atomIter(qc, info);
+    final Collation collation = toCollation(arg(1), qc);
+
+    final ItemSet set = CollationItemSet.get(collation, info);
+    final IntSet ints = new IntSet();
+
+    final ValueBuilder vb = new ValueBuilder(qc);
+    final LongList list = new LongList();
+
+    boolean intseq = seqType().instanceOf(SeqType.INTEGER_ZM);
+    for(Item item; (item = qc.next(values)) != null;) {
+      if(intseq) {
+        if(item.type == AtomType.INTEGER) {
+          final long l = item.itr(info);
+          final int i = (int) l;
+          if(i == l) {
+            if(ints.add(i)) list.add(i);
+            continue;
+          }
+        }
+        // fallback (input is no 32bit integer)
+        intseq = false;
+        for(int i : ints.toArray()) set.add(Int.get(i));
+        for(long l : list.finish()) vb.add(Int.get(l));
+      }
+      if(set.add(item)) vb.add(item);
+    }
+    return intseq ? IntSeq.get(list.finish()) : vb.value(this);
   }
 
   @Override
   protected void simplifyArgs(final CompileContext cc) throws QueryException {
-    exprs[0] = exprs[0].simplifyFor(Simplify.DATA, cc).simplifyFor(Simplify.DISTINCT, cc);
+    arg(0, arg -> {
+      final Expr expr = arg.simplifyFor(Simplify.DATA, cc);
+      return defined(1) ? expr : expr.simplifyFor(Simplify.DISTINCT, cc);
+    });
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-    if(st.zero()) return expr;
+    final Expr values = arg(0);
+    final SeqType st = values.seqType();
+    if(st.zero()) return values;
+
+    // X => sort() => distinct-values()  ->  X => distinct-values() => sort()
+    if(SORT.is(values) && (values.args().length == 1 ||
+        values.arg(0).seqType().type.instanceOf(AtomType.ANY_ATOMIC_TYPE))) {
+      final ExprList list = new ExprList().add(values.args());
+      list.set(0, cc.function(DISTINCT_VALUES, info, values.arg(0)));
+      return cc.function(SORT, info, list.finish());
+    }
+    // distinct-values(distinct-values($data))  ->  distinct-values($data)
+    if(DISTINCT_VALUES.is(values) && arg(1).equals(values.arg(1))) return values;
+
+    final Expr opt = optStats(cc);
+    if(opt != null) return opt;
 
     final AtomType type = st.type.atomic();
     if(type != null) {
-      // assign atomic type of argument
-      exprType.assign(type);
-
-      if(exprs.length == 1) {
+      if(!defined(1)) {
         // distinct-values(1 to 10)  ->  1 to 10
-        if(expr instanceof Range || expr instanceof RangeSeq) return expr;
+        if(values instanceof Range || values instanceof RangeSeq || values == BlnSeq.DISTINCT)
+          return values;
         // distinct-values($string)  ->  $string
         // distinct-values($node)  ->  data($node)
-        if(st.zeroOrOne()) return type == st.type ? expr : cc.function(Function.DATA, info, exprs);
+        if(st.zeroOrOne() && !st.mayBeArray())
+          return type == st.type ? values : cc.function(Function.DATA, info, exprs);
       }
+      // assign atomic type of argument
+      exprType.assign(type);
     }
-    return optStats(expr, cc);
-  }
-
-  /**
-   * Tries to evaluate distinct values based on the database statistics.
-   * @param expr expression
-   * @param cc compilation context
-   * @return original expression or sequence of distinct values
-   * @throws QueryException query exception
-   */
-  private Expr optStats(final Expr expr, final CompileContext cc) throws QueryException {
-    // can only be performed without collation and on axis paths
-    if(exprs.length > 1 || !(expr instanceof AxisPath)) return this;
-
-    // try to get statistics for resulting nodes
-    final AxisPath path = (AxisPath) expr;
-    final ArrayList<PathNode> nodes = path.pathNodes(path.root);
-    if(nodes == null) return this;
-
-    // loop through all nodes
-    final ValueBuilder vb = new ValueBuilder(cc.qc);
-    final HashItemSet set = new HashItemSet(false);
-    for(PathNode node : nodes) {
-      // retrieve text child if addressed node is an element
-      if(node.kind == Data.ELEM) {
-        if(!node.stats.isLeaf()) return this;
-        for(final PathNode nd : node.children) {
-          if(nd.kind == Data.TEXT) node = nd;
-        }
-      }
-      // skip nodes others than texts and attributes
-      if(node.kind != Data.TEXT && node.kind != Data.ATTR) return this;
-      // check if distinct values are available
-      if(!StatsType.isCategory(node.stats.type)) return this;
-      // if yes, add them to the item set
-      for(final byte[] c : node.stats.values) {
-        final Atm item = new Atm(c);
-        if(set.add(item, info)) vb.add(item);
-      }
-    }
-    return vb.value(this);
+    return this;
   }
 
   /**
@@ -127,7 +150,33 @@ public final class FnDistinctValues extends StandardFunc {
     if(op == OpV.LT) return Bln.FALSE;
     if(op == OpV.GE) return Bln.TRUE;
 
-    final Expr dupl = cc.function(Function._UTIL_DUPLICATES, info, exprs);
+    final Expr dupl = cc.function(Function.DUPLICATE_VALUES, info, exprs);
     return cc.function(op == OpV.LE || op == OpV.EQ ? Function.EMPTY : Function.EXISTS, info, dupl);
+  }
+
+  /**
+   * Tries to evaluate distinct values based on the database statistics.
+   * @param cc compilation context
+   * @return sequence of distinct values or {@code null}
+   * @throws QueryException query exception
+   */
+  private Expr optStats(final CompileContext cc) throws QueryException {
+    final Expr values = arg(0);
+    if(!defined(1) && values instanceof Path) {
+      final ArrayList<Stats> list = ((Path) values).pathStats();
+      if(list != null) {
+        final ValueBuilder vb = new ValueBuilder(cc.qc);
+        final ItemSet set = CollationItemSet.get(null, info);
+        for(final Stats stats : list) {
+          if(!StatsType.isCategory(stats.type)) return null;
+          for(final byte[] value : stats.values) {
+            final Atm item = Atm.get(value);
+            if(set.add(item)) vb.add(item);
+          }
+        }
+        return vb.value(this);
+      }
+    }
+    return null;
   }
 }

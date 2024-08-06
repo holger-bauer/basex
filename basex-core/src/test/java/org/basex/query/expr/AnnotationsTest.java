@@ -8,16 +8,16 @@ import org.junit.jupiter.api.*;
 /**
  * Annotations tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class AnnotationsTest extends SandboxTest {
   /** Parsing of function declarations. */
   @Test public void functionDecl() {
-    query("declare namespace a='a';declare %a:a function local:x() {1}; local:x()", 1);
+    query("declare namespace a='a';declare %a:a function local:x() { 1 }; local:x()", 1);
     query("declare %public function local:x() { 1 }; local:x()", 1);
     query("declare %private function local:x() { 1 }; local:x()", 1);
-    query("declare namespace a='a';declare %a:a function local:x() {1}; local:x()", 1);
+    query("declare namespace a='a';declare %a:a function local:x() { 1 }; local:x()", 1);
   }
 
   /** Parsing of variable declarations. */
@@ -30,8 +30,8 @@ public final class AnnotationsTest extends SandboxTest {
 
   /** Parsing errors and conflicts. */
   @Test public void conflicts() {
-    error("declare namespace a='a';declare %a:a() variable $x:=1; $x", ANNVALUE);
-    error("declare namespace a='a';declare %a:a() variable $x:=1; $x", ANNVALUE);
+    error("declare namespace a='a';declare %a:a() variable $x:=1; $x", ANNVALUE_X);
+    error("declare namespace a='a';declare %a:a() variable $x:=1; $x", ANNVALUE_X);
     error("declare %pfff:public variable $x := 1; $x", NOURI_X);
     error("declare %public %public variable $x := 1; $x", DUPLVARVIS);
     error("declare %public %private variable $x := 1; $x", DUPLVARVIS);
@@ -53,7 +53,17 @@ public final class AnnotationsTest extends SandboxTest {
     error("declare %rest:xx function local:x() { 1 }; 1", BASEX_ANNOTATION1_X_X);
     // check output annotations
     error("declare %output:xx function local:x() { 1 }; 1", BASEX_ANNOTATION1_X_X);
-    error("declare %output:method function local:x() { 1 }; 1", BASEX_ANNOTATION2_X_X);
-    error("declare %output:method(1) function local:x() { 1 }; 1", BASEX_ANNOTATION_X_X_X);
+    error("declare %output:method function local:x() { 1 }; 1", BASEX_ANN2_X_X);
+    error("declare %output:method(1) function local:x() { 1 }; 1", BASEX_ANN_X_X_X);
+  }
+
+  /** Literals. */
+  @Test public void literals() {
+    query("%Q{_}_ fn { . }(1)", 1);
+    query("%Q{_}_('') fn { . }(1)", 1);
+    query("%Q{_}_( '' ) fn { . }(1)", 1);
+    query("%Q{_}_('',1,-2,-3.4,-5.6e7,true(),false()) fn { . }(1)", 1);
+    query("%Q{_}_(  ''  ,  1  ,  -  2  ,  -  3.4  ,  -  5.6e7  , " +
+        "true  (  )  , false  (  )  )  %Q{_}__  %Q{_}___ fn { . }(1)", 1);
   }
 }

@@ -9,13 +9,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnDayFromDate extends DateTime {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = exprs[0].atomItem(qc, info);
-    return item == Empty.VALUE ? Empty.VALUE : Int.get(toDate(item, AtomType.DATE, qc).day());
+    final Item value = arg(0).atomItem(qc, info);
+    return value.isEmpty() ? Empty.VALUE : Int.get(toDate(value, AtomType.DATE, qc).day());
   }
 }

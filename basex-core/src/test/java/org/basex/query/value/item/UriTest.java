@@ -10,7 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 /**
  * URI tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public class UriTest {
@@ -79,7 +79,7 @@ public class UriTest {
   @MethodSource("sampleUris")
   public void isAbsolute(final String uri, @SuppressWarnings("unused") final boolean valid,
       final boolean absolute) {
-    assertEquals(absolute, Uri.uri(uri).isAbsolute(), "Uri absolute check failed");
+    assertEquals(absolute, Uri.get(uri).isAbsolute(), "Uri absolute check failed");
   }
 
   /**
@@ -92,6 +92,6 @@ public class UriTest {
   @MethodSource("sampleUris")
   public void isValid(final String uri, final boolean valid,
       @SuppressWarnings("unused") final boolean absolute) {
-    assertEquals(valid, Uri.uri(uri).isValid(), "Uri validation failed");
+    assertEquals(valid, Uri.get(uri).isValid(), "Uri validation failed");
   }
 }

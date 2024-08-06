@@ -2,23 +2,27 @@ package org.basex.query.up.primitives.db;
 
 import static org.basex.query.QueryError.*;
 
+import java.util.*;
+
+import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.up.primitives.*;
 import org.basex.util.*;
-import org.basex.util.options.*;
 
 /**
  * Add primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class DBAdd extends DBUpdate {
-  /** Container for new database documents. */
+  /** Container for new documents. */
   private final DBNew newDocs;
   /** Replace flag. */
   private final boolean replace;
+  /** Data clip with generated input. */
+  private DataClip clip;
   /** Size. */
   private int size;
 
@@ -26,20 +30,36 @@ public final class DBAdd extends DBUpdate {
    * Constructor.
    * @param data target database
    * @param input document to add (IO or ANode instance)
-   * @param opts database options
+   * @param qopts query options
    * @param replace replace flag
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DBAdd(final Data data, final NewInput input, final Options opts, final boolean replace,
-      final QueryContext qc, final InputInfo info) throws QueryException {
+  public DBAdd(final Data data, final NewInput input, final HashMap<String, String> qopts,
+      final boolean replace, final QueryContext qc, final InputInfo info) throws QueryException {
 
     super(UpdateType.DBADD, data, info);
     this.replace = replace;
 
-    final DBOptions options = new DBOptions(opts, DBOptions.PARSING, info);
-    newDocs = new DBNew(qc, options, info, input);
+    final DBOptions dbopts = new DBOptions(qopts, MainOptions.PARSING, info);
+    final MainOptions mopts = dbopts.assignTo(new MainOptions(qc.context.options, false));
+    newDocs = new DBNew(qc, mopts, info, input);
+  }
+
+  @Override
+  public void prepare() throws QueryException {
+    size = newDocs.inputs.size();
+    clip = newDocs.prepare(data.meta.name, false);
+  }
+
+  @Override
+  public void apply() throws QueryException {
+    try {
+      newDocs.addTo(data);
+    } finally {
+      clip.finish();
+    }
   }
 
   @Override
@@ -53,17 +73,6 @@ public final class DBAdd extends DBUpdate {
       if(path.equals(addPath)) throw UPMULTDOC_X_X.get(info, data.meta.name, addPath);
     }
     newDocs.merge(add.newDocs);
-  }
-
-  @Override
-  public void prepare() throws QueryException {
-    size = newDocs.inputs.size();
-    newDocs.prepare(data.meta.name, false);
-  }
-
-  @Override
-  public void apply() throws QueryException {
-    newDocs.add(data);
   }
 
   @Override

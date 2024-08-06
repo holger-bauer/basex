@@ -1,10 +1,10 @@
 package org.basex.query.value.type;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
 import java.util.*;
 
+import org.basex.io.in.DataInput;
 import org.basex.query.*;
 import org.basex.query.ann.*;
 import org.basex.query.util.list.*;
@@ -15,22 +15,16 @@ import org.basex.util.*;
 /**
  * XQuery 3.0 function types.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
-public class FuncType implements Type {
-  /** Any function placeholder string. */
-  static final String[] WILDCARD = { "*" };
-
+public class FuncType extends FType {
   /** Annotations. */
   public final AnnList anns;
   /** Return type of the function. */
   public final SeqType declType;
-  /** Argument types (can be {@code null}, indicated that no types were specified). */
+  /** Argument types (can be {@code null}, indicates that no types were specified). */
   public final SeqType[] argTypes;
-
-  /** Sequence types (lazy instantiation). */
-  private EnumMap<Occ, SeqType> seqTypes;
 
   /**
    * Constructor.
@@ -38,7 +32,7 @@ public class FuncType implements Type {
    * @param argTypes argument types (can be {@code null})
    */
   FuncType(final SeqType declType, final SeqType... argTypes) {
-    this(new AnnList(), declType, argTypes);
+    this(AnnList.EMPTY, declType, argTypes);
   }
 
   /**
@@ -54,69 +48,33 @@ public class FuncType implements Type {
   }
 
   @Override
-  public final boolean isNumber() {
-    return false;
+  public FuncType funcType() {
+    return this;
   }
 
   @Override
-  public final boolean isUntyped() {
-    return false;
-  }
-
-  @Override
-  public final boolean isNumberOrUntyped() {
-    return false;
-  }
-
-  @Override
-  public final boolean isStringOrUntyped() {
-    return false;
-  }
-
-  @Override
-  public final boolean isSortable() {
-    return false;
-  }
-
-  @Override
-  public SeqType seqType(final Occ occ) {
-    // cannot statically be instantiated due to circular dependencies
-    if(seqTypes == null) seqTypes = new EnumMap<>(Occ.class);
-    return seqTypes.computeIfAbsent(occ, o -> new SeqType(this, o));
-  }
-
-  @Override
-  public FItem cast(final Item item, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-
-    if(!(item instanceof FItem)) throw typeError(item, this, ii);
+  public FItem cast(final Item item, final QueryContext qc, final InputInfo info)
+      throws QueryException {
+    if(!(item instanceof FItem)) throw typeError(item, this, info);
     final FItem func = (FItem) item;
-    return this == SeqType.FUNCTION ? func : func.coerceTo(this, qc, ii, false);
+    return this == SeqType.FUNCTION ? func : func.coerceTo(this, qc, null, info);
   }
 
   @Override
-  public final Item cast(final Object value, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) {
-    throw Util.notExpected(value);
-  }
-
-  @Override
-  public final Item castString(final String string, final QueryContext qc, final StaticContext sc,
-      final InputInfo ii) {
-    throw Util.notExpected(string);
+  public Item read(final DataInput in, final QueryContext qc) {
+    throw Util.notExpected();
   }
 
   @Override
   public boolean eq(final Type type) {
     if(this == type) return true;
-    if(type.getClass() != FuncType.class) return false;
-    final FuncType ft = (FuncType) type;
-
-    if(this == SeqType.FUNCTION || ft == SeqType.FUNCTION || argTypes.length != ft.argTypes.length)
+    if(this == SeqType.FUNCTION || type == SeqType.FUNCTION || !(type instanceof FuncType))
       return false;
 
-    final int al = argTypes.length;
-    for(int a = 0; a < al; a++) {
+    final FuncType ft = (FuncType) type;
+    final int arity = argTypes.length, nargs = ft.argTypes.length;
+    if(arity != nargs) return false;
+    for(int a = 0; a < arity; a++) {
       if(!argTypes[a].eq(ft.argTypes[a])) return false;
     }
     return declType.eq(ft.declType);
@@ -124,14 +82,14 @@ public class FuncType implements Type {
 
   @Override
   public boolean instanceOf(final Type type) {
-    if(type.oneOf(this, SeqType.FUNCTION, AtomType.ITEM)) return true;
-    if(this == SeqType.FUNCTION || !(type instanceof FuncType) || type instanceof MapType ||
-        type instanceof ArrayType) return false;
+    if(this == type || type.oneOf(SeqType.FUNCTION, AtomType.ITEM)) return true;
+    if(type instanceof ChoiceItemType) return ((ChoiceItemType) type).hasInstance(this);
+    if(this == SeqType.FUNCTION || !(type instanceof FuncType)) return false;
 
     final FuncType ft = (FuncType) type;
-    final int al = argTypes.length;
-    if(al != ft.argTypes.length) return false;
-    for(int a = 0; a < al; a++) {
+    final int arity = argTypes.length, nargs = ft.argTypes.length;
+    if(arity != nargs) return false;
+    for(int a = 0; a < arity; a++) {
       if(!ft.argTypes[a].instanceOf(argTypes[a])) return false;
     }
     for(final Ann ann : ft.anns) {
@@ -142,45 +100,45 @@ public class FuncType implements Type {
 
   @Override
   public Type union(final Type type) {
+    if(type instanceof ChoiceItemType) return type.union(this);
     if(instanceOf(type)) return type;
     if(type.instanceOf(this)) return this;
 
-    if(!(type instanceof FuncType)) return AtomType.ITEM;
+    final FuncType ft = type.funcType();
+    if(ft == null) return AtomType.ITEM;
 
-    final FuncType ft = (FuncType) type;
-    final int al = argTypes.length;
-    if(al != ft.argTypes.length) return SeqType.FUNCTION;
+    final int arity = argTypes.length, nargs = ft.argTypes.length;
+    if(arity != nargs) return SeqType.FUNCTION;
 
-    final SeqType[] arg = new SeqType[al];
-    for(int a = 0; a < al; a++) {
+    final SeqType[] arg = new SeqType[arity];
+    for(int a = 0; a < arity; a++) {
       arg[a] = argTypes[a].intersect(ft.argTypes[a]);
       if(arg[a] == null) return SeqType.FUNCTION;
     }
-
-    final AnnList an = anns.union(ft.anns);
-    final SeqType dt = declType.union(ft.declType);
-    return get(an, dt, arg);
+    return get(anns.union(ft.anns), declType.union(ft.declType), arg);
   }
 
   @Override
   public Type intersect(final Type type) {
+    if(type instanceof ChoiceItemType) return type.intersect(this);
     if(instanceOf(type)) return this;
     if(type.instanceOf(this)) return type;
 
-    if(!(type instanceof FuncType)) return null;
     if(type instanceof MapType || type instanceof ArrayType) return type.intersect(this);
 
-    final FuncType ft = (FuncType) type;
-    final int al = argTypes.length;
-    if(al != ft.argTypes.length) return null;
+    final FuncType ft = type.funcType();
+    if(ft == null) return null;
+
+    final int arity = argTypes.length, nargs = ft.argTypes.length;
+    if(arity != nargs) return null;
 
     final AnnList an = anns.intersect(ft.anns);
     if(an == null) return null;
     final SeqType dt = declType.intersect(ft.declType);
     if(dt == null) return null;
 
-    final SeqType[] arg = new SeqType[al];
-    for(int a = 0; a < al; a++) arg[a] = argTypes[a].union(ft.argTypes[a]);
+    final SeqType[] arg = new SeqType[arity];
+    for(int a = 0; a < arity; a++) arg[a] = argTypes[a].union(ft.argTypes[a]);
     return get(an, dt, arg);
   }
 
@@ -202,7 +160,16 @@ public class FuncType implements Type {
    * @return function type
    */
   public static FuncType get(final SeqType declType, final SeqType... args) {
-    return get(new AnnList(), declType, args);
+    return get(AnnList.EMPTY, declType, args);
+  }
+
+  /**
+   * Return function type with fewer arguments.
+   * @param arity arity of target type
+   * @return function type
+   */
+  public FuncType with(final int arity) {
+    return get(anns, declType, Arrays.copyOf(argTypes, arity));
   }
 
   /**
@@ -212,10 +179,13 @@ public class FuncType implements Type {
    */
   public static Type find(final QNm name) {
     if(name.uri().length == 0) {
-      final byte[] ln = name.local();
-      if(Token.eq(ln, token(QueryText.FUNCTION))) return SeqType.FUNCTION;
-      if(Token.eq(ln, token(QueryText.MAP))) return SeqType.MAP;
-      if(Token.eq(ln, token(QueryText.ARRAY))) return SeqType.ARRAY;
+      switch(Token.string(name.local())) {
+        case QueryText.FUNCTION:
+        case QueryText.FN:       return SeqType.FUNCTION;
+        case QueryText.MAP:      return SeqType.MAP;
+        case QueryText.RECORD:   return SeqType.RECORD;
+        case QueryText.ARRAY:    return SeqType.ARRAY;
+      }
     }
     return null;
   }
@@ -237,23 +207,18 @@ public class FuncType implements Type {
   }
 
   @Override
-  public final AtomType atomic() {
+  public AtomType atomic() {
     return null;
   }
 
   @Override
-  public final ID id() {
+  public ID id() {
     return Type.ID.FUN;
   }
 
   @Override
-  public boolean nsSensitive() {
-    return false;
-  }
-
-  @Override
   public String toString() {
-    final QueryString qs = new QueryString().token(anns).token(QueryText.FUNCTION);
+    final QueryString qs = new QueryString().token(anns).token(QueryText.FN);
     if(this == SeqType.FUNCTION) qs.params(WILDCARD);
     else qs.params(argTypes).token(QueryText.AS).token(declType);
     return qs.toString();

@@ -3,33 +3,64 @@ package org.basex.http.rest;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
+import java.net.http.*;
 
 import org.basex.core.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
+import org.basex.query.func.*;
 import org.basex.util.http.*;
 import org.junit.jupiter.api.*;
 
 /**
  * This class tests the embedded REST API and the GET method.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RESTGetTest extends RESTTest {
   /**
-   * GET Test.
+   * Run queries.
    * @throws Exception exception
    */
-  @Test public void basic() throws Exception {
-    assertEquals("1", get("?query=1"));
-    assertEquals("a,b", get("?query=string-join(('a','b'),',')"));
+  @Test public void queries() throws Exception {
+    get("1", "", "query", 1);
+    get("a,b", "", "query", "string-join(('a','b'),',')");
+  }
 
-    put(NAME, new ArrayInput("<a/>"));
-    put(NAME + "/raw", new ArrayInput("XXX"), MediaType.APPLICATION_OCTET_STREAM);
-    assertEquals("<a/>", get(NAME + '/' + NAME + ".xml"));
-    assertEquals("XXX", get(NAME + "/raw"));
-    delete(NAME);
+  /**
+   * List databases.
+   * @throws Exception exception
+   */
+  @Test public void databases() throws Exception {
+    final String result = get(200, "");
+    query(result + " ! name()", "databases");
+    query(result + " ! namespace-uri()", "http://basex.org/rest");
+    query(result + "/node()", "");
+
+    put(null, NAME);
+    query(get(200, "") + "/*/text()", NAME);
+    delete(200, NAME);
+  }
+
+  /**
+   * List resources.
+   * @throws Exception exception
+   */
+  @Test public void resources() throws Exception {
+    final String xml = NAME + ".xml", bin = "binary.data", value = "data.xquery";
+    put(null, NAME);
+    put(new ArrayInput("<a/>"), NAME + '/' + xml);
+    send(201, Method.PUT.name(), new ArrayInput("XXX"),
+        MediaType.APPLICATION_OCTET_STREAM, NAME + '/' + bin);
+    get(200, "", "query", Function._DB_PUT_VALUE.args(NAME, "DATA", value));
+
+    query(get(200, NAME) + "/*/text() => sort()", xml + "\n" + bin + "\n" + value);
+    get("<a/>", NAME + '/' + xml);
+    get("XXX", NAME + '/' + bin);
+    get("DATA", NAME + '/' + value);
+
+    delete(200, NAME);
   }
 
   /**
@@ -37,14 +68,10 @@ public final class RESTGetTest extends RESTTest {
    * @throws Exception exception
    */
   @Test public void input() throws Exception {
-    assertEquals("<a/>", get("?query=.&context=<a/>"));
+    get("<a/>", "", "query", ".", "context", "<a/>");
+    get(500, "", "query", ".", "context", "<");
 
-    try {
-      assertEquals("<a/>", get("?query=.&context=<"));
-      fail("Error expected.");
-    } catch(final IOException ex) {
-      // expected
-    }
+    get("<a/>\n<b/>", "", "query", ".", "context", "<a/>", "context", "<b/>");
   }
 
   /**
@@ -52,33 +79,26 @@ public final class RESTGetTest extends RESTTest {
    * @throws IOException I/O exception
    */
   @Test public void bind() throws IOException {
-    assertEquals("123", get('?'
-        + "query=declare+variable+$x+as+xs:integer+external;$x&$x=123"));
-    assertEquals("124", get("?$x=123&"
-        + "query=declare+variable+$x+as+xs:integer+external;$x%2b1"));
-    assertEquals("6", get('?'
-        + "query=declare+variable+$a++as+xs:integer+external;"
-        + "declare+variable+$b+as+xs:integer+external;"
-        + "declare+variable+$c+as+xs:integer+external;$a*$b*$c&$a=1&$b=2&$c=3"));
+    get("123", "", "x", 123, "query",
+        "declare variable $x as xs:integer external; $x");
+    get("124", "", "x", 123, "query",
+        "declare variable $x as xs:integer external; $x + 1");
+    get("6", "", "a", 1, "b", 2, "c", 3, "query",
+        "declare variable $a as xs:integer external;"
+        + "declare variable $b as xs:integer external;"
+        + "declare variable $c as xs:integer external; $a * $b * $c");
+
+    get("1000", "", "x", 123, "x", 877, "query",
+        "declare variable $x as xs:integer* external; sum($x)");
   }
 
-  /** Error. */
-  @Test public void error1() {
-    try {
-      get("?query=(");
-      fail("Error expected.");
-    } catch(final IOException ex) {
-      assertContains(ex.getMessage(), "[XPST0003]");
-    }
-  }
-
-  /** Error. */
-  @Test public void error2() {
-    try {
-      get("?query=()&method=xxx");
-      fail("Error expected.");
-    } catch(final IOException ignored) {
-    }
+  /**
+   * Errors.
+   * @throws Exception exception
+   */
+  @Test public void errors() throws Exception {
+    get(500, "", "query", "(");
+    get(400, "", "query", "()", "method", "xxx");
   }
 
   /**
@@ -86,21 +106,31 @@ public final class RESTGetTest extends RESTTest {
    * @throws Exception exception
    */
   @Test public void contentType() throws Exception {
-    assertMediaType(mediaType("?query=1"), MediaType.APPLICATION_XML);
-    assertMediaType(mediaType("?command=info"), MediaType.TEXT_PLAIN);
+    check(MediaType.APPLICATION_XML, "?query=1");
+    check(MediaType.TEXT_PLAIN, "?command=info");
 
-    assertMediaType(mediaType("?query=1&method=xml"), MediaType.APPLICATION_XML);
-    assertMediaType(mediaType("?query=1&method=xhtml"), MediaType.TEXT_HTML);
-    assertMediaType(mediaType("?query=1&method=html"), MediaType.TEXT_HTML);
-    assertMediaType(mediaType("?query=1&method=text"), MediaType.TEXT_PLAIN);
-    assertMediaType(mediaType("?query=<json+type='object'/>&method=json"),
-        MediaType.APPLICATION_JSON);
+    check(MediaType.APPLICATION_XML, "?query=1&method=xml");
+    check(MediaType.TEXT_HTML, "?query=1&method=xhtml");
+    check(MediaType.TEXT_HTML, "?query=1&method=html");
+    check(MediaType.TEXT_PLAIN, "?query=1&method=text");
+    check(MediaType.APPLICATION_JSON, "?query=1&method=json");
 
-    assertMediaType(mediaType("?query=1&media-type=application/octet-stream"),
-        MediaType.APPLICATION_OCTET_STREAM);
-    assertMediaType(mediaType("?query=1&media-type=application/xml"), MediaType.APPLICATION_XML);
-    assertMediaType(mediaType("?query=1&media-type=text/html"), MediaType.TEXT_HTML);
-    assertMediaType(mediaType("?query=1&media-type=xxx"), new MediaType("xxx"));
+    check(MediaType.APPLICATION_OCTET_STREAM, "?query=1&media-type=application/octet-stream");
+    check(MediaType.APPLICATION_XML, "?query=1&media-type=application/xml");
+    check(MediaType.TEXT_HTML, "?query=1&media-type=text/html");
+    check(new MediaType("xxx"), "?query=1&media-type=xxx");
+  }
+
+  /**
+   * Executes the specified GET request and checks the media type of the response.
+   * @param type expected media type
+   * @param query request
+   * @throws IOException I/O exception
+   */
+  private static void check(final MediaType type, final String query) throws IOException {
+    final HttpHeaders headers = new IOUrl(REST_ROOT + query).response().headers();
+    final MediaType mt = new MediaType(headers.firstValue("Content-Type").get());
+    if(!mt.is(type)) fail("Wrong media type: " + mt + " returned, " + type + " expected.");
   }
 
   /**
@@ -108,13 +138,8 @@ public final class RESTGetTest extends RESTTest {
    * @throws IOException I/O exception
    */
   @Test public void queryOption() throws IOException {
-    assertEquals("2", get("?query=2,delete+node+<a/>&" + MainOptions.MIXUPDATES.name() + "=true"));
-    try {
-      get("?query=1,delete+node+<a/>&" + MainOptions.MIXUPDATES.name() + "=false");
-      fail("Error expected.");
-    } catch(final IOException ex) {
-      assertContains(ex.getMessage(), "[XUST0001]");
-    }
+    get(200, "", "query", "2, delete node <a/>", MainOptions.MIXUPDATES.name(), true);
+    get(500, "", "query", "2, delete node <a/>", MainOptions.MIXUPDATES.name(), false);
   }
 
   /**
@@ -123,32 +148,27 @@ public final class RESTGetTest extends RESTTest {
    */
   @Test public void runOption() throws IOException {
     final String path = context.soptions.get(StaticOptions.WEBPATH);
-    new IOFile(path, "x.xq").write("1");
-    assertEquals("1", get("?run=x.xq"));
 
-    new IOFile(path, "x.bxs").write("xquery 2");
-    assertEquals("2", get("?run=x.bxs"));
+    new IOFile(path, "query.xq").write("1");
+    get("1", "", "run", "query.xq");
+    get("1", "", "run", "query");
 
-    new IOFile(path, "x.bxs").write("xquery 3\nxquery 4");
-    assertEquals("34", get("?run=x.bxs"));
+    new IOFile(path, "script.bxs").write("xquery 2");
+    get("2", "", "run", "script.bxs");
+    get("2", "", "run", "script");
 
-    new IOFile(path, "x.bxs").write("<commands><xquery>5</xquery></commands>");
-    assertEquals("5", get("?run=x.bxs"));
+    new IOFile(path, "script.bxs").write("xquery 3\nxquery 4");
+    get("34", "", "run", "script.bxs");
 
-    new IOFile(path, "x.bxs").write("<set option='maxlen'>123</set>");
-    assertEquals("", get("?run=x.bxs"));
+    new IOFile(path, "script.bxs").write("<commands><xquery>5</xquery></commands>");
+    get("5", "", "run", "script.bxs");
 
-    try {
-      get("?run=unknown.abc");
-      fail("Error expected.");
-    } catch(final IOException ignored) {
-    }
+    new IOFile(path, "script.bxs").write("<set option='maxlen'>123</set>");
+    get(200, "", "run", "script.bxs");
 
-    try {
-      new IOFile(path, "x.bxs").write("<set option='unknown'>123</set>");
-      assertEquals("", get("?run=x.bxs"));
-      fail("Error expected.");
-    } catch(final IOException ignored) {
-    }
+    get(404, "", "run", "unknown.abc");
+
+    new IOFile(path, "script.bxs").write("<set option='unknown'>123</set>");
+    get(500, "", "run", "script.bxs");
   }
 }

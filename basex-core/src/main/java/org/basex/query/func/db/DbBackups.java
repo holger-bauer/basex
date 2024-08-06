@@ -1,12 +1,15 @@
 package org.basex.query.func.db;
 
-import static org.basex.util.Token.*;
+import static org.basex.query.func.db.DbAccess.*;
+import static org.basex.query.QueryError.*;
 
 import org.basex.core.*;
+import org.basex.core.cmd.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
+import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
@@ -16,39 +19,37 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbBackups extends StandardFunc {
-  /** Backup string. */
-  private static final String BACKUP = "backup";
-  /** Size string. */
-  private static final String SIZE = "size";
-  /** Date string. */
-  private static final String DATE = "date";
-  /** Database string. */
-  private static final String DATABASE = "database";
-
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
-    final String name = exprs.length == 0 ? null : string(toToken(exprs[0], qc));
+    final String name = defined(0) ? toName(arg(0), true, DB_NAME_X, qc) : null;
 
-    final StringList backups = name == null ? qc.context.databases.backups() :
-      qc.context.databases.backups(name);
-    return new BasicIter<FElem>(backups.size()) {
-      final IOFile dbPath = qc.context.soptions.dbPath();
+    final Context ctx = qc.context;
+    final StringList backups = name == null ? ctx.databases.backups() : ctx.databases.backups(name);
+    return new BasicIter<FNode>(backups.size()) {
+      final IOFile dbPath = ctx.soptions.dbPath();
 
       @Override
-      public FElem get(final long i) {
-        final String backup = backups.get((int) i);
-        final long length = new IOFile(dbPath, backup + IO.ZIPSUFFIX).length();
-        final String db = Databases.name(backup);
-        final Dtm dtm = Dtm.get(DateTime.parse(Databases.date(backup)).getTime());
-        return new FElem(BACKUP).add(backup).add(DATABASE, db).add(DATE, dtm.string(info)).
-            add(SIZE, token(length));
+      public FNode get(final long i) {
+        final String backup = backups.get((int) i), db = Databases.name(backup);
+        final FBuilder elem = FElem.build(Q_BACKUP).add(backup);
+        if(!db.isEmpty()) elem.add(Q_DATABASE, db);
+        elem.add(Q_DATE, Dtm.get(DateTime.parse(Databases.date(backup)).getTime()).string(info));
+        elem.add(Q_SIZE, new IOFile(dbPath, backup + IO.ZIPSUFFIX).length());
+        final String comment = ShowBackups.comment(backup, ctx);
+        if(!comment.isEmpty()) elem.add(Q_COMMENT, comment);
+        return elem.finish();
       }
     };
+  }
+
+  @Override
+  public boolean accept(final ASTVisitor visitor) {
+    return (defined(0) ? dataLock(arg(0), true, visitor) : visitor.lock((String) null)) &&
+        super.accept(visitor);
   }
 
   @Override

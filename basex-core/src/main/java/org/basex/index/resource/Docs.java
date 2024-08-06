@@ -20,20 +20,20 @@ import org.basex.util.list.*;
  * in some cases (e.g. when bulk insertions of new documents are performed). A tree structure could
  * be introduced to offer better general performance.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Lukas Kircher
  */
 final class Docs {
   /** Data reference. */
   private final Data data;
-  /** Pre values of document nodes (may be {@code null}).
+  /** Pre values of document nodes (can be {@code null}).
    * This variable should always be requested via {@link #docs()}. */
   private IntList docList;
-  /** Document paths (may be {@code null}).
+  /** Document paths (can be {@code null}).
    * This variable should always be requested via {@link #paths()}. */
   private TokenList pathList;
-  /** Mapping for path order (may be {@code null}).
+  /** Mapping for path order (can be {@code null}).
    * This variable should always be requested via {@link #order()}. */
   private int[] pathOrder;
   /** Dirty flag. */
@@ -106,7 +106,9 @@ final class Docs {
       // try to read paths from disk
       try(DataInput in = new DataInput(data.meta.dbFile(DATAPTH))) {
         pathList = new TokenList(in.readTokens());
-      } catch(final IOException ignore) { }
+      } catch(final IOException ex) {
+        Util.debug(ex);
+      }
     }
 
     // generate paths
@@ -215,21 +217,20 @@ final class Docs {
   /**
    * Returns the pre values of all document nodes matching the specified path.
    * @param path input path
-   * @param desc descendant traversal
+   * @param dir directory view
    * @return pre values (can be internal representation!)
    */
-  synchronized IntList docs(final String path, final boolean desc) {
+  synchronized IntList docs(final String path, final boolean dir) {
     // invalid path, or no documents: return empty list
     final String pth = MetaData.normPath(path);
     if(pth == null) return new IntList(0);
 
     // empty path: return all documents
     final IntList docs = docs();
-    if(desc && pth.isEmpty()) return docs;
+    if(!dir && pth.isEmpty()) return docs;
 
-    // normalize paths
+    // normalize paths, check for explicit directory indicator
     byte[] exact = EMPTY, prefix = normalize(token(pth));
-    // check for explicit directory indicator
     if(!(pth.isEmpty() || Strings.endsWith(pth, '/'))) {
       exact = prefix;
       prefix = concat(exact, SLASH);
@@ -245,7 +246,7 @@ final class Docs {
       boolean add = eq(pt, exact);
       if(!add) {
         add = startsWith(pt, prefix);
-        if(add && !desc) {
+        if(add && dir) {
           final int i = indexOf(pt, SLASH, prefix.length + 1);
           if(i != -1) add = set.add(substring(pt, prefix.length, i));
         }
@@ -258,13 +259,23 @@ final class Docs {
   /**
    * Returns the pre value of a document node that matches the specified path.
    * @param path input path
-   * @return pre value of document node, or {@code -1}
+   * @return pre value, or {@code -1} if the document does not exist or if the path is invalid
    */
   synchronized int doc(final String path) {
-    // invalid or empty path, or no documents: return -1
     final String pth = MetaData.normPath(path);
-    // find path; return -1 if path is empty or does not exist
-    return pth == null || pth.isEmpty() ? -1 : Math.max(-1, find(normalize(token(pth))));
+    if(pth != null && !pth.isEmpty()) {
+      final byte[] npth = normalize(token(pth));
+      final TokenList paths = paths();
+      final int[] order = order();
+      int l = 0, h = order.length - 1;
+      while(l <= h) {
+        final int m = l + h >>> 1, o = order[m], c = compare(paths.get(o), npth);
+        if(c == 0) return docs().get(o);
+        if(c < 0) l = m + 1;
+        else h = m - 1;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -272,10 +283,10 @@ final class Docs {
    * @param path given path (will be normalized by adding a trailing slash)
    * @return path to a directory or not
    */
-  synchronized boolean isDir(final byte[] path) {
-    final byte[] pref = concat(path, SLASH);
+  synchronized boolean isDir(final String path) {
+    final byte[] prefix = concat(path, SLASH);
     for(final byte[] pth : paths()) {
-      if(startsWith(pth, pref)) return true;
+      if(startsWith(pth, prefix)) return true;
     }
     return false;
   }
@@ -284,10 +295,12 @@ final class Docs {
    * Adds the database paths for the child documents of the given path to the given map.
    * @param path path
    * @param dir returns directories instead of files
-   * @param tbm map; values will be {@code false} to indicate documents
+   * @param map map with resource types
    */
-  synchronized void children(final byte[] path, final boolean dir, final TokenBoolMap tbm) {
-    final String pth = MetaData.normPath(string(path));
+  synchronized void children(final String path, final boolean dir,
+      final TokenObjMap<ResourceType> map) {
+
+    final String pth = MetaData.normPath(path);
     if(pth == null) return;
 
     // normalize root path
@@ -302,30 +315,10 @@ final class Docs {
         np = substring(np, root.length, np.length);
         final int i = indexOf(np, SLASH);
         // no more slashes means this must be a leaf
-        if(!dir && i == -1) tbm.put(np, false);
-        else if(dir && i >= 0) tbm.put(substring(np, 0, i), false);
+        if(!dir && i == -1) map.put(np, ResourceType.XML);
+        else if(dir && i >= 0) map.put(substring(np, 0, i), ResourceType.XML);
       }
     }
-  }
-
-  /**
-   * Returns the pre value of the addressed resource.
-   * @param path path to be found
-   * @return pre value, or {@code -1}
-   */
-  private int find(final byte[] path) {
-    // binary search
-    final TokenList paths = paths();
-    final int[] order = order();
-    int l = 0, h = order.length - 1;
-    while(l <= h) {
-      final int m = l + h >>> 1;
-      final int c = diff(paths.get(order[m]), path);
-      if(c == 0) return docs().get(m);
-      if(c < 0) l = m + 1;
-      else h = m - 1;
-    }
-    return -1;
   }
 
   /**

@@ -3,12 +3,12 @@ package org.basex.util;
 /**
  * This class stores strings in a history.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class History {
   /** Maximum size for storing entries in a history (currently: 10 MB). */
-  private static final int MAXBYTES = 10000000;
+  private static final long MAXBYTES = 100000000;
   /** Maximum number of entries to be stored. */
   private static final int MAX = 1024;
 

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.*;
 /**
  * Test class for the {@link TextInput} method.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TextInputTest {
@@ -122,6 +122,7 @@ public final class TextInputTest {
       for(int b; (b = ti.read()) != -1;) tb.add(b);
       assertSame(data, tb.finish());
     } catch(final IOException ex) {
+      Util.debug(ex);
       assertTrue(data.length >= IO.BLOCKSIZE,
         "Mark could not be reset for data size of " + data.length);
     }

@@ -1,6 +1,7 @@
 package org.basex.query.expr.path;
 
 import static org.basex.query.expr.path.Axis.*;
+import static org.basex.query.func.Function.*;
 
 import java.util.*;
 import java.util.function.*;
@@ -8,12 +9,14 @@ import java.util.function.*;
 import org.basex.core.locks.*;
 import org.basex.data.*;
 import org.basex.index.path.*;
+import org.basex.index.stats.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.expr.List;
 import org.basex.query.expr.index.*;
 import org.basex.query.func.Function;
+import org.basex.query.func.fn.*;
 import org.basex.query.func.util.*;
 import org.basex.query.util.*;
 import org.basex.query.util.index.*;
@@ -28,7 +31,7 @@ import org.basex.util.*;
 /**
  * Path expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Path extends ParseExpr {
@@ -36,12 +39,10 @@ public abstract class Path extends ParseExpr {
   public Expr root;
   /** Path steps. */
   public Expr[] steps;
-  /** Data reference (can be {@code null}). */
-  protected Data data;
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param type type
    * @param root root expression (can be {@code null})
    * @param steps steps
@@ -55,26 +56,26 @@ public abstract class Path extends ParseExpr {
   /**
    * Creates a new, optimized path expression.
    * @param cc compilation context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param root root expression (can be temporary {@link Dummy} node or {@code null})
    * @param steps steps
    * @return path instance
    * @throws QueryException query exception
    */
-  public static Expr get(final CompileContext cc, final InputInfo ii, final Expr root,
+  public static Expr get(final CompileContext cc, final InputInfo info, final Expr root,
       final Expr... steps) throws QueryException {
-    return get(ii, root, steps).optimize(cc);
+    return get(info, root, steps).optimize(cc);
   }
 
   /**
    * Returns a new path instance.
    * A path implementation is chosen that works fastest for the given steps.
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param root root expression (can be temporary {@link Dummy} node or {@code null})
    * @param steps steps
    * @return path instance
    */
-  public static Expr get(final InputInfo ii, final Expr root, final Expr... steps) {
+  public static Expr get(final InputInfo info, final Expr root, final Expr... steps) {
     // add steps of input array
     boolean axes = true;
     final ExprList tmp = new ExprList(steps.length);
@@ -82,11 +83,11 @@ public abstract class Path extends ParseExpr {
       Expr expr = step;
       if(expr instanceof ContextValue) {
         // rewrite context item to self step
-        expr = Step.get(((ContextValue) expr).info, SELF, KindTest.NOD);
+        expr = Step.get(expr.info(info), SELF, KindTest.NODE);
       } else if(expr instanceof Filter) {
         // rewrite filter expression to self step with predicates
         final Filter f = (Filter) expr;
-        if(f.root instanceof ContextValue) expr = Step.get(f.info, SELF, KindTest.NOD, f.exprs);
+        if(f.root instanceof ContextValue) expr = Step.get(f.info(), SELF, KindTest.NODE, f.exprs);
       }
       tmp.add(expr);
       axes = axes && expr instanceof Step;
@@ -99,18 +100,18 @@ public abstract class Path extends ParseExpr {
     if(axes) {
       if(iterative(root, stps)) {
         // example: a
-        if(single && !stps[0].has(Flag.POS)) return new SingleIterPath(ii, stps[0]);
+        if(single && !stps[0].has(Flag.POS)) return new SingleIterPath(info, stps[0]);
         // example: a/b
-        return new IterPath(ii, rt, stps);
+        return new IterPath(info, rt, stps);
       }
       // example: a/b/..
-      return new CachedPath(ii, rt, stps);
+      return new CachedPath(info, rt, stps);
     }
 
     // example: 'text'
     if(single && stps[0].seqType().instanceOf(SeqType.ANY_ATOMIC_TYPE_ZM)) return stps[0];
     // example: (1 to 10)/<xml/>
-    return new MixedPath(ii, rt, stps);
+    return new MixedPath(info, rt, stps);
   }
 
   @Override
@@ -134,13 +135,7 @@ public abstract class Path extends ParseExpr {
     cc.get(rt, () -> {
       final int sl = steps.length;
       for(int s = 0; s < sl; s++) {
-        Expr step = steps[s];
-        try {
-          step = step.compile(cc);
-        } catch(final QueryException ex) {
-          // replace original expression with error
-          step = cc.error(ex, step);
-        }
+        final Expr step = cc.compileOrError(steps[s], root == null && s == 0);
         steps[s] = step;
         cc.updateFocus(step);
       }
@@ -188,7 +183,7 @@ public abstract class Path extends ParseExpr {
     // return optimized expression
     if(expr != this) return expr;
 
-    // choose best path implementation (dummy will be used for type checking)
+    // choose the best path implementation (dummy will be used for type checking)
     return copyType(get(info, root == null && rt instanceof Dummy ? rt : root, steps));
   }
 
@@ -196,41 +191,50 @@ public abstract class Path extends ParseExpr {
   public final Expr simplifyFor(final Simplify mode, final CompileContext cc)
       throws QueryException {
 
-    if(mode == Simplify.EBV || mode == Simplify.PREDICATE) {
+    Expr expr = this;
+    if(mode.oneOf(Simplify.EBV, Simplify.PREDICATE)) {
+      // merge nested predicates. example: if(a[b])  ->  if(a/b)
       final Expr last = steps[steps.length - 1];
       if(last instanceof Step) {
         final Step step = (Step) last;
         if(step.exprs.length == 1 && step.seqType().type instanceof NodeType &&
             !step.exprs[0].seqType().mayBeNumber()) {
-          // merge nested predicates. example: if(a[b])  ->  if(a/b)
-          final Expr s = step.flattenEbv(this, true, cc);
-          if(s != step) {
-            step.exprs = new Expr[0];
-            return cc.simplify(this, s);
-          }
+          final Expr ex = step.flattenEbv(this, true, cc);
+          if(ex != step) expr = ex;
         }
       }
     }
-    return super.simplifyFor(mode, cc);
+    return cc.simplify(this, expr, mode);
+  }
+
+  /**
+   * Removes the last predicate from the last step and returns the optimized expression.
+   * An error will be raised if the last step is no XPath step.
+   * @param cc compilation context
+   * @return new path
+   * @throws QueryException query exception
+   */
+  public final Expr removePredicate(final CompileContext cc) throws QueryException {
+    final ExprList list = new ExprList(steps.length).add(steps);
+    final Step step = ((Step) list.pop()).removePredicate();
+    list.add(cc.get(root, () -> step.optimize(cc)));
+    return copyType(get(cc, info, root, list.finish()));
   }
 
   @Override
   public final boolean has(final Flag... flags) {
-    /* Context dependency: check if no root exists, or if it depends on context.
-     * Examples: text(); ./abc */
-    if(Flag.CTX.in(flags) && (root == null || root.has(Flag.CTX))) return true;
-    /* Positional access: only check root node (steps will refer to result of root node).
-     * Example: position()/a */
-    if(Flag.POS.in(flags) && (root != null && root.has(Flag.POS))) return true;
+    // Context dependency, positional access: only check root expression.
+    // Examples: text(); ./abc; position()/a
+    if(Flag.FCS.in(flags) ||
+       Flag.CTX.in(flags) && (root == null || root.has(Flag.CTX)) ||
+       Flag.POS.in(flags) && root != null && root.has(Flag.POS)) return true;
     // check remaining flags
     final Flag[] flgs = Flag.POS.remove(Flag.CTX.remove(flags));
-    if(flgs.length != 0) {
-      for(final Expr step : steps) {
-        if(step.has(flgs)) return true;
-      }
-      return root != null && root.has(flgs);
+    if(flgs.length == 0) return false;
+    for(final Expr step : steps) {
+      if(step.has(flgs)) return true;
     }
-    return false;
+    return root != null && root.has(flgs);
   }
 
   /**
@@ -250,7 +254,7 @@ public abstract class Path extends ParseExpr {
     for(final Expr step : steps) {
       if(!(step instanceof Step)) return false;
       final Axis axis = ((Step) step).axis;
-      return axis == Axis.SELF || axis == Axis.CHILD || axis == Axis.ATTRIBUTE;
+      if(axis != SELF && axis != CHILD && axis != ATTRIBUTE) return false;
     }
     return true;
   }
@@ -300,30 +304,22 @@ public abstract class Path extends ParseExpr {
    * @throws QueryException query exception
    */
   private Expr simplify(final CompileContext cc) throws QueryException {
-    // return root if it yields no result
-    if(root != null && root.seqType().zero()) return cc.replaceWith(this, root);
+    // root yields no result
+    if(root != null && root.seqType().zero()) return cc.emptySeq(this);
 
     // find empty results, remove redundant steps
     final int sl = steps.length;
     boolean removed = false;
     final ExprList list = new ExprList(sl);
     for(int s = 0; s < sl; s++) {
-      // remove redundant steps:
-      // <xml/>/self::node()  ->  <xml/>
-      // $text/descendant-or-self::text()  ->  $text
-      final Step st = axisStep(s);
-      if(st != null && st.exprs.length == 0 && st.test instanceof KindTest) {
-        final Expr prev = list.isEmpty() ? root : list.peek();
-        if(prev != null) {
-          final Type type = prev.seqType().type;
-          if(type.instanceOf(st.test.type) && (
-            st.axis == SELF ||
-            st.axis == DESCENDANT_OR_SELF && type.oneOf(NodeType.LEAVE_TYPES) ||
-            st.axis == ANCESTOR_OR_SELF && type.instanceOf(NodeType.DOCUMENT_NODE)
-          )) {
-            removed = true;
-            continue;
-          }
+      final Expr step = steps[s];
+      final Expr prev = list.isEmpty() ? root != null ? root : cc.qc.focus.value : list.peek();
+      if(prev != null) {
+        final SeqType seqType = prev.seqType();
+        if(seqType.type instanceof NodeType && (step instanceof ContextValue ||
+            step instanceof Step && ((Step) step).remove(seqType))) {
+          removed = true;
+          continue;
         }
       }
 
@@ -335,7 +331,7 @@ public abstract class Path extends ParseExpr {
       list.add(expr);
 
       // ignore remaining steps if step yields no results
-      // example: A/prof:void(.)/B  ->  A/prof:void(.)
+      // example: A/void(.)/B  ->  A/void(.)
       if(expr.seqType().zero() && s + 1 < sl) {
         cc.info(QueryText.OPTSIMPLE_X_X, (Supplier<?>) this::description, this);
         break;
@@ -344,36 +340,108 @@ public abstract class Path extends ParseExpr {
 
     // self step was removed: ensure that result will be in distinct document order
     if(removed && (list.isEmpty() || !(list.get(0).seqType().type instanceof NodeType))) {
-      if(root == null) root = new ContextValue(info).optimize(cc);
-      if(!root.ddo()) root = cc.simplify(root, cc.function(Function._UTIL_DDO, info, root));
+      if(root == null) root = ContextValue.get(cc, info);
+      if(!root.ddo()) {
+        root = cc.replaceWith(root, cc.function(Function.DISTINCT_ORDERED_NODES, info, root));
+      }
     }
 
     // no steps left: return root
     steps = list.finish();
-    return steps.length == 0 ? cc.replaceWith(this, root) : this;
+    return cc.replaceWith(this, steps.length == 0 ? root : this);
   }
 
   /**
    * Returns the path nodes that will result from this path.
    * @param rt root at compile time (can be {@code null})
-   * @return path nodes or {@code null} if nodes cannot be evaluated
+   * @param stats assess database statistics
+   * @return path nodes, or {@code null} if nodes cannot be evaluated
    */
-  public final ArrayList<PathNode> pathNodes(final Expr rt) {
+  private ArrayList<PathNode> pathNodes(final Expr rt, final boolean stats) {
     // ensure that path starts with document nodes
-    if(rt == null || !rt.seqType().type.instanceOf(NodeType.DOCUMENT_NODE) || data == null ||
-        !data.meta.uptodate) return null;
-
-    ArrayList<PathNode> nodes = data.paths.root();
-    final int sl = steps.length;
-    for(int s = 0; s < sl; s++) {
-      final Step curr = axisStep(s);
-      if(curr == null) return null;
-      nodes = curr.nodes(nodes, data);
-      if(nodes == null) return null;
-    }
-    return nodes;
+    final Data data = data();
+    return rt != null && rt.seqType().type.instanceOf(NodeType.DOCUMENT_NODE) && data != null &&
+        data.meta.uptodate ? pathNodes(data.paths.root(), stats) : null;
   }
 
+  /**
+   * Returns the path nodes that will result from this path.
+   * @param nodes current path nodes
+   * @param stats assess database statistics
+   * @return path nodes, or {@code null} if nodes cannot be collected
+   */
+  final ArrayList<PathNode> pathNodes(final ArrayList<PathNode> nodes, final boolean stats) {
+    ArrayList<PathNode> pn = nodes;
+    for(final Expr expr : steps) {
+      if(expr instanceof UtilRoot) {
+        pn = UtilRoot.nodes(pn);
+      } else if(expr instanceof Step) {
+        final Step step = (Step) expr;
+        pn = step.nodes(pn, stats);
+        // check if paths within predicates are correct
+        if(!stats && pn != null) {
+          for(final Expr ex : step.exprs) {
+            if(ex instanceof AxisPath) {
+              final AxisPath path = (AxisPath) ex;
+              if(path.root == null) {
+                final ArrayList<PathNode> tmp = path.pathNodes(pn, false);
+                if(tmp != null && tmp.isEmpty()) return tmp;
+              }
+            }
+          }
+        }
+      } else {
+        pn = null;
+      }
+      if(pn == null) break;
+    }
+    return pn;
+  }
+
+  /**
+   * Returns database statistics for the path nodes that will result from this path.
+   * @return statistics or {@code null}
+   */
+  public ArrayList<Stats> pathStats() {
+    final ArrayList<PathNode> nodes = pathNodes(root, true);
+    if(nodes == null) return null;
+
+    // loop through all nodes
+    final ArrayList<Stats> stats = new ArrayList<>();
+    for(PathNode node : nodes) {
+      // retrieve text child if addressed node is an element
+      if(node.kind == Data.ELEM) {
+        if(!node.stats.isLeaf()) return null;
+        for(final PathNode nd : node.children) {
+          if(nd.kind == Data.TEXT) node = nd;
+        }
+      }
+      // skip nodes others than texts and attributes
+      // check if distinct values are available
+      final int kind = node.kind;
+      if(kind != Data.TEXT && kind != Data.ATTR) return null;
+      stats.add(node.stats);
+    }
+    return stats;
+  }
+
+  /**
+   * Checks if the path contains empty steps.
+   * @param rt root at compile time (can be {@code null})
+   * @return result of check
+   */
+  private boolean emptySteps(final Expr rt) {
+    if(rt != null) {
+      Expr prev = rt;
+      for(final Expr step : steps) {
+        final SeqType seqType = prev.seqType();
+        if(seqType.type instanceof NodeType && step instanceof Step && ((Step) step).empty(seqType))
+          return true;
+        prev = step;
+      }
+    }
+    return false;
+  }
   /**
    * Checks if a path can be evaluated iteratively (i.e., if all results will be in distinct
    * document order without final sorting).
@@ -431,36 +499,37 @@ public abstract class Path extends ParseExpr {
 
   /**
    * Assigns a sequence type and (if statically known) result size.
-   * @param rt compile time root (can be {@code null})
+   * @param rt root at compile time (can be {@code null})
    */
   private void seqType(final Expr rt) {
-    if(rt != null) data = rt.data();
-
-    final SeqType st = steps[steps.length - 1].seqType();
+    final Expr last = steps[steps.length - 1];
+    final Data data = last.data();
+    final SeqType st = last.seqType();
     Occ occ = Occ.ZERO_OR_MORE;
-    long size = size(rt);
+    long size = size(rt, data);
 
     if(size == -1 && rt != null) {
-      size = rt.size();
       occ = rt.seqType().occ;
+      size = rt.size();
 
       for(final Expr step : steps) {
+        occ = occ.union(step.seqType().occ);
         final long sz = step.size();
         size = size != -1 && sz != -1 ? size * sz : -1;
-        occ = occ.union(step.seqType().occ);
       }
       // more than one result: final size is unknown due to DDO
       if(size > 1) size = -1;
     }
-    exprType.assign(st, occ, size);
+    exprType.assign(st, occ, size).data(data);
   }
 
   /**
    * Computes the result size via database statistics.
-   * @param rt compile time root (can be {@code null})
+   * @param rt root at compile time (can be {@code null})
+   * @param data data reference
    * @return number of results (or {@code -1})
    */
-  private long size(final Expr rt) {
+  private long size(final Expr rt, final Data data) {
     // check if path will yield any results
     if(root != null && root.size() == 0) return 0;
     for(final Expr step : steps) {
@@ -480,7 +549,7 @@ public abstract class Path extends ParseExpr {
     for(int s = 0; s < sl; s++) {
       final Step curr = axisStep(s);
       if(curr != null) {
-        nodes = curr.nodes(nodes, data);
+        nodes = curr.nodes(nodes, true);
         if(nodes == null) return -1;
       } else if(s + 1 == sl) {
         lastSize = steps[s].size();
@@ -503,6 +572,7 @@ public abstract class Path extends ParseExpr {
    */
   private ArrayList<PathNode> pathNodes(final int last) {
     // skip request if no path index exists or might be out-of-date
+    final Data data = data();
     if(data == null || !data.meta.uptodate) return null;
 
     ArrayList<PathNode> nodes = data.paths.root();
@@ -535,24 +605,12 @@ public abstract class Path extends ParseExpr {
   /**
    * Returns an empty sequence if the path will yield no results.
    * @param cc compilation context
-   * @param rt compile time root (can be {@code null})
+   * @param rt root at compile time (can be {@code null})
    * @return original or new expression
    */
   private Expr removeEmpty(final CompileContext cc, final Expr rt) {
-    final Check emptySteps = () -> {
-      Expr prev = rt;
-      for(final Expr step : steps) {
-        if(step instanceof Step && prev != null) {
-          final Type type = prev.seqType().type;
-          if(type instanceof NodeType && ((Step) step).emptyStep((NodeType) type)) return true;
-        }
-        prev = step;
-      }
-      return false;
-    };
-
-    final ArrayList<PathNode> nodes = pathNodes(rt);
-    if(nodes != null ? nodes.isEmpty() : emptySteps.ok()) {
+    final ArrayList<PathNode> nodes = pathNodes(rt, false);
+    if(nodes != null ? nodes.isEmpty() : emptySteps(rt)) {
       cc.info(QueryText.OPTPATH_X, this);
       return Empty.VALUE;
     }
@@ -562,7 +620,7 @@ public abstract class Path extends ParseExpr {
   /**
    * Converts descendant to child steps.
    * @param cc compilation context
-   * @param rt compile time root (can be {@code null})
+   * @param rt root at compile time (can be {@code null})
    * @return original or new expression
    * @throws QueryException query exception
    */
@@ -571,6 +629,7 @@ public abstract class Path extends ParseExpr {
     // - if path does not start with document nodes
     // - if index does not exist or is out-dated
     // - if several namespaces occur in the input
+    final Data data = data();
     if(rt == null || !rt.seqType().type.instanceOf(NodeType.DOCUMENT_NODE) ||
         data == null || !data.meta.uptodate || data.defaultNs() == null) return this;
 
@@ -611,9 +670,9 @@ public abstract class Path extends ParseExpr {
       for(int t = 0; t < ts; t++) {
         final Expr[] preds = t == ts - 1 ? ((Preds) steps[s]).exprs : new Expr[0];
         final QNm qName = qNames.get(ts - t - 1);
-        final Test test = qName == null ? KindTest.ELM :
+        final Test test = qName == null ? KindTest.ELEMENT :
           new NameTest(qName, NamePart.LOCAL, NodeType.ELEMENT, null);
-        stps[t] = Step.get(cc, root, curr.info, CHILD, test, preds);
+        stps[t] = Step.get(cc, root, curr.info(), CHILD, test, preds);
       }
       while(++s < sl) stps[ts++] = steps[s];
 
@@ -672,7 +731,7 @@ public abstract class Path extends ParseExpr {
    * Queries of type 1, 3, 5 will not yield any results if the string to be compared is empty.
    *
    * @param cc compilation context
-   * @param rt compile time root (can be {@code null})
+   * @param rt root at compile time (can be {@code null})
    * @return original or new expression
    * @throws QueryException query exception
    */
@@ -683,9 +742,10 @@ public abstract class Path extends ParseExpr {
     // cache index access costs
     IndexInfo index = null;
     // cheapest predicate and step
-    int indexPred = 0, indexStep = 0;
+    int predIndex = 0, stepIndex = 0;
 
     // check if path can be converted to an index access
+    final Data data = data();
     final int sl = steps.length;
     for(int s = 0; s < sl; s++) {
       // only accept descendant steps without positional predicates
@@ -700,21 +760,21 @@ public abstract class Path extends ParseExpr {
           new IndexStaticDb(data, info) :
           new IndexDynDb(root == null ? new ContextValue(info) : root, info);
 
-        // choose cheapest index access
+        // choose the cheapest index access
         for(int e = 0; e < el; e++) {
           final IndexInfo ii = new IndexInfo(db, cc, step);
           if(!step.exprs[e].indexAccessible(ii)) continue;
 
           if(ii.costs.results() == 0) {
             // no results...
-            cc.info(QueryText.OPTNORESULTS_X, ii.step);
+            cc.info(QueryText.OPTNORESULTS_X, step);
             return Empty.VALUE;
           }
 
           if(index == null || index.costs.compareTo(ii.costs) > 0) {
             index = ii;
-            indexPred = e;
-            indexStep = s;
+            predIndex = e;
+            stepIndex = s;
           }
         }
       }
@@ -729,72 +789,73 @@ public abstract class Path extends ParseExpr {
     cc.info(index.optInfo);
 
     // create new root expression
-    final ExprList resultSteps = new ExprList();
-    final Expr resultRoot;
+    final ExprList indexSteps = new ExprList();
+    final Expr indexRoot;
     if(index.expr instanceof Path) {
       final Path path = (Path) index.expr;
-      resultRoot = path.root;
-      resultSteps.add(path.steps);
+      indexRoot = path.root;
+      indexSteps.add(path.steps);
     } else {
-      resultRoot = index.expr;
+      indexRoot = index.expr;
     }
     // only one hit: update sequence type
-    if(index.costs.results() == 1 && resultRoot instanceof ParseExpr) {
-      final Occ occ = resultRoot instanceof IndexAccess ? Occ.EXACTLY_ONE : Occ.ZERO_OR_ONE;
-      ((ParseExpr) resultRoot).exprType.assign(occ);
+    if(index.costs.results() == 1 && indexRoot instanceof ParseExpr) {
+      final Occ occ = indexRoot instanceof IndexAccess ? Occ.EXACTLY_ONE : Occ.ZERO_OR_ONE;
+      ((ParseExpr) indexRoot).exprType.assign(occ);
     }
 
-    // invert steps that occur before index step and add them as predicate
-    final ExprList invSteps = new ExprList(), newPreds = new ExprList();
+    // invert steps that occur before index step, rewrite them to predicates
+    final Expr indexStep = indexSteps.isEmpty() ? null : indexSteps.peek();
+    final ExprList invSteps = new ExprList(), lastPreds = new ExprList();
     final Test rootTest = InvDocTest.get(rt);
-    if(rootTest != KindTest.DOC || data == null || !data.meta.uptodate || invertSteps(indexStep)) {
-      for(int s = indexStep; s >= 0; s--) {
-        final Axis invAxis = axisStep(s).axis.invert();
+    if(rootTest != KindTest.DOCUMENT_NODE || data == null || !data.meta.uptodate ||
+        invertSteps(stepIndex)) {
+      for(int s = stepIndex; s >= 0; s--) {
+        final Axis axis = axisStep(s).axis.invert();
+        InputInfo ii;
+        Axis newAxis;
+        Test newTest;
+        Expr[] newPreds;
         if(s == 0) {
-          // add document test for collections and axes other than ancestors
-          if(rootTest != KindTest.DOC || invAxis != ANCESTOR && invAxis != ANCESTOR_OR_SELF) {
-            invSteps.add(Step.get(cc, resultRoot, info, invAxis, rootTest));
-          }
+          ii = info;
+          newAxis = axis;
+          newTest = rootTest;
+          newPreds = new Expr[0];
         } else {
-          final Step prevStep = axisStep(s - 1);
-          final Axis newAxis = prevStep.axis == ATTRIBUTE ? ATTRIBUTE : invAxis;
-          final Expr newStep = Step.get(cc, resultRoot, prevStep.info, newAxis, prevStep.test,
-              prevStep.exprs);
-          invSteps.add(newStep);
+          final Step step = axisStep(s - 1);
+          ii = step.info();
+          newAxis = step.axis == ATTRIBUTE ? ATTRIBUTE : axis;
+          newTest = step.test;
+          newPreds = step.exprs;
+        }
+        // skip step if it is always successful
+        if(newAxis != ANCESTOR && newAxis != ANCESTOR_OR_SELF ||
+            newTest != KindTest.NODE && newTest != KindTest.DOCUMENT_NODE ||
+            newPreds.length > 0) {
+          final Expr expr = invSteps.isEmpty() ?
+            indexStep != null ? indexStep : indexRoot : invSteps.peek();
+          invSteps.add(Step.get(cc, expr, ii, newAxis, newTest, newPreds));
         }
       }
     }
+    // add created steps, followed by remaining predicates
     if(!invSteps.isEmpty()) {
-      newPreds.add(get(info, null, invSteps.finish()));
+      lastPreds.add(cc.get(indexStep != null ? indexStep : indexRoot,
+        () -> get(cc, info, null, invSteps.finish())));
     }
+    lastPreds.add(Array.remove(index.step.exprs, predIndex));
 
-    // add remaining predicates
-    final Expr[] preds = index.step.exprs;
-    final int pl = preds.length;
-    for(int p = 0; p < pl; p++) {
-      if(p != indexPred) newPreds.add(preds[p]);
-    }
-
-    // add predicates to end of path
-    if(!newPreds.isEmpty()) {
-      int ls = resultSteps.size() - 1;
-      final Expr step;
-      if(ls < 0 || !(resultSteps.get(ls) instanceof Step)) {
-        // add at least one self axis step
-        step = Step.get(cc, resultRoot, info, newPreds.finish());
-        ls++;
-      } else {
-        step = ((Step) resultSteps.get(ls)).addPredicates(newPreds.finish());
-      }
-      resultSteps.set(ls, step);
+    // attach predicates to last step or new self::node() step
+    if(!lastPreds.isEmpty()) {
+      indexSteps.add(indexStep instanceof Step
+          ? ((Step) indexSteps.pop()).addPredicates(lastPreds.finish())
+          : Step.get(cc, indexRoot, info, lastPreds.finish()));
     }
 
     // add remaining steps
-    for(int s = indexStep + 1; s < sl; s++) {
-      resultSteps.add(steps[s]);
-    }
+    for(int s = stepIndex + 1; s < sl; s++) indexSteps.add(steps[s]);
 
-    return resultSteps.isEmpty() ? resultRoot : get(cc, info, resultRoot, resultSteps.finish());
+    return indexSteps.isEmpty() ? indexRoot : get(cc, info, indexRoot, indexSteps.finish());
   }
 
   /**
@@ -814,7 +875,7 @@ public abstract class Path extends ParseExpr {
       final NameTest test = (NameTest) step.test;
       if(test.part() != NamePart.LOCAL) return true;
       // only support unique paths with nodes on the correct level
-      final ArrayList<PathNode> pn = data.paths.desc(test.qname.local());
+      final ArrayList<PathNode> pn = data().paths.desc(test.qname.local());
       if(pn.size() != 1 || pn.get(0).level() != s + 1) return true;
     }
     return false;
@@ -828,20 +889,23 @@ public abstract class Path extends ParseExpr {
    */
   private Expr toUnion(final CompileContext cc) throws QueryException {
     // function for rewriting a list to a union expression
-    final QueryFunction<Expr, Expr> rewrite = step -> {
-      if(step instanceof List) {
-        return ((List) step).toUnion(cc);
-      }
+    final QueryBiFunction<Expr, Expr, Expr> rewrite = (step, next) -> {
+      // do not rewrite (a, b)/<c/>
+      if(step == null || next != null && next.has(Flag.CNS)) return step;
+      // (a, b)/c  ->  (a | b)/a
+      if(step instanceof List) return ((List) step).toUnion(cc);
+      // a[b, c]  ->  a[b | c]
       if(step instanceof Filter) {
         final Filter filter = (Filter) step;
         if(!filter.mayBePositional() && filter.root instanceof List) {
           final Expr st = ((List) filter.root).toUnion(cc);
-          if(st != filter.root) return Filter.get(cc, filter.info, st, filter.exprs);
+          if(st != filter.root) return Filter.get(cc, filter.info(), st, filter.exprs);
         }
       }
-      if(step instanceof UtilReplicate && ((UtilReplicate) step).once() &&
-          step.seqType().type instanceof NodeType) {
-        return step.arg(0);
+      // replicate(a, 2)/b  ->  a/b
+      if(step.seqType().type instanceof NodeType) {
+        if(REPLICATE.is(step) && ((FnReplicate) step).singleEval(false)) return step.arg(0);
+        if(step instanceof SingletonSeq) return ((SingletonSeq) step).itemAt(0);
       }
       return step;
     };
@@ -849,7 +913,7 @@ public abstract class Path extends ParseExpr {
     // only rewrite root expression if subsequent step yields nodes
     boolean changed = false;
     if(steps[0].seqType().type instanceof NodeType) {
-      final Expr rt = rewrite.apply(root);
+      final Expr rt = rewrite.apply(root, steps[0]);
       if(rt != root) {
         root = rt;
         changed = true;
@@ -860,7 +924,7 @@ public abstract class Path extends ParseExpr {
       boolean chngd = false;
       final int sl = steps.length;
       for(int s = 0; s < sl; s++) {
-        final Expr step = rewrite.apply(steps[s]);
+        final Expr step = rewrite.apply(steps[s], s + 1 < sl ? steps[s + 1] : null);
         if(step != steps[s]) {
           steps[s] = step;
           chngd = true;
@@ -885,17 +949,18 @@ public abstract class Path extends ParseExpr {
     return cc.ok(root, () -> {
       boolean chngd = false;
       for(int s = 0; s < sl; s++) {
-        Expr curr = steps[s], next = s < sl - 1 ? steps[s + 1] : null;
-        if(steps[s] instanceof Step) {
-          final Step crr = (Step) steps[s];
-          if(crr.test == KindTest.NOD && next instanceof Step && ((Step) next).axis == ATTRIBUTE) {
+        Expr curr = steps[s];
+        if(curr instanceof Step) {
+          Expr next = s < sl - 1 ? steps[s + 1] : null;
+          final Step crr = (Step) curr;
+          if(crr.test == KindTest.NODE && next instanceof Step && ((Step) next).axis == ATTRIBUTE) {
             // rewrite node test before attribute step: node()/@*  ->  */@*
-            next = Step.get(cc, root, crr.info, crr.axis, KindTest.ELM, crr.exprs);
+            next = Step.get(cc, null, crr.info(), crr.axis, KindTest.ELEMENT, crr.exprs);
             curr = cc.replaceWith(curr, next);
             chngd = true;
           } else if(next != null) {
             // merge steps: //*  ->  /descendant::*
-            next = mergeStep(crr, next, cc);
+            next = mergeStep(crr, next, s > 0 ? steps[s - 1] : root, cc);
             if(next != null) {
               cc.info(QueryText.OPTMERGE_X, next);
               curr = next;
@@ -918,13 +983,16 @@ public abstract class Path extends ParseExpr {
    * @throws QueryException query exception
    */
   private Expr movePredicates(final CompileContext cc) throws QueryException {
-    // example: //*[text()]/text()  ->  //*/text()
+    // examples:
+    // a[b]/b      ->  a/b
+    // a[b]/b/c    ->  a/b/c
+    // a[b/c]/b/c  ->  a/b/c
     return cc.get(root, () -> {
       final int sl = steps.length;
       for(int s = 0; s < sl; s++) {
         final Expr curr = steps[s];
         if(curr instanceof Step) {
-          final Expr ex = movePredicates(cc, s);
+          final Expr ex = movePredicates(s);
           if(ex != null) return ex;
         }
         cc.updateFocus(curr);
@@ -935,12 +1003,10 @@ public abstract class Path extends ParseExpr {
 
   /**
    * Moves a predicate downwards.
-   * @param cc compilation context
    * @param s current step
    * @return new expression or {@code null}
-   * @throws QueryException query exception
    */
-  private Expr movePredicates(final CompileContext cc, final int s) throws QueryException {
+  private Expr movePredicates(final int s) {
     final Step step = (Step) steps[s];
     if(step.exprs.length != 1 || step.mayBePositional()) return null;
 
@@ -951,102 +1017,114 @@ public abstract class Path extends ParseExpr {
 
     final Expr[] predSteps = path.steps;
     final int sl = steps.length, pl = predSteps.length;
-    int t = s + 1, p = 0;
-    for(; t < sl && p < pl; p++, t++) {
-      if(!steps[t].equals(predSteps[p])) break;
+    int p = 0;
+    for(int i = s + 1; i < sl && p < pl; p++, i++) {
+      if(!steps[i].equals(predSteps[p])) break;
     }
-    if(t == s + 1) return null;
+    if(p < pl) return null;
 
-    // compose new path
-    final ExprList list = new ExprList();
-    // add previous steps
-    for(int r = 0; r < s; r++) list.add(steps[r]);
-    // add analyzed step without predicates
-    list.add(step.copyType(Step.get(step.info, step.axis, step.test)));
-    // add steps in between
-    for(int r = s + 1; r < t - 1; r++) list.add(steps[r]);
-    // attach remaining predicates of analyzed step
-    if(p < pl) {
-      cc.updateFocus(list.peek());
-      final Expr expr = get(cc, info, null, Arrays.copyOfRange(predSteps, p, pl));
-      list.add(((Step) steps[t - 1]).addPredicates(expr).optimize(cc));
-    } else {
-      list.add(steps[t - 1]);
-    }
-    // add remaining steps
-    for(int r = t; r < sl; r++) list.add(steps[r]);
-
-    return get(info, root, list.finish());
+    // compose new path, adopt analyzed step without predicates
+    final Expr[] exprs = steps.clone();
+    exprs[s] = step.copyType(Step.get(step.info(), step.axis, step.test));
+    return get(info, root, exprs);
   }
 
   /**
    * Merges adjacent steps.
    * @param curr current step
    * @param next next step
+   * @param prev previous step (can be {@code null})
    * @param cc compilation context
    * @return merged expression or {@code null}
    * @throws QueryException query exception
    */
-  private static Expr mergeStep(final Step curr, final Expr next, final CompileContext cc)
-      throws QueryException {
+  private static Expr mergeStep(final Step curr, final Expr next, final Expr prev,
+      final CompileContext cc) throws QueryException {
+
+    // do not merge if current step contains positional predicates
+    if(curr.mayBePositional()) return null;
 
     // merge self steps:  child::*/self::a  ->  child::a
     final Step nxt = next instanceof Step ? (Step) next : null;
     if(nxt != null && nxt.axis == SELF && !nxt.mayBePositional()) {
       final Test test = curr.test.intersect(nxt.test);
-      if(test == null) return null;
-      curr.test = test;
-      return curr.addPredicates(nxt.exprs);
+      return test == null ? null :
+        Step.get(cc, prev, curr.info(), curr.axis, test, ExprList.concat(curr.exprs, nxt.exprs));
     }
 
-    if(curr.axis != DESCENDANT_OR_SELF || curr.test != KindTest.NOD || curr.exprs.length > 0)
+    // merge descendant-or-self::node()
+    if(curr.axis != DESCENDANT_OR_SELF || curr.test != KindTest.NODE || curr.exprs.length > 0)
       return null;
 
-    // checks if an expression is a simple child or descendant step
-    final Predicate<Expr> simple = expr -> {
-      if(expr instanceof Step) {
-        final Step step = (Step) expr;
-        return (step.axis == CHILD || step.axis == DESCENDANT) && !step.mayBePositional();
-      }
-      return false;
-    };
+    // examples:
+    // - descendant-or-self::node()/*  ->  descendant::*
+    // - descendant-or-self::node()/descendant::*  ->  descendant::*
+    // - descendant-or-self::node()/descendant-or-self::*  ->  descendant-or-self::*
+    final Axis merged = mergedAxis(nxt);
+    if(merged != null) return Step.get(cc, prev, nxt.info(), merged, nxt.test, nxt.exprs);
+
     // function for merging steps inside union expressions
     final QueryFunction<Expr, Expr> rewrite = expr -> {
-      final Checks<Expr> startWithChild = ex -> {
-        if(!(ex instanceof Path)) return false;
-        final Path path = (Path) ex;
-        return path.root == null && simple.test(path.steps[0]);
-      };
       if(expr instanceof Union) {
-        final Union union = (Union) expr;
-        if(startWithChild.all(union.exprs)) {
-          for(final Expr path : union.exprs) {
-            ((Step) ((Path) path).steps[0]).axis = DESCENDANT;
+        final Axis axis = commonAxis(expr.args());
+        if(axis != null) {
+          for(final Expr path : expr.args()) {
+            final Path p = (Path) path;
+            final Step s = (Step) p.steps[0];
+            p.steps[0] = Step.get(cc, prev, s.info(), axis, s.test, s.exprs);
           }
-          return union.optimize(cc);
+          return expr.optimize(cc);
         }
       }
       return null;
     };
+    // descendant-or-self::node()/(* | text())  ->  (descendant::text() | (descendant::*)
+    if(next instanceof Union) return rewrite.apply(next);
 
-    // example: //child::*  ->  descendant::*
-    if(simple.test(nxt)) {
-      nxt.axis = DESCENDANT;
-      return nxt;
-    }
-    // example: //(text()|*)  ->  (descendant::text() | descendant::*)
-    if(next instanceof Union) {
-      return rewrite.apply(next);
-    }
-    // example: //(text()|*)[..]  ->  (/descendant::text() | /descendant::*)[..]
+    // descendant-or-self::node()/(text()|*)[..]  ->  (descendant::text() | descendant::*)[..]
     if(next instanceof Filter) {
       final Filter filter = (Filter) next;
       if(!filter.mayBePositional()) {
         final Expr expr = rewrite.apply(filter.root);
-        if(expr != null) return Filter.get(cc, filter.info, expr, filter.exprs);
+        if(expr != null) return Filter.get(cc, filter.info(), expr, filter.exprs);
       }
     }
     return null;
+  }
+
+  /**
+   * Returns a merged axis for a step preceded by descendant-or-self::node().
+   * @param expr step to test
+   * @return axis or {@code null}
+   */
+  private static Axis mergedAxis(final Expr expr) {
+    if(expr instanceof Step) {
+      final Step step = (Step) expr;
+      final Axis axis = step.axis;
+      if(!step.mayBePositional()) {
+        if(axis == CHILD || axis == DESCENDANT) return DESCENDANT;
+        if(axis == DESCENDANT_OR_SELF) return DESCENDANT_OR_SELF;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns the common merged axis of multiple expressions.
+   * @param exprs expressions
+   * @return common axis or {@code null}
+   */
+  private static Axis commonAxis(final Expr... exprs) {
+    Axis common = null;
+    for(final Expr ex : exprs) {
+      if(!(ex instanceof Path)) return null;
+      final Path path = (Path) ex;
+      if(path.root != null) return null;
+      final Axis merged = mergedAxis(path.steps[0]);
+      common = common == merged || common == null ? merged : null;
+      if(common == null) return null;
+    }
+    return common;
   }
 
   @Override
@@ -1062,7 +1140,7 @@ public abstract class Path extends ParseExpr {
   @Override
   public final VarUsage count(final Var var) {
     // context reference check: only consider root
-    if(var == null) return root == null ? VarUsage.ONCE : root.count(var);
+    if(var == null) return root == null ? VarUsage.ONCE : root.count(null);
 
     final VarUsage inRoot = root == null ? VarUsage.NEVER : root.count(var);
     return VarUsage.sum(var, steps) == VarUsage.NEVER ? inRoot : VarUsage.MORE_THAN_ONCE;
@@ -1087,12 +1165,13 @@ public abstract class Path extends ParseExpr {
     final CompileContext cc = ic.cc;
     final int sl = steps.length;
     final Expr rt = root != null ? root : cc.qc.focus.value;
-    if(changed) {
+    if(changed) cc.get(rt, () -> {
       for(int s = 0; s < sl; s++) {
-        final Expr step = steps[s];
-        steps[s] = step instanceof Step ? ((Step) step).optimize(rt, cc) : step.optimize(cc);
+        steps[s] = steps[s].optimize(cc);
+        cc.updateFocus(steps[s]);
       }
-    }
+      return null;
+    });
 
     changed |= ic.var != null && cc.ok(rt, () -> {
       boolean chngd = false;
@@ -1113,7 +1192,7 @@ public abstract class Path extends ParseExpr {
   @Override
   public final boolean accept(final ASTVisitor visitor) {
     if(root == null) {
-      visitor.lock(Locking.CONTEXT, false);
+      visitor.lock(Locking.CONTEXT);
     } else if(!root.accept(visitor)) {
       return false;
     }
@@ -1138,12 +1217,12 @@ public abstract class Path extends ParseExpr {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), root, steps);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     if(root != null) qs.token(root).token('/');
     qs.tokens(steps, "/");
   }

@@ -1,7 +1,6 @@
 package org.basex.query.expr;
 
 import org.basex.core.locks.*;
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -13,19 +12,26 @@ import org.basex.util.hash.*;
 /**
  * Context value.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ContextValue extends Simple {
-  /** Data reference (can be {@code null}). */
-  private Data data;
-
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public ContextValue(final InputInfo info) {
     super(info, SeqType.ITEM_ZM);
+  }
+
+  /**
+   * Creates a new, optimized context value expression.
+   * @param cc compilation context
+   * @param info input info (can be {@code null})
+   * @return optimized expression
+   */
+  public static Expr get(final CompileContext cc, final InputInfo info) {
+    return new ContextValue(info).optimize(cc);
   }
 
   @Override
@@ -59,23 +65,13 @@ public final class ContextValue extends Simple {
   }
 
   @Override
-  public Data data() {
-    return data;
-  }
-
-  @Override
-  public void data(final Data dt) {
-    data = dt;
-  }
-
-  @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
     return copyType(new ContextValue(info));
   }
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
-    return visitor.lock(Locking.CONTEXT, false) && super.accept(visitor);
+    return visitor.lock(Locking.CONTEXT) && super.accept(visitor);
   }
 
   @Override
@@ -84,7 +80,7 @@ public final class ContextValue extends Simple {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(".");
   }
 }

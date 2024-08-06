@@ -1,13 +1,20 @@
 package org.basex.util;
 
 import static org.basex.core.Text.*;
+import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.net.*;
+import java.nio.file.*;
 import java.util.*;
 
+import javax.net.ssl.*;
+
+import org.basex.core.jobs.*;
 import org.basex.io.*;
+import org.basex.io.in.*;
 import org.basex.query.*;
+import org.basex.util.hash.*;
 import org.basex.util.list.*;
 
 /**
@@ -15,7 +22,7 @@ import org.basex.util.list.*;
  * The methods are used for dumping error output, debugging information,
  * getting the application path, etc.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Util {
@@ -39,7 +46,7 @@ public final class Util {
     tb.add(NL).add("OS: ").add(System.getProperty("os.name"));
     tb.add(", ").add(System.getProperty("os.arch"));
     tb.add(NL).add("Stack Trace: ");
-    for(final String e : toArray(throwable)) tb.add(NL).add(e);
+    for(final String string : toArray(throwable)) tb.add(NL).add(string);
     return tb.toString();
   }
 
@@ -48,7 +55,7 @@ public final class Util {
    * @return runtime exception (indicates that an error is raised)
    */
   public static RuntimeException notExpected() {
-    return notExpected("Not Expected.");
+    return new RuntimeException("Not Expected.");
   }
 
   /**
@@ -93,7 +100,7 @@ public final class Util {
    * @return password or empty string
    */
   public static String password() {
-    // use standard input if no console if defined (such as in Eclipse)
+    // use standard input if no console is defined (such as in Eclipse)
     if(NOCONSOLE) return input();
     // hide password
     final char[] pw = System.console().readPassword();
@@ -101,19 +108,12 @@ public final class Util {
   }
 
   /**
-   * Prints a newline to standard output.
-   */
-  public static void outln() {
-    out(NL);
-  }
-
-  /**
    * Prints a string to standard output, followed by a newline.
    * @param string output string
    * @param ext text optional extensions
    */
-  public static void outln(final Object string, final Object... ext) {
-    out((string instanceof byte[] ? Token.string((byte[]) string) : string) + NL, ext);
+  public static void println(final Object string, final Object... ext) {
+    print((string instanceof byte[] ? string((byte[]) string) : string) + NL, ext);
   }
 
   /**
@@ -121,7 +121,7 @@ public final class Util {
    * @param string output string
    * @param ext text optional extensions
    */
-  public static void out(final Object string, final Object... ext) {
+  public static void print(final Object string, final Object... ext) {
     System.out.print(info(string, ext));
   }
 
@@ -160,24 +160,31 @@ public final class Util {
 
   /**
    * Returns a more user-friendly error message for the specified exception.
-   * @param throwable throwable reference
+   * @param th throwable reference
    * @return error message
    */
-  public static String message(final Throwable throwable) {
-    debug(throwable);
-    if(throwable instanceof BindException) return SRV_RUNNING;
-    if(throwable instanceof ConnectException) return CONNECTION_ERROR;
-    if(throwable instanceof SocketTimeoutException) return TIMEOUT_EXCEEDED;
-    if(throwable instanceof SocketException) return CONNECTION_ERROR;
+  public static String message(final Throwable th) {
+    debug(th);
+    if(th instanceof BindException) return SRV_RUNNING;
+    if(th instanceof ConnectException) return CONNECTION_ERROR;
+    if(th instanceof SocketTimeoutException) return TIMEOUT_EXCEEDED;
+    if(th instanceof SocketException) return CONNECTION_ERROR;
 
-    String msg = throwable.getMessage();
-    if(msg == null || msg.isEmpty() || throwable instanceof RuntimeException)
-      msg = throwable.toString();
-    if(throwable instanceof FileNotFoundException) return info(RES_NOT_FOUND_X, msg);
-    if(throwable instanceof UnknownHostException) return info(UNKNOWN_HOST_X, msg);
+    String msg = th.getMessage();
+    if(th instanceof JobException) return msg;
+    if(msg == null || msg.isEmpty() || th instanceof RuntimeException || th instanceof Error) {
+      msg = th.toString();
+    }
+    if(th instanceof ReflectiveOperationException) {
+      if(th.getCause() != null) msg += "; " + th.getCause();
+    }
+    if(th instanceof FileNotFoundException || th instanceof NoSuchFileException)
+      return info(RES_NOT_FOUND_X, msg);
+    if(th instanceof UnknownHostException) return info(UNKNOWN_HOST_X, msg);
+    if(th instanceof SSLException) return "SSL: " + msg;
 
     // chop long error messages. // example: doc("http://google.com/sdffds")
-    if(throwable.getClass() == IOException.class && msg.length() > 200) {
+    if(th.getClass() == IOException.class && msg.length() > 200) {
       msg = msg.substring(0, 200) + DOTS;
     }
     return msg;
@@ -196,7 +203,7 @@ public final class Util {
    * @param string debug string
    * @param ext text optional extensions
    */
-  public static void debug(final Object string, final Object... ext) {
+  public static void debugln(final Object string, final Object... ext) {
     if(Prop.debug) errln(string, ext);
   }
 
@@ -208,7 +215,7 @@ public final class Util {
    * @return extended string
    */
   public static String info(final Object string, final Object... ext) {
-    return Token.string(inf(string, ext));
+    return string(inf(string, ext));
   }
 
   /**
@@ -231,7 +238,7 @@ public final class Util {
   }
 
   /**
-   * Prints the current stack trace to System.err.
+   * Prints the current stack trace to System.err. Used for testing.
    * @param depth number of steps to print
    */
   public static void stack(final int depth) {
@@ -247,7 +254,7 @@ public final class Util {
     errln(message);
     final String[] stack = toArray(new Throwable());
     final int l = Math.min(Math.max(2, depth + 2), stack.length);
-    for(int s = 2; s < l; ++s) errln(stack[s]);
+    for(int s = 3; s < l; s++) errln(stack[s]);
   }
 
   /**
@@ -259,17 +266,14 @@ public final class Util {
   }
 
   /**
-   * Returns an string array representation of the specified throwable.
+   * Returns a string array representation of the specified throwable.
    * @param throwable throwable
    * @return string array
    */
   private static String[] toArray(final Throwable throwable) {
-    final StackTraceElement[] st = throwable.getStackTrace();
-    final int sl = st.length;
-    final String[] obj = new String[sl + 1];
-    obj[0] = throwable.toString();
-    for(int s = 0; s < sl; s++) obj[s + 1] = "\tat " + st[s];
-    return obj;
+    final StringList sl = new StringList().add(throwable.toString());
+    for(final StackTraceElement st : throwable.getStackTrace()) sl.add("\tat " + st);
+    return sl.finish();
   }
 
   /**
@@ -307,7 +311,7 @@ public final class Util {
     for(int c = 0; c < to; c++) {
       try {
         final int exit = process.exitValue();
-        if(exit == 1) return Token.string(new IOStream(process.getErrorStream()).read());
+        if(exit == 1) return new IOStream(process.getErrorStream()).string();
         break;
       } catch(final IllegalThreadStateException ex) {
         debug(ex);
@@ -319,5 +323,39 @@ public final class Util {
       }
     }
     return null;
+  }
+
+  /**
+   * Returns the contents of a property resource.
+   * @param name name of the property resource
+   * @return property map
+   */
+  public static TokenMap properties(final String name) {
+    final InputStream is = Util.class.getResourceAsStream('/' + name);
+    if(is == null) throw notExpected("%: Property resource missing.", name);
+
+    final TokenMap map = new TokenMap();
+    try(NewlineInput nli = new NewlineInput(is)) {
+      for(String line; (line = nli.readLine()) != null;) {
+        final int s = line.indexOf('=');
+        if(s == -1 || Strings.startsWith(line, '#')) continue;
+        final byte[] key = token(line.substring(0, s).trim());
+        if(map.contains(key)) throw notExpected("%: '%' is declared twice.", name, key);
+        map.put(key, token(line.substring(s + 1).trim().replace("\\t", "\t").replace("\\n", "\n")));
+      }
+    } catch(final IOException ex) {
+      throw notExpected("%: %", name, ex);
+    }
+    return map;
+  }
+
+  /**
+   * Checks if long values are small enough to be multiplied without overflow.
+   * @param value1 first value
+   * @param value2 second value
+   * @return result of check
+   */
+  public static boolean inBounds(final long value1, final long value2) {
+    return value2 == 0 || value1 <= Long.MAX_VALUE / value2;
   }
 }

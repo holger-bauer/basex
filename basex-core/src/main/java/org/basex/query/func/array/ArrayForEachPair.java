@@ -13,33 +13,45 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayForEachPair extends ArrayFn {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final XQArray array1 = toArray(exprs[0], qc), array2 = toArray(exprs[1], qc);
-    final FItem func = checkArity(exprs[2], 2, qc);
+  public XQArray item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final XQArray array1 = toArray(arg(0), qc), array2 = toArray(arg(1), qc);
+    final FItem action = toFunction(arg(2), 3, qc);
 
-    final ArrayBuilder builder = new ArrayBuilder();
+    int p = 0;
+    final ArrayBuilder ab = new ArrayBuilder();
     final Iterator<Value> as = array1.iterator(0), bs = array2.iterator(0);
-    while(as.hasNext() && bs.hasNext()) builder.append(func.invoke(qc, info, as.next(), bs.next()));
-    return builder.freeze();
+    while(as.hasNext() && bs.hasNext()) {
+      ab.append(action.invoke(qc, info, as.next(), bs.next(), Int.get(++p)));
+    }
+    return ab.array(this);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Type type1 = exprs[0].seqType().type, type2 = exprs[1].seqType().type;
+    final Expr array1 = arg(0), array2 = arg(1);
+    if(array1 == XQArray.empty()) return array1;
+    if(array2 == XQArray.empty()) return array2;
+
+    final Type type1 = array1.seqType().type, type2 = array2.seqType().type;
     if(type1 instanceof ArrayType && type2 instanceof ArrayType) {
-      exprs[2] = coerceFunc(exprs[2], cc,
-        SeqType.ITEM_ZM, ((ArrayType) type1).declType, ((ArrayType) type2).declType);
+      arg(2, arg -> refineFunc(arg, cc, SeqType.ITEM_ZM,
+          ((ArrayType) type1).memberType, ((ArrayType) type2).memberType, SeqType.INTEGER_O));
     }
 
     // assign type after coercion (expression might have changed)
-    final FuncType ft = exprs[2].funcType();
+    final FuncType ft = arg(2).funcType();
     if(ft != null) exprType.assign(ArrayType.get(ft.declType));
 
     return this;
+  }
+
+  @Override
+  public int hofIndex() {
+    return 2;
   }
 }

@@ -12,7 +12,7 @@ import java.util.*;
  *
  * Documentation: https://docs.basex.org/wiki/Clients
  *
- * (C) BaseX Team 2005-20, BSD License
+ * (C) BaseX Team 2005-24, BSD License
  */
 public final class BaseXClient implements Closeable {
   /** UTF-8 charset. */
@@ -31,7 +31,7 @@ public final class BaseXClient implements Closeable {
    * Constructor.
    * @param host server name
    * @param port server port
-   * @param username user name
+   * @param username username
    * @param password password
    * @throws IOException Exception
    */
@@ -121,22 +121,22 @@ public final class BaseXClient implements Closeable {
   }
 
   /**
-   * Replaces a document in a database.
+   * Puts (adds or replaces) a document in the opened database.
    * @param path path to resource
    * @param input xml input
    * @throws IOException I/O exception
    */
-  public void replace(final String path, final InputStream input) throws IOException {
+  public void put(final String path, final InputStream input) throws IOException {
     send(12, path, input);
   }
 
   /**
-   * Stores a binary resource in a database.
+   * Puts (adds or replaces) a binary resource in the opened database.
    * @param path path to resource
    * @param input xml input
    * @throws IOException I/O exception
    */
-  public void store(final String path, final InputStream input) throws IOException {
+  public void putBinary(final String path, final InputStream input) throws IOException {
     send(13, path, input);
   }
 

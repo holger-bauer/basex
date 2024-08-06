@@ -15,7 +15,7 @@ import org.basex.io.out.*;
  *
  * <p>The class is implemented by the {@link ClientSession} and {@link LocalSession} classes.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Session implements Closeable {
@@ -75,20 +75,20 @@ public abstract class Session implements Closeable {
   public abstract void add(String path, InputStream input) throws IOException;
 
   /**
-   * Replaces a document in an open database.
+   * Puts (adds or replaces) a document in the opened database.
    * @param path document(s) to replace
    * @param input new content
    * @throws IOException I/O exception
    */
-  public abstract void replace(String path, InputStream input) throws IOException;
+  public abstract void put(String path, InputStream input) throws IOException;
 
   /**
-   * Stores raw data in an open database.
+   * Puts (adds or replaces) a binary resource in the opened database.
    * @param path target path
    * @param input binary input
    * @throws IOException I/O exception
    */
-  public abstract void store(String path, InputStream input) throws IOException;
+  public abstract void putBinary(String path, InputStream input) throws IOException;
 
   /**
    * Returns command info as a string, regardless of whether an output stream

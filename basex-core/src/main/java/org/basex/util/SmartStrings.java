@@ -2,9 +2,9 @@ package org.basex.util;
 
 /**
  * This class provides convenience operations for smart string comparisons.
- * If query strings and character are lower case, search will be case insensitive.
+ * If query strings and character are lower case, search will be case-insensitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SmartStrings {
@@ -51,7 +51,7 @@ public final class SmartStrings {
    * @param sub substring
    * @return result of check
    */
-  public static boolean matches(final String string, final String sub) {
+  public static boolean charsOccurIn(final String string, final String sub) {
     final int sl = string.length(), tl = sub.length();
     int t = 0;
     for(int s = 0; s < sl && t < tl; s++) {

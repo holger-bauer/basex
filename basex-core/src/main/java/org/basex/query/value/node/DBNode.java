@@ -3,6 +3,7 @@ package org.basex.query.value.node;
 import static org.basex.query.QueryText.*;
 
 import java.io.*;
+import java.util.function.*;
 
 import org.basex.api.dom.*;
 import org.basex.build.*;
@@ -10,7 +11,7 @@ import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
+import org.basex.query.func.Function;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -24,15 +25,14 @@ import org.basex.util.list.*;
 /**
  * Database node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class DBNode extends ANode {
-  /** Parent of the database instance  (can be {@code null}). */
-  FNode root;
-
   /** Data reference. */
   private final Data data;
+  /** Parent of the database instance  (can be {@code null}). */
+  private FNode root;
   /** Pre value. */
   private int pre;
 
@@ -65,7 +65,7 @@ public class DBNode extends ANode {
 
   /**
    * Constructor, specifying full node information.
-   * @param data data reference
+   * @param data data reference (can be {@code null} if invoked by {@link FTNode})
    * @param pre pre value
    * @param rt root reference (can be {@code null})
    * @param type node type
@@ -103,7 +103,6 @@ public class DBNode extends ANode {
    */
   private DBNode set(final int p, final int k) {
     type = type(k);
-    value = null;
     pre = p;
     return this;
   }
@@ -131,51 +130,50 @@ public class DBNode extends ANode {
 
   @Override
   public final byte[] string() {
-    if(value == null) value = data.atom(pre);
-    return value;
+    return data.atom(pre);
   }
 
   @Override
   public final long itr(final InputInfo ii) throws QueryException {
-    if(type == NodeType.ELEMENT) {
+    // try to directly retrieve inlined numeric value from XML storage
+    long l = Long.MIN_VALUE;
+    final boolean text = type == NodeType.TEXT;
+    if(text || type == NodeType.ATTRIBUTE) {
+      l = data.textItr(pre, text);
+    } else if(type == NodeType.ELEMENT) {
       final int as = data.attSize(pre, Data.ELEM);
       if(data.size(pre, Data.ELEM) - as == 1 && data.kind(pre + as) == Data.TEXT) {
-        final long l = data.textItr(pre + as, true);
-        if(l != Long.MIN_VALUE) return l;
+        l = data.textItr(pre + as, true);
       }
-    } else if(type == NodeType.TEXT || type == NodeType.ATTRIBUTE) {
-      final long l = data.textItr(pre, type == NodeType.TEXT);
-      if(l != Long.MIN_VALUE) return l;
     }
-    return Int.parse(this, ii);
+    return l == Long.MIN_VALUE ? Int.parse(string(), ii) : l;
   }
 
   @Override
   public final double dbl(final InputInfo ii) throws QueryException {
     // try to directly retrieve inlined numeric value from XML storage
     double d = Double.NaN;
-    if(type == NodeType.ELEMENT) {
+    final boolean text = type == NodeType.TEXT;
+    if(text || type == NodeType.ATTRIBUTE) {
+      d = data.textDbl(pre, text);
+    } else if(type == NodeType.ELEMENT) {
       final int as = data.attSize(pre, Data.ELEM);
       if(data.size(pre, Data.ELEM) - as == 1 && data.kind(pre + as) == Data.TEXT) {
         d = data.textDbl(pre + as, true);
       }
-    } else if(type == NodeType.TEXT || type == NodeType.ATTRIBUTE) {
-      d = data.textDbl(pre, type == NodeType.TEXT);
     }
-    // GH-1206: parse invalid values again
     return Double.isNaN(d) ? Dbl.parse(string(), ii) : d;
   }
 
   @Override
   public final byte[] name() {
-    return type == NodeType.ELEMENT || type == NodeType.ATTRIBUTE ||
-        type == NodeType.PROCESSING_INSTRUCTION ? data.name(pre, kind(nodeType())) : null;
+    return type.oneOf(NodeType.ELEMENT, NodeType.ATTRIBUTE, NodeType.PROCESSING_INSTRUCTION) ?
+      data.name(pre, kind((NodeType) type)) : null;
   }
 
   @Override
   public final QNm qname() {
-    if(type == NodeType.ELEMENT || type == NodeType.ATTRIBUTE ||
-        type == NodeType.PROCESSING_INSTRUCTION) {
+    if(type.oneOf(NodeType.ELEMENT, NodeType.ATTRIBUTE, NodeType.PROCESSING_INSTRUCTION)) {
       final byte[][] qname = data.qname(pre, kind());
       return new QNm(qname[0], qname[1]);
     }
@@ -184,7 +182,7 @@ public class DBNode extends ANode {
 
   @Override
   public final Atts namespaces() {
-    return data.namespaces(pre);
+    return type == NodeType.ELEMENT ? data.namespaces(pre) : null;
   }
 
   @Override
@@ -197,7 +195,7 @@ public class DBNode extends ANode {
       }
       return Token.concat('/', data.meta.name, '/', base);
     }
-    final byte[] base = attribute(QNm.XML_BASE);
+    final byte[] base = attribute(XML_BASE);
     return base != null ? base : Token.EMPTY;
   }
 
@@ -207,14 +205,15 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final int diff(final ANode node) {
+  public final int compare(final ANode node) {
     if(this == node) return 0;
     final Data ndata = node.data();
     return ndata != null ?
-      // comparison of two databases: compare pre values or database ids
-      data == ndata ? pre - ((DBNode) node).pre : data.dbid - ndata.dbid :
+      // comparison of database nodes: compare pre values or database ids
+      data == ndata ? Integer.signum(pre - ((DBNode) node).pre) :
+        Integer.signum(data.dbid - ndata.dbid) :
       // comparison of database and fragment: find LCA
-      diff(this, node);
+      compare(this, node);
   }
 
   @Override
@@ -223,15 +222,14 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final DBNode materialize(final QueryContext qc, final boolean copy) {
-    return copy ? copy(qc) : this;
+  public final DBNode materialize(final Predicate<Data> test, final InputInfo ii,
+      final QueryContext qc) throws QueryException {
+    return materialized(test, ii) ? this : copy(qc);
   }
 
   @Override
   public final DBNode finish() {
-    final DBNode node = new DBNode(data, pre, root, nodeType());
-    node.score = score;
-    return node;
+    return new DBNode(data, pre, root, (NodeType) type);
   }
 
   @Override
@@ -250,6 +248,11 @@ public class DBNode extends ANode {
   public final boolean hasChildren() {
     final int kind = kind();
     return data.attSize(pre, kind) != data.size(pre, kind);
+  }
+
+  @Override
+  public final boolean hasAttributes() {
+    return data.attSize(pre, kind()) > 0;
   }
 
   @Override
@@ -431,13 +434,8 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final BXNode toJava() {
+  public final BXNode toJava() throws QueryException {
     return BXNode.get(copy(new MainOptions(), null));
-  }
-
-  @Override
-  public final int hashCode() {
-    return data.hashCode() + pre;
   }
 
   @Override
@@ -446,20 +444,20 @@ public class DBNode extends ANode {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, PRE, pre));
   }
 
   @Override
   public String toErrorString() {
     final QueryString qs = new QueryString();
-    plan(qs, true);
+    toString(qs, true);
     return qs.toString();
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    plan(qs, false);
+  public void toString(final QueryString qs) {
+    toString(qs, false);
   }
 
   /**
@@ -467,7 +465,7 @@ public class DBNode extends ANode {
    * @param qs query string builder
    * @param error error representation
    */
-  private void plan(final QueryString qs, final boolean error) {
+  private void toString(final QueryString qs, final boolean error) {
     if(error || data.inMemory()) {
       switch((NodeType) type) {
         case ATTRIBUTE:
@@ -477,7 +475,7 @@ public class DBNode extends ANode {
           qs.concat(FPI.OPEN, name(), " ", QueryString.toValue(string()), FPI.CLOSE);
           break;
         case ELEMENT:
-          qs.concat("<", name(), hasChildren() || attributeIter().size() > 0 ? DOTS : "", "/>");
+          qs.concat("<", name(), hasChildren() || hasAttributes() ? DOTS : "", "/>");
           break;
         case DOCUMENT_NODE:
           qs.token(DOCUMENT).brace(QueryString.toQuoted(baseURI()));
@@ -490,7 +488,7 @@ public class DBNode extends ANode {
           break;
       }
     } else {
-      qs.function(Function._DB_OPEN_PRE, data.meta.name, pre);
+      qs.function(Function._DB_GET_PRE, data.meta.name, pre);
     }
   }
 }

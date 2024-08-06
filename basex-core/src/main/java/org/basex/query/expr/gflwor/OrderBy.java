@@ -21,20 +21,20 @@ import org.basex.util.hash.*;
 /**
  * FLWOR {@code order by}-expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class OrderBy extends Clause {
   /** References to the variables to be sorted. */
-  VarRef[] refs;
+  private VarRef[] refs;
   /** Sort keys. */
-  final OrderKey[] keys;
+  private final OrderKey[] keys;
 
   /**
    * Constructor.
    * @param refs variables to sort
    * @param keys sort keys
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public OrderBy(final VarRef[] refs, final OrderKey[] keys, final InputInfo info) {
     super(info, SeqType.ITEM_ZM);
@@ -73,7 +73,7 @@ public final class OrderBy extends Clause {
         while(sub.next(qc)) {
           final int kl = keys.length;
           final Item[] key = new Item[kl];
-          for(int k = 0; k < kl; k++) key[k] = keys[k].expr.atomItem(qc, keys[k].info);
+          for(int k = 0; k < kl; k++) key[k] = keys[k].expr.atomItem(qc, keys[k].info());
           tuples.add(key);
 
           final int rl = refs.length;
@@ -103,12 +103,12 @@ public final class OrderBy extends Clause {
                 Item m = a[k], n = b[k];
                 if(m == Dbl.NAN || m == Flt.NAN) m = Empty.VALUE;
                 if(n == Dbl.NAN || n == Flt.NAN) n = Empty.VALUE;
-                if(m != Empty.VALUE && n != Empty.VALUE && !m.comparable(n))
-                  throw typeError(n, m.type, key.info);
+                if(!m.isEmpty() && !n.isEmpty() && !m.comparable(n))
+                  throw typeError(n, m.type, key.info());
 
-                final int c = m == Empty.VALUE
-                    ? n == Empty.VALUE ? 0                 : key.least ? -1 : 1
-                    : n == Empty.VALUE ? key.least ? 1 : -1 : m.diff(n, key.coll, key.info);
+                final int c = m.isEmpty()
+                    ? n.isEmpty() ? 0             : key.least ? -1 : 1
+                    : n.isEmpty() ? key.least ? 1 : -1 : m.compare(n, key.coll, true, key.info());
                 if(c != 0) return key.desc ? -c : c;
               }
               return 0;
@@ -138,7 +138,7 @@ public final class OrderBy extends Clause {
       // for $i in 1 to 2 order by 1 return $i  ->  for $i in 1 to 2 return $i
       if(expr instanceof Item) return true;
       // for $i in 1 to 2 order by $i return $i  ->  for $i in sort(1 to 2) return $i
-      if(fr != null && expr instanceof VarRef && ((VarRef) expr).var.is(fr.var)) {
+      if(fr != null && expr instanceof VarRef && ((VarRef) expr).var == fr.var) {
         fr.expr = cc.function(SORT, info, fr.expr);
         if(keys[0].desc) fr.expr = cc.function(REVERSE, info, fr.expr);
         return true;
@@ -183,7 +183,7 @@ public final class OrderBy extends Clause {
   public Clause inline(final InlineContext ic) throws QueryException {
     if(ic.var != null) {
       for(int r = refs.length; --r >= 0;) {
-        if(refs[r].var.is(ic.var)) refs = Array.remove(refs, r);
+        if(refs[r].var == ic.var) refs = Array.remove(refs, r);
       }
     }
     return ic.inline(keys) ? optimize(ic.cc) : null;
@@ -245,12 +245,12 @@ public final class OrderBy extends Clause {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), keys);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(ORDER).token(BY).tokens(keys, SEP);
   }
 }

@@ -18,14 +18,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class HtmlParse extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = exprs[0].atomItem(qc, info);
-    return item != Empty.VALUE ? parse(new IOContent(toBytes(item)), qc) : Empty.VALUE;
+    final Item value = arg(0).atomItem(qc, info);
+    return value.isEmpty() ? Empty.VALUE : parse(new IOContent(toBytes(value)), qc);
   }
 
   @Override
@@ -41,9 +41,9 @@ public class HtmlParse extends StandardFunc {
    * @throws QueryException query exception
    */
   protected final Item parse(final IO io, final QueryContext qc) throws QueryException {
-    final HtmlOptions opts = toOptions(1, new HtmlOptions(), qc);
+    final HtmlOptions options = toOptions(arg(1), new HtmlOptions(), qc);
     try {
-      return new DBNode(new org.basex.build.html.HtmlParser(io, MainOptions.get(), opts));
+      return new DBNode(new org.basex.build.html.HtmlParser(io, new MainOptions(), options));
     } catch(final IOException ex) {
       throw HTML_PARSE_X.get(info, ex);
     }

@@ -11,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * A FLWOR clause.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class Clause extends ParseExpr {
@@ -20,7 +20,7 @@ public abstract class Clause extends ParseExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param seqType sequence type
    * @param vars declared variables
    */
@@ -69,7 +69,7 @@ public abstract class Clause extends ParseExpr {
       @Override
       public boolean used(final VarRef ref) {
         for(final Var var : vars) {
-          if(var.is(ref.var)) return false;
+          if(var == ref.var) return false;
         }
         return true;
       }
@@ -91,7 +91,7 @@ public abstract class Clause extends ParseExpr {
    */
   public final boolean declares(final Var var) {
     for(final Var decl : vars) {
-      if(var.is(decl)) return true;
+      if(var == decl) return true;
     }
     return false;
   }

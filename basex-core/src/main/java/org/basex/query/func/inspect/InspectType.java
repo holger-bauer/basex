@@ -6,31 +6,54 @@ import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.options.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InspectType extends StandardFunc {
+  /** Inspection options. */
+  public static class InspectOptions extends Options {
+    /** Mode. */
+    public static final EnumOption<Mode> MODE = new EnumOption<>("mode", Mode.COMPUTED);
+    /** Item. */
+    public static final BooleanOption ITEM = new BooleanOption("item", false);
+  }
+
+  /** Inspection mode. */
+  public enum Mode {
+    /** Combined.   */ COMPUTED,
+    /** Value.      */ VALUE,
+    /** Expression. */ EXPRESSION;
+
+    @Override
+    public String toString() {
+      return EnumOption.string(this);
+    }
+  }
+
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Value value = exprs[0].value(qc);
+    final Value value = arg(0).value(qc);
+    final InspectOptions options = toOptions(arg(1), new InspectOptions(), qc);
+    final Mode mode = options.get(InspectOptions.MODE);
+    final boolean item = options.get(InspectOptions.ITEM);
 
-    // combine types of all items to get more specific type
-    SeqType st = null;
-    for(final Item item : value) {
-      final SeqType st2 = item.seqType();
-      st = st == null ? st2 : st.union(st2);
+    SeqType et = arg(0).seqType(), st = value.seqType();
+    switch(mode) {
+      case EXPRESSION:
+        st = et;
+        break;
+      case VALUE:
+        break;
+      default:
+        // compare refined with original type, which may be more specific (e.g. for node types)
+        value.refineType();
+        if(et.instanceOf(st)) st = et;
     }
-    if(st == null) st = SeqType.EMPTY_SEQUENCE_Z;
-    st = st.with(value.seqType().occ);
-
-    // compare with original type, which may be more specific (in particular for node types)
-    final SeqType et = exprs[0].seqType();
-    if(et.instanceOf(st)) st = et;
-
-    return Str.get(st.toString());
+    return Str.get((item ? st.with(Occ.EXACTLY_ONE) : st).toString());
   }
 }

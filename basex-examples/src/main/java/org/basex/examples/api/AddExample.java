@@ -9,7 +9,7 @@ import java.io.*;
  * This example requires a running database server instance.
  * Documentation: https://docs.basex.org/wiki/Clients
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class AddExample {
   /**
@@ -21,7 +21,7 @@ public final class AddExample {
     // create session
     try(BaseXClient session = new BaseXClient("localhost", 1984, "admin", "admin")) {
       // create empty database
-      session.execute("create db database");
+      session.execute("CREATE DB database");
       System.out.println(session.info());
 
       // define input stream
@@ -39,20 +39,20 @@ public final class AddExample {
       System.out.println(session.info());
 
       // run query on database
-      System.out.println(session.execute("xquery collection('database')"));
+      System.out.println(session.execute("XQUERY collection('database')"));
 
       // define input stream
       bais = new ByteArrayInputStream("<x>Hello Replacement!</x>".getBytes());
 
       // add document
-      session.replace("universe.xml", bais);
+      session.put("universe.xml", bais);
       System.out.println(session.info());
 
       // run query on database
-      System.out.println(session.execute("xquery collection('database')"));
+      System.out.println(session.execute("XQUERY collection('database')"));
 
       // drop database
-      session.execute("drop db database");
+      session.execute("DROP DB database");
     }
   }
 }

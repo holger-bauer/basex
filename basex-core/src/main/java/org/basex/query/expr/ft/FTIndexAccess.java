@@ -17,7 +17,7 @@ import org.basex.util.hash.*;
 /**
  * FTContains expression with index access.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTIndexAccess extends Simple {
@@ -28,7 +28,7 @@ public final class FTIndexAccess extends Simple {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param ftexpr contains, select and optional ignore expression
    * @param db index database
    */
@@ -36,6 +36,7 @@ public final class FTIndexAccess extends Simple {
     super(info, SeqType.TEXT_ZM);
     this.ftexpr = ftexpr;
     this.db = db;
+    exprType.data(db.data());
   }
 
   @Override
@@ -116,12 +117,12 @@ public final class FTIndexAccess extends Simple {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), db, ftexpr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     Expr expr = ftexpr;
     if(ftexpr instanceof FTWords) {
       final FTWords ftw = (FTWords) ftexpr;

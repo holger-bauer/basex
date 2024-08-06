@@ -7,6 +7,7 @@ import java.io.*;
 import org.basex.io.serial.*;
 import org.basex.query.util.ft.*;
 import org.basex.query.value.item.*;
+import org.basex.util.*;
 
 /**
  * This class serializes items as described in the
@@ -16,7 +17,7 @@ import org.basex.query.value.item.*;
  * discarded in the transformation process. More details are found in the
  * <a href="http://jsonml.org/XML/">JsonML documentation</a>.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JsonMLSerializer extends JsonSerializer {
@@ -26,11 +27,11 @@ public final class JsonMLSerializer extends JsonSerializer {
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  public JsonMLSerializer(final OutputStream os, final SerializerOptions opts) throws IOException {
-    super(os, opts);
+  public JsonMLSerializer(final OutputStream os, final SerializerOptions sopts) throws IOException {
+    super(os, sopts);
   }
 
   @Override
@@ -46,6 +47,9 @@ public final class JsonMLSerializer extends JsonSerializer {
   }
 
   @Override
+  protected void namespace(final byte[] prefix, final byte[] uri, final boolean standalone) { }
+
+  @Override
   protected void attribute(final byte[] name, final byte[] value, final boolean standalone)
       throws IOException {
 
@@ -56,9 +60,9 @@ public final class JsonMLSerializer extends JsonSerializer {
       att = true;
     }
     out.print('"');
-    for(final byte ch : name) printChar(ch);
+    for(final byte ch : Token.local(name)) printChar(ch);
     out.print("\":\"");
-    for(final byte ch : norm(value)) printChar(ch);
+    for(final byte ch : Token.normalize(value, form)) printChar(ch);
     out.print("\"");
   }
 

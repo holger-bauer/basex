@@ -17,7 +17,7 @@ import org.basex.util.Base64;
 /**
  * This class encrypts and decrypts textual inputs.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class Encryption {
@@ -33,7 +33,7 @@ final class Encryption {
   /** String: hex. */
   private static final String HEX = "hex";
 
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
   static {
@@ -45,7 +45,7 @@ final class Encryption {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   Encryption(final InputInfo info) {
     this.info = info;
@@ -140,7 +140,7 @@ final class Encryption {
    * @param data data to process
    * @param key secret key
    * @param algorithm encryption algorithm
-   * @param encoding encoding
+   * @param encoding encoding (can be {@code null})
    * @return MAC
    * @throws QueryException query exception
    */
@@ -158,6 +158,7 @@ final class Encryption {
       // convert to specified encoding, base64 as a standard, else use hex
       return Str.get(b64 ? Base64.encode(hash) : hex(hash, true));
     } catch(final NoSuchAlgorithmException ex) {
+      Util.debug(ex);
       throw CX_INVHASH_X.get(info, algorithm);
     } catch(final IllegalArgumentException | InvalidKeyException ex) {
       throw CX_KEYINV_X.get(info, ex);

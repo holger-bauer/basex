@@ -10,7 +10,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the Validation Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ValidateModuleTest extends SandboxTest {
@@ -84,9 +84,10 @@ public final class ValidateModuleTest extends SandboxTest {
   @Test public void dtdReport() {
     final Function func = _VALIDATE_DTD_REPORT;
     // check XML result
-    query(func.args(FILE, DTD), "<report>\n<status>valid</status>\n</report>");
+    query(func.args(FILE, DTD), "<report><status>valid</status></report>");
     // specify arguments as file paths
     query(func.args(FILE, DTD) + "//status/string()", "valid");
+    query(func.args(FILE, DTD) + "//message/@level/string()", "");
     // specify document as document nodes
     query(func.args(" doc(\"" + FILE + "\")", DTD) + "//status/string()", "valid");
     // specify arguments as file contents
@@ -110,13 +111,11 @@ public final class ValidateModuleTest extends SandboxTest {
       "let $doc := <root/> " +
       "let $schema := '<!ELEMENT unknown (#PCDATA)>' " +
       "let $report := " + func.args(" $doc", " $schema") +
-      "return $report update (" +
+      "return $report update {" +
       "  delete node .//message/text()," +
       "  for $a in .//@* return replace value of node $a with ''" +
-        ')',
-      "<report>\n<status>invalid</status>\n" +
-      "<message level=\"\" line=\"\" column=\"\"/>\n" +
-      "</report>");
+        '}',
+      "<report><status>invalid</status><message level=\"\" line=\"\" column=\"\"/></report>");
     // check URL attribute
     query("exists(" + func.args(INPUT, DTD) + "//@url)", true);
 
@@ -141,6 +140,12 @@ public final class ValidateModuleTest extends SandboxTest {
       "<xs:element name='root'/> " +
       "</xs:schema> " +
       "return validate:xsd($doc, $schema)", "");
+
+    // caching
+    query(func.args(FILE, XSD, " map { 'cache': true() }"), "");
+    query(func.args(FILE, XSD, " map { 'cache': 'yes' }"), "");
+    query(func.args(FILE, XSD, " map { 'cache': 'on' }"), "");
+    query(func.args(FILE, XSD, " map { 'cache': 1 }"), "");
 
     // invalid arguments
     error(func.args("unknown"), WHICHRES_X);
@@ -188,6 +193,12 @@ public final class ValidateModuleTest extends SandboxTest {
   }
 
   /** Test method. */
+  @Test public void xsdInit() {
+    final Function func = _VALIDATE_XSD_INIT;
+    assertTrue(query(func.args()).isEmpty());
+  }
+
+  /** Test method. */
   @Test public void xsdProcessor() {
     final Function func = _VALIDATE_XSD_PROCESSOR;
     assertFalse(query(func.args()).isEmpty());
@@ -197,7 +208,7 @@ public final class ValidateModuleTest extends SandboxTest {
   @Test public void xsdReport() {
     final Function func = _VALIDATE_XSD_REPORT;
     // check XML result
-    query(func.args(FILE, XSD), "<report>\n<status>valid</status>\n</report>");
+    query(func.args(FILE, XSD), "<report><status>valid</status></report>");
     // specify arguments as file paths
     query(func.args(FILE, XSD) + "//status/string()", "valid");
     // specify arguments as document nodes
@@ -216,6 +227,8 @@ public final class ValidateModuleTest extends SandboxTest {
 
     // returned error
     query(func.args(FILE) + "//status/string()", "invalid");
+    query(func.args(FILE) + "//message/@level/string()", "Error");
+
     query(
       "let $doc := <root/> " +
       "let $schema := <xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'> " +
@@ -230,13 +243,11 @@ public final class ValidateModuleTest extends SandboxTest {
       "                 <xs:element name='unknown'/> " +
       "               </xs:schema> " +
       "let $report := " + func.args(" $doc", " $schema") +
-      "return $report update (" +
+      "return $report update {" +
       "  delete node .//message/text()," +
       "  for $a in .//@* return replace value of node $a with ''" +
-        ')',
-      "<report>\n<status>invalid</status>\n" +
-      "<message level=\"\" line=\"\" column=\"\"/>\n" +
-      "</report>");
+        '}',
+      "<report><status>invalid</status><message level=\"\" line=\"\" column=\"\"/></report>");
     // check URL attribute
     query("exists(" + func.args(INPUT, XSD) + "//@url)", true);
 

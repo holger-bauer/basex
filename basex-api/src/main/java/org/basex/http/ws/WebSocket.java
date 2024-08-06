@@ -1,13 +1,11 @@
 package org.basex.http.ws;
 
-import static org.basex.http.HTTPText.*;
-
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.*;
 
-import javax.servlet.http.*;
+import jakarta.servlet.http.*;
 
 import org.basex.core.*;
 import org.basex.http.*;
@@ -19,13 +17,15 @@ import org.basex.query.value.seq.*;
 import org.basex.server.*;
 import org.basex.server.Log.*;
 import org.basex.util.*;
+import org.basex.util.http.*;
 import org.basex.util.list.*;
 import org.eclipse.jetty.websocket.api.*;
+import org.eclipse.jetty.websocket.api.exceptions.*;
 
 /**
  * This class defines an abstract WebSocket. It inherits the Jetty WebSocket adapter.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Johannes Finckh
  */
 public final class WebSocket extends WebSocketAdapter implements ClientInfo {
@@ -50,16 +50,14 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
    * Constructor.
    * @param request request
    */
-  WebSocket(final HttpServletRequest request) {
+  private WebSocket(final HttpServletRequest request) {
     this.request = request;
 
     final String pi = request.getPathInfo();
     path = new WsPath(pi != null ? pi : "/");
     session = request.getSession();
 
-    final Context ctx = HTTPContext.get().context();
-    context = new Context(ctx, this);
-    context.user(ctx.user());
+    context = new Context(HTTPContext.get().context(), this);
   }
 
   /**
@@ -87,7 +85,7 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
       // add headers (for binding them to the XQuery parameters in the corresponding bind method)
       final UpgradeRequest ur = sess.getUpgradeRequest();
       final BiConsumer<String, String> addHeader = (k, v) -> {
-        if(v != null) headers.put(k, new Atm(v));
+        if(v != null) headers.put(k, Atm.get(v));
       };
 
       addHeader.accept("http-version", ur.getHttpVersion());
@@ -106,9 +104,10 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
   }
 
   @Override
-  public void onWebSocketError(final Throwable cause) {
-    run("[WS-ERROR] " + request.getRequestURL() + ": " + cause.getMessage(), null,
-        () -> findAndProcess(Annotation._WS_ERROR, cause.getMessage()));
+  public void onWebSocketError(final Throwable th) {
+    final String m1 = th.getMessage(), m2 = Util.message(th), msg = m1 != null ? m1 : m2;
+    run("[WS-ERROR] " + request.getRequestURL() + ": " + msg, null,
+        () -> findAndProcess(Annotation._WS_ERROR, msg));
   }
 
   @Override
@@ -139,8 +138,8 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
 
   @Override
   public String clientName() {
-    Object value = atts.get(CLIENT_ID);
-    if(value == null && session != null) value = session.getAttribute(CLIENT_ID);
+    Object value = atts.get(HTTPText.CLIENT_ID);
+    if(value == null && session != null) value = session.getAttribute(HTTPText.CLIENT_ID);
     return clientName(value, context);
   }
 
@@ -162,6 +161,7 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
     try {
       if(session != null) session.getCreationTime();
     } catch(final IllegalStateException ex) {
+      Util.debug(ex);
       session = null;
     }
 
@@ -190,7 +190,7 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
   /**
    * Runs a function and creates log output.
    * @param info log string
-   * @param status close status
+   * @param status close status (can be {@code null})
    * @param func function to be run
    */
   private void run(final String info, final Integer status, final Runnable func) {
@@ -198,7 +198,7 @@ public final class WebSocket extends WebSocketAdapter implements ClientInfo {
     final Performance perf = new Performance();
     try {
       func.run();
-    } catch (final Exception ex) {
+    } catch(final Exception ex) {
       context.log.write(LogType.ERROR, "", perf, context);
       throw ex;
     }

@@ -1,5 +1,7 @@
 package org.basex.core;
 
+import java.util.*;
+
 import org.basex.core.jobs.*;
 import org.basex.core.locks.*;
 import org.basex.core.users.*;
@@ -8,16 +10,15 @@ import org.basex.io.random.*;
 import org.basex.query.util.pkg.*;
 import org.basex.query.value.seq.*;
 import org.basex.server.*;
-import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * This class serves as a central database context.
- * It references the currently opened database, options, client sessions, users and other meta data.
+ * It references the currently opened database, options, client sessions, users and other metadata.
  * Next, the instance of this class will be passed on to all operations, as it organizes concurrent
  * data access, ensuring that no job will concurrently write to the same data instances.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Context {
@@ -25,7 +26,7 @@ public final class Context {
   public final ClientBlocker blocker;
   /** Job pool. */
   public final JobPool jobs;
-  /** Options. */
+  /** Main options. */
   public final MainOptions options;
   /** Static options. */
   public final StaticOptions soptions;
@@ -43,7 +44,11 @@ public final class Context {
   public final Log log;
   /** Locking. */
   public final Locking locking;
+  /** Key/value store. */
+  public final Store store;
 
+  /** External objects (HTTP context, HTTP requests). */
+  private final HashSet<Object> external;
   /** Client info. Set to {@code null} in standalone/server mode. */
   private final ClientInfo client;
   /** Current node context. {@code null} if all documents of the current database are referenced. */
@@ -59,7 +64,7 @@ public final class Context {
 
   /** Marked nodes. {@code null} if database is closed. */
   public DBNodes marked;
-  /** Copied nodes {@code null} if database is closed.. */
+  /** Copied nodes {@code null} if database is closed. */
   public DBNodes copied;
   /** Focused node. */
   public int focused = -1;
@@ -104,9 +109,12 @@ public final class Context {
     blocker = ctx.blocker;
     locking = ctx.locking;
     users = ctx.users;
+    user = ctx.user;
     repo = ctx.repo;
     log = ctx.log;
     jobs = ctx.jobs;
+    store = ctx.store;
+    external = new HashSet<>(ctx.external);
   }
 
   /**
@@ -126,6 +134,8 @@ public final class Context {
     log = new Log(soptions);
     user = users.get(UserText.ADMIN);
     jobs = new JobPool(soptions);
+    external = new HashSet<>();
+    store = new Store(this);
     client = null;
   }
 
@@ -138,11 +148,10 @@ public final class Context {
   }
 
   /**
-   * Sets the user of this context. This method can only be called once.
+   * Sets the user of this context. This method should only be called once.
    * @param us user
    */
   public void user(final User us) {
-    if(user != null) throw Util.notExpected("User has already been assigned.");
     user = us;
   }
 
@@ -153,6 +162,7 @@ public final class Context {
   public synchronized void close() {
     if(closed) return;
     closed = true;
+    store.close();
     jobs.close();
     sessions.close();
     datas.close();
@@ -262,7 +272,7 @@ public final class Context {
 
   /**
    * Returns the name of the current client or user.
-   * @return user name (or {@code null})
+   * @return username (or {@code null})
    */
   public String clientName() {
     return client != null ? client.clientName() : user != null ? user.name() : null;
@@ -287,5 +297,29 @@ public final class Context {
       if(perm(Perm.READ, db)) sl.add(db);
     }
     return sl;
+  }
+
+  /**
+   * Assigns an external object.
+   * @param object external object
+   */
+  public void setExternal(final Object object) {
+    external.add(object);
+  }
+
+  /**
+   * Returns an external object of the specified class or interface.
+   * @param clz class of external object
+   * @return object or {@code null}
+   */
+  public Object getExternal(final Class<?> clz) {
+    for(final Object object : external) {
+      final Class<?> c = object.getClass();
+      if(c == clz) return object;
+      for(final Class<?> inter : c.getInterfaces()) {
+        if(inter == clz) return object;
+      }
+    }
+    return null;
   }
 }

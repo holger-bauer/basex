@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Mixed XQuery tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MixedTest extends SandboxTest {
@@ -58,6 +58,18 @@ public final class MixedTest extends SandboxTest {
     contains("import module namespace a='world' at '" + XQMFILE + "'; a:inlined()", "hello:foo");
   }
 
+  /** Checks imported module's types. */
+  @Test public void typesInModules() {
+    query("import module namespace a='world' at '" + XQMFILE + "'; '42' cast as a:int", 42);
+    query("import module namespace a='world' at '" + XQMFILE + "';" +
+      "declare item-type a:private-int as a:int; '42' cast as a:private-int", 42);
+
+    error("import module namespace a='world' at '" + XQMFILE + "';" +
+      "declare item-type Q{world}int as xs:double; '42' cast as a:int", DUPLTYPE_X);
+    error("import module namespace a='world' at '" + XQMFILE + "'; '42' cast as a:private-int",
+      WHICHCAST_X);
+  }
+
   /**
    * Overwrites an empty attribute value.
    */
@@ -86,8 +98,8 @@ public final class MixedTest extends SandboxTest {
     execute(new Add("a", "<a/>"));
     execute(new Add("b", "<a/>"));
     execute(new Optimize());
-    query(COUNT.args(_DB_OPEN.args(NAME, "a") + "/a"), 1);
-    query(COUNT.args(_DB_OPEN.args(NAME) + "/a"), 2);
+    query(COUNT.args(_DB_GET.args(NAME, "a") + "/a"), 1);
+    query(COUNT.args(_DB_GET.args(NAME) + "/a"), 2);
   }
 
   /**
@@ -130,7 +142,7 @@ public final class MixedTest extends SandboxTest {
     query("<A>{ document { <a><b/><c/></a> }/a/* }</A>/c/preceding-sibling::b", "<b/>");
     query("<A>{ (document { <a><b/><c/></a> } update {})/a/* }</A>/c/preceding-sibling::b", "<b/>");
 
-    error("let $doc := document { <a><b/></a> } update ()"
+    error("let $doc := document { <a><b/></a> } update { }"
         + "return id('id', element c { $doc/*/node() }/*)", IDDOC);
   }
 
@@ -165,7 +177,7 @@ public final class MixedTest extends SandboxTest {
   /** Optimizations of nested path expressions. */
   @Test public void gh1587() {
     execute(new CreateDB(NAME, "<a id='0'><b id='1'/></a>"));
-    final String query = "let $id := '0' return db:attribute('" + NAME + "', '1')/..";
+    final String query = "let $id := '0' return " + _DB_ATTRIBUTE.args(NAME, " '1'") + "/..";
     query(query, "<b id=\"1\"/>");
     query(query + "[../@id = $id]", "<b id=\"1\"/>");
     query(query + "[..[@id = $id]]", "<b id=\"1\"/>");
@@ -198,7 +210,7 @@ public final class MixedTest extends SandboxTest {
     execute(new CreateDB(NAME, file1.path()));
     execute(new CreateDB(NAME + '2', file2.path()));
     execute(new Close());
-    query("db:open('" + NAME + "')/*/* union db:open('" + NAME + "2')/*/*",
+    query(_DB_GET.args(NAME) + "/*/* union " + _DB_GET.args(NAME + '2') + "/*/*",
         "<n1a/>\n<n1b/>\n<n2a/>\n<n2b/>");
   }
 
@@ -218,15 +230,15 @@ public final class MixedTest extends SandboxTest {
 
     query("attribute { ' a ' } {}", "a=\"\"");
 
-    error("element { '' } {}", INVNAME_X);
-    error("element { ' ' } {}", INVNAME_X);
-    error("element { 'a b' } {}", INVNAME_X);
-    error("element { 'a:b' } {}", INVPREF_X);
-    error("element { 'a: b' } {}", INVNAME_X);
-    error("element { 'Q{}' } {}", INVNAME_X);
-    error("element { 'Q{ }' } {}", INVNAME_X);
+    error("element { '' } {}", INVQNAME_X);
+    error("element { ' ' } {}", INVQNAME_X);
+    error("element { 'a b' } {}", INVQNAME_X);
+    error("element { 'a:b' } {}", NOQNNAMENS_X);
+    error("element { 'a: b' } {}", INVQNAME_X);
+    error("element { 'Q{}' } {}", INVQNAME_X);
+    error("element { 'Q{ }' } {}", INVQNAME_X);
 
-    error("element { 'Q{ http://www.w3.org/2000/xmlns/ }a' } {}", INVNAME_X);
+    error("element { 'Q{ http://www.w3.org/2000/xmlns/ }a' } {}", CEINV_X);
   }
 
   /** Faster instance of checks. */
@@ -261,5 +273,45 @@ public final class MixedTest extends SandboxTest {
     query("(xs:anyURI('b'), 'a', 'a')[. = 'c'] instance of xs:string?", true);
     query("(xs:anyURI('b'), 'a', 'a')[. = 'c'] instance of xs:string+", false);
     query("(xs:anyURI('b'), 'a', 'a')[. = 'c'] instance of xs:string*", true);
+  }
+
+  /** JSON documents, node ids. */
+  @Test public void gh1983() {
+    query("tail(" + _JSON_PARSE.args("{}") +  "/*/ancestor-or-self::node()) instance of element()",
+        true);
+    query("tail(" + _CSV_PARSE.args("{}") +  "/*/ancestor-or-self::node()) instance of element()",
+        true);
+  }
+
+  /** fn:json-to-xml, namespaces. */
+  @Test public void gh1997() {
+    execute(new Close());
+    query(_DB_CREATE.args(NAME, " analyze-string('a', 'a')/*", NAME));
+    query(_DB_GET.args(NAME) + "/* => namespace-uri()", "http://www.w3.org/2005/xpath-functions");
+    query(_DB_CREATE.args(NAME, " json-to-xml('[1]')/*/*", NAME));
+    query(_DB_GET.args(NAME) + "/* => namespace-uri()", "http://www.w3.org/2005/xpath-functions");
+  }
+
+  /** Binary storage: out of bounds. */
+  @Test public void gh2100() {
+    query(_DB_CREATE.args("x", " <x>A</x>", "x.xml"));
+    query(_DB_GET.args("x") + " ! (delete node x, " + _DB_PUT_BINARY.args("x", " x", "pth") + ')');
+    query(_DB_GET_BINARY.args("x", "pth"), "A");
+
+    query(_DB_CREATE.args("x", " <x>A</x>", "x.xml"));
+    query(_DB_GET.args("x") + " ! (delete node x, " + _DB_ADD.args("x", " x", "pth") + ')');
+  }
+
+  /**
+   * Distinct document/database references.
+   * @throws IOException I/O exception
+   */
+  @Test public void gh2147() throws IOException {
+    final IOFile file = new IOFile(sandbox(), "test.xml");
+    file.write("<file/>");
+    query(_DB_CREATE.args("test", " <db/>", "test.xml"));
+
+    query("doc('" + file + "'), doc('test')", "<file/>\n<db/>");
+    query("doc('test'), doc('" + file + "')", "<db/>\n<file/>");
   }
 }

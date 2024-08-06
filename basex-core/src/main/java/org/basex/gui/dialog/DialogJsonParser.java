@@ -6,7 +6,7 @@ import java.awt.*;
 import java.io.*;
 
 import org.basex.build.json.*;
-import org.basex.build.json.JsonOptions.JsonFormat;
+import org.basex.build.json.JsonOptions.*;
 import org.basex.core.*;
 import org.basex.core.MainOptions.MainParser;
 import org.basex.gui.*;
@@ -14,13 +14,15 @@ import org.basex.gui.layout.*;
 import org.basex.gui.text.*;
 import org.basex.io.*;
 import org.basex.io.parse.json.*;
+import org.basex.query.*;
+import org.basex.query.value.item.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * JSON parser panel.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogJsonParser extends DialogParser {
@@ -114,10 +116,10 @@ final class DialogJsonParser extends DialogParser {
         } else {
           json = EXAMPLE;
         }
-        example.setText(example(MainParser.JSON.name(), json,
-            JsonConverter.get(jopts).convert(new IOContent(json)).serialize().toString()));
+        final Item item = JsonConverter.get(jopts).convert(new IOContent(json));
+        example.setText(example(MainParser.JSON.name(), json, item));
       }
-    } catch(final IOException ex) {
+    } catch(final QueryException | IOException ex) {
       example.setText(error(ex));
     }
     return true;

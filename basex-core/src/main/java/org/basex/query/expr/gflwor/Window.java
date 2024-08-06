@@ -20,7 +20,7 @@ import org.basex.util.hash.*;
 /**
  * The GFLWOR {@code window} clause.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Window extends Clause {
@@ -64,7 +64,7 @@ public final class Window extends Clause {
    * @param st start condition
    * @param nd end condition, might be {@code null}
    * @return non-{@code null} variables
-   * @throws QueryException query exception if the variable names aren't unique
+   * @throws QueryException query exception if the variable names are not unique
    */
   private static Var[] vars(final Var vr, final Condition st, final Condition nd)
       throws QueryException {
@@ -129,7 +129,7 @@ public final class Window extends Clause {
             }
 
             start.bind(qc, st[0], ps, st[1], st[2]);
-            qc.set(var, vb.value());
+            qc.set(var, vb.value(Window.this));
             return true;
           }
 
@@ -165,7 +165,7 @@ public final class Window extends Clause {
 
             // don't return dangling items if the {@code only} flag was specified
             if(found || !only) {
-              qc.set(var, vb.value());
+              qc.set(var, vb.value(Window.this));
               return true;
             }
           }
@@ -189,7 +189,7 @@ public final class Window extends Clause {
 
       @Override
       public boolean next(final QueryContext qc) throws QueryException {
-        while(true) {
+        do {
           Item curr, next = null;
           while((curr = advance()) != null) {
             next = queue.peekFirst();
@@ -222,15 +222,14 @@ public final class Window extends Clause {
             if(!(it == null && only)) {
               start.bind(qc, curr, pos, prev, next);
               prev = curr;
-              qc.set(var, vb.value());
+              qc.set(var, vb.value(Window.this));
               return true;
             }
           }
+        } while(!queue.isEmpty() || prepareNext(qc, sub));
 
-          // abort if no more tuples from above
-          if(!prepareNext(qc, sub)) return false;
-          queue.clear();
-        }
+        // abort if queue is empty and stream is exhausted
+        return false;
       }
 
       /**
@@ -336,13 +335,13 @@ public final class Window extends Clause {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.attachVariable(plan.create(this, SLIDING, sliding), var, false);
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.attachVariable(plan.create(this, SLIDING, sliding), var, false);
     plan.add(elem, start, end, expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(FOR).token(sliding ? SLIDING : TUMBLING).token(WINDOW).token(var).token(IN).
       token(expr).token(start);
     if(end != null) {
@@ -354,7 +353,7 @@ public final class Window extends Clause {
   /**
    * Evaluator for the Window clause.
    *
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Leo Woerteler
    */
   private abstract class WindowEval extends Eval {
@@ -397,7 +396,7 @@ public final class Window extends Clause {
   /**
    * Evaluator for the Tumbling Window clause.
    *
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Leo Woerteler
    */
   private abstract class TumblingEval extends WindowEval {
@@ -417,15 +416,13 @@ public final class Window extends Clause {
       prev = curr;
       pos++;
       final Item item = next();
-      // serve the stored item if available
       if(next != null) {
+        // serve the stored item if available
         curr = next;
         next = item;
-      } else if(item != null && popNext) {
-        // only assign if necessary
-        next = next();
-        curr = item;
       } else {
+        // only assign if necessary
+        if(item != null && popNext) next = next();
         curr = item;
       }
       return curr != null;

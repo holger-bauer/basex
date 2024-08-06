@@ -16,16 +16,16 @@ import org.basex.util.*;
 /**
  * Parses the jar descriptors and performs schema checks.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 final class JarParser {
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   private final InputInfo info;
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   JarParser(final InputInfo info) {
     this.info = info;

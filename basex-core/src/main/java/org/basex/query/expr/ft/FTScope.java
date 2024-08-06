@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * FTScope expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTScope extends FTFilter {
@@ -22,7 +22,7 @@ public final class FTScope extends FTFilter {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param same same flag
    * @param unit unit
@@ -71,12 +71,12 @@ public final class FTScope extends FTFilter {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, same ? SAME : DIFFERENT, unit), exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(exprs[0]).token(same ? SAME : DIFFERENT).token(unit);
   }
 }

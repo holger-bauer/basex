@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This class represents the path of a RESTXQ function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RestXqPath extends WebPath implements Comparable<RestXqPath> {
@@ -22,12 +22,12 @@ final class RestXqPath extends WebPath implements Comparable<RestXqPath> {
   /**
    * Constructor.
    * @param path path
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  RestXqPath(final String path, final InputInfo ii) throws QueryException {
+  RestXqPath(final String path, final InputInfo info) throws QueryException {
     super(path);
-    matcher = RestXqPathMatcher.parse(path, ii);
+    matcher = RestXqPathMatcher.parse(path, info);
   }
 
   /**
@@ -67,7 +67,7 @@ final class RestXqPath extends WebPath implements Comparable<RestXqPath> {
 
   @Override
   public int compareTo(final RestXqPath rxp) {
-    // compare number of path segments: path with less segments is less specific
+    // compare number of path segments: path with fewer segments is less specific
     final int sl = matcher.segments, d = rxp.matcher.segments - sl;
     if(d != 0) return d;
 

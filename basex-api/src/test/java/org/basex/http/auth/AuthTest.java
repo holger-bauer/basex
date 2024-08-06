@@ -4,9 +4,11 @@ import static org.basex.query.func.Function.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
+import java.net.http.*;
 
 import org.basex.core.*;
 import org.basex.http.*;
+import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.util.*;
 import org.junit.jupiter.api.*;
@@ -14,7 +16,7 @@ import org.junit.jupiter.api.*;
 /**
  * HTTP authentication tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class AuthTest extends HTTPTest {
@@ -48,7 +50,7 @@ public abstract class AuthTest extends HTTPTest {
    * @throws Exception Exception
    */
   @Test public void sendRequestOk() throws Exception {
-    assertEquals("200", sendRequest("admin", "admin"));
+    assertEquals("200", sendRequest("admin", NAME));
   }
 
   /**
@@ -62,15 +64,22 @@ public abstract class AuthTest extends HTTPTest {
   /**
    * Calls the specified URL and checks the error message.
    * @param url URL
-   * @param error expected error, or {@code null} if no error is expected
+   * @throws IOException I/O exception
    */
-  protected static void test(final String url, final String error) {
+  protected static void responseOk(final String url) throws IOException {
+    new IOUrl(url).response();
+  }
+
+  /**
+   * Calls the specified URL and checks the error message.
+   * @param url URL
+   */
+  protected static void responseFail(final String url) {
     try {
-      final String request = request(url, "", "GET");
-      if(error != null) fail("Error expected:\n" + request);
+      final HttpResponse<InputStream> request = new IOUrl(url).response();
+      fail("Error expected:\n" + request);
     } catch(final IOException ex) {
-      if(error == null) fail("No error expected:\n" + ex);
-      assertEquals(error, ex.getMessage());
+      assertEquals("401", ex.getMessage().replaceAll(":.*", ""));
     }
   }
 
@@ -85,7 +94,7 @@ public abstract class AuthTest extends HTTPTest {
     try(QueryProcessor qp = new QueryProcessor(_HTTP_SEND_REQUEST.args(
         " <http:request xmlns:http='http://expath.org/ns/http-client' method='GET' " +
         "auth-method='" + method + "' username='" + user + "' password='" + pass + "' " +
-        "send-authorization='true' href='" + REST_ROOT + "'/>") +
+        "href='" + REST_ROOT + "'/>") +
         "[. instance of node()]/@status/string()", ctx)) {
       return qp.value().serialize().toString();
     }

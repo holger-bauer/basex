@@ -10,14 +10,12 @@ import org.basex.util.*;
 /**
  * Functions on relational databases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class SqlClose extends SqlFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkCreate(qc);
-
     @SuppressWarnings("resource")
     final AutoCloseable ac = get(qc, true);
     try {

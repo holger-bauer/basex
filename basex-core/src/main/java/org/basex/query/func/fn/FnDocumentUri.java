@@ -12,20 +12,20 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnDocumentUri extends ContextFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    final ANode node = toNodeOrNull(context(qc), qc);
     if(node == null || node.type != NodeType.DOCUMENT_NODE) return Empty.VALUE;
     // return empty sequence for documents constructed via parse-xml
     final Data data = node.data();
     if(data != null && data.meta.name.isEmpty()) return Empty.VALUE;
 
     final byte[] uri = node.baseURI();
-    return uri.length == 0 ? Empty.VALUE : Uri.uri(uri, false);
+    return uri.length == 0 ? Empty.VALUE : Uri.get(uri, false);
   }
 
   @Override

@@ -8,19 +8,18 @@ import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
-import org.basex.util.ft.*;
 import org.basex.util.hash.*;
 
 /**
  * Or expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Or extends Logical {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   public Or(final InputInfo info, final Expr... exprs) {
@@ -35,21 +34,8 @@ public final class Or extends Logical {
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    // compute scoring
-    if(qc.scoring) {
-      double score = 0;
-      boolean found = false;
-      for(final Expr expr : exprs) {
-        final Item item = expr.ebv(qc, info);
-        found |= item.bool(info);
-        score += item.score();
-      }
-      return Bln.get(found, Scoring.avg(score, exprs.length));
-    }
-
-    // standard evaluation
     for(final Expr expr : exprs) {
-      if(expr.ebv(qc, info).bool(info)) return Bln.TRUE;
+      if(expr.test(qc, info, 0)) return Bln.TRUE;
     }
     return Bln.FALSE;
   }
@@ -74,7 +60,7 @@ public final class Or extends Logical {
     // use summarized costs for estimation
     ii.costs = costs;
     // no expressions means no costs: expression will later be pre-evaluated
-    ii.expr = list.size() == 1 ? list.get(0) : new Union(info, list.finish());
+    ii.expr = list.size() == 1 ? list.get(0) : new Union(info, list.finish()).optimize(ii.cc);
     return true;
   }
 
@@ -84,7 +70,7 @@ public final class Or extends Logical {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.tokens(exprs, ' ' + OR + ' ', true);
   }
 }

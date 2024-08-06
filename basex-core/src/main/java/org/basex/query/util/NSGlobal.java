@@ -9,7 +9,7 @@ import org.basex.util.hash.*;
 /**
  * Global namespaces.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NSGlobal {
@@ -47,12 +47,12 @@ public final class NSGlobal {
     NS.add(GEO_PREFIX, GEO_URI);
     NS.add(HTTP_PREFIX, HTTP_URI);
     NS.add(PKG_PREFIX, PKG_URI);
-    NS.add(ZIP_PREFIX, ZIP_URI);
     // EXQuery namespaces
     NS.add(REQUEST_PREFIX, REQUEST_URI);
     NS.add(REST_PREFIX, REST_URI);
     // BaseX namespaces
     NS.add(BASEX_PREFIX, BASEX_URI);
+    NS.add(JAVA_PREFIX, JAVA_URI);
     // namespaces of built-in modules
     NS.add(ADMIN_PREFIX, ADMIN_URI);
     NS.add(ARCHIVE_PREFIX, ARCHIVE_URI);
@@ -62,16 +62,14 @@ public final class NSGlobal {
     NS.add(DB_PREFIX, DB_URI);
     NS.add(FETCH_PREFIX, FETCH_URI);
     NS.add(FT_PREFIX, FT_URI);
-    NS.add(HASH_PREFIX, HASH_URI);
     NS.add(HOF_PREFIX, HOF_URI);
     NS.add(HTML_PREFIX, HTML_URI);
     NS.add(INDEX_PREFIX, INDEX_URI);
     NS.add(INPUT_PREFIX, INPUT_URI);
     NS.add(INSPECT_PREFIX, INSPECT_URI);
-    NS.add(JOBS_PREFIX, JOBS_URI);
+    NS.add(JOB_PREFIX, JOB_URI);
     NS.add(JSON_PREFIX, JSON_URI);
     NS.add(LAZY_PREFIX, LAZY_URI);
-    NS.add(OUT_PREFIX, OUT_URI);
     NS.add(PERM_PREFIX, PERM_URI);
     NS.add(PROC_PREFIX, PROC_URI);
     NS.add(PROF_PREFIX, PROF_URI);
@@ -80,7 +78,8 @@ public final class NSGlobal {
     NS.add(SESSION_PREFIX, SESSION_URI);
     NS.add(SESSIONS_PREFIX, SESSIONS_URI);
     NS.add(SQL_PREFIX, SQL_URI);
-    NS.add(STRINGS_PREFIX, STRINGS_URI);
+    NS.add(STORE_PREFIX, STORE_URI);
+    NS.add(STRING_PREFIX, STRING_URI);
     NS.add(UNIT_PREFIX, UNIT_URI);
     NS.add(UPDATE_PREFIX, UPDATE_URI);
     NS.add(USER_PREFIX, USER_URI);
@@ -90,6 +89,11 @@ public final class NSGlobal {
     NS.add(WS_PREFIX, WS_URI);
     NS.add(XSLT_PREFIX, XSLT_URI);
     NS.add(XQUERY_PREFIX, XQUERY_URI);
+
+    // obsolete prefixes
+    NS.add(JOBS_PREFIX, BASEX_URI);
+    NS.add(OUT_PREFIX, BASEX_URI);
+    NS.add(STRINGS_PREFIX, BASEX_URI);
 
     for(int s = NS.size() - 1; s >= 0; s--) {
       final byte[] prefix = NS.name(s), uri = NS.value(s);
@@ -103,11 +107,11 @@ public final class NSGlobal {
 
   /**
    * Finds the specified namespace uri.
-   * @param pref prefix of the namespace
+   * @param prefix prefix of the namespace
    * @return uri or {@code null}
    */
-  public static byte[] uri(final byte[] pref) {
-    return URIS.get(pref);
+  public static byte[] uri(final byte[] prefix) {
+    return URIS.get(prefix);
   }
 
   /**

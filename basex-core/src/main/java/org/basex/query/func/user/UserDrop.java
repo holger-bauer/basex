@@ -13,14 +13,14 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserDrop extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final User user = toInactiveUser(0, qc);
-    final StringList patterns = toPatterns(1, qc);
+    final User user = toInactiveUser(arg(0), qc);
+    final StringList patterns = toPatterns(arg(1), qc);
     if(user.name().equals(UserText.ADMIN)) throw USER_ADMIN.get(info);
     qc.updates().add(new Drop(user, patterns, qc, info), qc);
     return Empty.VALUE;
@@ -33,7 +33,7 @@ public final class UserDrop extends UserFn {
      * @param user user
      * @param patterns database (optional)
      * @param qc query context
-     * @param info input info
+     * @param info input info (can be {@code null})
      * @throws QueryException query exception
      */
     private Drop(final User user, final StringList patterns, final QueryContext qc,

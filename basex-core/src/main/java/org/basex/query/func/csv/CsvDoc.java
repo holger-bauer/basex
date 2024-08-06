@@ -8,13 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public class CsvDoc extends CsvParse {
+public final class CsvDoc extends CsvParse {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] uri = toTokenOrNull(exprs[0], qc);
-    return uri != null ? parse(checkPath(uri), qc) : Empty.VALUE;
+    final String href = toStringOrNull(arg(0), qc);
+    return href != null ? parse(toIO(href), qc) : Empty.VALUE;
   }
 }

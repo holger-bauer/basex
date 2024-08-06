@@ -10,7 +10,7 @@ import org.basex.io.*;
 /**
  * This class defines an abstract parser for single resources.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class SingleParser extends Parser {
@@ -20,10 +20,10 @@ public abstract class SingleParser extends Parser {
   /**
    * Constructor.
    * @param source input source
-   * @param opts database options
+   * @param options main options
    */
-  protected SingleParser(final IO source, final MainOptions opts) {
-    super(source, opts);
+  protected SingleParser(final IO source, final MainOptions options) {
+    super(source, options);
   }
 
   @Override

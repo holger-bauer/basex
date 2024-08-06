@@ -9,7 +9,7 @@ import org.basex.core.users.*;
 /**
  * Evaluates the 'grant' command and grants permissions to users.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Grant extends AUser {
@@ -19,7 +19,7 @@ public final class Grant extends AUser {
   /**
    * Default constructor.
    * @param permission permission
-   * @param user user name
+   * @param user username
    */
   public Grant(final Object permission, final String user) {
     this(permission, user, null);
@@ -28,8 +28,8 @@ public final class Grant extends AUser {
   /**
    * Constructor, specifying a database.
    * @param permission permission
-   * @param user user name
-   * @param pattern database pattern (may be {@code null})
+   * @param user username
+   * @param pattern database pattern (can be {@code null})
    */
   public Grant(final Object permission, final String user, final String pattern) {
     super(permission.toString(), user, pattern == null ? "" : pattern);

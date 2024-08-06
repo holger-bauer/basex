@@ -1,21 +1,18 @@
 package org.basex.http;
 
-import static org.basex.core.users.UserText.*;
-import static org.basex.util.Token.*;
-import static org.basex.util.http.HttpMethod.*;
+import static org.basex.util.http.Method.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 import java.net.*;
-import java.util.*;
+import java.net.http.*;
+import java.net.http.HttpRequest.*;
+import java.nio.charset.*;
 
 import org.basex.*;
 import org.basex.core.*;
-import org.basex.core.StaticOptions.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
-import org.basex.util.*;
-import org.basex.util.Base64;
 import org.basex.util.http.*;
 import org.basex.util.list.*;
 import org.junit.jupiter.api.*;
@@ -23,7 +20,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class contains common methods for the HTTP services.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class HTTPTest extends SandboxTest {
@@ -36,12 +33,12 @@ public abstract class HTTPTest extends SandboxTest {
 
   /**
    * Initializes the test.
-   * @param rt root path
+   * @param url root path
    * @param local local flag
    * @throws Exception exception
    */
-  protected static void init(final String rt, final boolean local) throws Exception {
-    init(rt, local, false);
+  protected static void init(final String url, final boolean local) throws Exception {
+    init(url, local, false);
   }
 
   /**
@@ -54,11 +51,11 @@ public abstract class HTTPTest extends SandboxTest {
   protected static void init(final String url, final boolean local, final boolean auth)
       throws Exception {
 
-    final StringList sl = new StringList();
-    sl.add("-p" + DB_PORT, "-h" + HTTP_PORT, "-s" + STOP_PORT, "-z", "-q");
+    final StringList sl = new StringList("-p" + DB_PORT, "-h" + HTTP_PORT, "-s" + STOP_PORT,
+        "-P" + NAME, "-z", "-q");
     if(local) sl.add("-l");
-    if(!auth) sl.add("-U" + ADMIN);
-    http = new BaseXHTTP(sl.toArray());
+    if(!auth) sl.add("-Uadmin");
+    http = new BaseXHTTP(sl.finish());
     rootUrl = url;
 
     final StaticOptions sopts = HTTPContext.get().context().soptions;
@@ -71,200 +68,160 @@ public abstract class HTTPTest extends SandboxTest {
    */
   @AfterAll public static void stop() throws IOException {
     http.stop();
-
-    // cleanup: remove project specific system properties
-    final StringList keys = new StringList();
-    final Properties props = System.getProperties();
-    for(final Object key : props.keySet()) {
-      final String path = key.toString();
-      if(path.startsWith(Prop.DBPREFIX)) keys.add(path);
-    }
-    for(final String key : keys) props.remove(key);
   }
 
   // PROTECTED METHODS ============================================================================
 
   /**
    * Executes the specified GET request and returns the result.
-   * @param query request
+   * @param expected expected result
+   * @param request request
+   * @param params query parameters
+   * @throws IOException I/O exception
+   */
+  protected static void get(final String expected, final String request, final Object... params)
+      throws IOException {
+    assertEquals(expected, get(200, request, params));
+  }
+
+  /**
+   * Executes the specified GET request and returns the result.
+   * @param status status code to check
+   * @param request request
+   * @param params query parameters
    * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
-  protected static String get(final String query) throws IOException {
-    return request(query, GET);
+  protected static String get(final int status, final String request, final Object... params)
+      throws IOException {
+    return send(status, GET.name(), null, null, request, params).replaceAll("\\r", "");
   }
 
   /**
    * Executes the specified DELETE request.
-   * @param query request
+   * @param status status code to check
+   * @param request request
+   * @param params query parameters
    * @return response code
    * @throws IOException I/O exception
    */
-  protected static String delete(final String query) throws IOException {
-    return request(query, DELETE);
+  protected static String delete(final int status, final String request, final Object... params)
+      throws IOException {
+    return send(status, DELETE.name(), null, null, request, params);
   }
 
   /**
    * Executes the specified HEAD request and returns the result.
-   * @param query request
+   * @param status status code to check
+   * @param request request
+   * @param params query parameters
    * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
-  protected static String head(final String query) throws IOException {
-    return request(query, HEAD);
+  protected static String head(final int status, final String request, final Object... params)
+      throws IOException {
+    return send(status, HEAD.name(), null, null, request, params);
   }
 
   /**
    * Executes the specified OPTIONS request and returns the result.
-   * @param query request
-   * @return string result, or {@code null} for a failure
-   * @throws IOException I/O exception
-   */
-  protected static String options(final String query) throws IOException {
-    return request(query, OPTIONS);
-  }
-
-  /**
-   * Executes the specified HTTP request and returns the result.
-   * @param query request
-   * @param method HTTP method
-   * @return string result, or {@code null} for a failure
-   * @throws IOException I/O exception
-   */
-  private static String request(final String query, final HttpMethod method)throws IOException {
-    return request(query, method.name());
-  }
-
-  /**
-   * Executes the specified HTTP request and returns the result.
-   * @param query request
-   * @param method HTTP method
-   * @return string result, or {@code null} for a failure
-   * @throws IOException I/O exception
-   */
-  protected static String request(final String query, final String method) throws IOException {
-    return request(rootUrl, query, method);
-  }
-
-  /**
-   * Executes the specified HTTP request and returns the result.
-   * @param root root URL
-   * @param query request
-   * @param method HTTP method
-   * @return string result, or {@code null} for a failure
-   * @throws IOException I/O exception
-   */
-  protected static String request(final String root, final String query, final String method)
-      throws IOException {
-
-    final IOUrl url = new IOUrl(root + query);
-    final HttpURLConnection conn = (HttpURLConnection) url.connection();
-    try {
-      conn.setRequestMethod(method);
-      return read(conn.getInputStream());
-    } catch(final IOException ex) {
-      throw error(conn, ex);
-    } finally {
-      conn.disconnect();
-    }
-  }
-
-  /**
-   * Executes the specified PUT request.
-   * @param query path
    * @param request request
-   * @param type media type
+   * @param params query parameters
    * @return string result, or {@code null} for a failure
    * @throws IOException I/O exception
    */
-  protected static String post(final String query, final String request, final MediaType type)
+  protected static String options(final String request, final Object... params)
       throws IOException {
-
-    // create connection
-    final IOUrl url = new IOUrl(rootUrl + query);
-    final HttpURLConnection conn = (HttpURLConnection) url.connection();
-    conn.setDoOutput(true);
-    conn.setRequestMethod(POST.name());
-    conn.setRequestProperty(HttpText.CONTENT_TYPE, type.toString());
-    // basic authentication
-    final String encoded = Base64.encode(ADMIN + ':' + ADMIN);
-    conn.setRequestProperty(HttpText.AUTHORIZATION, AuthMethod.BASIC + " " + encoded);
-    // send query
-    try(OutputStream out = conn.getOutputStream()) {
-      out.write(token(request));
-    }
-
-    try {
-      return read(conn.getInputStream());
-    } catch(final IOException ex) {
-      throw error(conn, ex);
-    } finally {
-      conn.disconnect();
-    }
+    return send(200, OPTIONS.name(), null, null, request, params);
   }
 
   /**
-   * Returns an exception with improved error message.
-   * @param conn connection reference
-   * @param ex exception
-   * @return exception
+   * Executes the specified POST request.
+   * @param payload payload
+   * @param type media type
+   * @param request path
+   * @return string result
    * @throws IOException I/O exception
    */
-  protected static IOException error(final HttpURLConnection conn, final IOException ex)
+  protected static String post(final String payload, final MediaType type, final String request)
       throws IOException {
-    final String msg = read(conn.getErrorStream());
-    throw new BaseXException(msg.isEmpty() ? ex.getMessage() : msg);
+    return post(200, payload, type, request);
   }
 
   /**
-   * Returns a string result from the specified input stream.
-   * @param is input stream
-   * @return string
+   * Executes the specified POST request.
+   * @param status status code to check
+   * @param payload payload
+   * @param type media type
+   * @param request path
+   * @param params query parameters
+   * @return string result
    * @throws IOException I/O exception
    */
-  protected static String read(final InputStream is) throws IOException {
-    return is == null ? "" : string(BufferInput.get(is).content());
+  protected static String post(final int status, final String payload, final MediaType type,
+      final String request, final Object... params) throws IOException {
+    return send(status, Method.POST.name(), new ArrayInput(payload), type, request, params);
   }
 
   /**
    * Executes the specified PUT request.
-   * @param url url
-   * @param is input stream
+   * @param is input stream (can be {@code null})
+   * @param request query
    * @throws IOException I/O exception
    */
-  protected static void put(final String url, final InputStream is) throws IOException {
-    put(url, is, null);
+  protected static void put(final InputStream is, final String request) throws IOException {
+    put(201, is, request);
   }
 
   /**
    * Executes the specified PUT request.
-   * @param url url
-   * @param is input stream
+   * @param status status code to check
+   * @param is input stream (can be {@code null})
+   * @param request query
+   * @param params query parameters
+   * @throws IOException I/O exception
+   */
+  protected static void put(final int status, final InputStream is, final String request,
+      final Object... params) throws IOException {
+    send(status, Method.PUT.name(), is, null, request, params);
+  }
+
+  /**
+   * Executes the specified PUT request.
+   * @param status status code to check
+   * @param method HTTP method
+   * @param is input stream (can be {@code null})
    * @param type media type (optional, may be {@code null})
+   * @param request query
+   * @param params parameters
+   * @return string result
    * @throws IOException I/O exception
    */
-  protected static void put(final String url, final InputStream is, final MediaType type)
-      throws IOException {
+  protected static String send(final int status, final String method, final InputStream is,
+      final MediaType type, final String request, final Object... params) throws IOException {
 
-    final IOUrl io = new IOUrl(rootUrl + url);
-    final HttpURLConnection conn = (HttpURLConnection) io.connection();
-    conn.setDoOutput(true);
-    conn.setRequestMethod(PUT.name());
-    if(type != null) conn.setRequestProperty(HttpText.CONTENT_TYPE, type.toString());
-    try(OutputStream bos = new BufferedOutputStream(conn.getOutputStream())) {
-      if(is != null) {
-        // send input stream if it not empty
-        try(BufferedInputStream bis = new BufferedInputStream(is)) {
-          for(int i; (i = bis.read()) != -1;) bos.write(i);
-        }
-      }
+    final BodyPublisher pub = is != null ? HttpRequest.BodyPublishers.ofInputStream(() -> is) :
+      HttpRequest.BodyPublishers.noBody();
+
+    final StringBuilder sb = new StringBuilder(rootUrl + request);
+    final int pl = params.length;
+    for(int p = 0; p < pl; p += 2) {
+      sb.append(p == 0 ? '?' : '&').append(params[p]).append('=').
+        append(URLEncoder.encode(params[p + 1].toString(), StandardCharsets.UTF_8));
     }
+    final URI uri = URI.create(sb.toString());
+    final HttpRequest.Builder builder = HttpRequest.newBuilder(uri).method(method, pub);
+    if(type != null) builder.setHeader("Content-Type", type.toString());
+
     try {
-      read(conn.getInputStream());
-    } catch(final IOException ex) {
-      throw error(conn, ex);
-    } finally {
-      conn.disconnect();
+      final HttpClient client = IOUrl.client(true);
+      final HttpResponse<String> response = client.send(builder.build(),
+          HttpResponse.BodyHandlers.ofString());
+      final String body = response.body();
+      assertEquals(status, response.statusCode(), method + ' ' + request + "\nResponse: " + body);
+      return body;
+    } catch(final InterruptedException ex) {
+      throw new IOException(ex);
     }
   }
 }

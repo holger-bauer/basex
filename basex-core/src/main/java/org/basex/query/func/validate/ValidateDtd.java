@@ -15,7 +15,7 @@ import org.xml.sax.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class ValidateDtd extends ValidateFn {
@@ -26,30 +26,26 @@ public class ValidateDtd extends ValidateFn {
 
   @Override
   public ArrayList<ErrorInfo> errors(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
-    return process(new Validation() {
+    return validate(new Validation() {
       @Override
-      void process(final ValidationHandler handler)
+      void validate()
           throws IOException, ParserConfigurationException, SAXException, QueryException {
 
-        final Item input = toNodeOrAtomItem(0, qc);
-        IO schema = null;
-        if(exprs.length > 1) {
-          final byte[] path = toTokenOrNull(exprs[1], qc);
-          if(path != null) schema = checkPath(path);
-        }
+        final Item input = toNodeOrAtomItem(arg(0), false, qc);
+        final String schema = toStringOrNull(arg(1), qc);
+        final IO schm = schema != null ? toIO(schema) : null;
 
         // integrate doctype declaration via serialization parameters
         SerializerOptions sp = null;
-        if(schema != null) {
+        if(schm != null) {
           sp = new SerializerOptions();
-          sp.set(SerializerOptions.DOCTYPE_SYSTEM, prepare(schema, handler).url());
+          sp.set(SerializerOptions.DOCTYPE_SYSTEM, prepare(schm).url());
         }
 
         final IO in = read(input, sp);
         final SAXParserFactory sf = SAXParserFactory.newInstance();
         sf.setValidating(true);
-        sf.newSAXParser().parse(in.inputSource(), handler);
+        sf.newSAXParser().parse(in.inputSource(), this);
       }
     });
   }

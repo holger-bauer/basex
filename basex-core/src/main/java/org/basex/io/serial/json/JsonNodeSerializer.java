@@ -19,13 +19,12 @@ import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
 import org.basex.util.list.*;
-import org.basex.util.options.Options.*;
 
 /**
  * This class serializes items as JSON. The input must conform to the rules
  * defined in the {@link JsonDirectConverter} and {@link JsonAttsConverter} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JsonNodeSerializer extends JsonSerializer {
@@ -52,13 +51,13 @@ public final class JsonNodeSerializer extends JsonSerializer {
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  public JsonNodeSerializer(final OutputStream os, final SerializerOptions opts)
+  public JsonNodeSerializer(final OutputStream os, final SerializerOptions sopts)
       throws IOException {
 
-    super(os, opts);
+    super(os, sopts);
     final int tl = typeCache.length;
     for(int t = 0; t < tl; t++) typeCache[t] = new TokenMap();
     atts = jopts.get(JsonOptions.FORMAT) == JsonFormat.ATTRIBUTES;
@@ -67,9 +66,10 @@ public final class JsonNodeSerializer extends JsonSerializer {
 
   @Override
   protected void node(final ANode node) throws IOException {
-    if(node.type == NodeType.DOCUMENT_NODE || custom) {
+    final Type type = node.type;
+    if(type == NodeType.DOCUMENT_NODE || custom) {
       super.node(node);
-    } else if(level == 0 && node.type == NodeType.ELEMENT && eq(JSON, node.name())) {
+    } else if(level == 0 && type == NodeType.ELEMENT && eq(JSON, node.name())) {
       final boolean c = custom;
       custom = true;
       super.node(node);
@@ -131,17 +131,17 @@ public final class JsonNodeSerializer extends JsonSerializer {
         out.print('"');
         final byte[] name = atts ? key : XMLToken.decode(key, lax);
         if(name == null) throw error("Name of element <%> is invalid", key);
-        out.print(norm(name));
+        out.print(normalize(name, form));
         out.print("\":");
       } else if(eq(ptype, ARRAY)) {
         if(atts) {
           if(!eq(elem.string(), ITEM)) throw error("<%> found, <%> expected", elem, ITEM);
           if(key != null) throw error("<%> must have no name attribute", elem);
-        } else {
-          if(!eq(elem.string(), VALUE)) throw error("<%> found, <%> expected", elem, VALUE);
+        } else if(!eq(elem.string(), VALUE)) {
+          throw error("<%> found, <%> expected", elem, VALUE);
         }
       } else {
-        throw error("<%> is typed as \"%\" and cannot be nested", elems.get(level - 1), ptype);
+        throw error("<%> is typed as \"%\" and cannot be nested", opened.get(level - 1), ptype);
       }
     }
 
@@ -154,7 +154,7 @@ public final class JsonNodeSerializer extends JsonSerializer {
         }
       }
       if(type == null) type = STRING;
-      types.set(level,  type);
+      types.set(level, type);
     }
 
     if(eq(type, OBJECT)) {
@@ -169,18 +169,18 @@ public final class JsonNodeSerializer extends JsonSerializer {
     final byte[] type = types.get(level - 1);
     if(eq(type, STRING)) {
       out.print('"');
-      for(final byte ch : norm(value)) printChar(ch);
+      for(final byte ch : normalize(value, form)) printChar(ch);
       out.print('"');
     } else if(eq(type, BOOLEAN)) {
       if(!eq(value, TRUE, FALSE))
-        throw error("Value of <%> is no boolean: \"%\"", elems.get(level - 1), value);
+        throw error("Value of <%> is no boolean: \"%\"", opened.get(level - 1), value);
       out.print(value);
     } else if(eq(type, NUMBER)) {
       if(Double.isNaN(toDouble(value)))
-        throw error("Value of <%> is no number: \"%\"", elems.get(level - 1), value);
+        throw error("Value of <%> is no number: \"%\"", opened.get(level - 1), value);
       out.print(value);
     } else if(trim(value).length != 0) {
-      throw error("<%> is typed as \"%\" and cannot have a value", elems.get(level - 1), type);
+      throw error("<%> is typed as \"%\" and cannot have a value", opened.get(level - 1), type);
     }
   }
 
@@ -229,8 +229,6 @@ public final class JsonNodeSerializer extends JsonSerializer {
     if(nodeSerializer == null) {
       final SerializerOptions so = new SerializerOptions();
       so.set(SerializerOptions.METHOD, sopts.get(SerializerOptions.JSON_NODE_OUTPUT_METHOD));
-      so.set(SerializerOptions.OMIT_XML_DECLARATION, YesNo.YES);
-      so.set(SerializerOptions.INDENT, YesNo.NO);
       nodeSerializer = Serializer.get(cache, so);
     }
     return nodeSerializer;

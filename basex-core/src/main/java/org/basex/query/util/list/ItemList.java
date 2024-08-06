@@ -11,7 +11,7 @@ import org.basex.util.list.*;
 /**
  * Resizable-array implementation for items.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class ItemList extends ObjectList<Item, ItemList> {
@@ -63,7 +63,7 @@ public final class ItemList extends ObjectList<Item, ItemList> {
    * @return the value
    */
   public Value value(final Expr expr) {
-    return ItemSeq.get(list, size, expr);
+    return ItemSeq.get(list, size, expr != null ? expr.seqType().type : null);
   }
 
   @Override

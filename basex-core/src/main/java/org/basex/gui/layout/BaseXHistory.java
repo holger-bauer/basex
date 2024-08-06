@@ -6,30 +6,30 @@ import org.basex.util.options.*;
 /**
  * This class remembers previous text inputs of a GUI component.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXHistory {
   /** Maximum number of history entries. */
-  public static final int MAX = 18;
-  /** Maximum number of compact history. */
-  public static final int MAXCOMPACT = 7;
+  public static final int MAX = 20;
+  /** Maximum number per page. */
+  public static final int MAXPAGE = 25;
 
   /** Options. */
   private final Options options;
-  /** History option. */
-  private final StringsOption history;
+  /** Key to history values. */
+  private final StringsOption key;
   /** History index. */
   private int index;
 
   /**
    * Constructor.
-   * @param history history values
+   * @param key key to history values
    * @param options options
    */
-  public BaseXHistory(final StringsOption history, final Options options) {
+  public BaseXHistory(final StringsOption key, final Options options) {
+    this.key = key;
     this.options = options;
-    this.history = history;
   }
 
   /**
@@ -43,7 +43,7 @@ public final class BaseXHistory {
     for(final String value : values()) {
       if(list.size() < MAX && !input.equals(value)) list.add(value);
     }
-    options.set(history, list.finish());
+    options.set(key, list.finish());
     index = 0;
   }
 
@@ -64,6 +64,6 @@ public final class BaseXHistory {
    * @return history values
    */
   public String[] values() {
-    return options.get(history);
+    return options.get(key);
   }
 }

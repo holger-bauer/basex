@@ -19,7 +19,7 @@ import org.xmldb.api.modules.*;
 /**
  * Abstract QueryService definition for the XMLDB:API.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BXQueryService implements XPathQueryService {
@@ -121,14 +121,13 @@ public final class BXQueryService implements XPathQueryService {
   private BXResourceSet query(final String query, final Value nodes) throws XMLDBException {
     // creates a query instance
     final Context ctx = coll.ctx;
-    try(QueryProcessor qp = new QueryProcessor(query, ctx)) {
-      qp.context(nodes);
-      qp.parse();
+    try(QueryProcessor qp = new QueryProcessor(query, ctx).context(nodes)) {
       // add default namespaces
       for(final Entry<String, String> entry : ns.entrySet()) {
         qp.sc.ns.add(token(entry.getKey()), token(entry.getValue()), null);
       }
       // perform query and return result
+      qp.parse();
       qp.register(ctx);
       try {
         return new BXResourceSet(qp.value(), coll);

@@ -8,7 +8,7 @@ import org.basex.util.*;
 /**
  * Parser for formatting dates.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DateParser extends TokenParser {
@@ -17,7 +17,7 @@ final class DateParser extends TokenParser {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param picture picture
    */
   DateParser(final InputInfo info, final byte[] picture) {

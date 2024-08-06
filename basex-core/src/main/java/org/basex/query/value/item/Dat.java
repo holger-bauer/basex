@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Date item ({@code xs:date}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Dat extends ADate {
@@ -26,12 +26,12 @@ public final class Dat extends ADate {
   /**
    * Constructor.
    * @param value date
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public Dat(final byte[] value, final InputInfo ii) throws QueryException {
+  public Dat(final byte[] value, final InputInfo info) throws QueryException {
     super(AtomType.DATE);
-    date(value, XDATE, ii);
+    date(value, XDATE, info);
   }
 
   /**
@@ -39,35 +39,37 @@ public final class Dat extends ADate {
    * @param value date
    * @param dur duration
    * @param plus plus/minus flag
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public Dat(final Dat value, final Dur dur, final boolean plus, final InputInfo ii)
+  public Dat(final Dat value, final Dur dur, final boolean plus, final InputInfo info)
       throws QueryException {
 
     this(value);
     if(dur instanceof DTDur) {
       calc((DTDur) dur, plus);
-      if(yea <= MIN_YEAR || yea > MAX_YEAR) throw YEARRANGE_X.get(ii, yea);
+      if(year <= MIN_YEAR || year > MAX_YEAR) throw YEARRANGE_X.get(info, year);
     } else {
-      calc((YMDur) dur, plus, ii);
+      calc((YMDur) dur, plus, info);
     }
     clean();
   }
 
   @Override
-  public void timeZone(final DTDur zone, final boolean spec, final InputInfo ii)
+  public Dat timeZone(final DTDur dur, final boolean undefined, final InputInfo info)
       throws QueryException {
-    tz(zone, spec, ii);
-    clean();
+    final Dat dat = new Dat(this);
+    dat.tz(dur, undefined, info);
+    dat.clean();
+    return dat;
   }
 
   /**
    * Cleans the item and removes invalid components.
    */
   private void clean() {
-    hou = -1;
-    min = -1;
-    sec = null;
+    hour = -1;
+    minute = -1;
+    seconds = null;
   }
 }

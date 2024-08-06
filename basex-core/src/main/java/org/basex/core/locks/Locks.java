@@ -6,7 +6,7 @@ import org.basex.data.*;
 /**
  * Read and write locks of a single job.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Locks {
@@ -19,8 +19,9 @@ public final class Locks {
    * Finalizes locks. Replaces context references with current database, sorts entries,
    * removes duplicates, assigns global read lock if global write lock exists.
    * @param ctx database context
+   * @return self reference
    */
-  public void finish(final Context ctx) {
+  public Locks finish(final Context ctx) {
     // global write lock: no read locks required
     if(writes.global()) reads.reset();
 
@@ -32,6 +33,7 @@ public final class Locks {
 
     // remove read locks that are also defined as write locks
     reads.remove(writes);
+    return this;
   }
 
   @Override

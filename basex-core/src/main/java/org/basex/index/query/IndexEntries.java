@@ -5,7 +5,7 @@ import org.basex.index.*;
 /**
  * This class contains information for returning index entries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IndexEntries implements IndexSearch {
@@ -40,12 +40,12 @@ public final class IndexEntries implements IndexSearch {
 
   /**
    * Constructor for traversing entries.
-   * @param text token to start with
+   * @param prefix token to start with
    * @param asc return results in ascending order
    * @param type index type
    */
-  public IndexEntries(final byte[] text, final boolean asc, final IndexType type) {
-    this(type, text);
+  public IndexEntries(final byte[] prefix, final boolean asc, final IndexType type) {
+    this(type, prefix);
     descending = !asc;
   }
 

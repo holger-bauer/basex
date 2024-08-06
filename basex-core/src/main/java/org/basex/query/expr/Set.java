@@ -20,7 +20,7 @@ import org.basex.util.*;
 /**
  * Set expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class Set extends Arr {
@@ -29,7 +29,7 @@ abstract class Set extends Arr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   Set(final InputInfo info, final Expr[] exprs) {
@@ -42,7 +42,7 @@ abstract class Set extends Arr {
     if(expr == null) {
       final int el = exprs.length;
       if(el == 0) return Empty.VALUE;
-      if(el == 1) return cc.function(Function._UTIL_DDO, info, exprs[0]);
+      if(el == 1) return cc.function(Function.DISTINCT_ORDERED_NODES, info, exprs[0]);
       // try to merge operands
       expr = mergePaths(cc);
       if(expr == null) expr = mergeFilters(cc);
@@ -146,7 +146,7 @@ abstract class Set extends Arr {
         tests.add(step.test);
       }
       // all steps were parsed. try to merge tests
-      if(s == sl) test = Test.get(tests.toArray(new Test[0]));
+      if(s == sl) test = Test.get(tests);
     }
 
     // try to merge first predicates of all steps
@@ -163,7 +163,8 @@ abstract class Set extends Arr {
         }
         list.add(newPredicate(step.exprs, cc));
       }
-      preds = s == sl ? new Expr[] { mergePredicates(list.finish(), cc).optimize(cc) } : null;
+      final Expr merged = cc.get(root, () -> mergePredicates(list.finish(), cc).optimize(cc));
+      preds = s == sl ? new Expr[] { merged } : null;
     }
     if(test == null || preds == null) return null;
 
@@ -231,12 +232,12 @@ abstract class Set extends Arr {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, ITERATIVE, iterative), exprs);
   }
 
   @Override
-  public final void plan(final QueryString qs) {
+  public final void toString(final QueryString qs) {
     qs.tokens(exprs, ' ' + Util.className(this).toLowerCase(Locale.ENGLISH) + ' ', true);
   }
 

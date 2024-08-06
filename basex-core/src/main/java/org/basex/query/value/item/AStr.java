@@ -1,19 +1,28 @@
 package org.basex.query.value.item;
 
+import java.util.*;
+
 import org.basex.query.*;
+import org.basex.query.util.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * Abstract string item.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class AStr extends Item {
-  /** String data (can be {@code null}). */
+  /** ASCII offset flag. */
+  private static final int[] ASCII = {};
+
+  /** String data ({@code null} if not initialized yet). */
   byte[] value;
+  /** Character offsets. {@code null}: unknown, {@code ASCII}: ASCII, otherwise: offsets. */
+  private int[] offsets;
 
   /**
    * Constructor.
@@ -24,10 +33,10 @@ public abstract class AStr extends Item {
 
   /**
    * Constructor, specifying a type and value.
-   * @param type atomic type
    * @param value value
+   * @param type atomic type
    */
-  AStr(final AtomType type, final byte[] value) {
+  AStr(final byte[] value, final Type type) {
     super(type);
     this.value = value;
   }
@@ -37,23 +46,76 @@ public abstract class AStr extends Item {
     return string(ii).length != 0;
   }
 
-  @Override
-  public final boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    final byte[] str1 = string(ii), str2 = item.string(ii);
-    return coll == null ? Token.eq(str1, str2) : coll.compare(str1, str2) == 0;
+  /**
+   * Checks if the string only consists of ASCII characters.
+   * @param info input info (can be {@code null})
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  public boolean ascii(final InputInfo info) throws QueryException {
+    if(offsets == null) {
+      final byte[] token = string(info);
+      if(Token.ascii(token)) {
+        offsets = ASCII;
+      } else {
+        final IntList list = new IntList();
+        final int tl = token.length;
+        for(int t = 0; t < tl; t += Token.cl(token, t)) list.add(t);
+        offsets = list.finish();
+      }
+    }
+    return offsets == ASCII;
   }
 
-  @Override
-  public boolean sameKey(final Item item, final InputInfo ii) throws QueryException {
-    return item.type.isStringOrUntyped() && eq(item, null, null, ii);
+  /**
+   * Returns the string length.
+   * @param info input info (can be {@code null})
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  public int length(final InputInfo info) throws QueryException {
+    return ascii(info) ? string(info).length : offsets.length;
   }
 
-  @Override
-  public final int diff(final Item item, final Collation coll, final InputInfo ii)
+  /**
+   * Returns a substring.
+   * @param info input info (can be {@code null})
+   * @param start start position
+   * @param end end position
+   * @return substring
+   * @throws QueryException query exception
+   */
+  public AStr substring(final InputInfo info, final int start, final int end)
       throws QueryException {
-    final byte[] str1 = string(ii), str2 = item.string(ii);
-    return coll == null ? Token.diff(str1, str2) : coll.compare(str1, str2);
+    if(start == 0 && end == length(info)) return this;
+
+    final byte[] token = string(info);
+    final boolean ascii =  ascii(info);
+    final int s = ascii ? start : offsets[start];
+    final int e = ascii ? end : end < offsets.length ? offsets[end] : token.length;
+    return Str.get(Arrays.copyOfRange(token, s, e));
+  }
+
+  @Override
+  public final boolean comparable(final Item item) {
+    return item.type.isStringOrUntyped();
+  }
+
+  @Override
+  public final boolean equal(final Item item, final Collation coll, final InputInfo ii)
+      throws QueryException {
+    return Token.eq(string(ii), item.string(ii), Collation.get(coll, ii));
+  }
+
+  @Override
+  public final boolean deepEqual(final Item item, final DeepEqual deep) throws QueryException {
+    return comparable(item) && Token.eq(string(deep.info), item.string(deep.info), deep);
+  }
+
+  @Override
+  public final int compare(final Item item, final Collation coll, final boolean transitive,
+      final InputInfo ii) throws QueryException {
+    return Token.compare(string(ii), item.string(ii), Collation.get(coll, ii));
   }
 
   @Override
@@ -65,7 +127,7 @@ public abstract class AStr extends Item {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.quoted(value);
   }
 }

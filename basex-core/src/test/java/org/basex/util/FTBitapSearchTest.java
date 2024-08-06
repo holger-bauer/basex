@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
 /**
  * Test {@link FTBitapSearch} methods.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class FTBitapSearchTest {
@@ -41,7 +41,7 @@ public final class FTBitapSearchTest {
       this.expected = expected;
       final int hl = hay.length;
       final byte[][] hs = new byte[hl][];
-      for(int h = 0; h < hay.length; h++) hs[h] = token(hay[h]);
+      for(int h = 0; h < hl; h++) hs[h] = token(hay[h]);
 
       haystack = new FTIterator() {
         /** Index of current element. */

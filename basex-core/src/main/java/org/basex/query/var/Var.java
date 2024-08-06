@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Variable expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  */
@@ -23,22 +23,16 @@ public final class Var extends ExprInfo {
   public final QNm name;
   /** Variable ID. */
   public final int id;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   public final InputInfo info;
 
-  /** Declared type, {@code null} if not specified. */
+  /** Declared type ({@code null} if no type or {@code item()*} was specified). */
   public SeqType declType;
-  /** Flag for function conversion. */
-  public boolean promote;
-  /** Stack slot number. */
+  /** Stack slot ({@code -1} if unused). */
   int slot;
 
   /** Actual type (by type inference). */
-  private final ExprType exprType = new ExprType(SeqType.ITEM_ZM);
-  /** Static context. */
-  private final StaticContext sc;
-  /** Flag for function parameters. */
-  private final boolean param;
+  private final ExprType exprType;
   /** Input expression, from which the data reference and DDO flag will be requested. */
   private Expr ex;
 
@@ -46,21 +40,18 @@ public final class Var extends ExprInfo {
    * Constructor for a variable with an already known stack slot.
    * @param name variable name
    * @param declType declared type, {@code null} for no check
-   * @param param function parameter flag
-   * @param slot stack slot
    * @param qc query context, used for generating a variable ID
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
+   * @param slot stack slot ({@code -1} if unused)
+   * @param exprType expression type (can be {@code null})
    */
-  public Var(final QNm name, final SeqType declType, final boolean param, final int slot,
-      final QueryContext qc, final StaticContext sc, final InputInfo info) {
+  public Var(final QNm name, final SeqType declType, final QueryContext qc, final InputInfo info,
+      final int slot, final ExprType exprType) {
     this.name = name;
-    this.param = param;
-    this.sc = sc;
     this.info = info;
     this.slot = slot;
     this.declType = declType == null || declType.eq(SeqType.ITEM_ZM) ? null : declType;
-    promote = param;
+    this.exprType = exprType != null ? exprType : new ExprType(SeqType.ITEM_ZM);
     id = qc.varIDs++;
   }
 
@@ -68,26 +59,20 @@ public final class Var extends ExprInfo {
    * Constructor.
    * @param name variable name
    * @param declType declared sequence type, {@code null} for no check
-   * @param param function parameter flag
    * @param qc query context, used for generating a variable ID
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
-  public Var(final QNm name, final SeqType declType, final boolean param, final QueryContext qc,
-      final StaticContext sc, final InputInfo info) {
-    this(name, declType, param, -1, qc, sc, info);
+  public Var(final QNm name, final SeqType declType, final QueryContext qc, final InputInfo info) {
+    this(name, declType, qc, info, -1, null);
   }
 
   /**
    * Copy constructor.
    * @param var variable to copy
    * @param qc query context
-   * @param sc static context
    */
-  public Var(final Var var, final QueryContext qc, final StaticContext sc) {
-    this(var.name, var.declType, var.param, qc, sc, var.info);
-    promote = var.promote;
-    exprType.assign(var.exprType);
+  public Var(final Var var, final QueryContext qc) {
+    this(var.name, var.declType, qc, var.info, -1, new ExprType(var.exprType));
   }
 
   /**
@@ -164,7 +149,7 @@ public final class Var extends ExprInfo {
 
     if(declType != null) {
       if(declType.occ.intersect(st.occ) == null)
-        throw INVTREAT_X_X_X.get(info, st, declType, Token.concat('$', name.string()));
+        throw INVCONVERT_X_X_X.get(info, st, declType, Token.concat('$', name.string()));
       if(st.instanceOf(declType)) {
         if(cc != null) cc.info(OPTTYPE_X, this);
         declType = null;
@@ -182,14 +167,6 @@ public final class Var extends ExprInfo {
   }
 
   /**
-   * Determines if this variable checks the type of the expression bound to it.
-   * @return {@code true} if the type is checked or promoted, {@code false} otherwise
-   */
-  public boolean checksType() {
-    return declType != null;
-  }
-
-  /**
    * Returns an equivalent to the given expression that checks this variable's type.
    * @param expr expression
    * @param cc compilation context
@@ -197,23 +174,20 @@ public final class Var extends ExprInfo {
    * @throws QueryException query exception
    */
   public Expr checked(final Expr expr, final CompileContext cc) throws QueryException {
-    return checksType() ? new TypeCheck(sc, info, expr, declType, promote).optimize(cc) : expr;
+    return declType != null ? new TypeCheck(info, expr, declType).optimize(cc) : expr;
   }
 
   /**
    * Checks the type of this value and casts/promotes it when necessary.
    * @param value value to be checked
    * @param qc query context
-   * @param opt if the result should be optimized
+   * @param cc compilation context (can be {@code null})
    * @return checked and possibly cast value
    * @throws QueryException if the check failed
    */
-  public Value checkType(final Value value, final QueryContext qc, final boolean opt)
+  public Value checkType(final Value value, final QueryContext qc, final CompileContext cc)
       throws QueryException {
-
-    if(!checksType() || declType.instance(value)) return value;
-    if(promote) return declType.promote(value, name, qc, sc, info, opt);
-    throw typeError(value, declType, name, info, promote);
+    return declType != null ? declType.coerce(value, name, qc, cc, info) : value;
   }
 
   /**
@@ -233,60 +207,27 @@ public final class Var extends ExprInfo {
    */
   public void checkType(final Expr expr) throws QueryException {
     final SeqType et = expr.seqType(), vt = seqType();
-    if(!checksType() || vt.type.instanceOf(et.type) ||
+    if(declType == null || vt.type.instanceOf(et.type) ||
         et.type.instanceOf(vt.type) && et.occ.instanceOf(vt.occ)) return;
 
-    if(!promote || !(et.type instanceof NodeType) && !et.promotable(vt)) {
-      throw vt.type.nsSensitive() ? NSSENS_X_X.get(info, et, vt) :
-        typeError(expr, vt, name, info, promote);
+    if(!(et.type instanceof NodeType) && !et.promotable(vt)) {
+      throw vt.type.nsSensitive() ? NSSENS_X_X.get(info, et, vt) : typeError(expr, vt, name, info);
     }
-  }
-
-  /**
-   * Checks whether the given variable is identical to this one, i.e. has the same id.
-   * @param var variable to check
-   * @return {@code true} if the IDs are equal, {@code false} otherwise
-   */
-  public boolean is(final Var var) {
-    return id == var.id;
-  }
-
-  /**
-   * Checks if this variable performs function conversion on its bound values.
-   * @return result of check
-   */
-  public boolean promotes() {
-    return promote;
-  }
-
-  @Override
-  public int hashCode() {
-    return id;
   }
 
   /**
    * Tries to adopt the given type check.
    * @param st type to check
-   * @param prom if function conversion should be applied
    * @return {@code true} if the check could be adopted, {@code false} otherwise
    */
-  public boolean adoptCheck(final SeqType st, final boolean prom) {
-    if(declType == null || st.instanceOf(declType)) {
-      declType = st;
-    } else if(!declType.instanceOf(st)) {
-      return false;
-    }
-    promote |= prom;
+  public boolean adoptCheck(final SeqType st) {
+    if(declType != null && !st.instanceOf(declType)) return declType.instanceOf(st);
+    declType = st;
     return true;
   }
 
   @Override
-  public boolean equals(final Object obj) {
-    return obj instanceof Var && is((Var) obj);
-  }
-
-  @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.attachVariable(plan.create(this), this, true));
   }
 
@@ -295,17 +236,17 @@ public final class Var extends ExprInfo {
    * @return variable id
    */
   public byte[] id() {
-    return Token.concat(DOLLAR, name.string(), "_", id);
+    return Token.concat("$", name.string(), "_", id);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(id());
     if(declType != null) qs.token(AS).token(declType);
   }
 
   @Override
   public String toErrorString() {
-    return Strings.concat(DOLLAR, name.string());
+    return Strings.concat("$", name.string());
   }
 }

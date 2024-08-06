@@ -19,7 +19,7 @@ import org.basex.util.list.*;
 /**
  * This is the starter class for the graphical frontend.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXGUI extends Main {
@@ -97,8 +97,8 @@ public final class BaseXGUI extends Main {
     f.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
     f.setAlwaysOnTop(true);
     f.setUndecorated(true);
-    f.setIconImage(BaseXImages.get("logo_64"));
-    f.add(new JLabel(BaseXImages.icon("logo_256")));
+    f.setIconImage(BaseXImages.get("logo_small"));
+    f.add(new JLabel(BaseXImages.icon("logo_large")));
     f.pack();
     f.setLocationRelativeTo(null);
     f.setVisible(true);

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.*;
 
 /**
  * Base class with common functionality for all ID -> PRE mapping tests.
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public abstract class IdPreMapBulkTestBase {
@@ -76,12 +76,9 @@ public abstract class IdPreMapBulkTestBase {
     final StringBuilder s = new StringBuilder();
     for(final int[] o : ops) {
       s.append(o[2] > 0 ? "insert(" : "delete(");
-      s.append(o[0]);
-      s.append(',');
-      s.append(o[1]);
-      s.append(',');
-      s.append(o[2]);
-      s.append(");\n");
+      s.append(o[0]).append(',');
+      s.append(o[1]).append(',');
+      s.append(o[2]).append(");\n");
     }
     Util.errln("Operations:\n" + s);
     Util.errln(testedmap);
@@ -89,7 +86,7 @@ public abstract class IdPreMapBulkTestBase {
 
   /**
    * Dummy implementation of ID -> PRE map: very slow, but simple and correct.
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Dimitar Popov
    */
   protected static class DummyIdPreMap extends IdPreMap {

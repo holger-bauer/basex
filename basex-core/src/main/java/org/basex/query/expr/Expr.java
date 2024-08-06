@@ -5,6 +5,7 @@ import java.util.*;
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
+import org.basex.query.expr.CmpV.*;
 import org.basex.query.expr.constr.*;
 import org.basex.query.expr.gflwor.*;
 import org.basex.query.expr.path.*;
@@ -28,7 +29,7 @@ import org.basex.util.hash.*;
  * Abstract class for representing XQuery expressions.
  * Expression are divided into {@link ParseExpr} and {@link Value} classes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Expr extends ExprInfo {
@@ -82,7 +83,8 @@ public abstract class Expr extends ExprInfo {
    * or {@link Empty#VALUE} if the expression yields an empty sequence.
    * If this method is not implemented, {@link #value(QueryContext)} must be implemented instead.
    * @param qc query context
-   * @param ii input info (only required by {@link Seq} instances, which have no input info)
+   * @param ii input info (can be {@code null}); required for those {@link Value} instances
+   *   that have no input info)
    * @return item or {@link Empty#VALUE}
    * @throws QueryException query exception
    */
@@ -91,7 +93,8 @@ public abstract class Expr extends ExprInfo {
   /**
    * Evaluates the expression and returns an iterator on the resulting, atomized items.
    * @param qc query context
-   * @param ii input info
+   * @param ii input info (can be {@code null}); required for those {@link Value} instances
+   *   that have no input info)
    * @return iterator
    * @throws QueryException query exception
    */
@@ -108,7 +111,8 @@ public abstract class Expr extends ExprInfo {
    * Evaluates the expression and returns the resulting, atomized item,
    * or {@link Empty#VALUE} if the expression yields an empty sequence.
    * @param qc query context
-   * @param ii input info (only required by {@link Seq} instances, which have no input info)
+   * @param ii input info (can be {@code null}); required for those {@link Value} instances
+   *   that have no input info)
    * @return item or {@link Empty#VALUE}
    * @throws QueryException query exception
    */
@@ -119,37 +123,23 @@ public abstract class Expr extends ExprInfo {
   /**
    * Evaluates the expression and returns the atomized items.
    * @param qc query context
-   * @param ii input info (only required by {@link Seq} instances, which have no input info)
+   * @param ii input info (can be {@code null}); required for those {@link Value} instances
+   *   that have no input info)
    * @return atomized item
    * @throws QueryException query exception
    */
   public abstract Value atomValue(QueryContext qc, InputInfo ii) throws QueryException;
 
   /**
-   * <p>Checks if the effective boolean value can be computed for this expression:</p>
-   * <ul>
-   *   <li> If it yields an empty sequence, {@link Bln#FALSE} will be returned.
-   *   <li> If it yields a single item, this item will be returned.
-   *   <li> If it yields nodes, the first node will be returned.
-   *   <li> Otherwise, an error will be raised.
-   * </ul>
-   * <p>A single numeric item may later be evaluated as positional predicate.</p>
+   * Computes the effective boolean value for this expression.
    * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
+   * @param ii input info (can be {@code null}); required for those {@link Value} instances
+   *   that have no input info)
+   * @param pos position of context item (if {@code 0}, perform EBV test)
    * @return item
    * @throws QueryException query exception
    */
-  public abstract Item ebv(QueryContext qc, InputInfo ii) throws QueryException;
-
-  /**
-   * Performs a predicate test and returns the item if the test was successful.
-   * The returned item is required for full-text scoring.
-   * @param qc query context
-   * @param ii input info (required for {@link Seq} instances, which have no input info)
-   * @return item or {@code null}
-   * @throws QueryException query exception
-   */
-  public abstract Item test(QueryContext qc, InputInfo ii) throws QueryException;
+  public abstract boolean test(QueryContext qc, InputInfo ii, long pos) throws QueryException;
 
   /**
    * Tests if this is a vacuous expression (empty sequence or error function).
@@ -167,13 +157,6 @@ public abstract class Expr extends ExprInfo {
    */
   public Data data() {
     return null;
-  }
-
-  /**
-   * Assigns a data reference, if supported.
-   * @param dt data reference
-   */
-  public void data(@SuppressWarnings("unused") final Data dt) {
   }
 
   /**
@@ -197,12 +180,12 @@ public abstract class Expr extends ExprInfo {
    * @return {@code true} if the variable is used
    */
   public final boolean uses(final Var var) {
-    // return true iff the the search was aborted, i.e. the variable is used
+    // return true iff the search was aborted, i.e. the variable is used
     return !accept(new ASTVisitor() {
       @Override
       public boolean used(final VarRef ref) {
         // abort when the variable is used
-        return !ref.var.is(var);
+        return ref.var != var;
       }
     });
   }
@@ -232,7 +215,7 @@ public abstract class Expr extends ExprInfo {
    * This function is called by:
    * <ul>
    *   <li> {@link Closure#optimize}</li>
-   *   <li> {@link GFLWOR#inlineLets}</li>
+   *   <li> {@link GFLWOR#inlineForLet}</li>
    *   <li> {@link GFLWOR#optimizePos}</li>
    *   <li> {@link GFLWOR#simplify}</li>
    *   <li> {@link GFLWOR#unusedVars}</li>
@@ -247,7 +230,7 @@ public abstract class Expr extends ExprInfo {
 
   /**
    * Inlines an expression into this one, replacing all variable or context references.
-   * This function is called by {@link InlineContext#inline(Expr)} (see invocations of this
+   * This function is called by {@link InlineContext#inline(Expr)} (see invocations of these
    * functions for further inlinings).
    *
    * The variable reference is replaced in:
@@ -280,18 +263,40 @@ public abstract class Expr extends ExprInfo {
   public abstract Expr copy(CompileContext cc, IntObjMap<Var> vm);
 
   /**
-   * This function is called at compile time for expressions whose operands might be simplified.
+   * Simplifies the expression. Overwritten by many expressions;
+   * calls {@link #simplify(Simplify, CompileContext)} otherwise.
    * @param mode mode of simplification
    * @param cc compilation context
    * @return simplified or original expression
    * @see Simplify
    * @throws QueryException query exception
    */
-  @SuppressWarnings("unused")
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    // return true if a deterministic expression returns at least one node
-    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) &&
-      seqType().instanceOf(SeqType.NODE_OM) && !has(Flag.NDT) ? cc.simplify(this, Bln.TRUE) : this;
+    return simplify(mode, cc);
+  }
+
+  /**
+   * Simplifies the expression.
+   * @param mode mode of simplification
+   * @param cc compilation context
+   * @return simplified or original expression
+   * @see Simplify
+   * @throws QueryException query exception
+   */
+  public final Expr simplify(final Simplify mode, final CompileContext cc) throws QueryException {
+    Expr expr = this;
+    if(mode.oneOf(Simplify.EBV, Simplify.PREDICATE)) {
+      // boolean(<a/>)  ->  true()
+      // E[()]  ->  E[false()]
+      final SeqType st = seqType();
+      final boolean nodes = st.instanceOf(SeqType.NODE_OM);
+      if((nodes || st.zero()) && !has(Flag.NDT)) expr = Bln.get(nodes);
+    } else if(mode == Simplify.COUNT && !(this instanceof Value)) {
+      // count(db:get('db')//with-known-result-size)  ->  replicate('', size)
+      final long size = size();
+      if(size != -1 && !has(Flag.NDT)) expr = SingletonSeq.get(Str.EMPTY, size);
+    }
+    return expr != this ? cc.simplify(this, expr, mode) : this;
   }
 
   /**
@@ -305,12 +310,11 @@ public abstract class Expr extends ExprInfo {
    * @return function type, or {@code null} if expression yields no functions
    */
   public FuncType funcType() {
-    final Type type = seqType().type;
-    return type instanceof FuncType ? (FuncType) type : null;
+    return seqType().type.funcType();
   }
 
   /**
-   * Indicates if this expression returns nodes in document order without duplicates.
+   * Indicates if this expression returns items in document order without duplicates.
    * @return result of check
    */
   public boolean ddo() {
@@ -328,18 +332,32 @@ public abstract class Expr extends ExprInfo {
 
   /**
    * Returns the specified argument/operand of an expression (function, list, etc).
-   * @param i index of argument
-   * @return arguments or {@code null}
+   * @param a index of argument
+   * @return argument or {@link Empty#UNDEFINED} if argument is undefined
    */
-  public final Expr arg(final int i) {
-    return args()[i];
+  public Expr arg(final int a) {
+    final Expr[] args = args();
+    return args != null && a < args.length ? args[a] : Empty.UNDEFINED;
+  }
+
+  /**
+   * Optimizes an expression for positional access.
+   * Overwritten by {@link Int}, {@link Range}, {@link RangeSeq}}.
+   * @param op comparison operator
+   * @param cc compilation context
+   * @return boolean result, optimized or original expression
+   * @throws QueryException query exception
+   */
+  @SuppressWarnings("unused")
+  public Expr optimizePos(final OpV op, final CompileContext cc) throws QueryException {
+    return simplifyFor(Simplify.NUMBER, cc).simplifyFor(Simplify.DISTINCT, cc);
   }
 
   /**
    * Checks if an expression can be rewritten to an index access.
    * If so, the index expression will be bound to {@link IndexInfo#expr}.
    * This method will be called by the {@link Path} expression.
-   * @param ii index info
+   * @param ii index info (can be {@code null})
    * @return true if an index can be used
    * @throws QueryException query exception
    */
@@ -362,7 +380,7 @@ public abstract class Expr extends ExprInfo {
    * @return {@code true} if there are variables which are used but not declared in this expression,
    *         {@code false} otherwise
    */
-  protected boolean hasFreeVars() {
+  public boolean hasFreeVars() {
     final BitSet declared = new BitSet();
     return !accept(new ASTVisitor() {
       @Override
@@ -382,7 +400,7 @@ public abstract class Expr extends ExprInfo {
    * Tries to merge two expressions that are part of an EBV test.
    * Called by {@link And}, {@link Or}), {@link Step} and {@link Filter}.
    * Overwritten by {@link CmpG}, {@link CmpIR}, {@link CmpR}, {@link CmpSR},
-   * {@link ItrPos}, {@link Pos} and others.
+   * {@link IntPos}, {@link SimplePos} and others.
    * @param expr second expression
    * @param or union or intersection
    * @param cc compilation context
@@ -416,7 +434,7 @@ public abstract class Expr extends ExprInfo {
    * @param exprs expressions to visit
    * @return success flag
    */
-  protected static boolean visitAll(final ASTVisitor visitor, final Expr...exprs) {
+  protected static boolean visitAll(final ASTVisitor visitor, final Expr... exprs) {
     for(final Expr expr : exprs) {
       if(!expr.accept(visitor)) return false;
     }
@@ -424,7 +442,7 @@ public abstract class Expr extends ExprInfo {
   }
 
   /**
-   * Counts the number of expressions in this expression's sub-tree.
+   * Counts the number of expressions in this expression's subtree.
    * This method is e.g. called by {@link StaticFunc#inline} to check if an expression
    * is small enough to be inlined.
    * @return number of expressions
@@ -450,6 +468,16 @@ public abstract class Expr extends ExprInfo {
   }
 
   /**
+   * Returns the input info of this expression, or the supplied reference as fallback.
+   * @param info fallback reference
+   * @return info or {@code null}
+   */
+  public final InputInfo info(final InputInfo info) {
+    final InputInfo ii = info();
+    return ii != null ? ii : info;
+  }
+
+  /**
    * {@inheritDoc}
    * <div>
    * This function is e.g. called by:
@@ -464,8 +492,7 @@ public abstract class Expr extends ExprInfo {
    *   <li>{@link CmpG#optimize(CompileContext)} or {@link CmpV#optimize(CompileContext)},
    *     in order to pre-evaluate equality tests.
    *   </li>
-   *   <li>{@link CmpG#optimize(CompileContext)} or
-   *     {@link Pos#get(Expr, CmpV.OpV, InputInfo, CompileContext)},
+   *   <li>{@link CmpG#optimize(CompileContext)},
    *     in order to compare the start and end value.
    *   </li>
    *   <li>{@link PathCache}, in order to find identical root values at runtime.

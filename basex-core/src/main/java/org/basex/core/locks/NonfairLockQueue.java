@@ -5,10 +5,10 @@ import java.util.*;
 /**
  * Lock queue for non-fair locking.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class NonfairLockQueue extends LockQueue {
+final class NonfairLockQueue extends LockQueue {
   /** Queued readers. */
   private final Queue<Long> readers = new LinkedList<>();
   /** Queued writers. */

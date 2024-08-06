@@ -9,42 +9,40 @@ import org.basex.util.*;
 /**
  * Common superclass for static functions and variables.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class StaticDecl extends StaticScope {
   /** Annotations. */
-  public final AnnList anns;
-  /** Name of the declaration. */
-  public final QNm name;
+  public AnnList anns;
 
-  /** Declared type, {@code null} if not specified. */
-  protected SeqType declType;
-  /** Flag that is set during compilation and execution and prevents infinite loops. */
+  /** Indicates if code is currently being compiled or evaluated. */
   protected boolean dontEnter;
 
   /**
    * Constructor.
-   * @param anns annotations
    * @param name name
    * @param declType declared return type (can be {@code null})
+   * @param anns annotations
    * @param vs variable scope
-   * @param doc xqdoc documentation
-   * @param info input info
+   * @param info input info (can be {@code null})
+   * @param doc xqdoc string
    */
-  protected StaticDecl(final AnnList anns, final QNm name, final SeqType declType,
-      final VarScope vs, final String doc, final InputInfo info) {
-    super(vs.sc, vs, doc, info);
-    this.anns = anns;
+  protected StaticDecl(final QNm name, final SeqType declType, final AnnList anns,
+      final VarScope vs, final InputInfo info, final String doc) {
+    super(info.sc());
     this.name = name;
     this.declType = declType;
+    this.anns = anns;
+    this.vs = vs;
+    this.info = info;
+    doc(doc);
   }
 
-  /**
-   * Returns a unique identifier for this declaration.
-   * @return a byte sequence that uniquely identifies this declaration
-   */
-  public abstract byte[] id();
+  @Override
+  public final void reset() {
+    compiled = false;
+  }
 
   /**
    * Returns the type of this expression. If no type has been declared in the expression,

@@ -1,6 +1,7 @@
 package org.basex.query.func.fn;
 
 import static org.basex.query.func.Function.*;
+
 import java.util.*;
 
 import org.basex.query.*;
@@ -16,58 +17,75 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnHead extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = exprs[0].iter(qc).next();
-    return item == null ? Empty.VALUE : item;
+    final Item input = arg(0).iter(qc).next();
+    return input == null ? Empty.VALUE : input;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-    if(st.zeroOrOne()) return expr;
+    final Expr input = arg(0);
+    final SeqType st = input.seqType();
+    if(st.zeroOrOne()) return input;
 
-    // rewrite nested function calls
-    final long size = expr.size();
-    if(_UTIL_INIT.is(expr) && size > 1)
-      return cc.function(HEAD, info, expr.args());
-    if(TAIL.is(expr))
-      return cc.function(_UTIL_ITEM, info, expr.arg(0), Int.get(2));
-    if(SUBSEQUENCE.is(expr) || _UTIL_RANGE.is(expr)) {
-      final SeqRange r = SeqRange.get(expr, cc);
-      // safety check (at this stage, r.length will never be 0)
+    final long size = input.size();
+    // head(tail(E))  ->  items-at(E, 2)
+    if(TAIL.is(input))
+      return cc.function(ITEMS_AT, info, input.arg(0), Int.get(2));
+    // head(trunk(E))  ->  head(E)
+    if(TRUNK.is(input) && size > 1)
+      return cc.function(HEAD, info, input.args());
+    // head(subsequence(E, pos))  ->  items-at(E, pos)
+    if(SUBSEQUENCE.is(input) || _UTIL_RANGE.is(input)) {
+      final SeqRange r = SeqRange.get(input, cc);
+      // safety check (at this stage, r.length should never be 0)
       if(r != null && r.length != 0)
-        return cc.function(_UTIL_ITEM, info, expr.arg(0), Int.get(r.start + 1));
+        return cc.function(ITEMS_AT, info, input.arg(0), Int.get(r.start + 1));
     }
-    if(REVERSE.is(expr))
-      return cc.function(_UTIL_LAST, info, expr.args());
-    if(_UTIL_REPLICATE.is(expr)) {
+    if(REVERSE.is(input)) {
+      // head(reverse(root[test]))  ->  head(reverse(root)[test])
+      if(input.arg(0) instanceof IterFilter) {
+        final IterFilter filter = (IterFilter) input.arg(0);
+        return cc.function(HEAD, info,
+            Filter.get(cc, filter.info(), cc.function(REVERSE, info, filter.root), filter.exprs));
+      }
+      // head(reverse(E))  ->  foot(E)
+      return cc.function(FOOT, info, input.args());
+    }
+    // head(replicate(E, count))  ->  head(E)
+    if(REPLICATE.is(input)) {
       // static integer will always be greater than 1
-      if(expr.arg(1) instanceof Int) return cc.function(HEAD, info, expr.arg(0));
+      if(input.arg(1) instanceof Int) return cc.function(HEAD, info, input.arg(0));
     }
-    if(_FILE_READ_TEXT_LINES.is(expr))
+    // head(file:read-text-lines(E))  ->  file:read-text-lines(E, 0, 1)
+    if(_FILE_READ_TEXT_LINES.is(input))
       return FileReadTextLines.opt(this, 0, 1, cc);
 
     // rewrite list to its arguments or to elvis operator
-    if(expr instanceof List) {
-      final Expr[] args = expr.args();
+    if(input instanceof List) {
+      final Expr[] args = input.args();
       final Expr first = args[0];
-      final SeqType st1 = first.seqType();
-      if(st1.one()) return first;
-      if(st1.oneOrMore()) return cc.function(HEAD, info, first);
-      if(st1.zeroOrOne()) {
-        final Expr dflt = List.get(cc, info, Arrays.copyOfRange(args, 1, args.length));
-        return cc.function(_UTIL_OR, info, first, cc.function(HEAD, info, dflt));
+      final SeqType stFirst = first.seqType();
+      // head((1, 2))  ->  1
+      if(stFirst.one()) return first;
+      // head((1 to 2), 3))  ->  head(1 to 2)
+      if(stFirst.oneOrMore()) return cc.function(HEAD, info, first);
+      final int al = args.length;
+      if(stFirst.zeroOrOne() && (al == 2 || args[1].seqType().occ != Occ.ZERO_OR_ONE)) {
+        // head(($a[.], 1))         ->  $a[.] otherwise 1
+        // head(($a[.], $b[.], 1))  ->  (will not be rewritten)
+        final Expr dflt = List.get(cc, info, Arrays.copyOfRange(args, 1, al));
+        return new Otherwise(info, first, cc.function(HEAD, info, dflt)).optimize(cc);
       }
     }
 
-    exprType.assign(st.with(st.oneOrMore() ? Occ.EXACTLY_ONE : Occ.ZERO_OR_ONE));
-    data(expr.data());
-    return this;
+    final Occ occ = st.oneOrMore() ? Occ.EXACTLY_ONE : Occ.ZERO_OR_ONE;
+    exprType.assign(st.with(occ)).data(input);
+    return embed(cc, false);
   }
 }

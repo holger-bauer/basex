@@ -1,24 +1,24 @@
 (:~
  : Drop patterns.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/users';
 
-import module namespace util = 'dba/util' at '../lib/util.xqm';
+import module namespace utils = 'dba/utils' at '../lib/utils.xqm';
 
 (:~ Top category :)
 declare variable $dba:SUB := 'user';
 
 (:~
  : Drops a pattern.
- : @param  $name      user name
+ : @param  $name      username
  : @param  $patterns  database patterns
  : @return redirection
  :)
 declare
   %updating
-  %rest:GET
+  %rest:POST
   %rest:path('/dba/pattern-drop')
   %rest:query-param('name',    '{$name}')
   %rest:query-param('pattern', '{$patterns}')
@@ -28,9 +28,8 @@ function dba:pattern-drop(
 ) as empty-sequence() {
   try {
     $patterns ! user:drop($name, .),
-    util:redirect($dba:SUB, map {
-      'name': $name, 'info': util:info($patterns, 'pattern', 'dropped') })
+    utils:redirect($dba:SUB, { 'name': $name, 'info': utils:info($patterns, 'pattern', 'dropped') })
   } catch * {
-    util:redirect($dba:SUB, map { 'error': $err:description })
+    utils:redirect($dba:SUB, { 'error': $err:description })
   }
 };

@@ -2,54 +2,49 @@ package org.basex.query.func.fn;
 
 import static org.basex.query.func.Function.*;
 
-import java.util.*;
-
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.List;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
+import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
-import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnReverse extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
     // optimization: reverse sequence
-    final Iter iter = exprs[0].iter(qc);
+    final Iter input = arg(0).iter(qc);
 
     // materialize value if number of results is unknown
-    final long size = iter.size();
+    final long size = input.size();
     // no result: empty iterator
     if(size == 0) return Empty.ITER;
     // single result: iterator
-    if(size == 1) return iter;
-
+    if(size == 1) return input;
     // value-based iterator
-    final Value value = iter.iterValue();
-    if(value != null) return value.reverse(qc).iter();
+    if(input.valueIter()) return input.value(qc, null).reverse(qc).iter();
 
-    // fast route if the size is known
+    // size is known: create iterator
     if(size > -1) return new Iter() {
       long c = size;
+
       @Override
       public Item next() throws QueryException {
-        qc.checkStop();
-        return --c >= 0 ? iter.get(c) : null;
+        return --c >= 0 ? input.get(c) : null;
       }
       @Override
       public Item get(final long i) throws QueryException {
-        return iter.get(size - i - 1);
+        return input.get(size - i - 1);
       }
       @Override
       public long size() {
@@ -59,51 +54,56 @@ public final class FnReverse extends StandardFunc {
 
     // standard iterator
     final ValueBuilder vb = new ValueBuilder(qc);
-    for(Item item; (item = qc.next(iter)) != null;) vb.addFront(item);
+    for(Item item; (item = qc.next(input)) != null;) {
+      vb.addFront(item);
+    }
     return vb.value(this).iter();
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return exprs[0].value(qc).reverse(qc);
+    return arg(0).value(qc).reverse(qc);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
-    // zero/single items or singleton sequence: return argument
-    if(expr.seqType().zeroOrOne() || expr instanceof SingletonSeq &&
-        ((SingletonSeq) expr).singleItem()) return expr;
-    // reverse sequence
-    if(expr instanceof RangeSeq) return ((RangeSeq) expr).reverse(cc.qc);
+    final Expr input = arg(0);
+    if(input.seqType().zeroOrOne()) return input;
+    if(input instanceof Value) return ((Value) input).reverse(cc.qc);
 
-    // reverse(tail(reverse(E))  ->  util:init(E)
-    if(TAIL.is(expr) && REVERSE.is(expr.arg(0)))
-      return cc.function(_UTIL_INIT, info, expr.arg(0).args());
-    // reverse(util:init(reverse(E))  ->  tail(E)
-    if(_UTIL_INIT.is(expr) && REVERSE.is(expr.arg(0)))
-      return cc.function(TAIL, info, expr.arg(0).args());
-    // reverse(util:replicate(ITEM, COUNT))  ->  util:replicate(ITEM, COUNT)
-    if(_UTIL_REPLICATE.is(expr) && !expr.has(Flag.NDT))
-      if(expr.arg(0).seqType().zeroOrOne()) return expr;
+    // reverse(reverse(E))  ->  E
+    if(REVERSE.is(input)) return input.arg(0);
+    // reverse(tail(reverse(E))  ->  trunk(E)
+    if(TAIL.is(input) && REVERSE.is(input.arg(0)))
+      return cc.function(TRUNK, info, input.arg(0).args());
+    // reverse(trunk(reverse(E))  ->  tail(E)
+    if(TRUNK.is(input) && REVERSE.is(input.arg(0)))
+      return cc.function(TAIL, info, input.arg(0).args());
+    // reverse(replicate(ZOO, count))  ->  replicate(ZOO, count)
+    if(REPLICATE.is(input) && !input.has(Flag.NDT))
+      if(input.arg(0).seqType().zeroOrOne()) return input;
 
-    // rewrite list
-    if(expr instanceof List) {
-      final Expr[] args = expr.args();
-      if(((Checks<Expr>) ex -> ex.seqType().zeroOrOne()).all(args)) {
-        Collections.reverse(Arrays.asList(args));
-        return expr;
-      }
+    // reverse((E1, E2))  ->  reverse(E2), reverse(E1)
+    if(input instanceof List) {
+      final Expr[] args = input.args();
+      final int al = args.length;
+      final ExprList list = new ExprList(al);
+      for(int a = al - 1; a >= 0; a--) list.add(cc.function(REVERSE, info, args[a]));
+      return List.get(cc, input.info(info), list.finish());
     }
-    return adoptType(expr);
+    // reverse(E[test])  ->  reverse(E)[test]
+    if(input instanceof IterFilter) {
+      final IterFilter filter = (IterFilter) input;
+      if(filter.root.size() != -1) return Filter.get(cc, info,
+          cc.function(REVERSE, filter.info(info), filter.root), filter.exprs);
+    }
+
+    adoptType(input);
+    return embed(cc, false);
   }
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    Expr expr = this;
-    if(mode == Simplify.DISTINCT) {
-      expr = cc.simplify(this, exprs[0]);
-    }
-    return expr == this ? super.simplifyFor(mode, cc) : expr.simplifyFor(mode, cc);
+    return cc.simplify(this, mode.oneOf(Simplify.DISTINCT, Simplify.COUNT) ? arg(0) : this, mode);
   }
 }

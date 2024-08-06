@@ -8,7 +8,7 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing tokens.
  * It extends the {@link TokenSet} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class TokenMap extends TokenSet {
@@ -19,6 +19,15 @@ public class TokenMap extends TokenSet {
    * Default constructor.
    */
   public TokenMap() {
+    this(Array.INITIAL_CAPACITY);
+  }
+
+  /**
+   * Constructor with initial capacity.
+   * @param capacity array capacity (will be resized to a power of two)
+   */
+  public TokenMap(final long capacity) {
+    super(capacity);
     values = new byte[capacity()][];
   }
 
@@ -29,7 +38,7 @@ public class TokenMap extends TokenSet {
    * @param value value
    */
   public final void put(final byte[] key, final byte[] value) {
-    // array bounds are checked before array is resized..
+    // array bounds are checked before array is resized
     final int i = put(key);
     values[i] = value;
   }

@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * An XQuery function call, either static or dynamic.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class FuncCall extends Arr {
@@ -18,7 +18,7 @@ public abstract class FuncCall extends Arr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs sub-expressions
    */
   FuncCall(final InputInfo info, final Expr[] exprs) {
@@ -33,24 +33,20 @@ public abstract class FuncCall extends Arr {
    */
   abstract XQFunction evalFunc(QueryContext qc) throws QueryException;
 
-  /**
-   * Evaluates and returns the arguments for this call.
-   * @param qc query context
-   * @return the function
-   * @throws QueryException query exception
-   */
-  abstract Value[] evalArgs(QueryContext qc) throws QueryException;
-
   @Override
   public final void markTailCalls(final CompileContext cc) {
-    if(cc != null) cc.info(QueryText.OPTTCE_X, this);
-    tco = true;
+    if(!tco) {
+      if(cc != null) cc.info(QueryText.OPTTCE_X, this);
+      tco = true;
+    }
   }
 
   @Override
   public final Value value(final QueryContext qc) throws QueryException {
     final XQFunction func = evalFunc(qc);
-    final Value[] args = evalArgs(qc);
+    final int arity = func.arity();
+    final Value[] args = new Value[arity];
+    for(int a = 0; a < arity; ++a) args[a] = exprs[a].value(qc);
     return tco ? func.invokeTail(qc, info, args) : func.invoke(qc, info, args);
   }
 }

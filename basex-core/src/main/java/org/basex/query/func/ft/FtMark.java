@@ -18,7 +18,7 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FtMark extends StandardFunc {
@@ -38,54 +38,48 @@ public class FtMark extends StandardFunc {
   /**
    * Performs the mark function.
    * @param qc query context
-   * @param ex extract flag
+   * @param extract extract flag
    * @return iterator
    * @throws QueryException query exception
    */
-  final Iter mark(final QueryContext qc, final boolean ex) throws QueryException {
-    byte[] m = MARK;
-    int l = ex ? 150 : Integer.MAX_VALUE;
+  final Iter mark(final QueryContext qc, final boolean extract) throws QueryException {
+    final Item name = arg(1).atomItem(qc, info);
+    final Item length = arg(2).atomItem(qc, info);
 
-    if(exprs.length > 1) {
-      // name of the marker element; default is <mark/>
-      m = toToken(exprs[1], qc);
-      if(!XMLToken.isQName(m)) throw valueError(AtomType.QNAME, m, info);
-    }
-    if(exprs.length > 2) {
-      l = (int) toLong(exprs[2], qc);
-    }
-    final byte[] mark = m;
-    final int len = l;
+    final byte[] m = name.isEmpty() ? MARK : toToken(name);
+    if(!XMLToken.isQName(m)) throw valueError(AtomType.QNAME, m, info);
+    final int l = length.isEmpty() ? extract ? 150 : Integer.MAX_VALUE :
+      (int) Math.min(Integer.MAX_VALUE, toLong(length));
 
     return new Iter() {
       final FTPosData ftd = new FTPosData();
-      Iter iter;
-      BasicIter<Item> ir;
+      BasicIter<Item> iter;
+      Iter nodes;
 
       @Override
       public Item next() throws QueryException {
         while(true) {
-          if(ir != null) {
-            final Item item = ir.next();
+          if(iter != null) {
+            final Item item = iter.next();
             if(item != null) return item;
-            ir = null;
+            iter = null;
           }
           final FTPosData tmp = qc.ftPosData;
           try {
             qc.ftPosData = ftd;
-            if(iter == null) iter = exprs[0].iter(qc);
-            final Item item = iter.next();
+            if(nodes == null) nodes = arg(0).iter(qc);
+            final Item item = nodes.next();
             if(item == null) return null;
 
             // copy node to main memory data instance
             final MemData md = new MemData(qc.context.options);
             final DataBuilder db = new DataBuilder(md, qc);
-            db.ftpos(mark, qc.ftPosData, len).build(toDBNode(item));
+            db.ftpos(m, qc.ftPosData, l).build(toDBNode(item, true));
 
             final IntList il = new IntList();
             final int s = md.meta.size;
             for(int p = 0; p < s; p += md.size(p, md.kind(p))) il.add(p);
-            ir = DBNodeSeq.get(il.finish(), md, FtMark.this).iter();
+            iter = DBNodeSeq.get(il.finish(), md, FtMark.this).iter();
           } finally {
             qc.ftPosData = tmp;
           }

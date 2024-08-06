@@ -4,6 +4,7 @@ import static org.basex.http.rest.RESTText.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.AbstractMap.*;
 
 import org.basex.core.*;
 import org.basex.http.*;
@@ -14,12 +15,14 @@ import org.basex.query.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * REST-based evaluation of POST operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RESTPost {
@@ -42,7 +45,7 @@ final class RESTPost {
     try(NewlineInput ni = new NewlineInput(conn.request.getInputStream())) {
       doc = new DBNode(new IOContent(ni.encoding(encoding).content()));
     } catch(final IOException ex) {
-      throw HTTPCode.BAD_REQUEST_X.get(ex);
+      throw HTTPStatus.BAD_REQUEST_X.get(ex);
     }
 
     try {
@@ -50,8 +53,8 @@ final class RESTPost {
       // handle request
       final String cmd = value("local-name(*)", doc, ctx);
       if(cmd.equals(COMMANDS)) {
-        final String script = DataBuilder.stripNS(doc, REST_URI, ctx).serialize().toString();
-        return RESTScript.get(session, script);
+        final String script = DataBuilder.stripNamespace(doc, REST_URI, ctx).serialize().toString();
+        return RESTCommands.get(session, script, false);
       }
 
       // handle serialization parameters
@@ -63,7 +66,7 @@ final class RESTPost {
           if(sopts.option(name) != null) {
             sopts.assign(name, value);
           } else {
-            throw HTTPCode.UNKNOWN_PARAM_X.get(name);
+            throw HTTPStatus.UNKNOWN_PARAM_X.get(name);
           }
         }
       }
@@ -78,38 +81,53 @@ final class RESTPost {
       }
 
       // handle variables
-      final Map<String, String[]> vars = new HashMap<>();
+      final Map<String, Map.Entry<Object, String>> bindings = new HashMap<>();
       try(QueryProcessor qp = new QueryProcessor("*/*:variable", ctx).context(doc)) {
         for(final Item item : qp.value()) {
           final String name = value("@name", item, ctx);
           final String value = value("@value", item, ctx);
           final String type = value("@type", item, ctx);
-          vars.put(name, new String[] { value, type });
+          bindings.compute(name, (k, v) -> {
+            final StringList list = new StringList();
+            if(v != null) {
+              if(v.getKey() instanceof String[]) {
+                for(final String obj : (String[]) v.getKey()) list.add(obj);
+              } else if(v.getKey() instanceof String) {
+                list.add(k);
+              }
+            }
+            return new SimpleEntry<>(list.add(value).finish(), type);
+          });
         }
       }
 
       // handle input
-      String val = null;
-      try(QueryProcessor qp = new QueryProcessor("*/*:context/(*, text()[normalize-space()])",
-          ctx).context(doc)) {
+      String value = null;
+      try(QueryProcessor qp = new QueryProcessor("*/*:context/(*|text()[normalize-space()])", ctx).
+          context(doc)) {
         for(final Item item : qp.value()) {
-          if(val != null) throw HTTPCode.MULTIPLE_CONTEXT_X.get();
+          if(value != null) throw HTTPStatus.MULTIPLE_CONTEXTS.get();
           // create main memory instance of the specified node
-          val = DataBuilder.stripNS((ANode) item, REST_URI, ctx).serialize().toString();
+          value = DataBuilder.stripNamespace((ANode) item, REST_URI, ctx).serialize().toString();
         }
+      }
+      if(value != null) {
+        bindings.put(null, new SimpleEntry<>(value, NodeType.DOCUMENT_NODE.toString()));
       }
 
       // command body
       final String text = value("*/*:text/text()", doc, ctx);
 
       // choose evaluation
-      if(cmd.equals(COMMAND)) return RESTCommand.get(session, text);
-      if(cmd.equals(RUN)) return RESTRun.get(session, text, vars, val);
-      if(cmd.equals(QUERY)) return RESTQuery.get(session, text, vars, val);
-      throw HTTPCode.BAD_REQUEST_X.get("Invalid POST command: " + cmd);
+      switch(cmd) {
+        case COMMAND: return RESTCommands.get(session, text, true);
+        case RUN:     return RESTRun.get(session, text, bindings);
+        case QUERY:   return RESTQuery.get(session, text, bindings);
+      }
+      throw HTTPStatus.BAD_REQUEST_X.get("Invalid POST command: " + cmd);
 
     } catch(final QueryException ex) {
-      throw HTTPCode.BAD_REQUEST_X.get(ex);
+      throw HTTPStatus.BAD_REQUEST_X.get(ex);
     }
   }
 

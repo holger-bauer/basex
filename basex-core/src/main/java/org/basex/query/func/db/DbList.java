@@ -1,11 +1,12 @@
 package org.basex.query.func.db;
 
-import static org.basex.util.Token.*;
+import static org.basex.query.func.db.DbAccess.*;
 
 import java.util.*;
 
 import org.basex.core.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
@@ -16,43 +17,24 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
-import org.basex.util.http.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class DbList extends StandardFunc {
-  /** Resource element name. */
-  static final String DATABASE = "database";
-  /** Resource element name. */
-  static final String RESOURCE = "resource";
-  /** Resource element name. */
-  static final String RESOURCES = "resources";
-  /** Path. */
-  static final String PATH = "path";
-  /** Raw. */
-  static final String RAW = "raw";
-  /** Size. */
-  static final String SIZE = "size";
-  /** Content type. */
-  static final String CONTENT_TYPE = "content-type";
-  /** Modified date. */
-  static final String MODIFIED_DATE = "modified-date";
-  /** Directory flag. */
-  static final String DIR = "dir";
 
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    return exprs.length == 0 ? list(qc).iter() : resources(qc);
+    return defined(0) ? resources(qc) : list(qc).iter();
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return exprs.length == 0 ? list(qc) : resources(qc).value(qc, this);
+    return defined(0) ? resources(qc).value(qc, this) : list(qc);
   }
 
   /**
@@ -75,68 +57,67 @@ public class DbList extends StandardFunc {
    * @throws QueryException query exception
    */
   private Iter resources(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
-    final String path = string(exprs.length == 1 ? EMPTY : toToken(exprs[1], qc));
+    final Data data = toData(qc);
+    final String path = defined(1) ? toString(arg(1), qc) : "";
+
     final IntList docs = data.resources.docs(path);
-    final TokenList bins = data.resources.binaries(path);
-    final int ds = docs.size(), size = ds + bins.size();
+    final StringList binaries = data.resources.paths(path, ResourceType.BINARY);
+    final StringList values = data.resources.paths(path, ResourceType.VALUE);
+    final int ds = docs.size(), bs = ds + binaries.size(), size = bs + values.size();
 
     return new BasicIter<Str>(size) {
       @Override
       public Str get(final long i) {
-        return i < size ? Str.get(tokenAt((int) i)) : null;
+        return i < size ? Str.get(path((int) i)) : null;
       }
+
       @Override
       public Value value(final QueryContext q, final Expr expr) throws QueryException {
         final TokenList tl = new TokenList(Seq.initialCapacity(size));
-        for(int i = 0; i < size; i++) tl.add(tokenAt(i));
+        for(int i = 0; i < size; i++) tl.add(path(i));
         return StrSeq.get(tl);
       }
-      private byte[] tokenAt(final int i) {
-        return i < ds ? data.text(docs.get(i), true) : bins.get(i - ds);
+
+      private byte[] path(final int i) {
+        return i < ds ? data.text(docs.get(i), true) :
+          Token.token(i < bs ? binaries.get(i - ds) : values.get(i - bs));
       }
     };
   }
 
   @Override
   public final boolean accept(final ASTVisitor visitor) {
-    if(exprs.length == 0) {
-      if(!visitor.lock(null, false)) return false;
-    } else {
-      if(!dataLock(visitor, 0)) return false;
-    }
-    return super.accept(visitor);
+    return (defined(0) ? dataLock(arg(0), false, visitor) : visitor.lock((String) null)) &&
+        super.accept(visitor);
   }
 
   /**
-   * Creates a directory node.
+   * Creates a directory element.
    * @param path path
    * @param mdate modified date
    * @return resource node
    */
-  static FNode dir(final byte[] path, final long mdate) {
-    final FElem dir = new FElem(DIR);
-    dir.add(path).add(MODIFIED_DATE, DateTime.format(new Date(mdate)));
-    return dir;
+  static FNode dir(final String path, final long mdate) {
+    final String date = DateTime.format(new Date(mdate));
+    return FElem.build(Q_DIR).add(path).add(Q_MODIFIED_DATE, date).finish();
   }
 
   /**
-   * Creates a resource node.
-   * @param path path
-   * @param raw raw flag
-   * @param type media type
+   * Creates a resource element.
+   * @param path path to resource
    * @param mdate modified date
-   * @param size size (can be {@code null})
+   * @param size size
+   * @param type resource type
    * @return resource node
    */
-  static FNode resource(final byte[] path, final boolean raw, final MediaType type,
-      final long mdate, final Long size) {
+  static FNode resource(final String path, final long mdate, final long size,
+      final ResourceType type) {
 
-    final FElem resource = new FElem(RESOURCE).add(path);
-    resource.add(RAW, token(raw));
-    resource.add(CONTENT_TYPE, type.toString());
-    resource.add(MODIFIED_DATE, DateTime.format(new Date(mdate)));
-    if(size != null) resource.add(SIZE, token(size));
-    return resource;
+    final FBuilder elem = FElem.build(Q_RESOURCE).add(path);
+    elem.add(Q_TYPE, type);
+    elem.add(Q_CONTENT_TYPE, type.contentType(path));
+    elem.add(Q_MODIFIED_DATE, DateTime.format(new Date(mdate)));
+    elem.add(Q_SIZE, size);
+    return elem.finish();
   }
 }

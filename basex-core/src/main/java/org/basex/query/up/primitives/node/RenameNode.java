@@ -9,12 +9,13 @@ import org.basex.query.up.atomic.*;
 import org.basex.query.up.primitives.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Rename node primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class RenameNode extends NodeUpdate {
@@ -25,16 +26,16 @@ public final class RenameNode extends NodeUpdate {
    * Constructor.
    * @param pre target node pre value
    * @param data target data reference
-   * @param ii input info
-   * @param name new QName / new name value
+   * @param info input info (can be {@code null})
+   * @param name new QName
    */
-  public RenameNode(final int pre, final Data data, final InputInfo ii, final QNm name) {
-    super(UpdateType.RENAMENODE, pre, data, ii);
+  public RenameNode(final int pre, final Data data, final InputInfo info, final QNm name) {
+    super(UpdateType.RENAMENODE, pre, data, info);
     this.name = name;
   }
 
   @Override
-  public void prepare(final MemData tmp, final QueryContext qc) { }
+  public void prepare(final MemData memData, final QueryContext qc) { }
 
   @Override
   public void merge(final Update update) throws QueryException {
@@ -44,7 +45,7 @@ public final class RenameNode extends NodeUpdate {
   @Override
   public void update(final NamePool pool) {
     final DBNode node = node();
-    pool.add(name, node.nodeType());
+    pool.add(name, (NodeType) node.type);
     pool.remove(node);
   }
 

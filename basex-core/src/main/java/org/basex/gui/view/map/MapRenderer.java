@@ -16,7 +16,7 @@ import org.basex.util.list.*;
 /**
  * This class assembles utility methods for painting rectangle contents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
@@ -440,7 +440,7 @@ final class MapRenderer {
   }
 
   /**
-   * Calculates a the tooltip text for the thumbnail visualization.
+   * Calculates the tooltip text for the thumbnail visualization.
    * @param rect rectangle
    * @param data full-text to be drawn
    * @param x mouseX

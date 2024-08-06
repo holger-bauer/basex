@@ -1,5 +1,7 @@
 package org.basex.query.expr;
 
+import java.util.*;
+
 import org.basex.core.locks.*;
 import org.basex.query.*;
 import org.basex.query.ann.*;
@@ -10,11 +12,11 @@ import org.basex.util.*;
 /**
  * Pragma for database options.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class BaseXPragma extends Pragma {
-  /** Non-deterministic flag. */
+  /** Nondeterministic flag. */
   private final boolean ndt;
 
   /**
@@ -24,7 +26,7 @@ public final class BaseXPragma extends Pragma {
    */
   public BaseXPragma(final QNm name, final byte[] value) {
     super(name, value);
-    ndt = Token.eq(name.local(), Token.token(QueryText.NON_DETERMNISTIC));
+    ndt = Token.eq(name.local(), Token.token(QueryText.NONDETERMNISTIC));
   }
 
   @Override
@@ -43,16 +45,23 @@ public final class BaseXPragma extends Pragma {
 
   @Override
   public void accept(final ASTVisitor visitor) {
-    if(Token.eq(name.local(), Annotation._BASEX_LOCK.local())) {
-      for(final String lock : Locking.queryLocks(value)) {
-        visitor.lock(lock, false);
+    visitor.lock(() -> {
+      final ArrayList<String> list = new ArrayList<>(1);
+      if(Token.eq(name.local(), Annotation._BASEX_LOCK.local())) {
+        Collections.addAll(list, Locking.queryLocks(value));
       }
-    }
+      return list;
+    });
   }
 
   @Override
   public Pragma copy() {
     return new BaseXPragma(name, value);
+  }
+
+  @Override
+  public boolean simplify() {
+    return !ndt;
   }
 
   @Override

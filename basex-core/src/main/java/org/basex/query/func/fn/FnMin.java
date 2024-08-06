@@ -3,10 +3,13 @@ package org.basex.query.func.fn;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.value.type.AtomType.*;
 
+import java.util.*;
+
+import org.basex.index.stats.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.CmpV.*;
+import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.collation.*;
@@ -15,150 +18,139 @@ import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnMin extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return minmax(OpV.GT, qc);
+    return minmax(true, qc);
   }
 
   /**
    * Returns a minimum or maximum item.
-   * @param cmp comparator
+   * @param min compute minimum or maximum
    * @param qc query context
    * @return resulting item or {@link Empty#VALUE}
    * @throws QueryException query exception
    */
-  final Item minmax(final OpV cmp, final QueryContext qc) throws QueryException {
-    final Collation coll = toCollation(1, qc);
-    final Expr expr = exprs[0];
-    Item item1 = value(cmp);
-    if(item1 != null) return item1;
+  final Item minmax(final boolean min, final QueryContext qc) throws QueryException {
+    final Expr values = arg(0);
+    final Collation collation = toCollation(arg(1), qc);
 
-    if(expr instanceof Range) {
-      final Value value = expr.value(qc);
-      return value.isEmpty() ? Empty.VALUE : value.itemAt(cmp == OpV.GT ? 0 : value.size() - 1);
+    if(values instanceof Range) {
+      final Value value = values.value(qc);
+      return value.isEmpty() ? Empty.VALUE : value.itemAt(min ? 0 : value.size() - 1);
     }
 
-    final Iter iter = expr.atomIter(qc, info);
-    item1 = iter.next();
-    if(item1 == null) return Empty.VALUE;
+    final Iter iter = values.atomIter(qc, info);
+    Item item = iter.next();
+    if(item == null) return Empty.VALUE;
 
     // ensure that item is sortable
-    final Type type1 = item1.type;
-    if(!type1.isSortable()) throw CMP_X.get(info, type1);
+    final Type type = item.type;
+    if(!type.isSortable()) throw COMPARE_X_X.get(info, type, item);
 
-    // strings and URIs
-    if(item1 instanceof AStr) {
-      for(Item item2; (item2 = qc.next(iter)) != null;) {
-        if(!(item2 instanceof AStr)) throw CMP_X_X_X.get(info, type1, item2.type, item2);
-        final Type type2 = item2.type;
-        if(cmp.eval(item1, item2, coll, sc, info)) item1 = item2;
-        if(type1 != type2 && item1.type == ANY_URI) item1 = STRING.cast(item1, qc, sc, info);
-      }
-      return item1;
+    final boolean string = item instanceof AStr, numeric = !string && !(
+        type == BOOLEAN || item instanceof ADate || item instanceof Dur || item instanceof Bin);
+    if(numeric) {
+      if(type.isUntyped()) item = DOUBLE.cast(item, qc, info);
+      if(item == Dbl.NAN || item == Flt.NAN) return item;
     }
-    // booleans, dates, durations, binaries
-    if(type1 == BOOLEAN || item1 instanceof ADate || item1 instanceof Dur || item1 instanceof Bin) {
-      for(Item item; (item = qc.next(iter)) != null;) {
-        if(type1 != item.type) throw CMP_X_X_X.get(info, type1, item.type, item);
-        if(cmp.eval(item1, item, coll, sc, info)) item1 = item;
+    for(Item it; (it = qc.next(iter)) != null;) {
+      final Type type2 = it.type;
+      if(numeric) {
+        if(type2.isUntyped()) it = DOUBLE.cast(it, qc, info);
+        if(it == Dbl.NAN || it == Flt.NAN) return it;
       }
-      return item1;
-    }
-    // numbers
-    if(type1.isUntyped()) item1 = DOUBLE.cast(item1, qc, sc, info);
-    for(Item item2; (item2 = qc.next(iter)) != null;) {
-      final AtomType type = numType(item1, item2);
-      if(cmp.eval(item1, item2, coll, sc, info) || Double.isNaN(item2.dbl(info))) item1 = item2;
-      if(type != null) item1 = type.cast(item1, qc, sc, info);
-    }
-    return item1;
-  }
-
-  /**
-   * Returns the new target type, or {@code null} if conversion is not necessary.
-   * @param item1 first item
-   * @param item2 second item
-   * @return result (or {@code null})
-   * @throws QueryException query exception
-   */
-  private AtomType numType(final Item item1, final Item item2) throws QueryException {
-    final Type type2 = item2.type;
-    if(type2.isUntyped()) return DOUBLE;
-    final Type type1 = item1.type;
-    if(!(item2 instanceof ANum)) throw CMP_X_X_X.get(info, type1, type2, item2);
-    return type1 == type2 ? null :
-           type1 == DOUBLE || type2 == DOUBLE ? DOUBLE :
-           type1 == FLOAT || type2 == FLOAT ? FLOAT :
-           null;
-  }
-
-  /**
-   * Evaluate value arguments.
-   * @param cmp comparator
-   * @return smallest value or {@code null}
-   */
-  private Item value(final OpV cmp) {
-    final Expr expr = exprs[0];
-    if(expr instanceof Value && exprs.length < 2) {
-      Item item = null;
-      final Value value = (Value) expr;
-      final long size = value.size();
-      if(value instanceof RangeSeq) {
-        final RangeSeq seq = (RangeSeq) value;
-        item = seq.itemAt((cmp == OpV.GT ^ seq.asc) ? size - 1 : 0);
-      } else if(value instanceof SingletonSeq && ((SingletonSeq) value).singleItem()) {
-        item = value.itemAt(0);
-      } else if(value.isItem()) {
-        item = (Item) value;
+      if(!(numeric ? it instanceof ANum : string ? it instanceof AStr : type == type2)) {
+        throw ARGTYPE_X_X_X.get(info, type, type2, it);
       }
-      if(item != null) {
-        final Type type = item.seqType().type;
-        if(type.isNumber() || type.instanceOf(STRING)) return item;
-      }
+      if(min ^ item.compare(it, collation, true, info) < 0) item = it;
     }
-    return null;
+    return item;
   }
 
   @Override
   protected void simplifyArgs(final CompileContext cc) throws QueryException {
-    // do not simplify input arguments
-    if(exprs.length > 1) exprs[1] = exprs[1].simplifyFor(Simplify.STRING, cc);
+    final Type type = arg(0).seqType().type;
+    if(type.isNumberOrUntyped()) arg(0, arg -> arg.simplifyFor(Simplify.NUMBER, cc));
+
+    if(defined(1)) arg(1, arg -> arg.simplifyFor(Simplify.STRING, cc));
   }
 
   @Override
-  protected Expr opt(final CompileContext cc) {
-    return opt(OpV.GT);
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    return opt(true, cc);
   }
 
   /**
    * Optimizes a minimum or maximum item.
-   * @param cmp comparator
-   * @return optimized or original item
+   * @param min compute minimum or maximum
+   * @param cc compilation context
+   * @return optimized or original expression
+   * @throws QueryException query exception
    */
-  final Expr opt(final OpV cmp) {
-    Expr expr = optFirst();
+  final Expr opt(final boolean min, final CompileContext cc) throws QueryException {
+    arg(0, arg -> arg.simplifyFor(Simplify.DATA, cc).simplifyFor(Simplify.DISTINCT, cc));
+
+    final Expr expr = optFirst();
     if(expr != this) return expr;
 
-    expr = exprs[0];
-    final SeqType st = expr.seqType();
+    final boolean noColl = !defined(1);
+    final Expr values = arg(0);
+    final SeqType st = values.seqType();
     Type type = st.type;
     if(type.isSortable()) {
       if(type.isUntyped()) {
         type = DOUBLE;
-      } else if(st.one() && exprs.length < 2) {
-        return expr;
+      } else if(st.one() && noColl) {
+        return values;
       }
       exprType.assign(type);
-      final Item item = value(cmp);
-      if(item != null) return item;
+      if(values instanceof Value && noColl) {
+        Item item = null;
+        final Value value = (Value) values;
+        final long size = value.size();
+        if(value instanceof RangeSeq) {
+          final RangeSeq rs = (RangeSeq) value;
+          item = rs.itemAt(min ^ rs.ascending() ? size - 1 : 0);
+        } else if(value instanceof SingletonSeq && ((SingletonSeq) value).singleItem()) {
+          item = value.itemAt(0);
+        } else if(value.isItem()) {
+          item = (Item) value;
+        }
+        if(item != null) {
+          type = item.seqType().type;
+          if(type.isNumber() || type.instanceOf(STRING)) return item;
+        }
+      }
+    }
+
+    if(noColl && values instanceof Path) {
+      final ArrayList<Stats> list = ((Path) values).pathStats();
+      if(list != null) {
+        double v = min ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY;
+        for(final Stats stats : list) {
+          if(!StatsType.isNumeric(stats.type)) return this;
+          final TokenIntMap map = stats.values;
+          if(map == null) {
+            v = min ? Math.min(v, stats.min) : Math.max(v, stats.max);
+          } else {
+            for(final byte[] value : map) {
+              if(value.length == 0) return this;
+              final double d = Token.toDouble(value);
+              v = min ? Math.min(v, d) : Math.max(v, d);
+            }
+          }
+        }
+        return Dbl.get(v);
+      }
     }
     return this;
   }

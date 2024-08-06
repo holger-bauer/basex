@@ -4,6 +4,7 @@ import static org.basex.util.Token.*;
 import static org.basex.util.FTToken.*;
 
 import java.io.*;
+import java.net.*;
 import java.util.*;
 
 import javax.xml.transform.stream.*;
@@ -11,6 +12,7 @@ import javax.xml.transform.stream.*;
 import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.io.in.*;
+import org.basex.io.out.*;
 import org.basex.util.*;
 import org.xml.sax.*;
 
@@ -19,7 +21,7 @@ import org.xml.sax.*;
  * be a local file ({@link IOFile}), a URL ({@link IOUrl}), a byte array
  * ({@link IOContent}), or a stream ({@link IOStream}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class IO {
@@ -57,18 +59,18 @@ public abstract class IO {
   public static final String LOGSUFFIX = ".log";
   /** Ignore suffix. */
   public static final String IGNORESUFFIX = ".ignore";
-  /** Directory for raw files. */
-  public static final String RAW = "raw";
   /** File prefix. */
   public static final String FILEPREF = "file:/";
+  /** Jar prefix. */
+  public static final String JARPREF = "jar:";
 
   /** XQuery suffixes. */
   public static final String[] XQSUFFIXES =
-    { XQSUFFIX, XQMSUFFIX, ".xqy", ".xql", ".xqu", ".xquery" };
+    { XQSUFFIX, XQMSUFFIX, ".xqy", ".xql", ".xqu", ".xquery", ".xpath" };
   /** Archive suffixes. */
-  public static final String[] ZIPSUFFIXES = {
+  public static final String[] ARCHIVESUFFIXES = {
     ZIPSUFFIX, GZSUFFIX, TGZSUFFIX, TARSUFFIX, XARSUFFIX,
-    ".docx", ".pptx", ".xslx", ".odt", ".odp", ".ods", ".epub", ".idml"
+    ".docx", ".pptx", ".xlsx", ".odt", ".odp", ".ods", ".epub", ".idml"
   };
   /** XSL suffixes. */
   public static final String[] XSLSUFFIXES = { ".xsl", ".xslt", ".fo", ".fob" };
@@ -79,8 +81,10 @@ public abstract class IO {
   /** JS file suffixes. */
   public static final String[] JSSUFFIXES = { ".js", ".java", ".ts", ".vue" };
 
+  /** Disk block/page size (12). */
+  public static final int BLOCKPOWER = 12;
   /** Disk block/page size (4096). */
-  public static final int BLOCKSIZE = 1 << 12;
+  public static final int BLOCKSIZE = 1 << BLOCKPOWER;
   /** Table node size power (4). */
   public static final int NODEPOWER = 4;
   /** Table node size power (16). */
@@ -93,9 +97,9 @@ public abstract class IO {
 
   /** Absolute file path. All paths have forward slashes, no matter which OS is used. */
   protected String pth;
-  /** File size (in bytes). */
+  /** Input size in bytes ({@code -1} if unknown). */
   protected long len = -1;
-  /** File name. */
+  /** Filename. */
   private String nm;
 
   /**
@@ -129,27 +133,26 @@ public abstract class IO {
     if(location == null) return new IOContent("");
     final String s = location.trim();
     return s.indexOf('<') == 0 ? new IOContent(s) :
-           IOUrl.isFileURL(s)  ? new IOFile(IOUrl.toFile(s)) :
+           IOUrl.isFileURL(s)  ? new IOFile(IOFile.toPath(s)) :
            IOUrl.isValid(s)    ? new IOUrl(s) :
            IOFile.isValid(s)   ? new IOFile(s) :
            new IOContent(s);
   }
 
   /**
-   * Returns the binary contents.
-   * @return binary contents
+   * Returns the binary content.
+   * @return binary content
    * @throws IOException I/O exception
    */
   public abstract byte[] read() throws IOException;
 
   /**
-   * Returns the contents as string. The input encoding will be guessed by analyzing the
-   * first bytes. UTF-8 will be used as fallback.
-   * @return string contents
+   * Returns the contents as string. The input encoding will be guessed by analyzing the input.
+   * @return string content
    * @throws IOException I/O exception
    */
   public final String string() throws IOException {
-    return new TextInput(this).cache().toString();
+    return new TextInput(read()).cache().toString();
   }
 
   /**
@@ -166,7 +169,7 @@ public abstract class IO {
    * @return result of check
    */
   public boolean isDir() {
-    return false;
+    return Strings.endsWith(pth, '/');
   }
 
   /**
@@ -196,7 +199,7 @@ public abstract class IO {
   }
 
   /**
-   * Sets the input length.
+   * Sets the number of bytes of the input.
    * @param length length
    */
   public final void length(final long length) {
@@ -204,8 +207,8 @@ public abstract class IO {
   }
 
   /**
-   * Returns the file length.
-   * @return file length
+   * Returns the number of bytes of the input.
+   * @return length
    */
   public long length() {
     return len;
@@ -231,6 +234,14 @@ public abstract class IO {
   public abstract InputStream inputStream() throws IOException;
 
   /**
+   * Returns the encoding.
+   * @return encoding, or {@code null} if unknown
+   */
+  public String encoding() {
+    return null;
+  }
+
+  /**
    * Merges two paths.
    * @param path path to be merged
    * @return resulting reference
@@ -238,7 +249,15 @@ public abstract class IO {
   public final IO merge(final String path) {
     if(path.isEmpty()) return this;
     final IO io = get(path);
-    return io.isAbsolute() ? io : get((Strings.endsWith(pth, '/') ? pth : dir()) + path);
+    if(io.isAbsolute()) return io;
+    if(IOUrl.isJarURL(pth)) {
+      try {
+        return get(new URL(new URL(pth), path).toString());
+      } catch(final MalformedURLException ex) {
+        Util.stack(ex);
+      }
+    }
+    return get((Strings.endsWith(pth, '/') ? pth : dir()) + path);
   }
 
   /**
@@ -246,7 +265,7 @@ public abstract class IO {
    * @return result of check
    */
   public final boolean isArchive() {
-    return hasSuffix(ZIPSUFFIXES);
+    return hasSuffix(ARCHIVESUFFIXES);
   }
 
   /**
@@ -339,5 +358,27 @@ public abstract class IO {
       if(suf.equals(suffix)) return true;
     }
     return false;
+  }
+
+  /**
+   * Writes data from an input stream to an output stream.
+   * @param in input stream
+   * @param out output stream
+   * @throws IOException I/O exception
+   */
+  public static final void write(final InputStream in, final OutputStream out) throws IOException {
+    try(BufferInput bi = BufferInput.get(in); BufferOutput bo = BufferOutput.get(out)) {
+      for(int c; (c = bi.read()) != -1;) bo.write(c);
+    }
+  }
+
+  /**
+   * Compares file names for equality. Ignores the case, depending on the operating system.
+   * @param string1 first string
+   * @param string2 strings to be compared
+   * @return {@code true} if test is successful
+   */
+  public static boolean equals(final String string1, final String string2) {
+    return Prop.CASE ? string1.equals(string2) : string1.equalsIgnoreCase(string2);
   }
 }

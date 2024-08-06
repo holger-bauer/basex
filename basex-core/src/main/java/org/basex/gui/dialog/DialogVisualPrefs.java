@@ -13,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * Visualization preferences.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogVisualPrefs extends BaseXBack {
@@ -22,7 +22,7 @@ final class DialogVisualPrefs extends BaseXBack {
   /** Wrap tabs. */
   private final BaseXCheckBox scrollTabs;
   /** Show names checkbox. */
-  private final BaseXCheckBox showNames;
+  private final BaseXTextField labels;
 
   /** Slim rectangles to text length. */
   private final BaseXCheckBox treeSlims;
@@ -51,11 +51,11 @@ final class DialogVisualPrefs extends BaseXBack {
    */
   DialogVisualPrefs(final BaseXDialog dialog) {
     border(8).setLayout(new ColumnLayout(40));
-    gui = dialog.gui;
+    gui = dialog.gui();
 
-    final GUIOptions gopts = dialog.gui.gopts;
+    final GUIOptions gopts = gui.gopts;
     scrollTabs = new BaseXCheckBox(dialog, SCROLL_TABS, GUIOptions.SCROLLTABS, gopts);
-    showNames = new BaseXCheckBox(dialog, SHOW_NAME_ATTS, GUIOptions.SHOWNAME, gopts);
+    labels = new BaseXTextField(dialog, GUIOptions.LABELS, gopts);
     mousefocus = new BaseXCheckBox(dialog, RT_FOCUS, GUIOptions.MOUSEFOCUS, gopts);
     treeSlims = new BaseXCheckBox(dialog, ADJUST_NODES, GUIOptions.TREESLIMS, gopts);
     treeAtts = new BaseXCheckBox(dialog, SHOW_ATTS, GUIOptions.TREEATTS, gopts);
@@ -64,6 +64,7 @@ final class DialogVisualPrefs extends BaseXBack {
     mapWeight = new BaseXSlider(dialog, 0, 100, GUIOptions.MAPWEIGHT, gopts);
     mapAtts = new BaseXCheckBox(dialog, SHOW_ATTS, GUIOptions.MAPATTS, gopts);
     mapAlgo.setSize(200, 100);
+    labels.setColumns(18);
     BaseXLayout.setWidth(mapWeight, 150);
 
     final StringList lafs = new StringList("(default)");
@@ -89,8 +90,12 @@ final class DialogVisualPrefs extends BaseXBack {
 
     pp = new BaseXBack(new RowLayout());
     pp.add(new BaseXLabel(GENERAL + COL, true, true));
-    pp.add(showNames);
     pp.add(mousefocus);
+    p.add(pp);
+
+    pp = new BaseXBack(new RowLayout());
+    pp.add(new BaseXLabel(LABEL_ATTS + COL, true, true));
+    pp.add(labels);
     p.add(pp);
 
     add(p);
@@ -130,7 +135,7 @@ final class DialogVisualPrefs extends BaseXBack {
     treeAtts.assign();
     mapAtts.assign();
     scrollTabs.assign();
-    showNames.assign();
+    labels.assign();
     mapWeight.assign();
     mapAlgo.assign();
     mapOffsets.assign();

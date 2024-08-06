@@ -1,7 +1,7 @@
 (:~
  : Users page.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/users';
 
@@ -25,32 +25,28 @@ declare
   %rest:query-param('error', '{$error}')
   %rest:query-param('info',  '{$info}')
   %output:method('html')
+  %output:html-version('5')
 function dba:users(
   $sort   as xs:string,
   $error  as xs:string?,
   $info   as xs:string?
 ) as element(html) {
-  html:wrap(
-    map {
-      'header': $dba:CAT, 'info': $info, 'error': $error,
-      'css': 'codemirror/lib/codemirror.css',
-      'scripts': ('codemirror/lib/codemirror.js', 'codemirror/mode/xml/xml.js')
-    },
+  html:wrap({ 'header': $dba:CAT, 'info': $info, 'error': $error },
     <tr>
       <td>
-        <form action='{ $dba:CAT }' method='post' class='update'>
+        <form method='post'>
         <h2>Users</h2>
         {
           let $headers := (
-            map { 'key': 'name', 'label': 'Name' },
-            map { 'key': 'permission', 'label': 'Permission' },
-            map { 'key': 'you', 'label': 'You' }
+            { 'key': 'name', 'label': 'Name' },
+            { 'key': 'permission', 'label': 'Permission' },
+            { 'key': 'you', 'label': 'You' }
           )
           let $entries := (
             let $current := session:get($config:SESSION-KEY)
             for $user in user:list-details()
             let $name := string($user/@name)
-            return map {
+            return {
               'name': $name,
               'permission': $user/@permission,
               'you': if($current = $name) then '✓' else '–'
@@ -58,50 +54,26 @@ function dba:users(
           )
           let $buttons := (
             html:button('user-create', 'Create…'),
-            html:button('user-drop', 'Drop', true())
+            html:button('user-drop', 'Drop', ('CHECK', 'CONFIRM'))
           )
-          let $options := map { 'link': 'user', 'sort': $sort }
-          return html:table($headers, $entries, $buttons, map { }, $options)
+          let $options := { 'link': 'user', 'sort': $sort }
+          return html:table($headers, $entries, $buttons, {}, $options)
         }
         </form>
         <div>&#xa0;</div>
       </td>
       <td class='vertical'/>
       <td>
-        <form action='users-info' method='post'>{
-          <h3>Extra Information</h3>,
-          html:button('save', 'Save'),
+        <form method='post'>{
+          <h2>User Information</h2>,
+          html:button('users-info', 'Update'),
           <div class='small'/>,
           <textarea name='info' id='editor' spellcheck='false'>{
-            serialize(user:info())
+            serialize(user:info(), { 'indent': true() } )
           }</textarea>,
           html:js('loadCodeMirror("xml", true);')
         }</form>
       </td>
     </tr>
-  )
-};
-
-(:~
- : Redirects to the specified action.
- : @param  $action  action to perform
- : @param  $names   names of users
- : @param  $ids     ids
- : @return redirection
- :)
-declare
-  %rest:POST
-  %rest:path('/dba/users')
-  %rest:query-param('action', '{$action}')
-  %rest:query-param('name',   '{$names}')
-  %rest:query-param('id',     '{$ids}')
-function dba:users-redirect(
-  $action  as xs:string,
-  $names   as xs:string*,
-  $ids     as xs:string*
-) as element(rest:response) {
-  web:redirect($action,
-    if($action = 'user-create') then map { }
-    else map { 'name': $names, 'redirect': $dba:CAT }
   )
 };

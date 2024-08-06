@@ -5,7 +5,7 @@ import static org.basex.util.Token.*;
 /**
  * This class assembles texts which are used in the data classes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public interface DataText {
@@ -161,8 +161,6 @@ public interface DataText {
   /** HTML: Non-breaking space entity. */
   byte[] E_NBSP = token("&nbsp;");
 
-  /** Token: name. */
-  byte[] T_NAME = token("name");
   /** Token: size. */
   byte[] T_SIZE = token("size");
 
@@ -213,7 +211,7 @@ public interface DataText {
   /** CDATA output. */
   byte[] CDATA_C = token("]]>");
 
-  /** XML spaces: element name. */
+  /** XML spaces: attribute name. */
   byte[] XML_SPACE = token("xml:space");
   /** XML spaces: default. */
   byte[] DEFAULT = token("default");

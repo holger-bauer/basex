@@ -3,17 +3,18 @@ package org.basex.tests.bxapi.xdm;
 import javax.xml.namespace.*;
 
 import org.basex.query.*;
-import org.basex.query.func.fn.*;
+import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.tests.bxapi.*;
+import org.basex.util.*;
 
 /**
  * Wrapper for representing XQuery values.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class XdmValue implements Iterable<XdmItem> {
@@ -33,7 +34,7 @@ public abstract class XdmValue implements Iterable<XdmItem> {
    * @return node name
    */
   public String getBaseURI() {
-    throw new XQueryException(new QueryException("Item must be a node: " + internal()));
+    throw new XQueryException(new QueryException("Item must be a node: " + this));
   }
 
   /**
@@ -41,7 +42,7 @@ public abstract class XdmValue implements Iterable<XdmItem> {
    * @return node name
    */
   public QName getName() {
-    throw new XQueryException(new QueryException("Item must be a node: " + internal()));
+    throw new XQueryException(new QueryException("Item must be a node: " + this));
   }
 
   /**
@@ -50,7 +51,7 @@ public abstract class XdmValue implements Iterable<XdmItem> {
    */
   public boolean getBoolean() {
     throw new XQueryException(new QueryException(
-        "Value has no boolean representation: " + internal()));
+        "Value has no boolean representation: " + this));
   }
 
   /**
@@ -61,8 +62,9 @@ public abstract class XdmValue implements Iterable<XdmItem> {
     try {
       return Long.parseLong(getString());
     } catch(final NumberFormatException ex) {
+      Util.debug(ex);
       throw new XQueryException(new QueryException(
-          "Value has no integer representation: " + internal()));
+          "Value has no integer representation: " + this));
     }
   }
 
@@ -72,7 +74,7 @@ public abstract class XdmValue implements Iterable<XdmItem> {
    */
   public String getString() {
     throw new XQueryException(new QueryException(
-        "Value has no string representation: " + internal()));
+        "Value has no string representation: " + this));
   }
 
   /**
@@ -84,12 +86,15 @@ public abstract class XdmValue implements Iterable<XdmItem> {
   /**
    * Checks if the two values are deep-equal, according to XQuery.
    * @param value second value
+   * @param ordered ordered results
    * @return result of check
    * @throws XQueryException exception
    */
-  public boolean deepEqual(final XdmValue value) {
+  public boolean deepEqual(final XdmValue value, final boolean ordered) {
     try {
-      return new DeepEqual().equal(internal(), value.internal());
+      final DeepEqualOptions options = new DeepEqualOptions();
+      options.set(DeepEqualOptions.ORDERED, ordered);
+      return new DeepEqual(null, null, null, options).equal(internal(), value.internal());
     } catch(final QueryException ex) {
       throw new XQueryException(ex);
     }
@@ -100,6 +105,7 @@ public abstract class XdmValue implements Iterable<XdmItem> {
    * @return value type
    */
   public abstract SeqType getType();
+
   /**
    * Returns the internal value representation.
    * Should be made invisible to other packages.

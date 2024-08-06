@@ -1,3 +1,221 @@
+VERSION 11.1 (July 10, 2024) -------------------------------------------
+
+ - [FIX] Duplicate libraries removed from distribution packages
+ - [FIX] XQuery, inspect:module and inspect:xqdoc
+ - [FIX] WebSocket, ws:broadcast, ws:emit: send maps and arrays
+ - [FIX] HTTP Payloads: handling multipart messages
+ - [ADD] XQuery: support for union node tests
+ - [MOD] XQuery: Better coercion for arrays and maps
+ - [MIN] Updated to Jetty 11.0.22 and Markup Blitz 1.4
+
+VERSION 11.0 (June 6, 2024) --------------------------------------------
+
+ STORAGE
+ - Key/value Store: Better compactification when storing values
+ - CSV/JSON/XML parsing: reduced memory consumption
+
+ XQUERY
+ - First release with new 4.0 features
+ - Numerous new built-in functions (standard, maps, arrays, math)
+ - Updates: Multiple targets in rename/replace/insert expressions
+ - New custom functions: archive:refresh, validate:xsd-init, xslt:init
+ - Full support for Invisible XML.
+
+ GENERAL
+ - GUI: Full Unicode character support
+ - Web Server: Upgrade to Jetty 11
+ - Command-Line: New options -C, -Q, -W
+ - Options: WRITESTORE, writes store to disk at shutdown time
+
+VERSION 10.7 (August 4, 2023) ------------------------------------------
+
+ - GUI, Editor: Full support for Unicode characters
+ - GUI, Editor: Faster font rendering (font dialog: anti-aliasing)
+ - XQuery 4: New features, functions, operators
+ - BaseX 11 preview features (see the documentation)
+ - bug fix: web:forward, write concluding log entry
+ - bug fix: job:eval, re-initialize scheduled jobs
+ - various other bug fixes
+
+VERSION 10.6 (May 4, 2023) ---------------------------------------------
+
+ - XQuery: Much more memory-efficient representation of XML fragments
+ - XQuery: Faster access to substrings and single characters
+ - XQuery: Faster iterations with the simple map operator 
+ - XQuery 4: more preview features available
+ - CSV/JSON conversions: Less memory consumption
+ - CSV parsing: option for skipping empty fields
+ - GUI, editor: better code completion
+ - Less reflection: Direct acccess to TagSoup, iXml, JLine
+ - Minor bug fixes
+
+VERSION 10.5 (March 23, 2023) ------------------------------------------
+
+ - new XQuery 4 features
+ - numerous performance tweaks
+ - minor bug fixes
+
+VERSION 10.4 (December 1, 2022) ----------------------------------------
+
+ - minor bug fixes
+ - DBA, settings: enable indentation
+ - XQuery 4 preview features updated
+
+VERSION 10.3 (October 11, 2022) ----------------------------------------
+
+ - better pooling of HTTP requests
+ - new command-line option -W for indenting results
+ - minor bug fixes
+
+VERSION 10.2 (September 28, 2022) --------------------------------------
+
+ - new undocumented XQuery 4 preview features
+ - optimization: better rewritings of positional tests
+ - optimization: simplifying arithmetic expressions
+ - optimization: consistent propagation of data reference
+ - optimization: faster invocation of function items
+
+VERSION 10.1 (August 18, 2022) -----------------------------------------
+
+ - Bug fix: HTTP Requests, sending headers
+ - Bug fix: Storage handling of main-memory databases
+ - Bug fix: GUI editor, double clicks
+ - Bug fix: function items and mixed updates
+ - undocumented XQuery 4 preview features
+
+VERSION 10.0 (August 1, 2022) ------------------------------------------
+
+ STORAGE
+ - Three resources types: XML, binary, XQuery Values
+ - When importing XML, whitespaces are now preserved
+ - Backups enhanced for general data (users, services, store)
+
+ XQUERY
+ - Multiple compilation steps for improved locking!
+ - New Store Module: persistent main-memory key-value storage
+ - Database Module: store values (db:put-value, db:get-value)
+ - When serializing XML, indentation is now turned off
+
+ GENERAL
+ - GUI revised: HiDPI support, new icons, improved consistency
+ - All HTTP requests based on new Java HTTP client
+ - Universal catalog support, based on new XML Catalog API
+ - Responses of standard REST API use default namespace
+ - Default ports for web applications: 8984/8985 -> 8080/8081
+ - Default admin password was removed
+
+VERSION 9.7.3 (June 30, 2022) ------------------------------------------
+
+ - DBA: Improved support for database backups
+ - Performance tweaks and bug fixes
+ - BaseX 10 preview: Store Module (before: Caching Module)
+ - BaseX 10 preview: Backup of general data (users, jobs, stores)
+
+VERSION 9.7.2 (May 14, 2022) -------------------------------------------
+
+ - English Stemmer: dictionary for irregular forms added
+ - Preview implementations of BaseX 10 features
+ - Performance tweaks, minor fixes
+
+VERSION 9.7.1 (April 26, 2022) -----------------------------------------
+
+ - RESTXQ: improved caching for unmodified modules
+ - GUI: improved support for middle mouse button
+ - GUI, editor: list opened files (Ctrl-F6)
+ - Backups: support for comments added
+ - XQuery: inspect:functions: parse modules only once
+ - XQuery: db:delete: Faster deletion of binary resources
+ - XQuery: jobs:eval: handling of large job numbers revised
+ - XQuery optimizations: rewrite value to general comparisons
+
+VERSION 9.7 (March 23, 2022) -------------------------------------------
+
+ XQUERY
+ - numerous performance tweaks and optimizations
+ - support for formatting integers and dates in French
+ - xslt:transform-report: support for xsl:messages
+ - util:strip-namespaces: remove namespaces from elements
+ - XSD validation: improved support for XML catalogs
+
+VERSION 9.6.4 (December 17, 2021) --------------------------------------
+
+ - Performance tweaks, minor fixes
+
+VERSION 9.6.3 (October 21, 2021) ---------------------------------------
+
+ - Minor fixes, Performance tweaks
+
+VERSION 9.6.2 (September 30, 2021) -------------------------------------
+
+ - Performance tweaks, minor bug fixes
+
+VERSION 9.6.1 (August 26, 2021) ----------------------------------------
+
+ - GUI bug fix, XQuery performance tweaks
+
+VERSION 9.6 (August 19, 2021) ------------------------------------------
+
+ XQUERY: MODULES, FEATURES
+ - Archive Module, archive:write: stream large archives to file
+ - SQL Module: support for more SQL types
+ - Full-Text Module, ft:thesaurus: perform Thesaurus queries
+ - Fulltext, fuzzy search: specify Levenshtein limit
+ - UNROLLLIMIT option: controll limit for unrolling loops
+
+ XQUERY: JAVA BINDINGS
+ - Java objects of unknown type are wrapped into function items
+ - results of constructor calls are returned as function items
+ - the standard package java.lang. has become optional
+ - array arguments can be specified with the middle dot notation
+ - conversion can be controlled with the WRAPJAVA option
+ - better support for XQuery arrays and maps
+
+ WEB APPLICATIONS
+ - RESTXQ: Server-Timing HTTP headers are attached to the reponse
+
+VERSION 9.5.2 (May 27, 2021) -------------------------------------------
+
+ - Performance tweaks, minor bug fixes
+
+VERSION 9.5.1 (April 2, 2021) ------------------------------------------
+
+ - Performance tweaks, minor bug fixes
+
+VERSION 9.5 (February 25, 2021) ----------------------------------------
+
+ RESTXQ
+ - the client IP address behind a proxy is added to the logs
+ - stack traces in the error message can now be suppressed
+ - the default error code has been changed from 400 to 500
+ - error messages are more user-friendly now (#1708)
+ - content negotiation was improved (#1991)
+ - inline arguments of called function (#1982)
+
+ XQUERY FUNCTIONS
+ - Utility: new functions for sequences, arrays and maps
+ - Higher-Order Functions: hof:drop-while
+ - Jobs: More options for job intervals
+
+ XQUERY PERFORMANCE
+ - revised scoring propagation (all items will take less memory)
+ - default function inlining limit reduced from 100 to 50
+ - axis path rewritings, better typing (#1910, #1976, #1979)
+ - better typing (#1906, #1908, #1909, #1944, #1945)
+ - faster data()/string() checks (#1975)
+ - rewrite map:merge to map:put (#1969)
+ - rewrite order by to fn:sort (#1966)
+ - rewrite group by to fn:distinct-values (#1932)
+ - rewrite quantifiers to FLWOR expressions (#1961)
+ - optimizations of arithmetic expressions (#1938, #1972)
+ - optimizations of lookup operator (#1929, #1984)
+ - optimizations of counts (#1965, #1973, #1974)
+ - optimizations of regular lists (#1919, #1924)
+ - optimizations of switch expression (#1920)
+ - optimizations of instance of (#1939)
+ - distinct values (#1930, #1967)
+ - positional checks (#1937)
+ - existence checks (#1971)
+
 VERSION 9.4.6 (January 7, 2021) ----------------------------------------
 
  - Performance tweaks, minor bug fixes

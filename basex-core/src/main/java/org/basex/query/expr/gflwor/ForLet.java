@@ -12,10 +12,10 @@ import org.basex.util.*;
 /**
  * FLWOR {@code for}/{@code let} clause.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public abstract class ForLet extends Clause {
+abstract class ForLet extends Clause {
   /** Item variable. */
   public Var var;
   /** Bound expression. */
@@ -25,7 +25,7 @@ public abstract class ForLet extends Clause {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param seqType sequence type
    * @param var variables
    * @param expr expression
@@ -70,7 +70,7 @@ public abstract class ForLet extends Clause {
   }
 
   /**
-   * Returns an expression that is appropriate for inlining.
+   * Tries to return an expression that is appropriate for inlining.
    * @param cc compilation context
    * @return inlineable expression or {@code null}
    * @throws QueryException query exception
@@ -92,7 +92,7 @@ public abstract class ForLet extends Clause {
     //   let $a as element(a) := <a/> where $a instance of element(b) return $a
     //   let $a := (<a/>, <b/>) where $a/self::a return $a
     //   for $a allowing empty in 0 where $a return count($a)
-    if(vars.length != 1 || scoring || var.checksType() || size() != 1 || !ex.uses(var))
+    if(vars.length != 1 || scoring || var.declType != null || size() != 1 || !ex.uses(var))
       return false;
 
     final InlineContext ic = new InlineContext(var, new ContextValue(info), cc);

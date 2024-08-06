@@ -16,22 +16,12 @@ import org.basex.util.hash.*;
 /**
  * The scope of variables, either the query, a user-defined or an inline function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class VarScope {
-  /** Static context. */
-  public final StaticContext sc;
   /** Local variables in this scope. */
   private final ArrayList<Var> vars = new ArrayList<>();
-
-  /**
-   * Constructor for a top-level module.
-   * @param sc static context
-   */
-  public VarScope(final StaticContext sc) {
-    this.sc = sc;
-  }
 
   /**
    * Adds a variable to this scope.
@@ -48,14 +38,12 @@ public final class VarScope {
    * Creates a new local variable in this scope.
    * @param name variable name
    * @param st type of the variable (can be {@code null})
-   * @param param function parameter flag
    * @param qc query context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return the variable
    */
-  public Var addNew(final QNm name, final SeqType st, final boolean param, final QueryContext qc,
-      final InputInfo ii) {
-    return add(new Var(name, st, param, qc, sc, ii));
+  public Var addNew(final QNm name, final SeqType st, final QueryContext qc, final InputInfo info) {
+    return add(new Var(name, st, qc, info));
   }
 
   /**
@@ -72,7 +60,7 @@ public final class VarScope {
    * @param fp frame pointer
    * @param qc query context
    */
-  public static void exit(final int fp, final QueryContext qc) {
+  public void exit(final int fp, final QueryContext qc) {
     qc.stack.exitFrame(fp);
   }
 

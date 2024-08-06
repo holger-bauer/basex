@@ -10,7 +10,7 @@ import org.xml.sax.helpers.*;
 /**
  * Standard XML parser.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XmlParser {
@@ -60,6 +60,7 @@ public final class XmlParser {
 
     final SAXParserFactory f = SAXParserFactory.newInstance();
     f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", dtd);
+    f.setFeature("http://xml.org/sax/features/external-general-entities", dtd);
     f.setFeature("http://xml.org/sax/features/external-parameter-entities", dtd);
     f.setFeature("http://xml.org/sax/features/use-entity-resolver2", false);
     f.setNamespaceAware(true);
@@ -69,7 +70,7 @@ public final class XmlParser {
   }
 
   /** Error handler (causing no STDERR output). */
-  private static class XmlHandler extends DefaultHandler {
+  private static final class XmlHandler extends DefaultHandler {
     @Override
     public void fatalError(final SAXParseException ex) throws SAXParseException { throw ex; }
     @Override

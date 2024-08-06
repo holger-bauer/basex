@@ -5,7 +5,7 @@ import org.basex.query.*;
 /**
  * Full-text document and queries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class FTData extends QueryTest {
@@ -40,6 +40,7 @@ abstract class FTData extends QueryTest {
       "  <wld>yeah</wld>\n" +
       "  <mix>A<sub/>B</mix>\n" +
       "  <mix>B<sub/>A</mix>\n" +
+      "  <order>A B A</order>\n" +
       "</fttest>";
 
   static { create(DOC); }
@@ -62,15 +63,15 @@ abstract class FTData extends QueryTest {
       { "FT 1", nodes(14), "//w[text() contains text 'HELLO']" },
       { "FT 2", nodes(14), "//w[text() contains text 'hello']" },
       { "FT 3", nodes(14), "//w[text() contains text '    hello!...   ']" },
-      { "FT 4", empty(), "//w[  text  (   )  contains text  '  anarmophism  '  ]  " },
-      { "FT 5", empty(), "//w[text() contains text 'db']" },
+      { "FT 4", emptySequence(), "//w[  text  (   )  contains text  '  anarmophism  '  ]  " },
+      { "FT 5", emptySequence(), "//w[text() contains text 'db']" },
       { "FT 6", nodes(42, 46), "//mix[text() contains text 'A']" },
       { "FT 7", nodes(14), "//w[text() contains text 'hello']['A' contains text 'A']" },
       { "FT 8", nodes(14), "//w[text() contains text 'hello']['X' contains text 'X' using fuzzy]" },
       { "FT 9", nodes(14), "//w[text() = 'hello' and 'X' contains text 'X']" },
       { "FT 10", nodes(14), "//w[text() = 'hello' and text() contains text 'hello']" },
-      { "FT 11", empty(), "//wld[text() contains text '']" },
-      { "FT 12", empty(), "//wld[text() contains text ' ']" },
+      { "FT 11", emptySequence(), "//wld[text() contains text '']" },
+      { "FT 12", emptySequence(), "//wld[text() contains text ' ']" },
       { "FT 13", nodes(40), "//*[text() contains text 'yeah']" },
 
       { "Preds 1", nodes(7, 9, 11),
@@ -125,7 +126,7 @@ abstract class FTData extends QueryTest {
         "//w[text() contains text 'xml &amp; databases']" },
       { "Phrase 3", nodes(7, 9, 11),
         "//w[text() contains text 'xml :) databases :|']" },
-      { "Phrase 4", empty(),
+      { "Phrase 4", emptySequence(),
         "//w[text() contains text 'xml db']" },
       { "Phrase 5", nodes(25, 29),
         "/fttest/fti[text() contains text 'wordt ook wel eens']" },
@@ -207,7 +208,7 @@ abstract class FTData extends QueryTest {
 
       { "FTFuzzy 1", nodes(7, 9, 11), "//*[text() contains text 'Database' using fuzzy]" },
       { "FTFuzzy 2", nodes(7, 9, 11), "//*[text() contains text 'Databaze' using fuzzy]" },
-      { "FTFuzzy 3", empty(), "//*[text() contains text 'Databasing' using fuzzy]" },
+      { "FTFuzzy 3", emptySequence(), "//*[text() contains text 'Databasing' using fuzzy]" },
 
       { "FTAnyAllOption 1", nodes(3, 5, 7, 9, 11),
         "/fttest/co/w[text() contains text 'xml' any]" },
@@ -254,7 +255,7 @@ abstract class FTData extends QueryTest {
         "//w[text() contains text 'XmL' occurs from 0 to 1 times]" },
       { "FTTimes 7", nodes(5),
         "//w[text() contains text 'xml xml' occurs at least 2 times]" },
-      { "FTTimes 8", empty(),
+      { "FTTimes 8", emptySequence(),
         "//w[text() contains text 'xml xml' occurs at least 4 times]" },
 
       { "FTAnyAllTimes 1", booleans(true),
@@ -287,11 +288,11 @@ abstract class FTData extends QueryTest {
       { "FTAndOr 6", nodes(31, 33),
         "//fti[text() contains text 'adfad' ftand 'wordt' ftand 'ook' " +
         "ftand 'wel' ftand 'een' ftand 's']" },
-      { "FTAndOr 7", empty(),
+      { "FTAndOr 7", emptySequence(),
         "//*[text() contains text 'databases' ftand 'db']" },
       { "FTAndOr 8", nodes(14),
         "//*[text() contains text 'hola' ftor 'hello']" },
-      { "FTAndOr 9", empty(),
+      { "FTAndOr 9", emptySequence(),
         "//*[text() contains text 'hola' ftand 'hello']" },
       { "FTAndOr 10", nodes(14),
         "//w[text() contains text 'HELLO' ftand ('hello' using stemming)]" },
@@ -300,7 +301,7 @@ abstract class FTData extends QueryTest {
 
       { "FTStemming 1", nodes(7, 9, 11),
         "//w[text() contains text 'xml database' using stemming]" },
-      { "FTStemming 2", empty(),
+      { "FTStemming 2", emptySequence(),
         "//w[text() contains text 'xml database' using no stemming]" },
       { "FTStemming 3", nodes(7, 9, 11),
         "//w[text() contains text 'xml' ftand 'databasing' using stemming " +
@@ -322,6 +323,12 @@ abstract class FTData extends QueryTest {
         " using stemming using language 'Russian'" },
       { "FTStemming 11", booleans(true),
         "'de' contains text 'de' using stemming using language 'pt'" },
+      { "FTStemming 12", booleans(true),
+        "'mice' contains text 'mouse' using stemming" },
+      { "FTStemming 13", booleans(true),
+        "'symposia' contains text 'symposium' using stemming" },
+      { "FTStemming 14", booleans(true),
+        "'men' contains text 'man' using stemming" },
 
       { "FTLanguage 1", nodes(14),
         "//*[text() contains text 'hello' using language 'en']" },
@@ -344,7 +351,7 @@ abstract class FTData extends QueryTest {
         "//w[. contains text 'databases' ordered]" },
       { "FTOrdered 2", nodes(7, 9, 11),
         "//w[. contains text 'xml' ftand 'databases' ordered]" },
-      { "FTOrdered 3", empty(),
+      { "FTOrdered 3", emptySequence(),
         "//w[. contains text 'databases' ftand 'xml' ordered]" },
       { "FTOrdered 4", booleans(true),
         "'A B' contains text ('A' ftand 'B' ordered)" },
@@ -363,6 +370,14 @@ abstract class FTData extends QueryTest {
         "'A B' contains text ('B' ftor 'A') ordered" },
       { "FTOrdered 11", booleans(true),
         "'A B C' contains text ('A' ftor 'C') ftand 'B' ordered" },
+      { "FTOrdered 12", booleans(true),
+        "//order contains text { 'A', 'B' } all ordered" },
+      { "FTOrdered 13", booleans(true),
+        "//order contains text { 'B', 'A' } all ordered" },
+      { "FTOrdered 14", booleans(true),
+        "//order contains text 'A B' all words ordered" },
+      { "FTOrdered 15", booleans(true),
+        "//order contains text 'B A' all words ordered" },
 
       { "FTDistance 1", nodes(3),
         "//w[text() contains text 'the' ftand 'fourth' " +
@@ -426,7 +441,7 @@ abstract class FTData extends QueryTest {
 
       { "FTContent 1", nodes(3, 5, 9, 11),
         "//w[text() contains text 'xml' at start]" },
-      { "FTContent 2", empty(),
+      { "FTContent 2", emptySequence(),
         "//w[. contains text 'databases' at start]" },
       { "FTContent 3", nodes(9, 11),
         "//w[. contains text 'xml databases' at start]" },
@@ -438,7 +453,7 @@ abstract class FTData extends QueryTest {
         "//w[. contains text 'xml databases' at end]" },
       { "FTContent 7", nodes(7, 9, 11),
         "//w[. contains text 'xml' ftand 'databases' at end]" },
-      { "FTContent 8", empty(),
+      { "FTContent 8", emptySequence(),
         "//w[. contains text 'have xml' at end]" },
       { "FTContent 9", nodes(14),
         "//w[text() contains text 'hello' entire content]" },

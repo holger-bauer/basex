@@ -4,12 +4,12 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import org.basex.data.*;
-import org.basex.util.*;
+import org.basex.io.*;
 
 /**
  * This class organizes currently opened databases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Datas {
@@ -91,8 +91,7 @@ public final class Datas {
    */
   private Entry<Data, Integer> get(final String name) {
     for(final Entry<Data, Integer> entry : list.entrySet()) {
-      final String db = entry.getKey().meta.name;
-      if(Prop.CASE ? db.equals(name) : db.equalsIgnoreCase(name)) return entry;
+      if(IO.equals(entry.getKey().meta.name, name)) return entry;
     }
     return null;
   }

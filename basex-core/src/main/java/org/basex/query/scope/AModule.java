@@ -1,57 +1,56 @@
 package org.basex.query.scope;
 
+import java.util.*;
+
 import org.basex.query.*;
 import org.basex.query.func.*;
+import org.basex.query.util.hash.*;
+import org.basex.query.value.type.*;
 import org.basex.query.var.*;
-import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
  * An XQuery module.
  *
- * @author BaseX Team 2005-14, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class AModule extends StaticScope {
   /** User-defined functions. */
-  private final TokenObjMap<StaticFunc> funcs;
+  public ArrayList<StaticFunc> funcs;
   /** Static variables. */
-  private final TokenObjMap<StaticVar> vars;
-  /** Namespace URIs of imported modules (currently not used). */
-  protected final TokenSet imports;
+  public ArrayList<StaticVar> vars;
+  /** Public types. */
+  public QNmMap<SeqType> types;
+  /** URIs of modules. */
+  public TokenSet modules;
+  /** Namespaces. */
+  public TokenMap namespaces;
 
   /**
    * Constructor.
    * @param sc static context
-   * @param vs variable scope (can be {@code null})
-   * @param doc documentation (can be {@code null})
-   * @param info input info (can be {@code null})
-   * @param funcs user-defined functions (can be {@code null})
-   * @param vars static variables (can be {@code null})
-   * @param imports namespace URIs of imported modules (can be {@code null})
    */
-  AModule(final StaticContext sc, final VarScope vs, final String doc, final InputInfo info,
-      final TokenObjMap<StaticFunc> funcs, final TokenObjMap<StaticVar> vars,
-      final TokenSet imports) {
-    super(sc, vs, doc, info);
-    this.funcs = funcs;
-    this.vars = vars;
-    this.imports = imports;
+  AModule(final StaticContext sc) {
+    super(sc);
   }
 
   /**
-   * Return static variables.
-   * @return static variables
+   * Assigns module properties.
+   * @param fn user-defined functions
+   * @param vr static variables
+   * @param tp public types
+   * @param md URIs of modules
+   * @param ns namespaces
+   * @param d documentation string
    */
-  public final TokenObjMap<StaticVar> vars() {
-    return vars;
-  }
-
-  /**
-   * Return static functions.
-   * @return static functions
-   */
-  public final TokenObjMap<StaticFunc> funcs() {
-    return funcs;
+  public void set(final ArrayList<StaticFunc> fn, final ArrayList<StaticVar> vr,
+      final QNmMap<SeqType> tp, final TokenSet md, final TokenMap ns, final String d) {
+    funcs = fn;
+    vars = vr;
+    types = tp;
+    modules = md;
+    namespaces = ns;
+    doc(d);
   }
 }

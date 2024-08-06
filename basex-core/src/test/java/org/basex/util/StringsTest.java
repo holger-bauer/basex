@@ -7,7 +7,7 @@ import org.junit.jupiter.api.*;
 /**
  * Strings tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class StringsTest {
@@ -32,17 +32,17 @@ public class StringsTest {
 
   /** Test. */
   @Test public void className() {
-    assertEquals("", Strings.className(""));
-    assertEquals("A", Strings.className("a"));
-    assertEquals(".", Strings.className("."));
-    assertEquals(".A", Strings.className(".a"));
-    assertEquals(".Ab", Strings.className(".ab"));
-    assertEquals("String", Strings.className("string"));
-    assertEquals("java.lang.String", Strings.className("java.lang.string"));
-    assertEquals("java.lang.String", Strings.className("java.lang.string"));
-    assertEquals("java.lang.String", Strings.className("java/lang/string"));
-    assertEquals("org.basex.modules.MetaData", Strings.className("org.basex.modules.meta-data"));
-    assertEquals("a.BC", Strings.className("a/-b-c"));
+    assertEquals("", Strings.uriToClasspath(""));
+    assertEquals("A", Strings.uriToClasspath("a"));
+    assertEquals(".", Strings.uriToClasspath("."));
+    assertEquals(".A", Strings.uriToClasspath(".a"));
+    assertEquals(".Ab", Strings.uriToClasspath(".ab"));
+    assertEquals("String", Strings.uriToClasspath("string"));
+    assertEquals("java.lang.String", Strings.uriToClasspath("java.lang.string"));
+    assertEquals("java.lang.String", Strings.uriToClasspath("java.lang.string"));
+    assertEquals("java.lang.String", Strings.uriToClasspath("java/lang/string"));
+    assertEquals("org.basex.modules.MD", Strings.uriToClasspath("org.basex.modules.m-d"));
+    assertEquals("a.BC", Strings.uriToClasspath("a/-b-c"));
   }
 
   /** Test. */
@@ -59,8 +59,7 @@ public class StringsTest {
 
     assertEquals("org/index", Strings.uri2path("http://org"));
     assertEquals("org/index", Strings.uri2path("http://org/"));
-    assertEquals("org/basex/modules/hello/World",
-        Strings.uri2path("http://basex.org/modules/hello/World"));
+    assertEquals("org/basex/m/hello/World", Strings.uri2path("http://basex.org/m/hello/World"));
     assertEquals("com/example/www/index", Strings.uri2path("http://www.example.com"));
     assertEquals("a/b/c", Strings.uri2path("a:b:c"));
     assertEquals("A/A", Strings.uri2path("http://%41/%41"));

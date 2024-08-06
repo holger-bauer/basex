@@ -9,13 +9,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnEnvironmentVariable extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final String env = System.getenv(Token.string(toToken(exprs[0], qc)));
-    return env != null ? Str.get(env) : Empty.VALUE;
+    final String value = System.getenv(toString(arg(0), qc));
+    return value != null ? Str.get(value) : Empty.VALUE;
   }
 }

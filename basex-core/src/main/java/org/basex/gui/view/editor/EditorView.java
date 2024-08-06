@@ -5,10 +5,11 @@ import static org.basex.gui.GUIConstants.*;
 import static org.basex.util.Token.*;
 
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 import java.util.*;
+import java.util.List;
 import java.util.Timer;
+import java.util.concurrent.atomic.*;
 import java.util.regex.*;
 
 import javax.swing.*;
@@ -42,28 +43,26 @@ import org.xml.sax.*;
 /**
  * This view allows the input and evaluation of queries and documents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class EditorView extends View {
-  /** Delay for showing the please wait info. */
+  /** Delay for showing the "please wait" info. */
   private static final int WAIT_DELAY = 250;
   /** Delay for highlighting an error. */
   private static final int SEARCH_DELAY = 100;
   /** Link pattern. */
-  private static final Pattern LINK = Pattern.compile("(.*?), ([0-9]+)/([0-9]+)");
+  private static final Pattern LINK = Pattern.compile("(.*?), (\\d+)/(\\d+)");
 
   /** Project files. */
   final ProjectView project;
-  /** Go button. */
-  final AbstractButton go;
+  /** Test button. */
+  final AbstractButton test;
 
   /** History Button. */
   private final AbstractButton history;
   /** Stop Button. */
   private final AbstractButton stop;
-  /** Test button. */
-  private final AbstractButton test;
   /** Search bar. */
   private final SearchBar search;
   /** Info label. */
@@ -82,12 +81,11 @@ public final class EditorView extends View {
   /** Main-memory document. */
   private DBNode doc;
 
-  /** Evaluation counter. */
-  private int statusID;
-
+  /** Parse counter. */
+  private final AtomicInteger parseID = new AtomicInteger();
   /** Parse query context. */
-  private volatile QueryContext parseQC;
-  /** Input info. */
+  private final AtomicBoolean parsing = new AtomicBoolean();
+  /** Current input info (can be {@code null}). */
   private InputInfo inputInfo;
 
   /**
@@ -115,52 +113,46 @@ public final class EditorView extends View {
     final SearchEditor center = new SearchEditor(gui, tabs, null);
     search = center.bar();
 
-    final AbstractButton newB = BaseXButton.command(GUIMenuCmd.C_EDITNEW, gui);
-    final AbstractButton openB = BaseXButton.command(GUIMenuCmd.C_EDITOPEN, gui);
+    final AbstractButton newB = BaseXButton.command(GUIMenuCmd.C_EDIT_NEW, gui);
+    final AbstractButton openB = BaseXButton.command(GUIMenuCmd.C_EDIT_OPEN, gui);
     final AbstractButton saveB = BaseXButton.get("c_save", SAVE, false, gui);
     final AbstractButton find = search.button(FIND_REPLACE);
-    final AbstractButton vars = BaseXButton.command(GUIMenuCmd.C_VARS, gui);
+    final AbstractButton vars = BaseXButton.command(GUIMenuCmd.C_EXTERNAL_VARIABLES, gui);
+    final AbstractButton go = BaseXButton.command(GUIMenuCmd.C_GO, gui);
 
-    history = BaseXButton.get("c_history", RECENTLY_OPENED, false, gui);
+    history = BaseXButton.get("c_history", BaseXLayout.addShortcut(RECENTLY_OPENED,
+        BaseXKeys.HISTORY.toString()), false, gui);
     stop = BaseXButton.get("c_stop", STOP, false, gui);
     stop.setEnabled(false);
-    go = BaseXButton.get("c_go", BaseXLayout.addShortcut(RUN_QUERY,
-        BaseXKeys.EXEC1.toString()), false, gui);
     test = BaseXButton.get("c_test", BaseXLayout.addShortcut(RUN_TESTS,
-        BaseXKeys.UNIT.toString()), false, gui);
+        BaseXKeys.TESTS.toString()), false, gui);
 
-    final BaseXBack buttons = new BaseXBack(false);
-    buttons.layout(new ColumnLayout());
+    final BaseXToolBar buttons = new BaseXToolBar();
     buttons.add(newB);
     buttons.add(openB);
     buttons.add(saveB);
     buttons.add(history);
-    buttons.add(Box.createHorizontalStrut(4));
-    buttons.add(find);
-    buttons.add(Box.createHorizontalStrut(4));
-    buttons.add(stop);
+    buttons.addSeparator();
     buttons.add(go);
+    buttons.add(stop);
     buttons.add(vars);
     buttons.add(test);
+    buttons.addSeparator();
+    buttons.add(find);
 
-    context = new BaseXLabel("").resize(1.2f);
+    context = new BaseXLabel("").resize(1.25f);
     context.setForeground(dgray);
 
-    final BaseXBack top = new BaseXBack(false);
-    top.layout(new ColumnLayout(10));
-    top.add(buttons);
-    top.add(context);
-
-    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout());
-    north.add(top, BorderLayout.WEST);
+    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout(10, 0)).border(0, 0, 4, 0);
+    north.add(buttons, BorderLayout.WEST);
+    north.add(context, BorderLayout.CENTER);
     north.add(new BaseXHeader(EDITOR), BorderLayout.EAST);
 
     // status and query pane
     search.editor(addTab(), false);
 
-    info = new BaseXLabel().setText(OK, Msg.SUCCESS).resize(1.2f);
-    pos = new BaseXLabel(" ").resize(1.2f);
-
+    info = new BaseXLabel().setText(OK, Msg.SUCCESS).resize(1.25f);
+    pos = new BaseXLabel(" ").resize(1.25f);
     posCode.invokeLater();
 
     final BaseXBack south = new BaseXBack(false).border(8, 0, 0, 0);
@@ -190,49 +182,23 @@ public final class EditorView extends View {
     saveB.addActionListener(e -> {
       final JPopupMenu pop = new JPopupMenu();
       final StringBuilder mnem = new StringBuilder();
-      final JMenuItem sa = GUIMenu.newItem(GUIMenuCmd.C_EDITSAVE, gui, mnem);
-      final JMenuItem sas = GUIMenu.newItem(GUIMenuCmd.C_EDITSAVEAS, gui, mnem);
-      sa.setEnabled(GUIMenuCmd.C_EDITSAVE.enabled(gui));
-      sas.setEnabled(GUIMenuCmd.C_EDITSAVEAS.enabled(gui));
+      final JMenuItem sa = GUIMenu.newItem(GUIMenuCmd.C_EDIT_SAVE, gui, mnem);
+      final JMenuItem sas = GUIMenu.newItem(GUIMenuCmd.C_EDIT_SAVE_AS, gui, mnem);
+      sa.setEnabled(GUIMenuCmd.C_EDIT_SAVE.enabled(gui));
+      sas.setEnabled(GUIMenuCmd.C_EDIT_SAVE_AS.enabled(gui));
       pop.add(sa);
       pop.add(sas);
       pop.show(saveB, 0, saveB.getHeight());
     });
-    history.addActionListener(e -> {
-      final JPopupMenu pm = new JPopupMenu();
-      ActionListener al = ac -> {
-        // rewrite and open chosen file
-        open(new IOFile(ac.getActionCommand().replaceAll("(.*) \\[(.*)]", "$2/$1")));
-      };
 
-      // create popup menu with of recently opened files
-      final StringList opened = new StringList();
-      for(final EditorArea ea : editors()) opened.add(ea.file().path());
-
-      final StringList hst = new StringList(BaseXHistory.MAX);
-      final StringList all = new StringList(gui.gopts.get(GUIOptions.EDITOR));
-      final int fl = Math.min(all.size(), e == null ? BaseXHistory.MAX : BaseXHistory.MAXCOMPACT);
-      for(int f = 0; f < fl; f++) hst.add(all.get(f));
-
-      for(final String en : hst.sort(Prop.CASE)) {
-        // disable opened files
-        final JMenuItem item = new JMenuItem(en.replaceAll("(.*)[/\\\\](.*)", "$2 [$1]"));
-        if(opened.contains(en)) BaseXLayout.boldFont(item);
-        pm.add(item).addActionListener(al);
-      }
-      al = ac -> history.getActionListeners()[0].actionPerformed(null);
-      if(e != null && pm.getComponentCount() == BaseXHistory.MAXCOMPACT) {
-        pm.add(new JMenuItem(DOTS)).addActionListener(al);
-      }
-      pm.show(history, 0, history.getHeight());
-    });
+    history.addActionListener(e -> historyPopup(0));
     refreshHistory(null);
+
     info.addMouseListener((MouseClickedListener) e -> markError(true));
     stop.addActionListener(e -> {
       stop.setEnabled(false);
       gui.stop();
     });
-    go.addActionListener(e -> run(getEditor(), Action.EXECUTE));
     test.addActionListener(e -> run(getEditor(), Action.TEST));
     tabs.addChangeListener(e -> {
       final EditorArea ea = getEditor();
@@ -258,7 +224,8 @@ public final class EditorView extends View {
 
   @Override
   public void refreshMark() {
-    test.setEnabled(!getEditor().file().hasSuffix(IO.BXSSUFFIX));
+    final EditorArea edit = getEditor();
+    test.setEnabled(edit.file().hasSuffix(IO.XQSUFFIXES) && !edit.modified());
   }
 
   @Override
@@ -290,52 +257,92 @@ public final class EditorView extends View {
   }
 
   /**
+   * Shows a history popup menu.
+   * @param start first entry
+   */
+  public void historyPopup(final int start) {
+    // create list of paths; show opened files first
+    final HashSet<String> opened = new HashSet<>();
+    for(final EditorArea edit : editors()) opened.add(edit.file().path());
+    final List<String> paths = new ArrayList<>(opened);
+    for(final String path : gui.gopts.get(GUIOptions.EDITOR)) {
+      if(!paths.contains(path)) paths.add(path);
+    }
+    paths.sort((path1, path2) -> {
+      final boolean c1 = opened.contains(path1), c2 = opened.contains(path2);
+      return c1 == c2 ? path1.compareTo(path2) : c1 ? -1 : 1;
+    });
+
+    final JPopupMenu menu = new JPopupMenu();
+    int p = start - 1;
+    final int max = Math.min(paths.size(), start + BaseXHistory.MAXPAGE);
+    if(start > 0) menu.add(new JMenuItem(DOTS)).addActionListener(
+        ac -> historyPopup(start - BaseXHistory.MAXPAGE));
+    while(++p < max) {
+      final String path = paths.get(p);
+      final IOFile file = new IOFile(path);
+      final String label = file.name() + " \u00b7 " + BaseXLayout.reversePath(file);
+      final JMenuItem item = new JMenuItem(label);
+      item.setToolTipText(BaseXLayout.info(file, true));
+      if(opened.contains(path)) BaseXLayout.boldFont(item);
+      menu.add(item).addActionListener(ac -> open(file));
+    }
+    if(p < paths.size()) menu.add(new JMenuItem(DOTS)).addActionListener(
+        ac -> historyPopup(start + BaseXHistory.MAXPAGE));
+    menu.show(history, 0, history.getHeight());
+  }
+
+  /**
    * Refreshes the context label.
    */
   public void refreshContextLabel() {
-    final String label = context();
-    context.setText(label.isEmpty() ? "" : CONTEXT + COLS + label);
+    String label = context();
+    label = label.isEmpty() ? "" : CONTEXT + COLS + label;
+    if(!context.getText().equals(label)) context.setText(label);
   }
 
   /**
-   * Sets an editor context document.
-   * @param node document
+   * Sets an XML document as context.
+   * @param file file
    */
-  public void setContext(final DBNode node) {
-    doc = node;
-    // close database
-    if(Close.close(gui.context)) gui.notify.init();
-    // remove context item binding
-    final Map<String, String> map = gui.context.options.toMap(MainOptions.BINDINGS);
-    map.remove("");
-    DialogBindings.assign(map, gui);
-    // remove context label
-    refreshContextLabel();
+  public void setContext(final IOFile file) {
+    try {
+      // close database
+      if(Close.close(gui.context)) gui.notify.init();
+      doc = new DBNode(file);
+      // remove context item binding
+      final Map<String, String> map = gui.context.options.toMap(MainOptions.BINDINGS);
+      map.remove("");
+      DialogBindings.assign(map, gui);
+      refreshContextLabel();
+    } catch(final IOException ex) {
+      Util.debug(ex);
+      BaseXDialog.error(gui, Util.info(ex));
+    }
   }
 
   /**
-   * Returns the current context string.
+   * Returns a string describing the current context.
    * @return context string (can be empty)
    */
   public String context() {
     // check if context binding was set
     String value = gui.context.options.toMap(MainOptions.BINDINGS).get("");
     if(value != null) {
-      value = Strings.concat("xs:untypedAtomic(", new Atm(value), ')');
+      value = Strings.concat("xs:untypedAtomic(", Atm.get(value), ')');
     }
-
     // check if database is opened
     if(value == null) {
       final Data data = gui.context.data();
-      if(data != null) value = Function._DB_OPEN.args(data.meta.name).trim();
+      if(data != null) value = Function._DB_GET.args(data.meta.name);
     }
     // check if main-memory document exists
     if(value == null) {
-      if(doc != null) value = Function.DOC.args(doc.data().meta.original).trim();
+      if(doc != null) value = Function.DOC.args(new IOFile(doc.data().meta.original).name());
     } else {
       doc = null;
     }
-    return value != null ? value : "";
+    return value != null ? value.trim() : "";
   }
 
   /**
@@ -428,8 +435,8 @@ public final class EditorView extends View {
   public void open() {
     // open file chooser for XML creation
     final BaseXFileChooser fc = new BaseXFileChooser(gui, OPEN, gui.gopts.get(GUIOptions.WORKPATH));
-    fc.filter(XQUERY_FILES, IO.XQSUFFIXES);
-    fc.filter(BXS_FILES, IO.BXSSUFFIX);
+    fc.filter(XQUERY_FILES, false, IO.XQSUFFIXES);
+    fc.filter(BXS_FILES, false, IO.BXSSUFFIX);
     fc.textFilters();
     for(final IOFile f : fc.multi().selectAll(Mode.FOPEN)) open(f);
   }
@@ -452,17 +459,15 @@ public final class EditorView extends View {
     final EditorArea edit = getEditor();
     final String path = edit.opened() ? edit.file().path() : gui.gopts.get(GUIOptions.WORKPATH);
     final BaseXFileChooser fc = new BaseXFileChooser(gui, SAVE_AS, path);
-    fc.filter(XQUERY_FILES, IO.XQSUFFIXES);
-    fc.filter(BXS_FILES, IO.BXSSUFFIX);
+    fc.filter(XQUERY_FILES, false, IO.XQSUFFIXES);
+    fc.filter(BXS_FILES, false, IO.BXSSUFFIX);
     fc.textFilters();
     fc.suffix(IO.XQSUFFIX);
 
     // save new file
     final IOFile file = fc.select(Mode.FSAVE);
-    if(file == null) return false;
-
-    // success: save file, parse contents
-    if(!edit.save(file)) return false;
+    if(file == null || !edit.save(file)) return false;
+    // success: parse contents
     run(edit, Action.PARSE);
     return true;
   }
@@ -471,7 +476,7 @@ public final class EditorView extends View {
    * Creates a new file.
    */
   public void newFile() {
-    if(!visible()) GUIMenuCmd.C_SHOWEDITOR.execute(gui);
+    if(!visible()) GUIMenuCmd.C_SHOW_EDITOR.execute(gui);
     refreshControls(addTab(), true);
   }
 
@@ -503,7 +508,7 @@ public final class EditorView extends View {
    * @return opened editor, or {@code null} if file could not be opened
    */
   private EditorArea open(final IOFile file, final boolean parse, final boolean error) {
-    if(!visible()) GUIMenuCmd.C_SHOWEDITOR.execute(gui);
+    if(!visible()) GUIMenuCmd.C_SHOW_EDITOR.execute(gui);
 
     EditorArea edit = find(file);
     if(edit != null) {
@@ -535,8 +540,15 @@ public final class EditorView extends View {
 
   /**
    * Parses or evaluates the current file.
+   */
+  public void run() {
+    run(getEditor(), Action.EXECUTE);
+  }
+
+  /**
+   * Parses or evaluates the query in the specified editor.
+   * @param editor editor
    * @param action action
-   * @param editor current editor
    */
   void run(final EditorArea editor, final Action action) {
     refreshControls(editor, false);
@@ -562,13 +574,13 @@ public final class EditorView extends View {
       if(xquery) gui.execute(true, new Test(file.path()));
     } else if(action == Action.EXECUTE && script) {
       // execute script
-      gui.execute(true, new Execute(string(text)));
+      gui.execute(true, new Execute(string(text)).baseURI(file.path()));
     } else if(action == Action.EXECUTE || xquery) {
       // execute or parse query
       String input = string(text);
       if(action == Action.EXECUTE || gui.gopts.get(GUIOptions.EXECRT)) {
         // find main module if current file cannot be evaluated; return early if no module is found
-        if(!xquery || QueryProcessor.isLibrary(input)) {
+        if(!xquery || QueryParser.isLibrary(input)) {
           final EditorArea ea = execEditor();
           if(ea == null) return;
           file = ea.file();
@@ -581,7 +593,7 @@ public final class EditorView extends View {
         execFile = file;
       } else {
         // parse: replace empty query with empty sequence (suppresses errors for plain text files)
-        parse(input.isEmpty() ? "()" : input, file, QueryProcessor.isLibrary(input));
+        parse(input.isEmpty() ? "()" : input, file);
       }
     } else if(file.hasSuffix(IO.JSONSUFFIX)) {
       try {
@@ -589,7 +601,7 @@ public final class EditorView extends View {
         io.name(file.path());
         JsonConverter.get(new JsonParserOptions()).convert(io);
         info(null);
-      } catch(final IOException ex) {
+      } catch(final QueryException | IOException ex) {
         info(ex);
       }
     } else if(script || file.hasSuffix(gui.gopts.xmlSuffixes()) || file.hasSuffix(IO.XSLSUFFIXES)) {
@@ -672,9 +684,8 @@ public final class EditorView extends View {
     final StringList paths = new StringList();
     if(file != null) {
       gui.gopts.setFile(GUIOptions.WORKPATH, file.parent());
-      final String path = file.path();
-      paths.add(path);
-      tabs.setToolTipTextAt(tabs.getSelectedIndex(), path);
+      paths.add(file.path());
+      tabs.setToolTipTextAt(tabs.getSelectedIndex(), BaseXLayout.info(file, true));
     }
     for(final String old : gui.gopts.get(GUIOptions.EDITOR)) {
       if(paths.size() < BaseXHistory.MAX) paths.addUnique(old);
@@ -742,26 +753,25 @@ public final class EditorView extends View {
    * Parses the current query after a little delay.
    * @param input query input
    * @param file file
-   * @param library library flag
    */
-  private void parse(final String input, final IO file, final boolean library) {
-    final int id = ++statusID;
+  private void parse(final String input, final IO file) {
+    final int id = parseID.incrementAndGet();
     new Timer(true).schedule(new TimerTask() {
       @Override
       public void run() {
         // let current parser finish; check if thread is obsolete
-        while(parseQC != null) Performance.sleep(1);
-        if(id != statusID) return;
+        while(parsing.get()) Performance.sleep(1);
+        if(id != parseID.get()) return;
 
         // parse query
+        parsing.set(true);
         try(QueryContext qc = new QueryContext(gui.context)) {
-          parseQC = qc;
-          qc.parse(input, library, file.path());
-          if(id == statusID) info(null);
+          qc.parse(input, file.path());
+          if(id == parseID.get()) info(null);
         } catch(final QueryException ex) {
-          if(id == statusID) info(ex);
+          if(id == parseID.get()) info(ex);
         } finally {
-          parseQC = null;
+          parsing.set(false);
         }
       }
     }, SEARCH_DELAY);
@@ -770,14 +780,14 @@ public final class EditorView extends View {
   /**
    * Processes the result from a command or query execution.
    * @param th exception or {@code null}
-   * @param stopped {@code true} if evaluation was interrupted
+   * @param stopped {@code true} if evaluation was stopped
    * @param refresh refresh buttons
    */
   public void info(final Throwable th, final boolean stopped, final boolean refresh) {
     // do not refresh view when query is running
     if(!refresh && stop.isEnabled()) return;
 
-    ++statusID;
+    parseID.incrementAndGet();
     final EditorArea editor = getEditor();
     String path = "";
     if(editor != null) {
@@ -797,9 +807,10 @@ public final class EditorView extends View {
       inputInfo = null;
     } else {
       info.setCursor(CURSORHAND);
-      info.setText(th.getLocalizedMessage(), Msg.ERROR);
-      final String tt = th.getMessage().replace("<", "&lt;").replace(">", "&gt;").replaceAll(
-          "\r?\n", "<br/>").replaceAll("(<br/>.*?)<br/>.*", "$1");
+      final String msg = Util.message(th), local = th.getLocalizedMessage();
+      info.setText(local != null ? local : msg, Msg.ERROR);
+      final String tt = msg.replace("<", "&lt;").replace(">", "&gt;").
+        replaceAll("\r?\n", "<br/>").replaceAll("(<br/>.*?)<br/>.*", "$1");
       info.setToolTipText("<html>" + tt + "</html>");
 
       if(th instanceof QueryIOException) {
@@ -921,12 +932,12 @@ public final class EditorView extends View {
 
   /**
    * Updates the references to renamed files.
-   * @param old old file file reference
+   * @param old old file reference
    * @param renamed updated file reference
    */
   public void rename(final IOFile old, final IOFile renamed) {
     try {
-      // use canonical representation and add slash to names of directories
+      // use canonical representation and add slash to the directory names
       final boolean dir = renamed.isDir();
       final String oldPath = old.file().getCanonicalPath() + (dir ? File.separator : "");
       // iterate through all tabs
@@ -982,8 +993,8 @@ public final class EditorView extends View {
   public final GUICode posCode = new GUICode() {
     @Override
     public void execute(final Object arg) {
-      final int[] lc = getEditor().pos();
-      pos.setText(lc[0] + " : " + lc[1]);
+      final int[] cp = getEditor().caretPos();
+      pos.setText(cp[0] + " : " + cp[1]);
     }
   };
 
@@ -1009,7 +1020,7 @@ public final class EditorView extends View {
     for(final EditorArea edit : editors()) {
       if(edit.opened()) continue;
       final String n = edit.file().name().substring(FILE.length());
-      bl.set(n.isEmpty() ? 1 : Integer.parseInt(n), true);
+      bl.set(n.isEmpty() ? 1 : Strings.toInt(n), true);
     }
     // find first free file number
     int b = 0;
@@ -1030,7 +1041,7 @@ public final class EditorView extends View {
     final BaseXBack tab = new BaseXBack(false).layout(new BorderLayout(10, 0));
     tab.add(edit.label, BorderLayout.CENTER);
 
-    final AbstractButton close = tabButton("e_close", "e_close2");
+    final AbstractButton close = tabButton("e_close", "e_close_hover");
     close.addActionListener(e -> close(edit));
     tab.add(close, BorderLayout.EAST);
 
@@ -1060,7 +1071,7 @@ public final class EditorView extends View {
    */
   public boolean confirm(final EditorArea edit) {
     final boolean all = edit == null;
-     final EditorArea[] eas = all ? editors() : new EditorArea[] { edit };
+    final EditorArea[] eas = all ? editors() : new EditorArea[] { edit };
     final String[] buttons = all && eas.length > 1 ? new String[] { CLOSE_ALL } : new String[0];
 
     for(final EditorArea ea : eas) {
@@ -1101,6 +1112,6 @@ public final class EditorView extends View {
     for(final Component c : tabs.getComponents()) {
       if(c instanceof EditorArea) edits.add((EditorArea) c);
     }
-    return edits.toArray(new EditorArea[0]);
+    return edits.toArray(EditorArea[]::new);
   }
 }

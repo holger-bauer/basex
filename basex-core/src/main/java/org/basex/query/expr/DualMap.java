@@ -4,7 +4,6 @@ import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.hash.*;
@@ -12,13 +11,13 @@ import org.basex.util.hash.*;
 /**
  * Simple map expression: iterative evaluation with two operands (the last one yielding items).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DualMap extends SimpleMap {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   DualMap(final InputInfo info, final Expr... exprs) {
@@ -26,30 +25,50 @@ public final class DualMap extends SimpleMap {
   }
 
   @Override
-  public Iter iter(final QueryContext qc) {
+  public Iter iter(final QueryContext qc) throws QueryException {
     return new Iter() {
-      Iter iter;
+      final Expr expr1 = exprs[0], expr2 = exprs[1];
+      final Iter iter1 = expr1.iter(qc);
+      final long size = expr2.size() == 1 ? iter1.size() : -1;
 
       @Override
       public Item next() throws QueryException {
-        if(iter == null) iter = exprs[0].iter(qc);
+        qc.checkStop();
 
         final QueryFocus qf = qc.focus;
-        final Value value = qf.value;
+        final Value qv = qf.value;
         try {
+          Item item;
           do {
-            // evaluate left operand
-            qf.value = value;
-            Item item = qc.next(iter);
-            if(item == null) return null;
-            // evaluate right operand (yielding an item)
+            // left operand
+            item = iter1.next();
+            if(item == null) break;
+            // right operand
             qf.value = item;
-            item = exprs[1].item(qc, info);
-            if(item != Empty.VALUE) return item;
-          } while(true);
+            item = expr2.item(qc, info);
+            qf.value = qv;
+          } while(item.isEmpty());
+          return item;
         } finally {
-          qf.value = value;
+          qf.value = qv;
         }
+      }
+
+      @Override
+      public Item get(final long i) throws QueryException {
+        final QueryFocus qf = qc.focus;
+        final Value qv = qf.value;
+        try {
+          qf.value = iter1.get(i);
+          return exprs[1].item(qc, info);
+        } finally {
+          qf.value = qv;
+        }
+      }
+
+      @Override
+      public long size() {
+        return size;
       }
     };
   }
@@ -64,7 +83,8 @@ public final class DualMap extends SimpleMap {
       for(Item item; (item = qc.next(iter)) != null;) {
         qf.value = item;
         item = exprs[1].item(qc, info);
-        if(item != Empty.VALUE) vb.add(item);
+        if(!item.isEmpty()) vb.add(item);
+        qf.value = qv;
       }
       return vb.value(this);
     } finally {

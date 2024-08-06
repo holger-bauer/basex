@@ -8,16 +8,10 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the Profiling Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProfModuleTest extends SandboxTest {
-  /** Test method. */
-  @Test public void dump() {
-    final Function func = _PROF_DUMP;
-    query(func.args("a"), "");
-  }
-
   /** Test method. */
   @Test public void human() {
     final Function func = _PROF_HUMAN;
@@ -72,20 +66,13 @@ public final class ProfModuleTest extends SandboxTest {
     query(func.args(1), 1);
     query(func.args(" (1, 2, 3)"), "1\n2\n3");
     query(func.args(" <x a='1' b='2' c='3'/>/@*/data()"), "1\n2\n3");
+    query(func.args(" ('x' cast as enum('a', 'x'), 'y' cast as enum('b', 'y'))"), "x\ny");
   }
 
   /** Test method. */
   @Test public void variables() {
     final Function func = _PROF_VARIABLES;
     query("for $x in 1 to 2 return " + func.args(), "");
-    query(func.args() + ", let $x := random:double() return floor($x * $x)", 0);
-  }
-
-  /** Test method. */
-  @Test public void voidd() {
-    final Function func = _PROF_VOID;
-    query(func.args(" ()"), "");
-    query(func.args(1), "");
-    query(func.args("1,2"), "");
+    query(func.args() + ", let $x := " + _RANDOM_DOUBLE.args() + " return floor($x * $x)", 0);
   }
 }

@@ -4,7 +4,6 @@ import static org.basex.query.QueryText.*;
 
 import java.util.function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.func.Function;
 import org.basex.query.iter.*;
@@ -22,52 +21,47 @@ import org.basex.util.hash.*;
 /**
  * Except expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Except extends Set {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
-  public Except(final InputInfo info, final Expr[] exprs) {
+  public Except(final InputInfo info, final Expr... exprs) {
     super(info, exprs);
   }
 
   @Override
   Expr opt(final CompileContext cc) {
-    // first operand is empty: return empty sequence
-    if(exprs[0] == Empty.VALUE) return cc.emptySeq(this);
-
     // determine type
-    SeqType st = exprs[0].seqType();
-    if(st.zero()) st = SeqType.NODE_ZM;
+    final SeqType st = exprs[0].seqType();
+    if(st.zero()) return exprs[0];
+    if(!(st.type instanceof NodeType)) return null;
 
-    // skip optimizations if operands do not have the correct type
-    if(st.type instanceof NodeType) {
-      exprType.assign(st.union(Occ.ZERO));
-
-      final ExprList list = new ExprList(exprs.length);
-      for(final Expr expr : exprs) {
-        if(expr == Empty.VALUE) {
-          // ignore empty operands
-          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-        } else if(!expr.has(Flag.CNS, Flag.NDT)) {
-          final int same = ((Checks<Expr>) ex -> ex.equals(expr)).index(list);
-          // identical to first operand: return empty sequence
-          // example: text() except text()  ->  ()
-          if(same == 0) return cc.emptySeq(this);
-          // identical to subsequent operand: remove duplicate
-          // example: node() except * except *  ->  node() except *
-          if(same > 0) cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-          else list.add(expr);
-        } else {
-          list.add(expr);
-        }
+    final ExprList list = new ExprList(exprs.length);
+    for(final Expr expr : exprs) {
+      if(expr == Empty.VALUE) {
+        // ignore empty operands
+        cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+      } else if(!expr.has(Flag.CNS, Flag.NDT)) {
+        final int same = ((Checks<Expr>) ex -> ex.equals(expr)).index(list);
+        // identical to first operand: return empty sequence
+        // example: text() except text()  ->  ()
+        if(same == 0) return Empty.VALUE;
+        // identical to subsequent operand: remove duplicate
+        // example: node() except * except *  ->  node() except *
+        if(same > 0) cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+        else list.add(expr);
+      } else {
+        list.add(expr);
       }
-      exprs = list.finish();
     }
+    exprs = list.finish();
+
+    exprType.assign(st.union(Occ.ZERO)).data(exprs[0]);
     return null;
   }
 
@@ -84,13 +78,17 @@ public final class Except extends Set {
   Value nodes(final QueryContext qc) throws QueryException {
     final ANodeBuilder nodes = new ANodeBuilder();
     Iter iter = exprs[0].iter(qc);
-    for(Item item; (item = qc.next(iter)) != null;) nodes.add(toNode(item));
+    for(Item item; (item = qc.next(iter)) != null;) {
+      nodes.add(toNode(item));
+    }
     nodes.ddo();
 
     final int el = exprs.length;
     for(int e = 1; e < el && !nodes.isEmpty(); e++) {
       iter = exprs[e].iter(qc);
-      for(Item item; (item = qc.next(iter)) != null;) nodes.removeAll(toNode(item));
+      for(Item item; (item = qc.next(iter)) != null;) {
+        nodes.removeAll(toNode(item));
+      }
     }
     return nodes.value(this);
   }
@@ -110,7 +108,7 @@ public final class Except extends Set {
         for(int i = 1; i < il; i++) {
           if(nodes[0] == null) return null;
           if(nodes[i] == null) continue;
-          final int d = nodes[0].diff(nodes[i]);
+          final int d = nodes[0].compare(nodes[i]);
 
           if(d < 0 && i + 1 == il) break;
           if(d == 0) {
@@ -124,11 +122,6 @@ public final class Except extends Set {
         return temp;
       }
     };
-  }
-
-  @Override
-  public Data data() {
-    return exprs[0].data();
   }
 
   @Override

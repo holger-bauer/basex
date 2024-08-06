@@ -8,7 +8,7 @@ import org.basex.util.*;
 /**
  * A node of a FingerTree.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -70,8 +70,9 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
       // check if index is in left digit
       if(pos < deep.leftSize) {
         Node<?, E> nd = null;
-        for(int i = 0; i < deep.left.length; i++) {
-          nd = deep.left[i];
+        final int ll = deep.left.length;
+        for(int l = 0; l < ll; l++) {
+          nd = deep.left[l];
           final long sz = nd.size();
           if(pos < sz) break;
           pos -= sz;
@@ -87,8 +88,9 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
         // index is in right digit
         pos -= mSize;
         Node<?, E> nd = null;
-        for(int i = 0; i < deep.right.length; i++) {
-          nd = deep.right[i];
+        final int rl = deep.right.length;
+        for(int r = 0; r < rl; r++) {
+          nd = deep.right[r];
           final long sz = nd.size();
           if(pos < sz) break;
           pos -= sz;
@@ -132,18 +134,18 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
   public abstract long size();
 
   /**
-   * Adds an element to the front of this tree.
+   * Prepends an element to the front of this tree.
    * @param fst new first element
    * @return updated tree
    */
-  public abstract FingerTree<N, E> cons(Node<N, E> fst);
+  public abstract FingerTree<N, E> prepend(Node<N, E> fst);
 
   /**
-   * Adds an element to the end of this tree.
+   * Appends an element to the end of this tree.
    * @param lst new last element
    * @return updated tree
    */
-  public abstract FingerTree<N, E> snoc(Node<N, E> lst);
+  public abstract FingerTree<N, E> append(Node<N, E> lst);
 
   /**
    * Returns the first element of this tree.
@@ -153,8 +155,8 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
   public abstract Node<N, E> head();
 
   /**
-   * Returns this tree removing the first element.
-   * @return updated tree
+   * Returns this tree without the first element.
+   * @return new tree
    */
   public abstract FingerTree<N, E> tail();
 
@@ -163,13 +165,13 @@ public abstract class FingerTree<N, E> implements Iterable<E> {
    * @return last element
    * @throws NoSuchElementException if the tree is empty
    */
-  public abstract Node<N, E> last();
+  public abstract Node<N, E> foot();
 
   /**
-   * Returns this tree removing the last element.
-   * @return updated tree
+   * Returns this tree without the last element.
+   * @return new tree
    */
-  public abstract FingerTree<N, E> init();
+  public abstract FingerTree<N, E> trunk();
 
   /**
    * Concatenates this finger tree with the given one.

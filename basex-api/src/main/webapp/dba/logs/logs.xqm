@@ -1,42 +1,42 @@
 (:~
  : Logging page.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/logs';
 
+import module namespace config = 'dba/config' at '../lib/config.xqm';
 import module namespace html = 'dba/html' at '../lib/html.xqm';
-import module namespace options = 'dba/options' at '../lib/options.xqm';
 
 (:~ Top category :)
 declare variable $dba:CAT := 'logs';
 
 (:~
  : Redirects to the URL that creates a log entry table for the specified timestamp.
- : @param  $name  name (date) of log file
+ : @param  $date  name of log file
  : @param  $time  timestamp to be found
  : @return redirection
  :)
 declare
   %rest:GET
   %rest:path('/dba/logs-jump')
-  %rest:query-param('name', '{$name}')
+  %rest:query-param('date', '{$date}')
   %rest:query-param('time', '{$time}')
 function dba:logs-jump(
-  $name  as xs:string,
+  $date  as xs:string,
   $time  as xs:string
 ) as element(rest:response) {
   let $page := head((
-    let $ignore-logs := options:get($options:IGNORE-LOGS)
-    let $max := options:get($options:MAXROWS)
+    let $ignore-logs := config:get($config:IGNORE-LOGS)
+    let $max := config:get($config:MAXROWS)
     for $log at $pos in reverse(
-      admin:logs($name, true())[not($ignore-logs and matches(., $ignore-logs, 'i'))]
+      admin:logs($date, true())[not($ignore-logs and matches(., $ignore-logs, 'i'))]
     )
     where $log/@time = $time
     return ($pos - 1) idiv $max + 1,
     1
   ))
-  return web:redirect('/dba/logs', map { 'name': $name, 'page': $page, 'time': $time }) update {
+  return web:redirect('/dba/logs', { 'name': $date, 'page': $page, 'time': $time }) update {
     .//*:header/@value ! (replace value of node . with . || '#' || $time)
   }
 };
@@ -63,6 +63,7 @@ declare
   %rest:query-param('page',  '{$page}', '1')
   %rest:query-param('time',  '{$time}')
   %output:method('html')
+  %output:html-version('5')
 function dba:logs(
   $input  as xs:string?,
   $name   as xs:string?,
@@ -72,64 +73,62 @@ function dba:logs(
   $page   as xs:string,
   $time   as xs:string?
 ) as element(html) {
-  let $files := (
-    for $file in admin:logs()
-    order by $file descending
-    return $file
-  )
-  let $name := if($name) then $name else string(head($files))
-  return html:wrap(map { 'header': $dba:CAT, 'info': $info, 'error': $error },
+  let $files := reverse(sort(admin:logs()))
+  let $date := $name otherwise string(head($files))
+  return html:wrap({ 'header': $dba:CAT, 'info': $info, 'error': $error },
     <tr>
-      <td width='205'>
-        <h2>{ html:link('Logs', $dba:CAT) }</h2>
-        <form action='{ $dba:CAT }' method='post' class='update'>
-          <input type='hidden' name='name' id='name' value='{ $name }'/>
+      <td width='190'>
+        <h2>{
+          'Logs', '&#xa0;',
+          <input type='text' id='log-filter' name='log-filter' max-length='10'
+                 onkeyup='logFilter();' class='smallinput'/>
+        }</h2>
+
+        <form method='post' id='dates'>
+          <input type='hidden' name='date' id='date' value='{ $date }'/>
           <input type='hidden' name='sort' id='sort' value='{ $sort }'/>
           <input type='hidden' name='page' id='page' value='{ $page }'/>
           <input type='hidden' name='time' id='time' value='{ $time }'/>
           <div id='list'>{
-            let $buttons := html:button('log-delete', 'Delete', true())
-            let $headers := (
-              map { 'key': 'name', 'label': 'Name', 'type': 'dynamic' },
-              map { 'key': 'size', 'label': 'Size', 'type': 'bytes' }
+            let $buttons := (
+              html:button('logs-download', 'Download', 'CHECK'),
+              html:button('logs-delete', 'Delete', ('CHECK', 'CONFIRM'))
             )
-            let $entries := 
-              for $entry in reverse(sort($files))
-              return map {
-                'name': function() {
+            let $headers := (
+              { 'key': 'name', 'label': 'Name', 'type': 'dynamic' },
+              { 'key': 'size', 'label': 'Size', 'type': 'bytes' }
+            )
+            let $entries :=
+              for $entry in $files
+              return {
+                'name': fn() {
                   let $link := html:link(
-                    $entry, $dba:CAT, (map { 'sort': $sort }, map { 'name': $entry })
+                    $entry, $dba:CAT, ({ 'sort': $sort }, { 'name': $entry })
                   ) update {
                     (: enrich link targets with current search string :)
                     insert node attribute onclick { 'addInput(this);' } into .
                   }
-                  return if ($name = $entry) then element b { $link } else $link
+                  return if($date = $entry) then element b { $link } else $link
                 },
                 'size': $entry/@size
               }
-            return html:table($headers, $entries, $buttons, map { }, map { })
+            return html:table($headers, $entries, $buttons)
           }</div>
         </form>
       </td>
       <td class='vertical'/>
       <td>{
-        if($name) then (
-          <form action='log-download' method='post' id='resources' autocomplete='off'>
-            <h3>{
-              $name, '&#xa0;',
-              <input type='hidden' name='name' value='{ $name }'/>,
-              <input size='40' id='input' name='input' value='{ $input }'
-                title='Enter regular expression'
-                onkeydown='if(event.keyCode==13) {{logEntries(true,false);event.preventDefault();}}'
-                onkeyup='logEntries(false, true);'/>,
-              ' ',
-              html:button('download', 'Download')
-            }</h3>
-          </form>,
+        if($date) then (
+          <h3>{
+            $date, '&#xa0;',
+            <input type='hidden' name='name' value='{ $date }'/>,
+            <input type='text' id='input' name='input' value='{ $input }' autocomplete='off'
+                   title='Enter regular expression' autofocus='autofocus'
+                   onkeyup='logEntries(event.key);'/>
+          }</h3>,
           <div id='output'/>,
-          html:js('logEntries(true, false);')
-        ) else (),
-        html:focus('input')
+          html:js('logEntries();')
+        )
       }</td>
     </tr>
   )
@@ -138,7 +137,7 @@ function dba:logs(
 (:~
  : Returns a log entry table.
  : @param  $input  search input
- : @param  $name   name of selected log files
+ : @param  $date   name of selected log files
  : @param  $sort   table sort key
  : @param  $page   current page
  : @param  $time   timestamp to highlight
@@ -147,84 +146,86 @@ function dba:logs(
 declare
   %rest:POST('{$input}')
   %rest:path('/dba/log')
-  %rest:query-param('name', '{$name}')
+  %rest:query-param('date', '{$date}')
   %rest:query-param('sort', '{$sort}', 'time')
   %rest:query-param('page', '{$page}', '1')
   %rest:query-param('time', '{$time}')
   %output:method('html')
+  %output:html-version('5')
   %output:indent('no')
   %rest:single
 function dba:log(
   $input  as xs:string?,
-  $name   as xs:string,
+  $date   as xs:string,
   $sort   as xs:string,
   $page   as xs:string,
   $time   as xs:string?
 ) as element()+ {
+  (: check if input is a valid regular expression :)
+  $input[.] ! void(analyze-string('', .)),
+
   let $headers := (
-    map { 'key': 'time', 'label': 'Time', 'type': 'dynamic', 'order': 'desc' },
-    map { 'key': 'address', 'label': 'Address' },
-    map { 'key': 'user', 'label': 'User', 'type': 'dynamic' },
-    map { 'key': 'type', 'label': 'Type', 'type': 'dynamic' },
-    map { 'key': 'ms', 'label': 'ms', 'type': 'decimal', 'order': 'desc' },
-    map { 'key': 'text', 'label': 'Text', 'type': 'dynamic' }
+    { 'key': 'time', 'label': 'Time', 'type': 'dynamic', 'order': 'desc' },
+    { 'key': 'address', 'label': 'Address' },
+    { 'key': 'user', 'label': 'User', 'type': 'dynamic' },
+    { 'key': 'type', 'label': 'Type', 'type': 'dynamic' },
+    { 'key': 'ms', 'label': 'ms', 'type': 'decimal', 'order': 'desc' },
+    { 'key': 'text', 'label': 'Text', 'type': 'dynamic' }
   )
   let $entries := (
-    let $ignore-logs := options:get($options:IGNORE-LOGS)
-    let $search := boolean($input)
-    let $highlight := function($string) {
-      for $match in analyze-string($string, $input, 'i')/*
-      let $value := string($match)
-      return if(local-name($match) = 'match') then element b { $value } else $value
-    }
+    let $ignore-logs := config:get($config:IGNORE-LOGS)
+    let $regex-string := matches($input, '[+*?^$(){}|\[\]\\]')
+    let $terms := if($regex-string) then $input else tokenize($input)
+    let $joined-terms := if($regex-string) then $input else string-join($terms, '|')
 
-    for $log in reverse(admin:logs($name, true()))
-    let $user := string($log/@user)
-    let $type := string($log/@type)
+    for $log in reverse(admin:logs($date, true()))
     let $text := string($log)
-    let $user-hit := $search and matches($user, $input, 'iq')
-    let $type-hit := $search and not($user-hit) and matches($type, $input, 'iq')
-    let $text-hit := $search and not($user-hit or $type-hit) and matches($text, $input, 'i')
-    where (not($search) or $user-hit or $type-hit or $text-hit) and (
-      not($ignore-logs and matches($text, $ignore-logs, 'i'))
-    )
-    let $id := string($log/@time)
-    let $time := if($input or $sort != 'time') then (
-      function() { html:link($id, $dba:CAT || '-jump', map { 'name': $name, 'time': $id }) }
-    ) else if($id = $time) then (
-      element b { $id }
-    ) else (
-      $id
-    )
-    return map {
-      'id': $id,
-      'time': $time,
-      'address': string($log/@address),
-      'user': if($user-hit) then function() { $highlight($user) } else $user,
-      'type': if($type-hit) then function() { $highlight($type) } else $type,
-      'ms': xs:decimal($log/@ms),
-      'text': if($text-hit) then function() { $highlight($text) } else $text
-    }
-  )
-  let $params := map { 'name': $name, 'input': $input }
-  let $options := map { 'sort': $sort, 'presort': 'time', 'page': xs:integer($page) }
-  return html:table($headers, $entries, (), $params, $options)
-};
+    where not($ignore-logs and matches($text, $ignore-logs, 'i'))
 
-(:~
- : Redirects to the specified action.
- : @param  $action  action to perform
- : @param  $names   names of selected log files
- : @return redirection
- :)
-declare
-  %rest:POST
-  %rest:path('/dba/logs')
-  %rest:query-param('action', '{$action}')
-  %rest:query-param('name',   '{$names}')
-function dba:logs-redirect(
-  $action  as xs:string,
-  $names   as xs:string*
-) as element(rest:response) {
-  web:redirect($action, map { 'name': $names[.], 'redirect': $dba:CAT })
+    for $map-results in (
+      let $map := {
+        'user': string($log/@user),
+        'type': string($log/@type),
+        'text': $text
+      }
+      return if($input) then (
+        if(every $term in $terms satisfies (
+          some $v in $map?* satisfies matches($v, $term, 'i')
+        )) then (
+          map:merge(
+            map:for-each($map, fn($k, $v) {
+              map:entry($k, (
+                if(matches($v, $joined-terms, 'i')) then fn() {
+                  for $match in analyze-string($v, $joined-terms, 'i')/*
+                  let $value := string($match)
+                  return if($match/self::fn:match) then element b { $value } else $value
+                } else (
+                  $v
+                )
+              ))
+            })
+          )
+        )
+      ) else (
+        $map
+      )
+    )
+
+    let $id := string($log/@time)
+    return map:merge((
+      $map-results,
+      {
+        'id': $id,
+        'address': string($log/@address),
+        'ms': xs:decimal($log/@ms),
+        'time': fn() {
+          let $link := html:link($id, $dba:CAT || '-jump', { 'date': $date, 'time': $id })
+          return if(not($input) and $id = $time) then element b { $link } else $link
+        }
+      }
+    ))
+  )
+  let $params := { 'name': $date, 'input': $input }
+  let $options := { 'sort': $sort, 'presort': 'time', 'page': xs:integer($page) }
+  return html:table($headers, $entries, (), $params, $options)
 };

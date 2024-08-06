@@ -10,7 +10,7 @@ import org.basex.util.list.*;
 /**
  * Dummy item (only used at compile time).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Dummy extends Item {
@@ -51,18 +51,23 @@ public final class Dummy extends Item {
   }
 
   @Override
-  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
+  public boolean equal(final Item item, final Collation coll, final InputInfo ii) {
+    throw Util.notExpected();
+  }
+
+  @Override
+  public boolean atomicEqual(final Item item) {
+    throw Util.notExpected();
+  }
+
+  @Override
+  public int compare(final Item item, final Collation coll, final boolean transitive,
       final InputInfo ii) {
     throw Util.notExpected();
   }
 
   @Override
-  public boolean sameKey(final Item item, final InputInfo ii) {
-    throw Util.notExpected();
-  }
-
-  @Override
-  public int diff(final Item item, final Collation coll, final InputInfo ii) {
+  public boolean comparable(final Item item) {
     throw Util.notExpected();
   }
 
@@ -77,13 +82,13 @@ public final class Dummy extends Item {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     throw Util.notExpected();
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    final TokenList list = new TokenList().add(type.toString());
+  public void toString(final QueryString qs) {
+    final TokenList list = new TokenList().add(seqType.toString());
     if(data != null) list.add(data.meta.name);
     qs.token(getClass()).params(list.finish());
   }

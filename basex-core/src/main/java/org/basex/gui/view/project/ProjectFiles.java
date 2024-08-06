@@ -17,7 +17,7 @@ import org.basex.util.list.*;
 /**
  * Project file cache.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class ProjectFiles {
@@ -132,22 +132,21 @@ final class ProjectFiles {
    * Parses a single file.
    * @param path file path
    * @param ctx database context
-   * @param errs files with errors
+   * @param errors files with errors
    * @return parsed modules or {@code null}
    */
   static TokenMap parse(final String path, final Context ctx,
-      final TreeMap<String, InputInfo> errs) {
+      final TreeMap<String, InputInfo> errors) {
 
     try(TextInput ti = new TextInput(new IOFile(path))) {
+      final String input = ti.cache().toString();
       // parse query
       try(QueryContext qc = new QueryContext(ctx)) {
-        final String input = ti.cache().toString();
-        final boolean library = QueryProcessor.isLibrary(input);
-        qc.parse(input, library, path);
-        errs.remove(path);
+        qc.parse(input, path);
+        errors.remove(path);
         return qc.modParsed;
       } catch(final QueryException ex) {
-        errs.put(path, ex.info());
+        errors.put(path, ex.info());
       }
     } catch(final IOException ex) {
       // file may not be accessible
@@ -199,13 +198,13 @@ final class ProjectFiles {
     for(final boolean onlyName : new boolean[] { true, false }) {
       for(int mode = 0; mode < 5; mode++) {
         for(final String path : cache) {
-          // check if file has already been added, or it its contents have been scanned
+          // check if file has already been added, or if its contents have been scanned
           if(exclude.contains(path)) continue;
           // check if current file matches the pattern
           final String file = onlyName ? path.substring(path.lastIndexOf('/') + 1) : path;
           if(mode == 0 ? SmartStrings.startsWith(file, query) :
              mode == 1 ? SmartStrings.contains(file, query) :
-             SmartStrings.matches(file, query)) {
+             SmartStrings.charsOccurIn(file, query)) {
 
             // check file contents
             if(filterContent(path, search)) {

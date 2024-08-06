@@ -9,7 +9,7 @@ import java.awt.event.*;
 /**
  * This class offers system-dependent key mappings.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  * @author Klavs Prieditis
@@ -69,17 +69,19 @@ public enum BaseXKeys {
 
   // Navigation
 
-  /** Jump to input bar.     */ FOCUSINPUT(MAC ? META : NO_MOD, VK_F6),
+  /** Jump to input bar.     */ FOCUSINPUT(MAC ? META : NO_MOD, VK_F8),
   /** Jump to editor.        */ FOCUSEDITOR(MAC ? META : NO_MOD, VK_F12),
+  /** Jump to text.          */ FOCUSTEXT(MAC ? META | SHIFT : SHIFT, VK_F12),
 
   /** Next tab.              */ NEXTTAB(CTRL, VK_TAB),
   /** Previous tab.          */ PREVTAB(CTRL | SHIFT, VK_TAB),
   /** Close tab.             */ CLOSETAB(META, VK_F4),
 
-  /** Browse back.           */ GOBACK(MAC ? META : ALT, VK_LEFT),
-  /** Browse forward.        */ GOFORWARD(MAC ? META : ALT, VK_RIGHT),
-  /** Browse up.             */ GOUP(MAC ? META : ALT, VK_UP),
-  /** Browse home.           */ GOHOME(MAC ? META : ALT, VK_HOME),
+  /** Go back.               */ GOBACK(MAC ? META : ALT, VK_LEFT),
+  /** Go forward.            */ GOFORWARD(MAC ? META : ALT, VK_RIGHT),
+  /** Go up.                 */ GOUP(MAC ? META : ALT, VK_UP),
+  /** Go down.               */ FILTER(MAC ? META : ALT, VK_DOWN),
+  /** Go home.               */ GOHOME(MAC ? META : ALT, VK_HOME),
 
   /** Go to line.            */ GOTOLINE(META, VK_L),
 
@@ -104,12 +106,13 @@ public enum BaseXKeys {
 
   // General
 
-  /** Execute.               */ EXEC1(META, VK_ENTER),
-  /** Test.                  */ UNIT(META | SHIFT, VK_ENTER),
+  /** Run query.             */ EXEC(META, VK_ENTER),
+  /** Run test.              */ TESTS(META | SHIFT, VK_ENTER),
 
   /** Escape.                */ ESCAPE(NO_MOD, VK_ESCAPE),
   /** Context menu.          */ CONTEXT(NO_MOD, VK_CONTEXT_MENU),
   /** Copy path.             */ COPYPATH(META | SHIFT, VK_C),
+  /** File history.          */ HISTORY(META, VK_F6),
 
   /** Refresh.               */ REFRESH(NO_MOD, VK_F5),
   /** Rename.                */ RENAME(NO_MOD, VK_F2),
@@ -185,7 +188,7 @@ public enum BaseXKeys {
    */
   public static boolean modifier(final KeyEvent e) {
     final int c = e.getKeyCode();
-    return c == VK_ALT || c == VK_SHIFT || c == VK_META || c == VK_CONTROL ||
+    return c == 0 || c == VK_ALT || c == VK_SHIFT || c == VK_META || c == VK_CONTROL ||
         c == VK_PAUSE || c == VK_CAPS_LOCK || c == VK_ESCAPE ||
         c == VK_TAB && (e.isAltDown() || e.isMetaDown() || e.isControlDown());
   }

@@ -13,14 +13,13 @@ import org.basex.util.*;
 /**
  * Functions on files and directories.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  * @author Christian Gruen
  */
 abstract class FileFn extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkAdmin(qc);
     try {
       return item(qc);
     } catch(final NoSuchFileException ex) {
@@ -54,23 +53,12 @@ abstract class FileFn extends StandardFunc {
    * @return specified file
    * @throws QueryException query exception
    */
-  final Path checkParentDir(final Path path) throws QueryException {
+  final Path toParent(final Path path) throws QueryException {
     if(Files.isDirectory(path)) throw FILE_IS_DIR_X.get(info, path.toAbsolutePath());
     final Path parent = path.getParent();
     if(parent != null && !Files.exists(parent))
       throw FILE_NO_DIR_X.get(info, parent.toAbsolutePath());
     return path;
-  }
-
-  /**
-   * Returns the value of an optional boolean.
-   * @param i argument index
-   * @param qc query context
-   * @return boolean value
-   * @throws QueryException query exception
-   */
-  final boolean optionalBool(final int i, final QueryContext qc) throws QueryException {
-    return i < exprs.length && toBoolean(exprs[i], qc);
   }
 
   /**

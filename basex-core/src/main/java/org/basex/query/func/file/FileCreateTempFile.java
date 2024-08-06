@@ -1,7 +1,6 @@
 package org.basex.query.func.file;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.nio.file.*;
@@ -14,12 +13,12 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileCreateTempFile extends FileFn {
   @Override
-  public Item item(final QueryContext qc) throws QueryException, IOException {
+  public Str item(final QueryContext qc) throws QueryException, IOException {
     return createTemp(false, qc);
   }
 
@@ -31,14 +30,14 @@ public class FileCreateTempFile extends FileFn {
    * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  final synchronized Item createTemp(final boolean dir, final QueryContext qc)
+  final synchronized Str createTemp(final boolean dir, final QueryContext qc)
       throws QueryException, IOException {
 
-    final String pref = string(toToken(exprs[0], qc));
-    final String suf = exprs.length > 1 ? string(toToken(exprs[1], qc)) : "";
+    final String prefix = toString(arg(0), qc);
+    final String suffix = defined(1) ? toString(arg(1), qc) : "";
     final Path root;
-    if(exprs.length > 2) {
-      root = toPath(2, qc);
+    if(defined(2)) {
+      root = toPath(arg(2), qc);
       if(Files.isRegularFile(root)) throw FILE_NO_DIR_X.get(info, root);
     } else {
       root = Paths.get(Prop.TEMPDIR);
@@ -48,7 +47,7 @@ public class FileCreateTempFile extends FileFn {
     final Random rnd = new Random();
     Path file;
     do {
-      file = root.resolve(pref + rnd.nextLong() + suf);
+      file = root.resolve(prefix + rnd.nextLong() + suffix);
     } while(Files.exists(file));
 
     // create directory or file

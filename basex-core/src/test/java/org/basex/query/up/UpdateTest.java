@@ -4,6 +4,8 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.function.*;
+
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -16,7 +18,7 @@ import org.junit.jupiter.api.Test;
 /**
  * General test of the XQuery Update Facility implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class UpdateTest extends SandboxTest {
@@ -45,7 +47,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delete() {
     query(transform("<n><a><b/></a><c/><d><e><f/></e><g/></d></n>",
         "delete node $input//b, delete node $input//f, delete node $input//e"),
-        "<n>\n<a/>\n<c/>\n<d>\n<g/>\n</d>\n</n>");
+        "<n><a/><c/><d><g/></d></n>");
   }
 
   /**
@@ -54,7 +56,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delete2() {
     query(transform("<a><b/><c/><d/></a>",
         "delete node $input//b, delete node $input//c"),
-        "<a>\n<d/>\n</a>");
+        "<a><d/></a>");
   }
 
   /**
@@ -66,19 +68,19 @@ public final class UpdateTest extends SandboxTest {
             "<n2/><n3/><n4/><n5/><n6/><n7/><n8/><n9/><n10/><n11/>" +
         "</n1>";
     query(transform(doc, "delete node ($input//n3, $input//n5, $input//n7)"),
-        "<n1>\n<n2/>\n<n4/>\n<n6/>\n<n8/>\n<n9/>\n<n10/>\n<n11/>\n</n1>");
+        "<n1><n2/><n4/><n6/><n8/><n9/><n10/><n11/></n1>");
   }
 
   /** Transform expression shadowing another variable. */
   @Test public void shadowing() {
     query("let $c := <x/> return copy $c := $c modify () return $c", "<x/>");
-    query("declare variable $d := document{ <x/> } update (); $d/x", "<x/>");
+    query("declare variable $d := document{ <x/> } update { }; $d/x", "<x/>");
   }
 
   /** Transform expression containing a simple expression. */
   @Test public void transSimple() {
-    error("<a/> update ('')", UPMODIFY);
-    error("copy $a := <a/> modify ('') return $a", UPMODIFY);
+    error("<a/> update { '' }", UPMODIFY);
+    error("copy $a := <a/> modify '' return $a", UPMODIFY);
   }
 
   /**
@@ -87,21 +89,21 @@ public final class UpdateTest extends SandboxTest {
   @Test public void transform2() {
     set(MainOptions.MAINMEM, true);
     try {
-      execute(new CreateDB("DBtransform", "<instance><data><vocable hits='1'/></data></instance>"));
-      query(
-          "for $voc in 1 to 2 " +
-          "let $xml := db:open('DBtransform') " +
-          "return (" +
-          "$xml update (" +
-          "for $i in 1 to 2 return " +
-          "insert node $xml/instance/data/vocable[@hits = '1'] into ./instance))",
-          "<instance>\n<data>\n" +
-          "<vocable hits=\"1\"/>\n</data>\n" +
-          "<vocable hits=\"1\"/>\n" +
-          "<vocable hits=\"1\"/>\n</instance>\n<instance>\n<data>\n" +
-          "<vocable hits=\"1\"/>\n</data>\n" +
-          "<vocable hits=\"1\"/>\n" +
-          "<vocable hits=\"1\"/>\n</instance>");
+      execute(new CreateDB("DBTransform", "<instance><data><vocable hits='1'/></data></instance>"));
+      query("for $voc in 1 to 2 "
+          + "let $xml :=" + _DB_GET.args("DBTransform")
+          + "return $xml update {"
+          + "  for $i in 1 to 2 return "
+          + "    insert node $xml/instance/data/vocable[@hits = '1'] into ./instance"
+          + "}",
+          "<instance>"
+          + "<data><vocable hits=\"1\"/></data>"
+          + "<vocable hits=\"1\"/>"
+          + "<vocable hits=\"1\"/></instance>\n"
+          + "<instance>"
+          + "<data><vocable hits=\"1\"/></data>"
+          + "<vocable hits=\"1\"/>"
+          + "<vocable hits=\"1\"/></instance>");
     } finally {
       set(MainOptions.MAINMEM, false);
     }
@@ -113,7 +115,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void insertinto() {
     query(transform("<n><a/></n>",
         "insert node <x2/> into $input, insert node <x1/> into $input//a"),
-        "<n>\n<a>\n<x1/>\n</a>\n<x2/>\n</n>");
+        "<n><a><x1/></a><x2/></n>");
   }
 
   /**
@@ -122,7 +124,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void insertinto2() {
     query(transform("<n><a/><b/></n>",
         "insert node <x1/> into $input//a, insert node <x2/> into $input//b"),
-        "<n>\n<a>\n<x1/>\n</a>\n<b>\n<x2/>\n</b>\n</n>");
+        "<n><a><x1/></a><b><x2/></b></n>");
   }
 
   /**
@@ -131,7 +133,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void insertIntoAsFirst() {
     query(transform("<a att='0'/>",
         "insert node <b/> as first into $input, delete node $input/@att"),
-        "<a>\n<b/>\n</a>");
+        "<a><b/></a>");
   }
 
   /**
@@ -141,7 +143,7 @@ public final class UpdateTest extends SandboxTest {
     query(transform("<a att='0'/>",
         "insert node <b/> as first into $input, replace node $input/@att with " +
         "(attribute {'att1'}{0}, attribute {'att2'}{0})"),
-        "<a att1=\"0\" att2=\"0\">\n<b/>\n</a>");
+        "<a att1=\"0\" att2=\"0\"><b/></a>");
   }
 
   /**
@@ -150,23 +152,23 @@ public final class UpdateTest extends SandboxTest {
   @Test public void insertSequenceMerging() {
     query(transform("<n/>",
         "insert node <e1/> into $input, insert node <e2/> into $input"),
-        "<n>\n<e1/>\n<e2/>\n</n>");
+        "<n><e1/><e2/></n>");
     query(transform("<n/>",
         "insert node <e1/> as last into $input, insert node <e2/> as last into $input"),
-        "<n>\n<e1/>\n<e2/>\n</n>");
+        "<n><e1/><e2/></n>");
     query(transform("<n/>",
         "insert node <e1/> into $input, insert node <e2/> as last into $input"),
-        "<n>\n<e1/>\n<e2/>\n</n>");
+        "<n><e1/><e2/></n>");
     query(transform("<n/>",
         "insert node <e1/> as last into $input, insert node <e2/> into $input"),
-        "<n>\n<e2/>\n<e1/>\n</n>");
+        "<n><e2/><e1/></n>");
   }
 
   /**
    * Delete last node of a data instance. Checks if table limits are crossed.
    */
   @Test public void deleteLastNode() {
-    query(transform("<a><b/><c/></a>", "delete node $input//c"), "<a>\n<b/>\n</a>");
+    query(transform("<a><b/><c/></a>", "delete node $input//c"), "<a><b/></a>");
   }
 
   /**
@@ -174,9 +176,9 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void lazyReplace() {
     query(transform("<n><r>a</r></n>", "replace node $input/r with <r>b</r>"),
-        "<n>\n<r>b</r>\n</n>");
+        "<n><r>b</r></n>");
     query(transform("<n><r>a</r></n>", "replace node $input/r with <r>b</r>"),
-        "<n>\n<r>b</r>\n</n>");
+        "<n><r>b</r></n>");
   }
 
   /**
@@ -244,7 +246,7 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void replaceLastNode() {
     query(transform("<a><b/><c><d/><d/><d/></c></a>", "replace node $input//c with <c/>"),
-        "<a>\n<b/>\n<c/>\n</a>");
+        "<a><b/><c/></a>");
   }
 
   /**
@@ -263,7 +265,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void replaceAttribute2() {
     query(transform("<a><b att0='0'/><c/></a>",
         "replace node $input/b/@att0 with attribute att1 {'1'}"),
-        "<a>\n<b att1=\"1\"/>\n<c/>\n</a>");
+        "<a><b att1=\"1\"/><c/></a>");
   }
 
   /**
@@ -285,16 +287,16 @@ public final class UpdateTest extends SandboxTest {
    * multiple operations of the same type on the same node. Deleting a PRE value twice
    * would lead to deleting another node due to PRE shifts after the first delete.
    *
-   * If another {@link NodeUpdate} leads to the deletion of a node (i.e.
-   * {@link ReplaceValue} it must be substituted first by a sequence of other
+   * If another {@link NodeUpdate} leads to the deletion of a node (i.e.,
+   * {@link ReplaceValue}), it must be substituted first by a sequence of other
    * {@link NodeUpdate} that contains the {@link DeleteNode} primitive.
    *
    */
   @Test public void noMultipleAtomicDeletes() {
     query(transform("<n>text<doNotDelete/></n>",
-        "replace value of node $input//text() with \"\", " +
+        "replace value of node $input//text() with '', " +
         "delete node $input//text()"),
-        "<n>\n<doNotDelete/>\n</n>");
+        "<n><doNotDelete/></n>");
   }
 
   /**
@@ -360,10 +362,9 @@ public final class UpdateTest extends SandboxTest {
   }
 
   /**
-   * ReplaceElementContent on a target T with a text node and rename on a child of
-   * T. As a rename does not introduce any new node identities the rename is lost and T
-   * is expected to have no children after the end of the snapshot (except the new text
-   * node).
+   * ReplaceElementContent on a target T with a text node and rename on a child of T.
+   * As a RENAME does not introduce any new node identities, the RENAME is lost and T is
+   * expected to have no children after the end of the snapshot (except the new text node).
    */
   @Test public void replaceelementcontent6() {
     testBothSequences("<n><A/></n>", "<n>newText</n>",
@@ -385,7 +386,7 @@ public final class UpdateTest extends SandboxTest {
    * ReplaceNode on a target T and replaceElementContent on the only child of T.
    */
   @Test public void replaceelementcontent8() {
-    testBothSequences("<n><A><B/></A></n>", "<n>\n<newA/>\n</n>",
+    testBothSequences("<n><A><B/></A></n>", "<n><newA/></n>",
         "replace node $input/A with <newA/>",
         "replace value of node $input/A/B with 'newContentForA'");
   }
@@ -394,7 +395,7 @@ public final class UpdateTest extends SandboxTest {
    * ReplaceNode and ReplaceElementContent on a target T.
    */
   @Test public void replaceelementcontent9() {
-    testBothSequences("<n><A/></n>", "<n>\n<newA/>\n</n>",
+    testBothSequences("<n><A/></n>", "<n><newA/></n>",
         "replace node $input/A with <newA/>",
         "replace value of node $input/A with 'newContentForA'");
   }
@@ -403,7 +404,7 @@ public final class UpdateTest extends SandboxTest {
    * Delete/replace same target.
    */
   @Test public void deleteAndReplaceOnSameTarget() {
-    testBothSequences("<a><b/></a>", "<a>\n<newB/>\n</a>",
+    testBothSequences("<a><b/></a>", "<a><newB/></a>",
         "replace node $input/b with <newB/>", "delete node $input/b");
   }
 
@@ -422,10 +423,9 @@ public final class UpdateTest extends SandboxTest {
   }
 
   /**
-   * Replaces the value of the documents root node. Related to
-   * github issue #141.
+   * Replaces the value of the documents root node.
    */
-  @Test public void replaceValueOfEmptyRoot() {
+  @Test public void gh141() {
     createDB("<a/>");
     query("replace value of node /a with 'a'");
     query("/", "<a>a</a>");
@@ -437,7 +437,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void emptyInsert1() {
     query(
       "copy $x := <X/> modify insert nodes <A/> into $x return $x",
-      "<X>\n<A/>\n</X>");
+      "<X><A/></X>");
   }
 
   /**
@@ -455,7 +455,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void emptyInsert3() {
     createDB("<a/>");
     query("delete node /a");
-    query("insert nodes <X/> into db:open('" + NAME + "')");
+    query("insert nodes <X/> into" + _DB_GET.args(NAME));
     query("/", "<X/>");
   }
 
@@ -478,10 +478,10 @@ public final class UpdateTest extends SandboxTest {
     createDB(null);
     query("let $w := //item[@id = 'item0'] " +
       "return (if($w/@id) " +
-      "then (delete node $w/@id, db:optimize('" + NAME + "')) else ())");
+      "then (delete node $w/@id," + _DB_OPTIMIZE.args(NAME) + ") else ())");
   }
 
-  /** Variable from the inner scope shouldn't be visible. */
+  /** Variable from the inner scope should not be visible. */
   @Test public void outOfScope() {
     error("let $d := copy $e := <a/> modify () return $e return $e", VARUNDEF_X);
   }
@@ -523,7 +523,7 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void textMerging00() {
     query(transform("<a>AA<b/>CC</a>", "delete node $input//b",
-        "($input,count($input//text()))"),
+        "($input, count($input//text()))"),
         "<a>AACC</a>\n1");
   }
 
@@ -612,7 +612,7 @@ public final class UpdateTest extends SandboxTest {
       "(insert node 'foo' after $i, insert node 'faa' before $i, insert " +
       "node 'faa' into $i, delete node $i/text())");
     query("let $i := //item[@id='item0']/location return ($i/text(), ($i/../text())[2])",
-        "faa\nfoofoo");
+        "faa\nfoofoo\n");
   }
 
   /**
@@ -661,8 +661,8 @@ public final class UpdateTest extends SandboxTest {
     final String query =
         "replace node $input//e with 'T6'," +
         "insert node 'T11' before $input//a," +
-        "delete node ($input//a,$input//b,$input//c), " +
-        "replace node $input//d with (<newd/>,'T44')";
+        "delete node ($input//a, $input//b, $input//c), " +
+        "replace node $input//d with (<newd/>, 'T44')";
     final String expected = "<n>T1T11T2T3T4<newd/>T44T5T6</n>";
     checkTextNodeMerging(doc, query, expected, 2);
   }
@@ -685,7 +685,7 @@ public final class UpdateTest extends SandboxTest {
    * Simple delete.
    */
   @Test public void delayedDistanceAdjustment000() {
-    query(transform("<a><b/><c/></a>", "delete node $input/b"), "<a>\n<c/>\n</a>");
+    query(transform("<a><b/><c/></a>", "delete node $input/b"), "<a><c/></a>");
   }
 
   /**
@@ -693,7 +693,7 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment00() {
     query(transform("<a><b/><c/><d/></a>", "delete node ($input/b, $input/c)"),
-        "<a>\n<d/>\n</a>");
+        "<a><d/></a>");
   }
 
   /**
@@ -704,7 +704,7 @@ public final class UpdateTest extends SandboxTest {
     query("copy $c := <n><a/><n><a/><n/><a/></n><a/><n/><a/></n> " +
           "modify for $a in $c//a return replace node $a with <b/> " +
           "return $c",
-          "<n>\n<b/>\n<n>\n<b/>\n<n/>\n<b/>\n</n>\n<b/>\n<n/>\n<b/>\n</n>");
+          "<n><b/><n><b/><n/><b/></n><b/><n/><b/></n>");
   }
 
   /**
@@ -714,7 +714,7 @@ public final class UpdateTest extends SandboxTest {
     query("copy $c := <n><a/><a/></n> " +
         "modify for $a in $c//a return replace node $a with <b/> " +
         "return $c",
-        "<n>\n<b/>\n<b/>\n</n>");
+        "<n><b/><b/></n>");
   }
 
   /**
@@ -724,7 +724,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B><C/></B><D/></A>");
     query("insert node <XB/> before //B, insert node <XC/> before //C, " +
         "insert node <XD/> before //D");
-    query("/", "<A>\n<XB/>\n<B>\n<XC/>\n<C/>\n</B>\n<XD/>\n<D/>\n</A>");
+    query("/", "<A><XB/><B><XC/><C/></B><XD/><D/></A>");
   }
 
   /**
@@ -734,7 +734,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B><C/></B><D><E/></D></A>");
     query("insert node <XB/> before //B, insert node <XC/> before //C, " +
         "insert node <XD/> before //D, insert node <XE/> before //E");
-    query("/", "<A>\n<XB/>\n<B>\n<XC/>\n<C/>\n</B>\n<XD/>\n<D>\n<XE/>\n<E/>\n</D>\n</A>");
+    query("/", "<A><XB/><B><XC/><C/></B><XD/><D><XE/><E/></D></A>");
   }
 
   /**
@@ -744,7 +744,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B><C/><D/></B></A>");
     query("insert node <XB/> before //B, insert node <XC/> before //C, " +
         "insert node <XXC/> into //C");
-    query("/", "<A>\n<XB/>\n<B>\n<XC/>\n<C>\n<XXC/>\n</C>\n<D/>\n</B>\n</A>");
+    query("/", "<A><XB/><B><XC/><C><XXC/></C><D/></B></A>");
   }
 
   /**
@@ -754,7 +754,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B><C/><D/></B><E/></A>");
     query("insert node <XB/> before //B, insert node <XC/> before //C, " +
         "insert node <XXC/> into //C");
-    query("/", "<A>\n<XB/>\n<B>\n<XC/>\n<C>\n<XXC/>\n</C>\n<D/>\n</B>\n<E/>\n</A>");
+    query("/", "<A><XB/><B><XC/><C><XXC/></C><D/></B><E/></A>");
   }
 
   /**
@@ -763,7 +763,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment5() {
     createDB("<A><B><C/></B></A>");
     query("insert node <XB/> before //B, insert node <XC/> before //C");
-    query("/", "<A>\n<XB/>\n<B>\n<XC/>\n<C/>\n</B>\n</A>");
+    query("/", "<A><XB/><B><XC/><C/></B></A>");
   }
 
   /**
@@ -772,7 +772,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment6() {
     createDB("<A><B/><C/></A>");
     query("delete node //B");
-    query("/", "<A>\n<C/>\n</A>");
+    query("/", "<A><C/></A>");
   }
 
   /**
@@ -780,8 +780,8 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment7() {
     createDB("<A><B/><C/><D/><E/></A>");
-    query("delete node (//B,//D)");
-    query("/", "<A>\n<C/>\n<E/>\n</A>");
+    query("delete node (//B, //D)");
+    query("/", "<A><C/><E/></A>");
   }
 
   /**
@@ -789,8 +789,8 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment8() {
     createDB("<A><B/><C><D/><E/></C></A>");
-    query("delete node (//B,//D)");
-    query("/", "<A>\n<C>\n<E/>\n</C>\n</A>");
+    query("delete node (//B, //D)");
+    query("/", "<A><C><E/></C></A>");
   }
 
   /**
@@ -798,8 +798,8 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment9() {
     createDB("<A><B/><C><D/><E/><F/></C></A>");
-    query("delete node (//B,//D)");
-    query("/", "<A>\n<C>\n<E/>\n<F/>\n</C>\n</A>");
+    query("delete node (//B, //D)");
+    query("/", "<A><C><E/><F/></C></A>");
   }
 
   /**
@@ -807,8 +807,8 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment10() {
     createDB("<A><B/><C><D/><E/></C><F/></A>");
-    query("delete node (//B,//D)");
-    query("/", "<A>\n<C>\n<E/>\n</C>\n<F/>\n</A>");
+    query("delete node (//B, //D)");
+    query("/", "<A><C><E/></C><F/></A>");
   }
 
   /**
@@ -816,8 +816,8 @@ public final class UpdateTest extends SandboxTest {
    */
   @Test public void delayedDistanceAdjustment11() {
     createDB("<A><B/><C/><D/><E/></A>");
-    query("delete node (//C,//D)");
-    query("/", "<A>\n<B/>\n<E/>\n</A>");
+    query("delete node (//C, //D)");
+    query("/", "<A><B/><E/></A>");
   }
 
   /**
@@ -826,7 +826,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment12() {
     createDB("<A><B/><C/><D/><E/></A>");
     query("delete node (//B, //C), insert node <CNEW><X/></CNEW> before //D");
-    query("/", "<A>\n<CNEW>\n<X/>\n</CNEW>\n<D/>\n<E/>\n</A>");
+    query("/", "<A><CNEW><X/></CNEW><D/><E/></A>");
   }
 
   /**
@@ -837,7 +837,7 @@ public final class UpdateTest extends SandboxTest {
     query("insert node <X/> into //C," +
         "insert node <X><Y/></X> before //C," +
         "insert node <X/> after //D");
-    query("/", "<A>\n<B>\n<X>\n<Y/>\n</X>\n<C>\n<X/>\n</C>\n<D/>\n<X/>\n</B>\n</A>");
+    query("/", "<A><B><X><Y/></X><C><X/></C><D/><X/></B></A>");
   }
 
   /**
@@ -848,8 +848,8 @@ public final class UpdateTest extends SandboxTest {
     query("insert node <X><Y/></X> into //C," +
         "insert node <X><Y/></X> before //C," +
         "insert node <X><Y/></X> after //D");
-    query("/", "<A>\n<B>\n<X>\n<Y/>\n</X>\n<C>\n<X>\n<Y/>\n</X>\n" +
-        "</C>\n<D/>\n<X>\n<Y/>\n</X>\n</B>\n</A>");
+    query("/", "<A><B><X><Y/></X><C><X><Y/></X>" +
+        "</C><D/><X><Y/></X></B></A>");
   }
 
   /**
@@ -859,7 +859,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B/><C/></A>");
     query("insert node <X2/> before //C," +
         "insert node <X1/> after //B");
-    query("/", "<A>\n<B/>\n<X1/>\n<X2/>\n<C/>\n</A>");
+    query("/", "<A><B/><X1/><X2/><C/></A>");
   }
 
   /**
@@ -869,7 +869,7 @@ public final class UpdateTest extends SandboxTest {
     createDB("<A><B/><C><D/></C><E/></A>");
     query("insert node <X1/> into //C," +
         "insert node <X2/> as last into //C");
-    query("/", "<A>\n<B/>\n<C>\n<D/>\n<X1/>\n<X2/>\n</C>\n<E/>\n</A>");
+    query("/", "<A><B/><C><D/><X1/><X2/></C><E/></A>");
   }
 
   /**
@@ -878,7 +878,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment17() {
     createDB("<A><B/><C/><D/></A>");
     query("insert node <X/> after //B, delete node //C");
-    query("/", "<A>\n<B/>\n<X/>\n<D/>\n</A>");
+    query("/", "<A><B/><X/><D/></A>");
   }
 
   /**
@@ -887,7 +887,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment18() {
     createDB("<A><B/><C/><D/></A>");
     query("insert node <X/> before //D, delete node //C");
-    query("/", "<A>\n<B/>\n<X/>\n<D/>\n</A>");
+    query("/", "<A><B/><X/><D/></A>");
   }
 
   /**
@@ -896,7 +896,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment19() {
     createDB("<A><B/><C/><D/></A>");
     query("replace node //C with <X/>");
-    query("/", "<A>\n<B/>\n<X/>\n<D/>\n</A>");
+    query("/", "<A><B/><X/><D/></A>");
   }
 
   /**
@@ -933,7 +933,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment22() {
     createDB("<A><B><C/><D/></B><E/></A>");
     query("insert node <X/> into //D, delete node //B");
-    query("/", "<A>\n<E/>\n</A>");
+    query("/", "<A><E/></A>");
   }
 
   /**
@@ -943,7 +943,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment23() {
     createDB("<A><B/></A>");
     query("insert node <P2/> into //B, insert node <P3/> into //A");
-    query("/", "<A>\n<B>\n<P2/>\n</B>\n<P3/>\n</A>");
+    query("/", "<A><B><P2/></B><P3/></A>");
   }
 
   /**
@@ -952,7 +952,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment24() {
     createDB("<A><B/><C/><D/><E/></A>");
     query("insert node <X/> into //B, delete node //C");
-    query("/", "<A>\n<B>\n<X/>\n</B>\n<D/>\n<E/>\n</A>");
+    query("/", "<A><B><X/></B><D/><E/></A>");
   }
 
   /**
@@ -961,20 +961,21 @@ public final class UpdateTest extends SandboxTest {
   @Test public void delayedDistanceAdjustment25() {
     createDB("<A><B><C/></B><D/><E/></A>");
     query("insert node <X/> into //B, delete node //C");
-    query("/", "<A>\n<B>\n<X/>\n</B>\n<D/>\n<E/>\n</A>");
+    query("/", "<A><B><X/></B><D/><E/></A>");
   }
 
   /**
-   * Tests if pre value shifts are accumulated correctly for a mixture of structural and non-
-   * structural updates.
+   * Tests if pre value shifts are accumulated correctly for a mixture of structural and
+   * non-structural updates.
    */
   @Test public void delayedDistanceAdjustment26() {
     query(
-        "<n><x at1='0' at2='0'/><y at3='0'/><b/></n> update (" +
-        "delete node .//@at1," +
-        "delete node .//@at3," +
-        "rename node (.//@at2)[1] as 'at2x')",
-        "<n>\n<x at2x=\"0\"/>\n<y/>\n<b/>\n</n>");
+        "<n><x at1='0' at2='0'/><y at3='0'/><b/></n> update {" +
+        "  delete node .//@at1," +
+        "  delete node .//@at3," +
+        "  rename node (.//@at2)[1] as 'at2x'" +
+        "}",
+        "<n><x at2x=\"0\"/><y/><b/></n>");
   }
 
   /**
@@ -982,8 +983,8 @@ public final class UpdateTest extends SandboxTest {
    * Also includes update:output() and fn:put().
    */
   @Test public void dbUpdateTransform() {
-    error("copy $c := <a/> modify update:output('x') return $c", BASEX_UPDATE);
-    error("copy $c := <a/> modify db:add('" + NAME + "','<x/>','x.xml') return $c",
+    error("copy $c := <a/> modify" + _UPDATE_OUTPUT.args("x") + " return $c", BASEX_UPDATE);
+    error("copy $c := <a/> modify" + _DB_ADD.args(NAME, " <x/>", "x.xml") + " return $c",
         BASEX_UPDATE);
     error("copy $c := <a/> modify put(<a/>, 'x.txt') return $c", BASEX_UPDATE);
   }
@@ -1032,52 +1033,51 @@ public final class UpdateTest extends SandboxTest {
 
   /** Tests the "update" and "transform with" operators. */
   @Test public void update() {
-    query("<x/> update ()", "<x/>");
-    query("<x/> update insert node <y/> into .", "<x>\n<y/>\n</x>");
-    query("<x/> update (insert node <y/> into .)", "<x>\n<y/>\n</x>");
-    query("<x/> update { insert node <y/> into . }", "<x>\n<y/>\n</x>");
-    query("<x/> update {}", "<x/>");
-    query("<x/> update {} update {}", "<x/>");
-    query("<x/> update {}", "<x/>");
-    query("(<x/>,<y/>) update {}", "<x/>\n<y/>");
-    error("update:output('a') update ()", UPNOT_X);
-    error("<x/> update 1", UPMODIFY);
+    query("<x/> update { }", "<x/>");
+    query("<x/> update { insert node <y/> into . }", "<x><y/></x>");
+    query("<x/> update { }", "<x/>");
+    query("<x/> update { } update { }", "<x/>");
+    query("<x/> update { }", "<x/>");
+    query("(<x/>, <y/>) update { }", "<x/>\n<y/>");
+    error(_UPDATE_OUTPUT.args("a") + " update { }", UPNOT_X);
+    error("<x/> update { 1 }", UPMODIFY);
 
-    query("(<a>X</a>/text() update {})/..", "");
+    query("(<a>X</a>/text() update { })/..", "");
 
-    query("<x/> transform with {}", "<x/>");
-    query("<x/> transform with { insert node <y/> into . }", "<x>\n<y/>\n</x>");
-    error("update:output('a') transform with {}", UPNOT_X);
+    query("<x/> transform with { }", "<x/>");
+    query("<x/> transform with { insert node <y/> into . }", "<x><y/></x>");
+    error(_UPDATE_OUTPUT.args("a") + " transform with {}", UPNOT_X);
     error("<x/> transform with { 1 }", UPMODIFY);
   }
 
   /** Tests the relaxed rule that the last step of a path may be simple, vacuous, or updating. */
   @Test public void updateLastStep() {
-    query("<X/>!(delete node .)");
+    query("<X/> ! (delete node .)");
     query("<X/>/(delete node .)");
-    query("(<X/>,<Y/>)/(insert node <Z/> into .)");
+    query("(<X/>, <Y/>)/(insert node <Z/> into .)");
   }
 
   /** Tests the expressions in modify clauses for updates. */
   @Test public void modifyCheck() {
     error("copy $c:= <a>X</a> modify 'a' return $c", UPMODIFY);
-    error("copy $c:= <a>X</a> modify(delete node $c/text(),'a') return $c", UPALL);
+    error("copy $c:= <a>X</a> modify(delete node $c/text(), 'a') return $c", UPALL);
 
-    error("text { <a/> update (delete node <a/>,<b/>) }", UPALL);
-    error("1[<a/> update (delete node <a/>,<b/>)]", UPALL);
-    error("for $i in 1 order by (<a/> update (delete node <a/>,<b/>)) return $i", UPALL);
+    error("text { <a/> update { delete node <a/>, <b/> } }", UPALL);
+    error("1[<a/> update { delete node <a/>, <b/> }]", UPALL);
+    error("for $i in 1 order by (<a/> update { delete node <a/>, <b/> }) return $i", UPALL);
   }
 
   /** Reject updating function items. */
   @Test public void updatingFuncItems() {
-    query("update:output(?)", "(anonymous-function)#1");
+    query(_UPDATE_OUTPUT.args(" ?"), "update:output#1");
     query("update:output#1", "update:output#1");
     query("update:output#1, update:output#1", "update:output#1\nupdate:output#1");
 
     query("function() { () }()", "");
     query("declare updating function local:a() { () }; local:a#0", "local:a#0");
     query("declare function local:a() { local:a#0 };"
-        + "declare updating function local:b() { update:output('1') }; local:a()", "local:a#0");
+        + "declare updating function local:b() {" + _UPDATE_OUTPUT.args(1) + " }; local:a()",
+        "local:a#0");
     query("updating function() { delete node <a/> }()");
 
     query("let $f := %updating function() {} return updating $f()", "");
@@ -1088,15 +1088,17 @@ public final class UpdateTest extends SandboxTest {
     error("updating %updating function() { 1 }()", UPEXPECTF);
     error("%updating function() { 1 }()", UPEXPECTF);
 
-    error("update:output(?)(<a/>)", FUNCUP_X);
+    error(_UPDATE_OUTPUT.args(" ?") + "(<a/>)", FUNCUP_X);
     error("update:output#1(<a/>)", FUNCUP_X);
-    error("%updating function($a) { update:output($a) }(1)", FUNCUP_X);
+    error("%updating function($a) {" + _UPDATE_OUTPUT.args("a") + " }(1)", FUNCUP_X);
     error("declare updating function local:a() { () }; local:a#0()", FUNCUP_X);
 
     query("declare function local:a() { local:b#0 };"
-        + "declare updating function local:b() { update:output('1') }; updating local:a()()", 1);
+        + "declare updating function local:b() {" + _UPDATE_OUTPUT.args(1) + " }; "
+        + "updating local:a()()", 1);
     error("declare function local:a() { local:b#0 };"
-        + "declare updating function local:b() { update:output('1') }; local:a()()", FUNCUP_X);
+        + "declare updating function local:b() {" + _UPDATE_OUTPUT.args(1) + " }; "
+        + "local:a()()", FUNCUP_X);
 
     error("updating count(?)(1)", FUNCNOTUP_X);
     error("updating count#1(1)", FUNCNOTUP_X);
@@ -1109,7 +1111,7 @@ public final class UpdateTest extends SandboxTest {
   @Test public void gh1430() {
     query("let $f := "
         + "function($arg as %updating function(item()*) as empty-sequence()) { $arg } "
-        + "return prof:void($f(function($e) { $e ! (delete node .) }))", "");
+        + "return" + VOID.args(" $f(function($e) { $e ! (delete node .) })"), "");
   }
 
   /** Test method. */
@@ -1132,32 +1134,36 @@ public final class UpdateTest extends SandboxTest {
 
   /** Window clauses. */
   @Test public void window() {
-    query("for tumbling window $w in 1 start when true() return update:output($w)", 1);
+    query("for tumbling window $w in 1 start when true() "
+        + "return" + _UPDATE_OUTPUT.args(" $w"), 1);
     query("for sliding window $w in 1 start when true() end when true() "
-        + "return update:output($w)", 1);
-    error("for tumbling window $w in 1 start when delete node <a/> return ()", UPNOT_X);
-    error("for tumbling window $w in 1 start when () end when delete node <a/> return ()", UPNOT_X);
-    error("for tumbling window $w in update:output(1) start when () return ()", UPNOT_X);
+        + "return" + _UPDATE_OUTPUT.args(" $w"), 1);
+    error("for tumbling window $w in 1 start when delete node <a/> return ()",
+        UPNOT_X);
+    error("for tumbling window $w in 1 start when () end when delete node <a/> return ()",
+        UPNOT_X);
+    error("for tumbling window $w in" + _UPDATE_OUTPUT.args(1) + " start when () return ()",
+        UPNOT_X);
   }
 
-  /** Checks if updating expressions are treated like non-deterministic code. */
+  /** Checks if updating expressions are treated like nondeterministic code. */
   @Test public void noOptimization() {
     query("<a/> update { . ! (insert node text { '1' } into .) }", "<a>1</a>");
-    query("<a/> update { for $a in (1,2) return insert node text { '1' } into . }", "<a>11</a>");
-    query("(update:output('1'), update:output('2'))", "1\n2");
+    query("<a/> update { for $a in (1, 2) return insert node text { '1' } into . }", "<a>11</a>");
+    query(_UPDATE_OUTPUT.args(1) + ',' + _UPDATE_OUTPUT.args(2), "1\n2");
   }
 
   /** Test. */
   @Test public void gh1576() {
-    query("update:output([])", "[]");
-    query("update:output([1,(2,[3,4])])", "[1, (2, [3, 4])]");
-    query("update:output(map { })", "map {\n}");
-    query("update:output(map { 1: map { 2: 3 }})", "map {\n1: map {\n2: 3\n}\n}");
+    query(_UPDATE_OUTPUT.args(" [ ]"), "[]");
+    query(_UPDATE_OUTPUT.args(" [ 1, (2, [ 3, 4 ]) ]"), "[1,(2,[3,4])]");
+    query(_UPDATE_OUTPUT.args(" map { }"), "{}");
+    query(_UPDATE_OUTPUT.args(" map { 1: map { 2: 3 }}"), "{1:{2:3}}");
 
-    error("update:output(true#0)", BASEX_FUNCTION_X);
-    error("update:output([true#0])", BASEX_FUNCTION_X);
-    error("update:output([1,(2,[3,true#0])])", BASEX_FUNCTION_X);
-    error("update:output(map { 1: map { 2: true#0 }})", BASEX_FUNCTION_X);
+    error(_UPDATE_OUTPUT.args(" true#0"), BASEX_STORE_X);
+    error(_UPDATE_OUTPUT.args(" [ true#0 ]"), BASEX_STORE_X);
+    error(_UPDATE_OUTPUT.args(" [1, (2, [ 3, true#0 ])]"), BASEX_STORE_X);
+    error(_UPDATE_OUTPUT.args(" map { 1: map { 2: true#0 }}"), BASEX_STORE_X);
   }
 
   /** Test. */
@@ -1167,8 +1173,8 @@ public final class UpdateTest extends SandboxTest {
 
   /** Do not merge non-updating expressions. */
   @Test public void gh1943() {
-    query("let $c := <a/> ! (. update {}, . update {}) return $c[1] is $c[2]", false);
-    query("let $a := <a/> let $c := ($a update {}, $a update {}) return $c[1] is $c[2]", false);
+    query("let $c := <a/> ! (. update { }, . update { }) return $c[1] is $c[2]", false);
+    query("let $a := <a/> let $c := ($a update { }, $a update { }) return $c[1] is $c[2]", false);
 
     query("<a/> ! (copy $_ := . modify () return $_)", "<a/>");
     query("let $a := <a/> let $c := ("
@@ -1177,8 +1183,186 @@ public final class UpdateTest extends SandboxTest {
         + ") return $c[1] is $c[2]", false);
   }
 
-  /** XQuery: Simple map, update checks. */
+  /** Simple map, update checks. */
   @Test public void gh1957() {
-    query("declare %updating function local:f() { (1, 2) ! prof:void(.) }; local:f()", "");
+    query("declare %updating function local:f() { (1, 2) !" + VOID.args(" .") + " }; "
+        + "local:f()", "");
+  }
+
+  /** Simple map, update checks. */
+  @Test public void gh1978() {
+    createDB(null);
+    set(MainOptions.ADDCACHE, true);
+    try {
+      final String doc = "<_>qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+          + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsqqquqqqqqsqqsqqq"
+          + "yqqsqqqqqqqqsqsqqqqqqqqqquqqquqqsqqqqqquqyuqqqqsqqquqqqqquqs"
+          + "sqqqqqqsqqsqqqqsqqqqqqqqsqqqqqyqqqqsqqsqqqsqqqquqqquqqqqqquq"
+          + "qqqqqqquqqqsqqqqqsuqqsqsqqqsqqqsqqsqqqqsqqqsqqqqqqqqsqsqqqsq"
+          + "qqqqqqssqqsqqsqqquqqqquqqqqqqqqqsqququqqqsqqqququqqqqqqqsqqq"
+          + "qsqqsqqqqqqqqquqqqqqqqqqqquqsqsqqqqqqqqqssqqsqyuqqqqsqqquqqq"
+          + "qqqqqqqqqqqqqsqqqqqqqqqqqqqququuyqqsqqqqqqqqsqqqqussqqsqqsqq"
+          + "qqyqqqsqqqqsqqqqqqsqqqsusqyqsqqqqqsqqqqqqqssqqqqqqqqsqsquuss"
+          + "quuqqqyqqquqqqquqqqqqqqsqqusqsqqqssqquqqqsqqqquusqqqsqqusqsq"
+          + "qqqqqqqqqquqqussqqqqyqqqsqyqqsqqqqqqqqqsqqqyqqsqqqqsqqqqsqqs"
+          + "qsqqqqqqququqqqsqqqqqqqqququqqqqqqqsqqqqsqqqqqqqqququuyqqquq"
+          + "sqsqqqqqqqqqquuqqqqqssuqqssqqqsqsqqqqqqqqqqqqqqqsqqqqquqqqqq"
+          + "ssqqsqyuqqqqsqqquqqqqsqqqqqquuqsqqqqqqsqqqqqqquqqquqqssqqqsq"
+          + "sqqqqqquqqqqqqqsququqqqqqqysqqqqqqqqqsqqqqqqqqsqqquuqqqqsqqs"
+          + "qqqqqqqqqqqqqqsqqqqqquqqqqsqqsqqqqqqqqqsqqqqqqqqsqqsqqqqqqsq"
+          + "qqyqqsqqqqqqsqqqqqqsqqqqsqqsqqqqsquqqsqyqqqqqqqsqqqqqqsququq"
+          + "qqqsqqqssqqsqqqqqqqqqqquqqqssqqsusqqquqsqqquqqqsqqsqsqqsquqq"
+          + "qqqqssqqusqsssqsqqqqqqsqqsqsquqqyqqqqsqqqqqqqqqqqusqsqqqsqqq"
+          + "suqqssqqqssqqqqsssqqsqqqqqsqqqqqquqqqqqsqqsqquqqqqqqyqqqqqqq"
+          + "qqqqsqqqqssququqqqqqqqqsqqqsqqqquqqqqqsqqqqqqqsqqqqsqqsqsqqq"
+          + "qqqqququqqyqqqquqsqqqqqqqqqqsqqqqsqqqqquqqqqqssqqsqqqqsqqqqq"
+          + "uqququqsqqsqqqqquqqqququqsqqqqqqsqqsqqqqqsquyqqqqqqqqqqqqsqq"
+          + "qssqqqsqqqqqqqqqquqqqssqqsusqqqqqqqsqqqqsqqsqsqqqyqqqqqqqqss"
+          + "qsqqsqqqqsqqqquqququqsqqsqqqquqqqququqsqqqqqqqussqsqqsqqqqqs"
+          + "quyqqsqqqqsqqqqqqqqqqqsqqqyqqsquqqqqqqqsqqsqsqqqqqqququqqqsq"
+          + "qqqqqqqququqqqqqqqqquqqqqqqqqqqqququuyqqquqsqsqqqqqqqqqquuqq"
+          + "qqqssuqqssqqqsqsqqqqqqqqqqqqqqsqqqqquqqqqqssqqsqyuqqqqsqqquq"
+          + "qqqsqqqqqquuqsqqqqqqsqqqqqqquqqquqqssqqqsqsqqqqquqqqqqqqsquq"
+          + "uqqqqqqysqqqqqqqqqsqqqqqqqqsqqquuqqqqqqqqqsqqqqquqquqqqqqqqq"
+          + "qqqqsqqqqqqqqsqqsqqqqqqsqqqyqqqqsquqqsqyqqqqqqqsqsqqqqqqsqqq"
+          + "qqqsqqqqsqqsqqqqqqsququqqqqsqqqssqqsqqqqqqqqqqquqqqssqqsusqq"
+          + "quqsqqquqqqsqqsqsqqsqqqqqqqqqsqqqqquqquqqqqqsquqqqqqqsuqqssq"
+          + "qqssqqqqsssqqqssqqusqsssqsqqqqqqsqqqqqusqsqqqqssququqqqqqqqq"
+          + "sqqqsqsquqqyqqqqsqqqqqqqquqqqqqqyqqqsqqqqqqqqqqssqqqqqqqqsqq"
+          + "qqsqqqqquqqqqqssqqqsqqqqsqqsqsqqqqqssqqqqqqqqqqqsququuqqqssq"
+          + "qqqqqqqsqqqqsqqqqquqqqqqssqqsqqquqququqsqqsqqqququqsqqqqqqsq"
+          + "qsqqqqqsquyqqqqqqqqqqqqsqqqssqqqsqqqqqqqqqquqqqssqqsuqqqsqqs"
+          + "qqqqussqqqsqqqyqqsqqqqsqqqqsqqsqsqqqqququqqqsqqqqqqququqqqsq"
+          + "qqsqqqyqqqqqqsqqqqsqqqqqqqqququuyqqquqsqsqqqqqqqqqqqqqqqqqqq"
+          + "qqqqqqsqqqqqquqqqqqssqqsqyuqqqqsqqquqqqqqqqqsqyqqqqqqqqqsqqq"
+          + "qqssuqqqqqqysqqqqqqqqqqqsqqqqussqqsqqqqsqqsqsqqqqququqqqsqqq"
+          + "qqqququqqquqsqqquqqqqqsusqyqqqqsqqqqqqqquqsqsqqqqqqqqqqsquqq"
+          + "qssqsqqsqqqqqqqysqqquuqqqqquqqqqqqsqqqsqqqyqqqqsqqqqqqsqqqqq"
+          + "qqqqqusqqqqsqqsqqqqqqqqqqqqsqqqqqqqqsqqqqqqqsqqqqqqsqqqyqqqu"
+          + "uqqqquqqqqqqqqsqqqqqqsqqqqqqqqsqsqqusqqqqsqqqyqqqyqqqqqsqqsq"
+          + "qqqqsqqqqqqqqsqsqqsqqsqyqqqqqqqqqqqsqsqqqqqqqqqsqqqquqqqqquq"
+          + "uqsqqsqqqququqsqqqsqqqqsqqsqqqqqsqqqqqqqqsqqqsqqqsququqqsqqs"
+          + "qyqqqqqqqqsqqqqqqqqqsqqqquqqqqqqququqsqqquqsqqquqqqsqqsqsqqs"
+          + "qqqsqqsqqquqsqsqqqqqqqqquqqqqqsqqusqqqqqsqqquuyqqsquqqqqqqqq"
+          + "qqqqqssqsqqqqqqsqqsqqqqqqqqsqqqqsqqqqquqqqqqssqqsqqqqqqsqqqq"
+          + "qqqqqqqqssququqqqqqqqqsqqqqqqquqqqqqqqqqqqssqssqqqsqquqqqqqq"
+          + "yqqsqqsqqqqqsquyqqsqqqqsqqqqsqqqqsqqsqsqqsqqsquqsqsssqqqqqqq"
+          + "qsqqqqsqqqqquqqqqqssqqsquqqqqqqqqqqququqqyqqqquqsqqqqsqquuqq"
+          + "ssqqqqqsqqsqsqququqsqqqqqqqqqqqqquqqqqqqqsqqqqquqqqqqsqqqqqq"
+          + "qqqqqququqsqqqqqqqququqsqqqssqsqqsqqqqquqqqqququqsqqsqqqququ"
+          + "qsqqqsqqqqqssqqqqqqqqqqqsququuqqqssqqsqqqqqsqqqqqquqqqqququq"
+          + "sqqsqqqququqsqqsqqsqqqqqsquyqqsqqqqsqqqqsqqqqsqqsqsqqssssqsq"
+          + "uqsqqqquqsqsssqsqqqqqqqqqsqqqqqqqqqsqquqsqqqqsqquqqqqqququqs"
+          + "qssuyqqsqqqqqsqqquqsqsqqqqqqqqqsqqqqqquqqqqqqqqussqqqsqqqyqq"
+          + "squqqqqqqsqqsqsqqqqququqqqsqqqqqqququqqqqqqqqquqqqqqqqqqqqqu"
+          + "quuyqqquqsqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqsqqqqqquqqqqqqqqssqq"
+          + "sqyuqqqqsqqquqqqqqsqqqqqssuqqqqqqysqqqqqqqqqqqsqqqqussqqsqqq"
+          + "uuquqqqqqsqqqqqqqqquqqqqqqqsqqqqsqqsqsqququqsqqsqqsqsqqqququ"
+          + "qsqqsqqqqqqqqquqqqqqqqsqqqqqqqqqqqsqqqqqqqqsqqsqqqqqqsqqqyqq"
+          + "qqqqqqsququqqsqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+          + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+          + "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+          + "qqqqqqqqqqqqqqqqqqq</_>";
+      execute(new Put("x.xml", doc));
+      query("string-length(_)", 4099);
+    } finally {
+      set(MainOptions.ADDCACHE, false);
+    }
+  }
+
+  /** Update document, ADDCACHE option. */
+  @Test public void gh1989() {
+    createDB("<a/>");
+    query(_DB_PUT.args(NAME, DOC, "Sandbox.xml", " map { 'addcache': true() }"));
+    query(_DB_EXISTS.args(NAME), true);
+    query(_DB_EXISTS.args(NAME + ".0"), false);
+  }
+
+  /** Update expression, context position. */
+  @Test public void gh2002() {
+    query("(<a/>, <b/>) update { insert node position() into . }", "<a>1</a>\n<b>2</b>");
+  }
+
+  /** Transform expression: NPE. */
+  @Test public void gh2041() {
+    error("copy $a := <a/>[. = 'x'] modify () return $a", UPSINGLE_X_X);
+  }
+
+  /** Too many element/attribute names. */
+  @Test public void gh2042() {
+    error("<_>{ (1 to 100000) ! element { 'x' || . } {} }</_> update { }",
+        BASEX_LIMIT_X_X);
+    error("<_>{ (1 to 100000) ! <_>{ attribute { 'x' || . } {} }</_>}</_> update { }",
+        BASEX_LIMIT_X_X);
+    error("<_>{ (1 to 1000) ! <_>{ namespace { 'x' || . } { . } }</_>}</_> update { }",
+        BASEX_LIMIT_X_X);
+  }
+
+  /** Replace with empty sequence. */
+  @Test public void gh2094() {
+    query("<a><b/></a> update { replace node b with () }", "<a/>");
+    query("<a>{ (1 to 10000) ! <b/> }</a> update { * ! (replace node . with ()) }", "<a/>");
+    query("<a>{ (1 to 10000) ! <b>X</b> }</a> update { * ! (replace node . with ()) }", "<a/>");
+  }
+
+  /** Replace attribute with empty sequence. */
+  @Test public void gh2095() {
+    query("<e a=''/> update { replace node @a with () }", "<e/>");
+    query("<e a='' b=''/> update { replace node @a with () }", "<e b=\"\"/>");
+    query("<e a='' b=''/> update { replace node @b with () }", "<e a=\"\"/>");
+  }
+
+  /** String value of modified text nodes. */
+  @Test public void gh2148() {
+    query("data(<_>a</_> update { replace node text() with . || 'b' })", "ab");
+  }
+
+  /** Bogus namespace conflict when renaming attributes. */
+  @Test public void gh2205() {
+    query("<_ a=''/> update { rename node @a as 'x' }",
+        "<_ x=\"\"/>");
+    query("<_ xmlns='_' a=''/> update { rename node @a as 'x' }",
+        "<_ xmlns=\"_\" x=\"\"/>");
+    query("<_ xmlns:p='_' p:a=''/> update { rename node @Q{_}a as 'a' }",
+        "<_ xmlns:p=\"_\" a=\"\"/>");
+  }
+
+  /** Updates: Preserve namespace declarations. */
+  @Test public void gh2206() {
+    final BiConsumer<String, String> run = (query, uri) ->
+      query("(<_>{ " + query + "}</_> update {}) ! namespace-uri(*)", uri);
+    run.accept("web:response-header(headers := map { 'a':'b' })//*:header",
+        "http://expath.org/ns/http-client");
+    run.accept("json-to-xml('{\"A\":1}')/*/*", "http://www.w3.org/2005/xpath-functions");
+    run.accept("analyze-string('a', 'a')/*", "http://www.w3.org/2005/xpath-functions");
+  }
+
+  /** Updates: Nodes in the xml namespace. */
+  @Test public void gh2227() {
+    query("<e a=''/> update { insert node attribute xml:a { '' } into . }",
+        "<e xml:a=\"\" a=\"\"/>");
+    query("<e xml:a=''/> update { insert node attribute a { '' } into . }",
+        "<e a=\"\" xml:a=\"\"/>");
+    query("<e/> update { insert nodes (attribute a { '' }, attribute xml:a { '' }) into . }",
+        "<e a=\"\" xml:a=\"\"/>");
+
+    error("<e a=''/> update { insert node attribute a { '' } into . }",
+        UPATTDUPL_X);
+    error("<e xml:a=''/> update { insert node attribute xml:a { 'b' } into . }",
+        UPATTDUPL_X);
+  }
+
+  /** Update text nodes. */
+  @Test public void gh2246() {
+    query("text { '' } update { replace value of node . with '' }", "");
+    query("text { 'a' } update { replace value of node . with 'a' }", "a");
+
+    query("text { '' } update { replace value of node . with 'a' }", "a");
+    query("text { 'a' } update { replace value of node . with '' }", "");
+    query("text { 'a' } update { replace value of node . with 'A' }", "A");
+
+    query("<x>{ 'a' }</x> update { replace value of node . with 'a' }", "<x>a</x>");
+    query("<x>{ 'a' }</x> update { replace value of node . with '' }", "<x/>");
+    query("<x>{ 'a' }</x> update { replace value of node . with 'A' }", "<x>A</x>");
   }
 }

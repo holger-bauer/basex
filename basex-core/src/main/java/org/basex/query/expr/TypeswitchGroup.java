@@ -5,7 +5,6 @@ import static org.basex.query.QueryText.*;
 import java.util.*;
 import java.util.function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.gflwor.*;
@@ -22,7 +21,7 @@ import org.basex.util.hash.*;
 /**
  * Group of type switch cases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TypeswitchGroup extends Single {
@@ -33,7 +32,7 @@ public final class TypeswitchGroup extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param var variable (can be {@code null})
    * @param seqTypes sequence types this case matches, the empty array means {@code default}
    * @param rtrn return expression
@@ -47,12 +46,7 @@ public final class TypeswitchGroup extends Single {
 
   @Override
   public Expr compile(final CompileContext cc) throws QueryException {
-    try {
-      super.compile(cc);
-    } catch(final QueryException ex) {
-      // replace original expression with error
-      expr = cc.error(ex, expr);
-    }
+    expr = cc.compileOrError(expr, false);
     return optimize(cc);
   }
 
@@ -77,7 +71,7 @@ public final class TypeswitchGroup extends Single {
    */
   void inline(final Value value, final CompileContext cc) throws QueryException {
     if(var != null) {
-      expr = new InlineContext(var, var.checkType(value, cc.qc, true), cc).inline(expr);
+      expr = new InlineContext(var, var.checkType(value, cc.qc, cc), cc).inline(expr);
     }
   }
 
@@ -89,13 +83,12 @@ public final class TypeswitchGroup extends Single {
    * @throws QueryException query exception
    */
   Expr rewrite(final Expr cond, final CompileContext cc) throws QueryException {
-    if(var == null) return cc.merge(cond, expr, info);
+    if(var == null) return cc.voidAndReturn(cond, expr, info);
 
     final IntObjMap<Var> vm = new IntObjMap<>();
-    final LinkedList<Clause> clauses = new LinkedList<>();
-    clauses.add(new Let(cc.copy(var, vm), cond).optimize(cc));
+    final Let let = new Let(cc.copy(var, vm), cond).optimize(cc);
     final Expr rtrn = expr.copy(cc, vm).optimize(cc);
-    return new GFLWOR(info, clauses, rtrn).optimize(cc);
+    return new GFLWOR(info, let, rtrn).optimize(cc);
   }
 
   /**
@@ -132,7 +125,7 @@ public final class TypeswitchGroup extends Single {
     // replace types
     if(sl != tmp.size()) {
       if(tmp.isEmpty()) return false;
-      seqTypes = tmp.toArray(new SeqType[0]);
+      seqTypes = tmp.toArray(SeqType[]::new);
       refineType(cc);
     }
 
@@ -170,15 +163,16 @@ public final class TypeswitchGroup extends Single {
   }
 
   /**
-   * Checks if the given sequence type matches this group.
-   * @param seqType sequence type
-   * @return result of check
+   * Finds the matching types from this group for the given sequence types.
+   * @param types sequence types
+   * @return the matching types from this group
    */
-  boolean instance(final SeqType seqType) {
+  ArrayList<SeqType> matchingTypes(final SeqType... types) {
+    final ArrayList<SeqType> tmp = new ArrayList<>(seqTypes.length);
     for(final SeqType st : seqTypes) {
-      if(seqType.instanceOf(st)) return true;
+      if(((Checks<SeqType>) type -> type.instanceOf(st)).any(types)) tmp.add(st);
     }
-    return false;
+    return tmp;
   }
 
   /**
@@ -252,23 +246,12 @@ public final class TypeswitchGroup extends Single {
     return expr.exprSize();
   }
 
-  /**
-   * Simplifies all expressions for requests of the specified type.
-   * @param mode mode of simplification
-   * @param cc compilation context
-   * @return {@code true} if expression has changed
-   * @throws QueryException query exception
-   */
-  public boolean simplify(final Simplify mode, final CompileContext cc) throws QueryException {
-    final Expr ex = expr.simplifyFor(mode, cc);
-    if(ex == expr) return false;
-    expr = ex;
-    return true;
-  }
-
   @Override
-  public Data data() {
-    return expr.data();
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    // varying behavior: return null if return expression has changed
+    final Expr rtrn = expr;
+    expr = rtrn.simplifyFor(mode, cc);
+    return rtrn != expr ? null : this;
   }
 
   @Override
@@ -280,8 +263,8 @@ public final class TypeswitchGroup extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.attachVariable(plan.create(this), var, false);
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.attachVariable(plan.create(this), var, false);
     if(seqTypes.length == 0) {
       plan.addAttribute(elem, DEFAULT, true);
     } else {
@@ -296,7 +279,7 @@ public final class TypeswitchGroup extends Single {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final boolean cases = seqTypes.length > 0;
     qs.token(cases ? CASE : DEFAULT);
     if(var != null) {

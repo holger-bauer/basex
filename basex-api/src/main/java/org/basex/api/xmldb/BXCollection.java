@@ -21,16 +21,16 @@ import org.xmldb.api.modules.*;
 /**
  * Implementation of the Collection Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BXCollection implements Collection {
   /** Database context. */
   final BXDatabase db;
   /** Database context. */
-  public final Context ctx;
+  final Context ctx;
   /** Database. */
-  public Data data;
+  Data data;
 
   /**
    * Constructor to create/open a collection.
@@ -46,7 +46,7 @@ public final class BXCollection implements Collection {
     ctx = db.ctx;
     try {
       final MainOptions mopts = ctx.options;
-      data = open ? Open.open(name, ctx, mopts) :
+      data = open ? Open.open(name, ctx, mopts, true, true) :
         CreateDB.create(name, Parser.emptyParser(mopts), ctx, mopts);
     } catch(final IOException ex) {
       throw new XMLDBException(ErrorCodes.VENDOR_ERROR, ex.getMessage());
@@ -139,7 +139,7 @@ public final class BXCollection implements Collection {
   public void removeResource(final Resource resource) throws XMLDBException {
     check();
 
-    // check if the resource is an xml resource
+    // check if the resource is an XML resource
     final BXXMLResource del = checkXML(resource);
 
     // check if data instance refers to another database

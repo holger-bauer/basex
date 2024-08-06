@@ -6,56 +6,60 @@ import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayJoin extends ArrayFn {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
+  public XQArray item(final QueryContext qc, final InputInfo ii) throws QueryException {
     // if possible, retrieve single item
-    final Expr expr = exprs[0];
-    if(expr.seqType().zeroOrOne()) {
-      final Item item = expr.item(qc, info);
-      return item == Empty.VALUE ? XQArray.empty() : toArray(item);
+    final Expr arrays = arg(0);
+    if(arrays.seqType().zeroOrOne()) {
+      final Item item = arrays.item(qc, info);
+      return item.isEmpty() ? XQArray.empty() : toArray(item);
     }
 
-    final Iter iter = expr.iter(qc);
+    final Iter iter = arrays.iter(qc);
     Item item = iter.next();
     if(item == null) return XQArray.empty();
-    final XQArray fst = toArray(item);
-    item = iter.next();
-    if(item == null) return fst;
-    final XQArray snd = toArray(item);
-    item = iter.next();
-    if(item == null) return fst.concat(snd);
 
-    final ArrayBuilder builder = new ArrayBuilder().append(fst).append(snd);
+    final XQArray first = toArray(item);
+    item = iter.next();
+    if(item == null) return first;
+
+    final XQArray second = toArray(item);
+    item = iter.next();
+    if(item == null) return first.concat(second);
+
+    final ArrayBuilder ab = new ArrayBuilder().append(first).append(second);
     do {
-      builder.append(toArray(item));
+      ab.append(toArray(item));
     } while((item = qc.next(iter)) != null);
-    return builder.freeze();
+    return ab.array(this);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    if(exprs[0].seqType().type instanceof ArrayType) {
+    final Expr arrays = arg(0);
+    if(arrays.seqType().type instanceof ArrayType) {
       // remove empty entries
-      if(exprs[0] instanceof List &&
-          ((Checks<Expr>) arg -> arg == XQArray.empty()).any(exprs[0].args())) {
+      final Expr[] args = arrays.args();
+      if(arrays instanceof List && ((Checks<Expr>) arg -> arg == XQArray.empty()).any(args)) {
         final ExprList list = new ExprList();
-        for(final Expr arg : exprs[0].args()) if(arg != XQArray.empty()) list.add(arg);
-        exprs[0] = List.get(cc, info, list.finish());
+        for(final Expr arg : args) {
+          if(arg != XQArray.empty()) list.add(arg);
+        }
+        arg(0, arg -> List.get(cc, info, list.finish()));
       }
       // return simple arguments
-      final SeqType st = exprs[0].seqType();
-      if(st.one()) return exprs[0];
+      final SeqType st = arg(0).seqType();
+      if(st.one()) return arg(0);
 
       exprType.assign(st.type);
     }

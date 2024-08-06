@@ -7,11 +7,12 @@ import java.util.concurrent.*;
 import javax.xml.transform.*;
 
 import org.basex.query.func.*;
+import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class XsltFn extends StandardFunc {
@@ -19,11 +20,11 @@ abstract class XsltFn extends StandardFunc {
   static final ConcurrentHashMap<String, Templates> MAP = new ConcurrentHashMap<>();
 
   /** Saxon implementations. */
-  static final String[] SAXON = {
+  private static final StringList SAXONS = new StringList(
     "com.saxonica.config.EnterpriseTransformerFactory",
     "com.saxonica.config.ProfessionalTransformerFactory",
     "net.sf.saxon.TransformerFactoryImpl"
-  };
+  );
 
   /** Processor. */
   static final String PROCESSOR;
@@ -31,28 +32,33 @@ abstract class XsltFn extends StandardFunc {
   static final String VERSION;
 
   static {
-    String processor = "Java", version = "1.0";
+    // check for system property, create list of implementations to check
+    final String clazz = TransformerFactory.class.getName();
+    final String property = System.getProperty(clazz);
+    final StringList impls = new StringList();
+    if(property != null) impls.add(property);
+    impls.add(SAXONS);
 
-    // check if system property has been assigned by the user
-    final String fac = TransformerFactory.class.getName();
-    final String impl = System.getProperty(fac);
-    if(impl != null) {
-      processor = "unknown";
-      version = "unknown";
-    } else {
-      // search classpath for Saxon processors, retrieve edition and XSL version
-      for(final String saxon : SAXON) {
-        if(find(saxon) != null) {
-          processor = "Saxon";
-          System.setProperty(fac, saxon);
-          final Class<?> vrsn = find("net.sf.saxon.Version");
-          final Object se = get(field(vrsn, "softwareEdition"), null);
-          if(se != null) processor += " " + se;
-          final Object xsl = invoke(method(vrsn, "getXSLVersionString"), null);
-          version = xsl != null ? xsl.toString() : "3.0";
-          break;
-        }
+    // search for implementation (custom, predefined)
+    String processor = "Java", version = "1.0";
+    for(final String impl : impls) {
+      if(find(impl) == null) continue;
+
+      if(SAXONS.contains(impl)) {
+        // Saxon: assign to system property, retrieve edition and XSL version
+        processor = "Saxon";
+        if(!impl.equals(property)) System.setProperty(clazz, impl);
+        final Class<?> vrsn = find("net.sf.saxon.Version");
+        final Object se = get(field(vrsn, "softwareEdition"), null);
+        if(se != null) processor += " " + se;
+        final Object xsl = invoke(method(vrsn, "getXSLVersionString"), null);
+        version = xsl != null ? xsl.toString() : "3.0";
+      } else {
+        // unknown: assign classpath
+        processor = impl;
+        version = "";
       }
+      break;
     }
     PROCESSOR = processor;
     VERSION = version;

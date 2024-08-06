@@ -3,41 +3,27 @@ package org.basex.query.value.node;
 import static org.basex.query.QueryText.*;
 import static org.basex.util.Token.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
 import org.basex.util.list.*;
 import org.w3c.dom.*;
 
 /**
  * Attribute node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FAttr extends FNode {
   /** Attribute name. */
   private final QNm name;
-
-  /**
-   * Constructor for creating an attribute.
-   * QNames will be cached and reused.
-   * @param name name
-   * @param value value
-   */
-  public FAttr(final String name, final String value) {
-    this(token(name), token(value));
-  }
-
-  /**
-   * Constructor for creating an attribute.
-   * QNames will be cached and reused.
-   * @param name name
-   * @param value value
-   */
-  public FAttr(final byte[] name, final byte[] value) {
-    this(new QNm(name), value);
-  }
+  /** Attribute value. */
+  private final byte[] value;
 
   /**
    * Default constructor.
@@ -70,8 +56,14 @@ public final class FAttr extends FNode {
   }
 
   @Override
-  public FAttr materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FAttr(name, value) : this;
+  public byte[] string() {
+    return value;
+  }
+
+  @Override
+  public FAttr materialize(final Predicate<Data> test, final InputInfo ii,
+      final QueryContext qc) {
+    return materialized(test, ii) ? this : new FAttr(name, value);
   }
 
   @Override
@@ -81,16 +73,19 @@ public final class FAttr extends FNode {
 
   @Override
   public boolean equals(final Object obj) {
-    return this == obj || obj instanceof FAttr && name.eq(((FAttr) obj).name) && super.equals(obj);
+    if(this == obj) return true;
+    if(!(obj instanceof FAttr)) return false;
+    final FAttr f = (FAttr) obj;
+    return name.eq(f.name) && Token.eq(value, f.value) && super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name.string(), VALUEE, value));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.concat(name.string(), "=", QueryString.toQuoted(value));
   }
 }

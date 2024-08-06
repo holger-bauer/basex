@@ -1,5 +1,8 @@
 package org.basex.query.value.node;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -8,17 +11,12 @@ import org.w3c.dom.*;
 /**
  * Text node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTxt extends FNode {
-  /**
-   * Constructor.
-   * @param t text value
-   */
-  public FTxt(final String t) {
-    this(Token.token(t));
-  }
+  /** Text value. */
+  private final byte[] value;
 
   /**
    * Constructor.
@@ -27,6 +25,14 @@ public final class FTxt extends FNode {
   public FTxt(final byte[] value) {
     super(NodeType.TEXT);
     this.value = value;
+  }
+
+  /**
+   * Constructor.
+   * @param value text value
+   */
+  public FTxt(final String value) {
+    this(Token.token(value));
   }
 
   /**
@@ -39,17 +45,28 @@ public final class FTxt extends FNode {
   }
 
   @Override
-  public FTxt materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FTxt(value) : this;
+  public byte[] string() {
+    return value;
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public FTxt materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc) {
+    return materialized(test, ii) ? this : new FTxt(value);
+  }
+
+  @Override
+  public boolean equals(final Object obj) {
+    return this == obj || obj instanceof FTxt && Token.eq(value, ((FTxt) obj).value) &&
+        super.equals(obj);
+  }
+
+  @Override
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), value);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.quoted(value);
   }
 }

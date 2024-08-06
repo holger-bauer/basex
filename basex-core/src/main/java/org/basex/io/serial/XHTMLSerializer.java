@@ -5,12 +5,14 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
+import org.basex.query.*;
 import org.basex.query.value.item.*;
+import org.basex.util.hash.*;
 
 /**
  * This class serializes items as XHTML.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class XHTMLSerializer extends MarkupSerializer {
@@ -69,5 +71,28 @@ final class XHTMLSerializer extends MarkupSerializer {
     } else if(docsys != null) {
       printDoctype(type, docpub, docsys);
     }
+  }
+
+  @Override
+  boolean inline() {
+    return contains(HTMLSerializer.INLINES, closed) ||
+        opening && contains(HTMLSerializer.INLINES, elem) ||
+        super.inline();
+  }
+
+  @Override
+  boolean suppressIndentation(final QNm qname) throws QueryIOException {
+    return contains(HTMLSerializer.FORMATTEDS, qname) || super.suppressIndentation(qname);
+  }
+
+  /**
+   * Checks whether the token set contains the specified element.
+   * @param elements the token set of element local names
+   * @param element the element QName
+   * @return {@code true} if the element is contained in the token set
+   */
+  private boolean contains(final TokenSet elements, final QNm element) {
+    return eq(element.uri(), html5 ? EMPTY : XHTML_URI) &&
+        elements.contains(html5 ? lc(element.local()) : element.local());
   }
 }

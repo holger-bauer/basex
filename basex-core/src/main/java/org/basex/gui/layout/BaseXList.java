@@ -20,7 +20,7 @@ import org.basex.util.list.*;
  * of the typed in text. Moreover, the cursor keys can be used to scroll
  * through the list, and list entries can be chosen with mouse clicks.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXList extends BaseXBack {
@@ -56,7 +56,7 @@ public final class BaseXList extends BaseXBack {
     values = choice.clone();
 
     // checks if list is purely numeric
-    for(final String v : values) num = num && v.matches("[0-9]+");
+    for(final String v : values) num = num && v.matches("\\d+");
 
     layout(new RowLayout());
     text = new BaseXTextField(dialog);
@@ -213,11 +213,10 @@ public final class BaseXList extends BaseXBack {
   /**
    * Sets the specified font.
    * @param font font name
-   * @param style style
    */
-  public void setFont(final String font, final int style) {
+  public void setFont(final String font) {
     final Font f = text.getFont();
-    text.setFont(new Font(font, style, f.getSize()));
+    text.setFont(new Font(font, Font.PLAIN, f.getSize()));
   }
 
   /**

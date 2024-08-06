@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * Wildcard expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Dimitar Popov
  */
@@ -172,8 +172,8 @@ public final class FTWildcard {
         }
         if(n > m) return false;
         ti += n;
-      } else {
-        if(ti >= tl || tok[ti++] != cps[qi++]) return false;
+      } else if(ti >= tl || tok[ti++] != cps[qi++]) {
+        return false;
       }
     }
     return ti == tl;

@@ -5,21 +5,20 @@ import org.basex.query.func.*;
 import org.basex.query.func.java.*;
 import org.basex.query.value.*;
 import org.basex.query.value.seq.*;
-import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RequestAttribute extends ApiFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final String name = Token.string(toToken(exprs[0], qc));
-    final Value dflt = exprs.length == 1 ? Empty.VALUE : exprs[1].value(qc);
-
+    final String name = toString(arg(0), qc);
     final Object object = request(qc).getAttribute(name);
-    return object != null ? JavaCall.toValue(object, qc, sc) : dflt;
+    if(object != null) return JavaCall.toValue(object, qc, info);
+
+    return defined(1) ? arg(1).value(qc) : Empty.VALUE;
   }
 }

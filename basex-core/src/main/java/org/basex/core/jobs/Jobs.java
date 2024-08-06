@@ -10,7 +10,9 @@ import java.util.*;
 import org.basex.build.*;
 import org.basex.core.*;
 import org.basex.io.*;
+import org.basex.io.serial.*;
 import org.basex.query.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 import org.basex.util.options.*;
@@ -18,7 +20,7 @@ import org.basex.util.options.*;
 /**
  * This class organizes persistent query jobs.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Jobs {
@@ -39,32 +41,57 @@ public final class Jobs {
    */
   public Jobs(final Context context) throws IOException {
     this.context = context;
-    file = context.soptions.dbPath(string(JOBS) + IO.XMLSUFFIX);
 
-    // parse jobs file
-    final IOContent content;
     synchronized(FILE) {
+      file = context.soptions.dbPath(string(Q_JOBS.string()) + IO.XMLSUFFIX);
       if(!file.exists()) return;
-      content = new IOContent(file.read(), file.path());
-    }
 
-    final MainOptions options = new MainOptions(false);
-    options.set(MainOptions.INTPARSE, true);
-    final ANode doc = new DBNode(Parser.singleParser(content, options, ""));
-    final ANode root = children(doc, JOBS).next();
-    if(root == null) {
-      Util.errln(file + ": No '%' root element.", JOBS);
-    } else {
-      for(final ANode child : children(root)) {
-        final byte[] qname = child.qname().id();
-        if(eq(qname, JOB)) {
-          final JobsOptions opts = options(child);
-          if(opts != null) {
-            add(new QueryJobSpec(opts, new HashMap<>(), new IOContent(child.string())));
+      final MainOptions options = new MainOptions(false);
+      options.set(MainOptions.INTPARSE, true);
+      options.set(MainOptions.STRIPWS, true);
+      final ANode doc = new DBNode(Parser.singleParser(file, options, ""));
+      final ANode root = children(doc, Q_JOBS).next();
+      if(root == null) {
+        Util.errln(file + ": No '%' root element.", Q_JOBS);
+      } else {
+        for(final ANode child : children(root)) {
+          final QNm qname = child.qname();
+          if(qname.eq(Q_JOB)) {
+            final JobOptions opts = options(child);
+            if(opts != null) {
+              add(new QueryJobSpec(opts, new HashMap<>(), new IOContent(child.string())));
+            }
+          } else {
+            Util.errln(file + ": invalid element: %.", qname);
           }
-        } else {
-          Util.errln(file + ": invalid element: %.", qname);
         }
+      }
+    }
+  }
+
+  /**
+   * Schedules all registered jobs.
+   */
+  public void init() {
+    // start all jobs
+    boolean error = false;
+    for(int l = 0; l < list.size(); l++) {
+      final QueryJobSpec spec = list.get(l);
+      try {
+        new QueryJob(spec, context, null, null);
+      } catch(final QueryException ex) {
+        // drop failing jobs
+        Util.errln(ex);
+        list.remove(l);
+        error = true;
+      }
+    }
+    // write jobs if list has changed
+    if(error) {
+      try {
+        write();
+      } catch(final IOException ex) {
+        Util.errln(file + ": %", ex);
       }
     }
   }
@@ -90,34 +117,7 @@ public final class Jobs {
    * @param id job id
    */
   public void remove(final String id) {
-    list.removeIf(job -> id.equals(job.options.get(JobsOptions.ID)));
-  }
-
-  /**
-   * Schedules all registered jobs.
-   */
-  public void run() {
-    boolean error = false;
-    // request size every time (list may shrink)
-    for(int l = 0; l < list.size(); l++) {
-      final QueryJobSpec spec = list.get(l);
-      try {
-        new QueryJob(spec, context, null, null);
-      } catch(final QueryException ex) {
-        // drop failing jobs
-        Util.errln(ex);
-        list.remove(l);
-        error = true;
-      }
-    }
-    // write jobs if list has changed
-    if(error) {
-      try {
-        write();
-      } catch(final IOException ex) {
-        Util.errln(file + ": %", ex);
-      }
-    }
+    list.removeIf(job -> id.equals(job.options.get(JobOptions.ID)));
   }
 
   /**
@@ -125,8 +125,8 @@ public final class Jobs {
    * @param job job element
    * @return jobs options, or {@code null} if an error occurred
    */
-  private JobsOptions options(final ANode job) {
-    final JobsOptions opts = new JobsOptions();
+  private JobOptions options(final ANode job) {
+    final JobOptions opts = new JobOptions();
     for(final ANode attr : job.attributeIter()) {
       try {
         opts.assign(string(attr.name()), string(attr.string()));
@@ -143,19 +143,15 @@ public final class Jobs {
    * @throws IOException I/O exception
    */
   public void write() throws IOException {
-    final FElem xml = toXML();
     synchronized(FILE) {
       // only create jobs file if jobs are registered
-      if(list.isEmpty()) {
-        if(file.exists()) {
-          file.delete();
-          return;
-        }
+      if(list.isEmpty() && file.exists()) {
+        file.delete();
+        return;
       }
-
       // write jobs file
       file.parent().md();
-      file.write(xml.serialize().finish());
+      file.write(toXml().serialize(SerializerMode.INDENT.get()).finish());
     }
   }
 
@@ -163,16 +159,15 @@ public final class Jobs {
    * Returns an XML representation of all jobs.
    * @return root element
    */
-  public FElem toXML() {
-    final FElem root = new FElem(JOBS);
+  public FNode toXml() {
+    final FBuilder root = FElem.build(Q_JOBS);
     for(final QueryJobSpec spec : list) {
-      final FElem elem = new FElem(JOB);
+      final FBuilder elem = FElem.build(Q_JOB);
       for(final Option<?> option : spec.options) {
-        final Object value = spec.options.get(option);
-        if(value != null) elem.add(option.name(), value.toString());
+        elem.add(new QNm(option.name()), spec.options.get(option));
       }
       root.add(elem.add(spec.query));
     }
-    return root;
+    return root.finish();
   }
 }

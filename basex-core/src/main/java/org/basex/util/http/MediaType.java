@@ -1,27 +1,39 @@
 package org.basex.util.http;
 
-import java.io.*;
 import java.util.*;
 
-import org.basex.io.in.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
 
 /**
  * Single Internet media type.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class MediaType {
+public final class MediaType implements Comparable<MediaType> {
+  /** File suffixes and media types. */
+  private static final HashMap<String, MediaType> MEDIATYPES = new HashMap<>();
+
+  /* Reads in the media-types. */
+  static {
+    final HashMap<String, MediaType> cache = new HashMap<>();
+    final TokenMap map = Util.properties("media-types.properties");
+    for(final byte[] key : map) {
+      final String suffix = Token.string(key), type = Token.string(map.get(key));
+      MEDIATYPES.put(suffix, cache.computeIfAbsent(type, MediaType::new));
+    }
+  }
+
   /** Multipart type. */
   private static final String MULTIPART = "multipart";
   /** Text type. */
   private static final String TEXT = "text";
-  /** XQuery sub type. */
+  /** XQuery subtype. */
   private static final String XQUERY = "xquery";
-  /** CSV sub type. */
+  /** CSV subtype. */
   private static final String CSV = "csv";
-  /** CSV sub type. */
+  /** CSV subtype. */
   private static final String COMMA_SEPARATED_VALUES = "comma-separated-values";
   /** XML media type suffix. */
   private static final String XML_SUFFIX = "+xml";
@@ -63,10 +75,10 @@ public final class MediaType {
 
   /** Main type. */
   private final String main;
-  /** Sub type. */
+  /** Subtype. */
   private final String sub;
   /** Parameters. */
-  private final HashMap<String, String> params = new HashMap<>();
+  private final HashMap<String, String> parameters = new HashMap<>();
 
   /**
    * Constructor.
@@ -76,7 +88,7 @@ public final class MediaType {
     final int p = string.indexOf(';');
     final String type = p == -1 ? string : string.substring(0, p);
 
-    // set main and sub type
+    // set main and subtype
     final int s = type.indexOf('/');
     main = s == -1 ? type : type.substring(0, s);
     sub  = s == -1 ? "" : type.substring(s + 1);
@@ -85,12 +97,12 @@ public final class MediaType {
     if(p != -1) {
       for(final String param : Strings.split(string.substring(p + 1), ';')) {
         final String[] kv = Strings.split(param, '=', 2);
-        // attribute: trim whitespaces, convert to lower case
+        // attribute: trim whitespace, convert to lower case
         final String k = kv[0].trim().toLowerCase(Locale.ENGLISH);
-        // value: trim whitespaces, remove quotes and backslashed characters
+        // value: trim whitespace, remove quotes and backslashed characters
         String v = kv.length < 2 ? "" : kv[1].trim();
         if(Strings.startsWith(v, '"')) v = v.replaceAll("^\"|\"$", "").replaceAll("\\\\(.)", "$1");
-        params.put(k, v);
+        parameters.put(k, v);
       }
     }
   }
@@ -104,7 +116,7 @@ public final class MediaType {
   }
 
   /**
-   * Returns the sub type.
+   * Returns the subtype.
    * @return type
    */
   public String sub() {
@@ -112,19 +124,28 @@ public final class MediaType {
   }
 
   /**
-   * Returns the media type, composed from the main and sub type.
-   * @return type
+   * Returns the media type, composed of the main and subtype.
+   * @return type without parameters
    */
   public String type() {
-    return sub.isEmpty() ? main : (main + '/' + sub);
+    return sub.isEmpty() ? main : main + '/' + sub;
   }
 
   /**
-   * Returns the parameters.
-   * @return parameters
+   * Returns the value of the specified parameter.
+   * @param name name of parameter
+   * @return parameter or {@code null}
    */
-  public HashMap<String, String> parameters() {
-    return params;
+  public String parameter(final String name) {
+    return parameters.get(name);
+  }
+
+  /**
+   * Returns an iterable set of all parameters.
+   * @return parameter set
+   */
+  public Set<Map.Entry<String, String>> parameters() {
+    return parameters.entrySet();
   }
 
   /**
@@ -163,7 +184,7 @@ public final class MediaType {
    * Checks if this is an XML type.
    * @return result of check
    */
-  public boolean isXML() {
+  public boolean isXml() {
     return is(TEXT_XML) || is(TEXT_XML_EPE) || is(APPLICATION_XML) || is(APPLICATION_XML_EPE) ||
         sub.endsWith(XML_SUFFIX);
   }
@@ -177,7 +198,7 @@ public final class MediaType {
   }
 
   /**
-   * Checks if the pattern is matching.
+   * Checks if the specified media type is contained in this media type.
    * @param pattern pattern
    * @return result of check
    */
@@ -186,7 +207,7 @@ public final class MediaType {
   }
 
   /**
-   * Checks if the main and sub type of this and the specified type are equal.
+   * Checks if the main and subtype of this and the specified type are equal.
    * @param type type
    * @return result of check
    */
@@ -195,9 +216,28 @@ public final class MediaType {
   }
 
   @Override
+  public int compareTo(final MediaType type) {
+    final int cmp = compareTo(main, type.main);
+    return cmp == 0 ? compareTo(sub, type.sub) : cmp;
+  }
+
+  /**
+   * Compares the specified main or subtypes.
+   * @param type1 first type
+   * @param type2 second type
+   * @return result of comparison (-1, 0, 1)
+   */
+  private static int compareTo(final String type1, final String type2) {
+    return type1.equals(type2) ? 0 :
+           type1.equals("*") ? 1 :
+           type2.equals("*") ? -1 :
+           type1.compareTo(type2);
+  }
+
+  @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder(type());
-    params.forEach((key, value) -> sb.append("; ").append(key).append('=').append(value));
+    parameters.forEach((key, value) -> sb.append("; ").append(key).append('=').append(value));
     return sb.toString();
   }
 
@@ -210,35 +250,6 @@ public final class MediaType {
   public static MediaType get(final String path) {
     final int s = path.lastIndexOf('/'), d = path.lastIndexOf('.');
     final String suffix = d <= s ? "" : path.substring(d + 1).toLowerCase(Locale.ENGLISH);
-    return TYPES.getOrDefault(suffix, APPLICATION_OCTET_STREAM);
-  }
-
-  /** Hash map containing all assignments. */
-  private static final HashMap<String, MediaType> TYPES = new HashMap<>();
-
-  /* Reads in the media-types. */
-  static {
-    final HashMap<String, MediaType> cache = new HashMap<>();
-    try {
-      final String file = "/media-types.properties";
-      final InputStream is = MediaType.class.getResourceAsStream(file);
-      if(is == null) {
-        Util.errln(file + " not found.");
-      } else {
-        try(NewlineInput nli = new NewlineInput(is)) {
-          for(String line; (line = nli.readLine()) != null;) {
-            final int i = line.indexOf('=');
-            if(i == -1 || Strings.startsWith(line, '#')) continue;
-            final String suffix = line.substring(0, i), type = line.substring(i + 1);
-            final MediaType mt = cache.computeIfAbsent(type, MediaType::new);
-            TYPES.put(suffix, mt);
-          }
-        }
-      }
-    } catch(final IOException ex) {
-      Util.errln(ex);
-    } catch(final Throwable ex) {
-      Util.stack(ex);
-    }
+    return MEDIATYPES.getOrDefault(suffix, APPLICATION_OCTET_STREAM);
   }
 }

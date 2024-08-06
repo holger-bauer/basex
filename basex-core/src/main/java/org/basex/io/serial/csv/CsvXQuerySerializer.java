@@ -16,19 +16,19 @@ import org.basex.util.list.*;
 /**
  * This class serializes map data as CSV. The input must conform to the XQuery CSV representation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CsvXQuerySerializer extends CsvSerializer {
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  public CsvXQuerySerializer(final OutputStream os, final SerializerOptions opts)
+  public CsvXQuerySerializer(final OutputStream os, final SerializerOptions sopts)
       throws IOException {
-    super(os, opts);
+    super(os, sopts);
   }
 
   @Override
@@ -36,21 +36,21 @@ public final class CsvXQuerySerializer extends CsvSerializer {
     if(sep && level == 0) out.print(' ');
 
     if(!(item instanceof XQMap))
-      throw CSV_SERIALIZE_X.getIO("Top level must be a map; " + item.type + " found");
+      throw CSV_SERIALIZE_X_X.getIO("Top level must be a map, found", item.type);
 
     final XQMap m = (XQMap) item;
     final TokenList tl = new TokenList();
     try {
       // print header
       if(header) {
-        if(!m.contains(CsvXQueryConverter.NAMES, null))
+        if(!m.contains(CsvXQueryConverter.NAMES))
           throw CSV_SERIALIZE_X.getIO("Map has no 'names' key");
-        record(m.get(CsvXQueryConverter.NAMES, null), tl);
+        record(m.get(CsvXQueryConverter.NAMES), tl);
       }
       // print records
-      if(!m.contains(CsvXQueryConverter.RECORDS, null))
+      if(!m.contains(CsvXQueryConverter.RECORDS))
         throw CSV_SERIALIZE_X.getIO("Map has no 'records' key");
-      for(final Item record : m.get(CsvXQueryConverter.RECORDS, null)) {
+      for(final Item record : m.get(CsvXQueryConverter.RECORDS)) {
         record(record, tl);
       }
     } catch(final QueryException ex) {
@@ -68,10 +68,9 @@ public final class CsvXQuerySerializer extends CsvSerializer {
    */
   private void record(final Value line, final TokenList tl) throws QueryException, IOException {
     if(!(line instanceof XQArray))
-      throw CSV_SERIALIZE_X.getIO("Array expected; " + line.type + " found");
+      throw CSV_SERIALIZE_X_X.getIO("Array expected, found", line.seqType());
     for(final Value entry : ((XQArray) line).members()) {
-      if(!(entry instanceof AStr))
-        throw CSV_SERIALIZE_X.getIO("Single item expected; " + entry.type + " found");
+      if(!entry.isItem()) throw CSV_SERIALIZE_X_X.getIO("Item expected, found" + entry.seqType());
       tl.add(((Item) entry).string(null));
     }
     record(tl);

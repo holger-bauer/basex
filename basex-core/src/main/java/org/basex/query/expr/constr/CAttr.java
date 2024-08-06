@@ -19,7 +19,7 @@ import org.basex.util.hash.*;
 /**
  * Attribute constructor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CAttr extends CName {
@@ -28,27 +28,23 @@ public final class CAttr extends CName {
 
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param name name
    * @param computed computed construction flag
    * @param value attribute value
    */
-  public CAttr(final StaticContext sc, final InputInfo info, final boolean computed,
-      final Expr name, final Expr... value) {
-    super(sc, info, SeqType.ATTRIBUTE_O, computed, name, value);
+  public CAttr(final InputInfo info, final boolean computed, final Expr name, final Expr... value) {
+    super(info, SeqType.ATTRIBUTE_O, computed, name, value);
   }
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
     name = name.simplifyFor(Simplify.STRING, cc);
     if(name instanceof Value) {
-      final QNm nm = qname(true, cc.qc, null);
-      if(nm != null) {
-        name = nm;
-        exprType.assign(SeqType.get(NodeType.ATTRIBUTE, Occ.EXACTLY_ONE,
-            Test.get(NodeType.ATTRIBUTE, nm)));
-      }
+      final QNm nm = qname(false, cc.qc);
+      name = nm;
+      exprType.assign(SeqType.get(NodeType.ATTRIBUTE, Occ.EXACTLY_ONE,
+          Test.get(NodeType.ATTRIBUTE, nm, null)));
     }
     optValue(cc);
     return this;
@@ -56,30 +52,29 @@ public final class CAttr extends CName {
 
   @Override
   public FAttr item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    QNm nm = qname(false, qc, sc);
-    final byte[] cp = nm.prefix();
+    QNm nm = qname(false, qc);
+    final byte[] nmPrefix = nm.prefix(), nmUri = nm.uri();
     if(computed) {
-      final byte[] cu = nm.uri();
-      if(eq(cp, XML) ^ eq(cu, XML_URI)) throw CAXML.get(info);
-      if(eq(cu, XMLNS_URI)) throw CAINV_.get(info, cu);
-      if(eq(cp, XMLNS) || cp.length == 0 && eq(nm.string(), XMLNS))
+      if(eq(nmPrefix, XML) ^ eq(nmUri, XML_URI)) throw CAXML.get(info);
+      if(eq(nmUri, XMLNS_URI)) throw CAINV_.get(info, nmUri);
+      if(eq(nmPrefix, XMLNS) || nmPrefix.length == 0 && eq(nm.string(), XMLNS))
         throw CAINV_.get(info, nm.string());
 
       // create new standard namespace to cover most frequent cases
-      if(eq(cp, EMPTY) && !eq(cu, EMPTY))
-        nm = new QNm(concat(NS0, nm.string()), cu);
+      if(eq(nmPrefix, EMPTY) && !eq(nmUri, EMPTY))
+        nm = qc.shared.qName(concat(NS0, nm.string()), nmUri);
     }
-    if(!nm.hasURI() && nm.hasPrefix()) throw INVPREF_X.get(info, nm);
+    if(!nm.hasURI() && nm.hasPrefix()) throw NOQNNAMENS_X.get(info, nmPrefix);
 
-    byte[] value = atomValue(qc);
-    if(eq(cp, XML) && eq(nm.local(), ID)) value = normalize(value);
+    byte[] value = atomValue(qc, true);
+    if(eq(nmPrefix, XML) && eq(nm.local(), ID)) value = normalize(value);
 
-    return new FAttr(nm, value);
+    return new FAttr(nm, qc.shared.token(value));
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new CAttr(sc, info, computed, name.copy(cc, vm), copyAll(cc, vm, exprs)));
+    return copyType(new CAttr(info, computed, name.copy(cc, vm), copyAll(cc, vm, exprs)));
   }
 
   @Override
@@ -88,9 +83,9 @@ public final class CAttr extends CName {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     if(computed) {
-      plan(qs, ATTRIBUTE);
+      toString(qs, ATTRIBUTE);
     } else {
       qs.token(((QNm) name).string()).token('=');
       if(exprs.length == 1 && exprs[0] instanceof Str) {

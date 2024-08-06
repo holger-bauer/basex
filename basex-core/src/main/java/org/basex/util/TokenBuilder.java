@@ -8,7 +8,7 @@ import java.util.*;
  * This class serves as an efficient constructor for {@link Token Tokens}.
  * It bears some resemblance to Java's {@link StringBuilder}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TokenBuilder {
@@ -31,6 +31,8 @@ public final class TokenBuilder {
   /** Underline flag. */
   public static final int ULINE = PRIVATE_END - 4;
 
+  /** Limit for info strings. */
+  private static final int LIMIT = 100;
   /** Byte array, storing all characters as UTF8. */
   private byte[] chars;
   /** Current token size. */
@@ -148,19 +150,29 @@ public final class TokenBuilder {
   public TokenBuilder add(final int cp) {
     if(cp <= 0x7F) {
       addByte((byte) cp);
-    } else if(cp <= 0x7FF) {
-      addByte((byte) (cp >>  6 & 0x1F | 0xC0));
-      addByte((byte) (cp & 0x3F | 0x80));
-    } else if(cp <= 0xFFFF) {
-      addByte((byte) (cp >> 12 & 0x0F | 0xE0));
-      addByte((byte) (cp >>  6 & 0x3F | 0x80));
-      addByte((byte) (cp & 0x3F | 0x80));
     } else {
-      addByte((byte) (cp >> 18 & 0x07 | 0xF0));
-      addByte((byte) (cp >> 12 & 0x3F | 0x80));
-      addByte((byte) (cp >>  6 & 0x3F | 0x80));
+      if(cp <= 0x7FF) {
+        addByte((byte) (cp >>  6 & 0x1F | 0xC0));
+      } else {
+        if(cp <= 0xFFFF) {
+          addByte((byte) (cp >> 12 & 0x0F | 0xE0));
+        } else {
+          addByte((byte) (cp >> 18 & 0x07 | 0xF0));
+          addByte((byte) (cp >> 12 & 0x3F | 0x80));
+        }
+        addByte((byte) (cp >>  6 & 0x3F | 0x80));
+      }
       addByte((byte) (cp & 0x3F | 0x80));
     }
+    return this;
+  }
+
+  /**
+   * Removes the last character.
+   * @return self reference
+   */
+  public TokenBuilder removeLast() {
+    while(--size > 0 && (chars[size] & 0xC0) == 0x80);
     return this;
   }
 
@@ -310,9 +322,9 @@ public final class TokenBuilder {
 
   /**
    * Adds the string representation of an object.
-   * The specified string may contain {@code %} characters as place holders.
-   * All place holders will be replaced by the specified extensions. If a digit is specified
-   * after the place holder character, it will be interpreted as insertion position.
+   * The specified string may contain {@code %} characters as placeholders.
+   * All placeholders will be replaced by the specified extensions. If a digit is specified
+   * after the placeholder character, it will be interpreted as insertion position.
    *
    * @param object object to be extended
    * @param extensions optional extension strings
@@ -336,7 +348,7 @@ public final class TokenBuilder {
   }
 
   /**
-   * Trims leading and trailing whitespaces.
+   * Trims leading and trailing whitespace.
    * @return self reference
    */
   public TokenBuilder trim() {
@@ -401,6 +413,16 @@ public final class TokenBuilder {
     chars = null;
     final int s = size;
     return s == 0 ? EMPTY : s == chrs.length ? chrs : Arrays.copyOf(chrs, s);
+  }
+
+  /**
+   * Checks if the building of an info string should be continued.
+   * @return result of check
+   */
+  public boolean moreInfo() {
+    if(size <= LIMIT) return true;
+    if(chars[size - 1] != '.' || chars[size - 2] != '.' || chars[size - 3] != '.') add("...");
+    return false;
   }
 
   @Override

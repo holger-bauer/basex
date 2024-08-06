@@ -4,13 +4,14 @@ import java.util.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.util.*;
 
 /**
  * QT3TS Report builder.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QT3TSReport {
@@ -99,74 +100,65 @@ public final class QT3TSReport {
     final String dquery = "replace(string(current-date()),'\\+.*','')";
     final String date = new XQuery(dquery).execute(ctx);
 
-    final FElem root = element("test-suite-result");
+    final FBuilder root = element("test-suite-result").declareNS();
 
     // submission element
-    final FElem submission = element("submission", root);
-    submission.add("anonymous", "false");
+    final FBuilder submission = element("submission");
+    submission.add(new QNm("anonymous"), "false");
 
-    final FElem created = element("created", submission);
-    created.add("by", Text.AUTHOR);
-    created.add("email", "cg@basex.org");
-    created.add("organization", Text.ORGANIZATION);
-    created.add("on", date);
+    final FBuilder created = element("created");
+    created.add(new QNm("by"), Text.AUTHOR);
+    created.add(new QNm("email"), "cg@basex.org");
+    created.add(new QNm("organization"), Text.ORGANIZATION);
+    created.add(new QNm("on"), date);
+    submission.add(created);
 
-    final FElem testRun = element("test-run", submission);
-    testRun.add("test-suite-version", "CVS");
-    testRun.add("date-run", date);
+    final FBuilder testRun = element("test-run");
+    testRun.add(new QNm("test-suite-version"), "CVS");
+    testRun.add(new QNm("date-run"), date);
+    submission.add(testRun);
 
-    element("notes", submission);
+    submission.add(element("notes"));
 
     // product element
-    final FElem product = element("product", root);
-    product.add("vendor", Text.ORGANIZATION);
-    product.add("name", Prop.NAME);
-    product.add("version", Prop.VERSION);
-    product.add("released", "true");
-    product.add("open-source", "true");
-    product.add("language", "XQ31");
+    final FBuilder product = element("product");
+    product.add(new QNm("vendor"), Text.ORGANIZATION);
+    product.add(new QNm("name"), Prop.NAME);
+    product.add(new QNm("version"), Prop.VERSION);
+    product.add(new QNm("released"), "true");
+    product.add(new QNm("open-source"), "true");
+    product.add(new QNm("language"), "XQ40");
 
     // dependency element
     for(final String[] deps : DEPENDENCIES) {
-      final FElem dependency = element("dependency", product);
-      dependency.add("type", deps[0]);
-      dependency.add("value", deps[1]);
-      dependency.add("satisfied", deps[2]);
+      final FBuilder dependency = element("dependency");
+      dependency.add(new QNm("type"), deps[0]);
+      dependency.add(new QNm("value"), deps[1]);
+      dependency.add(new QNm("satisfied"), deps[2]);
+      product.add(dependency);
     }
+    root.add(product);
 
     // test-set elements
-    FElem ts = null;
+    FBuilder ts = null;
     for(final String[] test : tests) {
       if(test.length == 1) {
-        ts = element("test-set", root);
-        ts.add("name", test[0]);
+        if(ts != null) root.add(ts);
+        ts = element("test-set").add(new QNm("name"), test[0]);
       } else {
-        final FElem tc = element("test-case", ts);
-        tc.add("name", test[0]);
-        tc.add("result", test[1]);
+        ts.add(element("test-case").add(new QNm("name"), test[0]).add(new QNm("result"), test[1]));
       }
     }
-    return root.serialize().finish();
-  }
-
-  /**
-   * Creates a root element.
-   * @param name name of element
-   * @return element node
-   */
-  private static FElem element(final String name) {
-    return new FElem(name, URI).declareNS();
+    if(ts != null) root.add(ts);
+    return root.finish().serialize().finish();
   }
 
   /**
    * Creates an element.
    * @param name name of element
-   * @param parent parent node
    * @return element node
    */
-  private static FElem element(final String name, final FElem parent) {
-    final FElem elem = new FElem(name, URI);
-    parent.add(elem);
-    return elem;
+  private static FBuilder element(final String name) {
+    return FElem.build(new QNm(name, URI));
   }
 }

@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Update primitive for the {@link Function#_DB_COPY} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DBCopy extends NameUpdate {
@@ -26,13 +26,17 @@ public final class DBCopy extends NameUpdate {
    * @param name database to be copied
    * @param target name of new database
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public DBCopy(final String name, final String target, final QueryContext qc,
       final InputInfo info) {
 
     super(UpdateType.DBCOPY, name, qc, info);
     targets.add(target);
+  }
+
+  @Override
+  public void prepare() {
   }
 
   @Override
@@ -50,9 +54,6 @@ public final class DBCopy extends NameUpdate {
   }
 
   @Override
-  public void prepare() { }
-
-  @Override
   public void merge(final Update update) throws QueryException {
     for(final String target : ((DBCopy) update).targets) {
       if(targets.contains(target)) throw DB_CONFLICT1_X_X.get(info, target, operation());
@@ -61,11 +62,13 @@ public final class DBCopy extends NameUpdate {
   }
 
   @Override
-  public String operation() { return "copied"; }
-
-  @Override
   public void databases(final StringList db) {
     super.databases(db);
     for(final String target : targets) db.add(target);
+  }
+
+  @Override
+  public String operation() {
+    return "copied";
   }
 }

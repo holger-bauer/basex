@@ -13,7 +13,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the embedded REST API and the DELETE method.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RESTDeleteTest extends RESTTest {
@@ -22,15 +22,11 @@ public final class RESTDeleteTest extends RESTTest {
    * @throws IOException I/O exception
    */
   @Test public void delete1() throws IOException {
-    put(NAME, new FileInputStream(FILE));
+    put(new FileInputStream(FILE), NAME);
     // delete database
-    assertEquals(delete(NAME).trim(), Util.info(Text.DB_DROPPED_X, NAME));
-    try {
-      // no database left
-      delete(NAME);
-      fail("Error expected.");
-    } catch(final BaseXException ignored) {
-    }
+    assertEquals(Util.info(Text.DB_DROPPED_X, NAME), delete(200, NAME).trim());
+    // no database left
+    delete(404, NAME);
   }
 
   /**
@@ -38,23 +34,19 @@ public final class RESTDeleteTest extends RESTTest {
    * @throws IOException I/O exception
    */
   @Test public void delete2() throws IOException {
-    put(NAME, null);
-    put(NAME + "/a", new ArrayInput(token("<a/>")));
-    put(NAME + "/b", new ArrayInput(token("<b/>")));
+    put(null, NAME);
+    put(new ArrayInput(token("<a/>")), NAME + "/a");
+    put(new ArrayInput(token("<b/>")), NAME + "/b");
     // delete 'a' directory
-    assertStartsWith(delete(NAME + "/a"), "1 ");
+    assertStartsWith(delete(200, NAME + "/a"), "1 ");
     // delete 'b' directory
-    assertStartsWith(delete(NAME + "/b"), "1 ");
+    assertStartsWith(delete(200, NAME + "/b"), "1 ");
     // no 'b' directory left
-    assertStartsWith(delete(NAME + "/b"), "0 ");
+    assertStartsWith(delete(200, NAME + "/b"), "0 ");
     // delete database
-    assertEquals(delete(NAME).trim(), Util.info(Text.DB_DROPPED_X, NAME));
-    try {
-      // no database left
-      delete(NAME);
-      fail("Error expected.");
-    } catch(final BaseXException ignored) {
-    }
+    assertEquals(Util.info(Text.DB_DROPPED_X, NAME), delete(200, NAME).trim());
+    // no database left
+    delete(404, NAME);
   }
 
   /**
@@ -62,13 +54,9 @@ public final class RESTDeleteTest extends RESTTest {
    * @throws IOException I/O exception
    */
   @Test public void deleteOption() throws IOException {
-    put(NAME, null);
-    delete(NAME + "/a?" + MainOptions.CHOP.name() + "=true");
-    try {
-      delete(NAME + "/a?xxx=true");
-      fail("Error expected.");
-    } catch(final IOException ignored) {
-    }
+    put(null, NAME);
+    delete(200, NAME + "/a?" + MainOptions.STRIPWS.name() + "=true");
+    // unknown option
+    delete(400, NAME + "/a?xxx=true");
   }
-
 }

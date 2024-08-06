@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Parsing options dialog.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogParsing extends BaseXBack {
@@ -40,14 +40,14 @@ final class DialogParsing extends BaseXBack {
    */
   DialogParsing(final BaseXDialog dialog, final BaseXTabs tabs) {
     border(8);
-    gui = dialog.gui;
+    gui = dialog.gui();
     this.tabs = tabs;
     label = new BaseXLabel().border(0, 0, 8, 0).large();
 
     final MainOptions opts = gui.context.options;
     parsers = new DialogParser[] { new DialogXmlParser(dialog, opts),
         new DialogHtmlParser(dialog, opts), new DialogJsonParser(dialog, opts),
-        new DialogCsvParser(dialog, opts), new DialogTextParser(dialog, opts)
+        new DialogCsvParser(dialog, opts)
     };
 
     setLayout(new BorderLayout());

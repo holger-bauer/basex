@@ -4,12 +4,10 @@ import static org.basex.query.QueryText.*;
 
 import java.util.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
-import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -20,7 +18,7 @@ import org.basex.util.hash.*;
 /**
  * Typeswitch expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Typeswitch extends ParseExpr {
@@ -31,7 +29,7 @@ public final class Typeswitch extends ParseExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param cond condition
    * @param groups case groups (last one is default)
    */
@@ -77,20 +75,31 @@ public final class Typeswitch extends ParseExpr {
     for(final TypeswitchGroup group : groups) {
       if(group.removeTypes(ct, types, cc)) newGroups.add(group);
     }
-    groups = newGroups.toArray(new TypeswitchGroup[0]);
+    groups = newGroups.toArray(TypeswitchGroup[]::new);
 
-    // combine types of return expressions
-    final int gl = groups.length;
-    SeqType st = groups[0].seqType();
-    for(int g = 1; g < gl; g++) st = st.union(groups[g].seqType());
-    exprType.assign(st);
+    // determine common type
+    exprType.assign(SeqType.union(groups, true)).data(groups);
 
     // check if always the same branch will be evaluated
     Expr expr = this;
-    // choose branch that can be statically determined
     TypeswitchGroup tg = null;
-    for(final TypeswitchGroup group : groups) {
-      if(tg == null && group.instance(ct)) tg = group;
+    final int gl = groups.length;
+    for(int g = 0; g < gl - 1; g++) {
+      final ArrayList<SeqType> matching = groups[g].matchingTypes(ct);
+      if(!matching.isEmpty()) {
+        // make sure that preceding groups do not branch on subtypes
+        boolean branch = false;
+        for(int h = 0; !branch && h < g; h++) {
+          for(final SeqType st : groups[h].seqTypes) {
+            if(((Checks<SeqType>) st::instanceOf).any(matching)) {
+              branch = true;
+              break;
+            }
+          }
+        }
+        if(!branch) tg = groups[g];
+        break;
+      }
     }
     // choose default branch if none of the branches will be chosen
     if(tg == null) {
@@ -121,16 +130,9 @@ public final class Typeswitch extends ParseExpr {
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
     boolean changed = false;
     for(final TypeswitchGroup group : groups) {
-      changed |= group.simplify(mode, cc);
+      changed |= group.simplifyFor(mode, cc) == null;
     }
     return changed ? optimize(cc) : super.simplifyFor(mode, cc);
-  }
-
-  @Override
-  public Data data() {
-    final ExprList list = new ExprList(groups.length);
-    for(final TypeswitchGroup group : groups) list.add(group);
-    return data(list.finish());
   }
 
   @Override
@@ -244,12 +246,12 @@ public final class Typeswitch extends ParseExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), cond, groups);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(TYPESWITCH).paren(cond).tokens(groups);
   }
 }

@@ -2,17 +2,19 @@ package org.basex.query.value.item;
 
 import java.io.*;
 import java.util.*;
+import java.util.function.*;
 
+import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
+import org.basex.query.func.Function;
 import org.basex.util.*;
 
 /**
  * Lazy string item ({@code xs:string}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StrLazy extends AStr implements Lazy {
@@ -54,9 +56,9 @@ public final class StrLazy extends AStr implements Lazy {
   }
 
   @Override
-  public BufferInput input(final InputInfo ii) throws QueryException {
+  public TextInput stringInput(final InputInfo ii) throws IOException, QueryException {
     if(cache) cache(ii);
-    return isCached() ? super.input(ii) : get(ii);
+    return isCached() ? super.stringInput(ii) : get(ii);
   }
 
   @Override
@@ -74,27 +76,51 @@ public final class StrLazy extends AStr implements Lazy {
     }
   }
 
+  @Override
+  public int hash() {
+    try {
+      return Token.hash(string(null));
+    } catch(final QueryException ex) {
+      Util.debug(ex);
+      return Integer.MAX_VALUE;
+    }
+  }
+
   /**
    * Returns an input stream for the item.
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return stream
    * @throws QueryException query exception
    */
-  private BufferInput get(final InputInfo ii) throws QueryException {
-    TextInput ti = null;
+  private TextInput get(final InputInfo info) throws QueryException {
+    NewlineInput nli = null;
     try {
-      ti = new TextInput(input);
-      ti.encoding(encoding).validate(validate);
-      return ti;
+      nli = new NewlineInput(input);
+      nli.encoding(encoding).validate(validate);
+      return nli;
     } catch(final IOException ex) {
-      if(ti != null) try { ti.close(); } catch(final IOException e) { Util.debug(e); }
-      throw error.get(ii, ex);
+      if(nli != null) try { nli.close(); } catch(final IOException e) { Util.debug(e); }
+      throw error.get(info, ex);
     }
   }
 
   @Override
   public boolean isCached() {
     return value != null;
+  }
+
+  @Override
+  public Item materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+    cache(ii);
+    return this;
+  }
+
+  @Override
+  public boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    cache(ii);
+    return true;
   }
 
   @Override
@@ -110,9 +136,9 @@ public final class StrLazy extends AStr implements Lazy {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     if(isCached()) {
-      super.plan(qs);
+      super.toString(qs);
     } else {
       qs.function(Function._FILE_READ_TEXT, input);
     }

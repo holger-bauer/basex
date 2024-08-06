@@ -4,12 +4,13 @@ import java.awt.*;
 
 import javax.swing.*;
 
+import org.basex.core.*;
 import org.basex.gui.GUIConstants.Msg;
 
 /**
  * Project specific Label implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class BaseXLabel extends JLabel {
@@ -55,16 +56,6 @@ public class BaseXLabel extends JLabel {
   }
 
   /**
-   * Sets the text color.
-   * @param c color
-   * @return self reference
-   */
-  public final BaseXLabel color(final Color c) {
-    setForeground(c);
-    return this;
-  }
-
-  /**
    * Resizes the used font.
    * @param factor resize factor
    * @return self reference
@@ -75,15 +66,33 @@ public class BaseXLabel extends JLabel {
   }
 
   /**
-   * Shows an text, preceded by a state icon.
+   * Shows a text, preceded by a state icon.
    * If the text is {@code null}, no text and icon is shown.
-   * @param text warning text
+   * @param text warning text (can be {@code null})
    * @param icon flag for displaying a warning or error icon
    * @return self reference
    */
   public final BaseXLabel setText(final String text, final Msg icon) {
     setIcon(text == null ? null : icon.small);
     setText(text == null ? " " : text);
+    return this;
+  }
+
+  /**
+   * Shows a text. If required, chops the last characters.
+   * @param text warning text
+   * @param width maximum width
+   * @return self reference
+   */
+  public final BaseXLabel setChoppedText(final String text, final int width) {
+    final FontMetrics fm = getFontMetrics(getFont());
+    String txt = text;
+    if(width < fm.stringWidth(txt)) {
+      int tl = txt.length();
+      while(tl > 0 && width < fm.stringWidth(txt + Text.DOTS)) txt = txt.substring(0, --tl);
+      txt += Text.DOTS;
+    }
+    super.setText(txt);
     return this;
   }
 

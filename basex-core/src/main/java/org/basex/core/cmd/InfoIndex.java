@@ -18,7 +18,7 @@ import org.basex.util.*;
  * Evaluates the 'info index' command and returns information on the indexes
  * of the currently opened database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InfoIndex extends AInfo {
@@ -69,7 +69,7 @@ public final class InfoIndex extends AInfo {
    * Prints information on the specified index.
    * @param idx index type
    * @param data data reference
-   * @param options options
+   * @param options main options
    * @return success flag
    */
   private static byte[] info(final CmdIndexInfo idx, final Data data, final MainOptions options) {
@@ -98,7 +98,7 @@ public final class InfoIndex extends AInfo {
    * @param desc index description
    * @param it index type
    * @param data data reference
-   * @param options options
+   * @param options main options
    * @param avl states if index is available
    * @return information
    */

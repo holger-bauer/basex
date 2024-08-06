@@ -9,13 +9,13 @@ import org.basex.util.*;
 /**
  * Simple expression without arguments.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Simple extends ParseExpr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param seqType sequence type
    */
   protected Simple(final InputInfo info, final SeqType seqType) {
@@ -57,7 +57,7 @@ public abstract class Simple extends ParseExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this));
   }
 }

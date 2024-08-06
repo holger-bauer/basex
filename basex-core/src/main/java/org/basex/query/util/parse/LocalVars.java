@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Organizes local variables.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class LocalVars {
@@ -42,12 +42,20 @@ public final class LocalVars {
   }
 
   /**
+   * Creates and registers local variables in the current scope.
+   * @param vrs variables to be added (can be {@code null})
+   */
+  public void add(final Var... vrs) {
+    for(final Var var : vrs) add(var);
+  }
+
+  /**
    * Tries to resolve a local variable reference.
    * @param name variable name
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return variable reference or {@code null}
    */
-  public VarRef resolveLocal(final QNm name, final InputInfo ii) {
+  public VarRef resolveLocal(final QNm name, final InputInfo info) {
     int l = vars.size();
     Var var = null;
 
@@ -64,28 +72,28 @@ public final class LocalVars {
     final int ls = vars.size();
     while(++l < ls) {
       final VarContext vctx = vars.get(l);
-      final Var local = new Var(var.name, var.seqType(), false, parser.qc, parser.sc, ii);
+      final Var local = new Var(var.name, var.seqType(), parser.qc, info);
       vctx.add(local);
-      vctx.bindings.put(local, new VarRef(ii, var));
+      vctx.bindings.put(local, new VarRef(info, var));
       var = local;
     }
 
     // return the properly propagated variable reference
-    return new VarRef(ii, var);
+    return new VarRef(info, var);
   }
 
   /**
    * Resolves the referenced variable as a local or static variable and returns a reference to it.
    * IF the variable is not declared, the specified error is thrown.
    * @param name variable name
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return referenced variable
-   * @throws QueryException if the variable isn't defined
+   * @throws QueryException if the variable is not defined
    */
-  public ParseExpr resolve(final QNm name, final InputInfo ii) throws QueryException {
+  public ParseExpr resolve(final QNm name, final InputInfo info) throws QueryException {
     // local variable
-    final VarRef local = resolveLocal(name, ii);
-    if(local != null) return local;
+    final VarRef ref = resolveLocal(name, info);
+    if(ref != null) return ref;
 
     // static variable
     final byte[] uri = name.uri();
@@ -93,18 +101,22 @@ public final class LocalVars {
     // accept variable reference...
     // - if a variable uses the module or an imported URI, or
     // - if it is specified in the main module
-    if(parser.sc.module == null || eq(parser.sc.module.uri(), uri) || parser.modules.contains(uri))
-      return parser.qc.vars.newRef(name, parser.sc, ii);
+    final QNm module = parser.sc.module;
+    if(module == null || eq(module.uri(), uri) || parser.moduleURIs.contains(uri))
+      return parser.qc.vars.newRef(name, info);
 
-    throw parser.error(VARUNDEF_X, ii, '$' + string(name.string()));
+    throw parser.error(VARUNDEF_X, info, '$' + string(name.string()));
   }
 
   /**
    * Pushes a new variable context onto the stack.
-   * @param global mapping for non-local variables
+   * @param global create global mapping for non-local variables
+   * @return global map or {@code null})
    */
-  public void pushContext(final HashMap<Var, Expr> global) {
-    vars.add(new VarContext(global, parser.sc));
+  public HashMap<Var, Expr> pushContext(final boolean global) {
+    final HashMap<Var, Expr> map = global ? new HashMap<>() : null;
+    vars.add(new VarContext(map));
+    return map;
   }
 
   /**

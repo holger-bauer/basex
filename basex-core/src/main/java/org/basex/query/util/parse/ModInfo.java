@@ -6,7 +6,7 @@ import org.basex.util.list.*;
 /**
  * Information required for parsing a module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ModInfo {
@@ -14,6 +14,6 @@ public final class ModInfo {
   public final TokenList paths = new TokenList(1);
   /** URI. */
   public byte[] uri;
-  /** Input info. */
+  /** Input info (can be {@code null}). */
   public InputInfo info;
 }

@@ -23,7 +23,7 @@ import org.basex.util.options.*;
 /**
  * This class defines all available serialization parameters.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SerializerOptions extends Options {
@@ -43,6 +43,9 @@ public final class SerializerOptions extends Options {
   public static final StringOption ENCODING =
       new StringOption("encoding", Strings.UTF8);
   /** Serialization parameter: yes/no. */
+  public static final EnumOption<YesNo> ESCAPE_SOLIDUS =
+      new EnumOption<>("escape-solidus", YesNo.YES);
+  /** Serialization parameter: yes/no. */
   public static final EnumOption<YesNo> ESCAPE_URI_ATTRIBUTES =
       new EnumOption<>("escape-uri-attributes", YesNo.NO);
   /** Serialization parameter: yes/no. */
@@ -50,7 +53,7 @@ public final class SerializerOptions extends Options {
       new EnumOption<>("include-content-type", YesNo.YES);
   /** Serialization parameter: yes/no. */
   public static final EnumOption<YesNo> INDENT =
-      new EnumOption<>("indent", YesNo.YES);
+      new EnumOption<>("indent", YesNo.NO);
   /** Serialization parameter. */
   public static final StringOption SUPPRESS_INDENTATION =
       new StringOption("suppress-indentation", "");
@@ -116,6 +119,9 @@ public final class SerializerOptions extends Options {
   /** Specific serialization parameter: binary serialization. */
   public static final EnumOption<YesNo> BINARY =
       new EnumOption<>("binary", YesNo.YES);
+  /** Specific serialization parameter: attribute indentation. */
+  public static final EnumOption<YesNo> INDENT_ATTRIBUTES =
+      new EnumOption<>("indent-attributes", YesNo.NO);
 
   /** Newlines. */
   public enum Newline {
@@ -179,45 +185,43 @@ public final class SerializerOptions extends Options {
    * Parses options.
    * @param name name of option
    * @param value value
-   * @param sc static context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public void parse(final String name, final byte[] value, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-
+  public void parse(final String name, final byte[] value, final InputInfo info)
+      throws QueryException {
     try {
       assign(name, string(value));
     } catch(final BaseXException ex) {
       for(final Option<?> o : this) {
-        if(o.name().equals(name)) throw SER_X.get(ii, ex);
+        if(o.name().equals(name)) throw SERPARAM_X.get(info, ex);
       }
-      throw OUTINVALID_X.get(ii, ex);
+      throw OUTPUT_X.get(info, ex);
     }
 
     // parse parameters and character map
     if(name.equals(PARAMETER_DOCUMENT.name())) {
-      Uri uri = Uri.uri(value);
-      if(!uri.isValid()) throw INVURI_X.get(ii, value);
-      if(!uri.isAbsolute()) uri = sc.baseURI().resolve(uri, ii);
+      Uri uri = Uri.get(value);
+      if(!uri.isValid()) throw INVURI_X.get(info, value);
+      if(!uri.isAbsolute()) uri = info.sc().baseURI().resolve(uri, info);
       final IO io = IO.get(string(uri.string()));
       final ANode root;
       try {
         root = new DBNode(io).childIter().next();
       } catch(final IOException ex) {
-        throw OUTDOC_X.get(ii, ex);
+        throw OUTDOC_X.get(info, ex);
       }
 
-      if(root != null) FuncOptions.serializer(root, this, ii);
+      if(root != null) FuncOptions.serializer(root, this, info);
 
       final HashMap<String, String> free = free();
-      if(!free.isEmpty()) throw SEROPTION_X.get(ii, free.keySet().iterator().next());
+      if(!free.isEmpty()) throw SERINVALID_X.get(info, free.keySet().iterator().next());
 
       for(final ANode child : root.childIter()) {
         if(child.type != NodeType.ELEMENT) continue;
         if(string(child.qname().local()).equals(USE_CHARACTER_MAPS.name())) {
           final String map = characterMap(child);
-          if(map == null) throw SEROPTION_X.get(ii, USE_CHARACTER_MAPS.name());
+          if(map == null) throw SERINVALID_X.get(info, USE_CHARACTER_MAPS.name());
           set(USE_CHARACTER_MAPS, map);
         }
       }

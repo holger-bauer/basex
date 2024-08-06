@@ -8,7 +8,7 @@ import org.basex.util.*;
  * This class assembles text string and tokens required by the XQuery processor
  * implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public interface QueryText {
@@ -52,6 +52,7 @@ public interface QueryText {
   /** Parser token. */ String DISTANCE = "distance";
   /** Parser token. */ String DIV = "div";
   /** Parser token. */ String DOCUMENT = "document";
+  /** Parser token. */ String DOCUMENT_NODE = "document-node";
   /** Parser token. */ String ELEMENT = "element";
   /** Parser token. */ String ELSE = "else";
   /** Parser token. */ String EMPTY_SEQUENCE = "empty-sequence";
@@ -59,11 +60,15 @@ public interface QueryText {
   /** Parser token. */ String ENCODING = "encoding";
   /** Parser token. */ String END = "end";
   /** Parser token. */ String ENTIRE = "entire";
+  /** Parser token. */ String ENUM = "enum";
+  /** Parser token. */ String ERRORS = "errors";
   /** Parser token. */ String EVERY = "every";
   /** Parser token. */ String EXACTLY = "exactly";
   /** Parser token. */ String EXCEPT = "except";
   /** Parser token. */ String EXTERNAL = "external";
+  /** Parser token. */ String FALSE = "false";
   /** Parser token. */ String FIRST = "first";
+  /** Parser token. */ String FN = "fn";
   /** Parser token. */ String FOR = "for";
   /** Parser token. */ String FROM = "from";
   /** Parser token. */ String FT_OPTION = "ft-option";
@@ -86,6 +91,8 @@ public interface QueryText {
   /** Parser token. */ String INTO = "into";
   /** Parser token. */ String INVOKE = "invoke";
   /** Parser token. */ String ITEM = "item";
+  /** Parser token. */ String ITEM_TYPE = "item-type";
+  /** Parser token. */ String KEY = "key";
   /** Parser token. */ String LANGUAGE = "language";
   /** Parser token. */ String LAST = "last";
   /** Parser token. */ String LAX = "lax";
@@ -94,18 +101,20 @@ public interface QueryText {
   /** Parser token. */ String LEVELS = "levels";
   /** Parser token. */ String LOWERCASE = "lowercase";
   /** Parser token. */ String MAP = "map";
+  /** Parser token. */ String MEMBER = "member";
   /** Parser token. */ String MOD = "mod";
   /** Parser token. */ String MODIFY = "modify";
   /** Parser token. */ String MODULE = "module";
   /** Parser token. */ String MOST = "most";
   /** Parser token. */ String NAMESPACE = "namespace";
+  /** Parser token. */ String NAMESPACE_NODE = "namespace-node";
   /** Parser token. */ String NEXT = "next";
   /** Parser token. */ String NO_INHERIT = "no-inherit";
   /** Parser token. */ String NO_PRESERVE = "no-preserve";
   /** Parser token. */ String NO = "no";
   /** Parser token. */ String NODE = "node";
   /** Parser token. */ String NODES = "nodes";
-  /** Parser token. */ String NON_DETERMINISTIC = "non-deterministic";
+  /** Parser token. */ String NONDETERMINISTIC = "nondeterministic";
   /** Parser token. */ String NOT = "not";
   /** Parser token. */ String OCCURS = "occurs";
   /** Parser token. */ String OF = "of";
@@ -115,12 +124,14 @@ public interface QueryText {
   /** Parser token. */ String ORDER = "order";
   /** Parser token. */ String ORDERED = "ordered";
   /** Parser token. */ String ORDERING = "ordering";
+  /** Parser token. */ String OTHERWISE = "otherwise";
   /** Parser token. */ String PARAGRAPH = "paragraph";
   /** Parser token. */ String PARAGRAPHS = "paragraphs";
   /** Parser token. */ String PHRASE = "phrase";
   /** Parser token. */ String PROCESSING_INSTRUCTION = "processing-instruction";
   /** Parser token. */ String PRESERVE = "preserve";
   /** Parser token. */ String PREVIOUS = "previous";
+  /** Parser token. */ String RECORD = "record";
   /** Parser token. */ String RELATIONSHIP = "relationship";
   /** Parser token. */ String RENAME = "rename";
   /** Parser token. */ String REPLACE = "replace";
@@ -153,6 +164,7 @@ public interface QueryText {
   /** Parser token. */ String TO = "to";
   /** Parser token. */ String TRANSFORM = "transform";
   /** Parser token. */ String TREAT = "treat";
+  /** Parser token. */ String TRUE = "true";
   /** Parser token. */ String TRY = "try";
   /** Parser token. */ String TUMBLING = "tumbling";
   /** Parser token. */ String TYPE = "type";
@@ -170,6 +182,7 @@ public interface QueryText {
   /** Parser token. */ String WEIGHT = "weight";
   /** Parser token. */ String WHEN = "when";
   /** Parser token. */ String WHERE = "where";
+  /** Parser token. */ String WHILE = "while";
   /** Parser token. */ String WILDCARDS = "wildcards";
   /** Parser token. */ String WINDOW = "window";
   /** Parser token. */ String WITH = "with";
@@ -178,18 +191,6 @@ public interface QueryText {
   /** Parser token. */ String WORDS = "words";
   /** Parser token. */ String XQUERY = "xquery";
 
-  /** Parser token. */ String DF_DEC = "decimal-separator";
-  /** Parser token. */ String DF_DIG = "digit";
-  /** Parser token. */ String DF_GRP = "grouping-separator";
-  /** Parser token. */ String DF_EXP = "exponent-separator";
-  /** Parser token. */ String DF_INF = "infinity";
-  /** Parser token. */ String DF_MIN = "minus-sign";
-  /** Parser token. */ String DF_NAN = "NaN";
-  /** Parser token. */ String DF_PAT = "pattern-separator";
-  /** Parser token. */ String DF_PC = "percent";
-  /** Parser token. */ String DF_PM = "per-mille";
-  /** Parser token. */ String DF_ZD = "zero-digit";
-
   /** Parser token. */ String NAMESPACES = "namespaces";
   /** Parser token. */ String ELEMENT_NAMESPACE = "element-namespace";
   /** Parser token. */ String FUNCTION_NAMESPACE = "function-namespace";
@@ -197,49 +198,10 @@ public interface QueryText {
   /** Parser token. */ String DECIMAL_FORMATS = "decimal-formats";
 
   /** Parser token. */ String LOCK = "lock";
-  /** Parser token. */ String NON_DETERMNISTIC = "non-deterministic";
+  /** Parser token. */ String NONDETERMNISTIC = "nondeterministic";
 
-  // PARSER KEYWORDS (IGNORED BY THE SYNTAX HIGHLIGHTER) ==========================================
-
-  /** Skip flag for the syntax highlighter (don't remove!). */
+  /** Parsed by the syntax highlighter (don’t remove): remaining constants will be ignored. */
   String IGNORE = null;
-
-  /** Parser token. */ String CONCAT = "||";
-  /** Parser token. */ String ASSIGN = ":=";
-  /** Parser token. */ String EQNAME = "Q{";
-  /** Parser token. */ String CDATA = "<![CDATA[";
-  /** Parser token. */ String COL = ":";
-  /** Parser token. */ String COLS = "::";
-  /** Parser token. */ String COLWC = ":*";
-  /** Parser token. */ String HSH = "#";
-  /** Parser token. */ String SEMICOL = ";";
-  /** Parser token. */ String COMMA = ",";
-  /** Parser token. */ String DOLLAR = "$";
-  /** Parser token. */ String DOTS2 = "..";
-  /** Parser token. */ String IS = "=";
-  /** Parser token. */ String EXCL = "!";
-  /** Parser token. */ String XQ10 = "1.0";
-  /** Parser token. */ String XQ11 = "1.1";
-  /** Parser token. */ String XQ30 = "3.0";
-  /** Parser token. */ String XQ31 = "3.1";
-  /** Parser token. */ String PAREN1 = "(";
-  /** Parser token. */ String PAREN2 = ")";
-  /** Parser token. */ String SQUARE1 = "[";
-  /** Parser token. */ String SQUARE2 = "]";
-  /** Parser token. */ String CURLY1 = "{";
-  /** Parser token. */ String CURLY2 = "}";
-  /** Parser token. */ String PIPE = "|";
-  /** Parser token. */ String PRAGMA = "(#";
-  /** Parser token. */ String PRAGMA2 = "#)";
-  /** Parser Token. */ String QUESTION = "?";
-  /** Parser Token. */ String ASTERISK = "*";
-  /** Parser token. */ String ARROW = "=>";
-  /** Parser token. */ String TERNARY1 = "??";
-  /** Parser token. */ String TERNARY2 = "!!";
-  /** Parser token. */ String ELVIS = "?:";
-
-  /** Java prefix. */ String JAVAPREF = "java:";
-  /** New keyword. */ String NEW = "new";
 
   // PREFIXES =====================================================================================
 
@@ -261,20 +223,21 @@ public interface QueryText {
   /** XQuery prefix. */ byte[] FN_PREFIX = token("fn");
   /** XQuery prefix. */ byte[] FT_PREFIX = token("ft");
   /** XQuery prefix. */ byte[] GEO_PREFIX = token("geo");
-  /** XQuery prefix. */ byte[] HASH_PREFIX = token("hash");
   /** XQuery prefix. */ byte[] HOF_PREFIX = token("hof");
   /** XQuery prefix. */ byte[] HTML_PREFIX = token("html");
   /** XQuery prefix. */ byte[] HTTP_PREFIX = token("http");
   /** XQuery prefix. */ byte[] INDEX_PREFIX = token("index");
   /** XQuery prefix. */ byte[] INPUT_PREFIX = token("input");
   /** XQuery prefix. */ byte[] INSPECT_PREFIX = token("inspect");
-  /** XQuery prefix. */ byte[] JOBS_PREFIX = token("jobs");
+  /** XQuery prefix. */ byte[] JAVA_PREFIX = token("java");
+  /** XQuery prefix. */ byte[] JOB_PREFIX = token("job");
+  /** Obsolete.      */ byte[] JOBS_PREFIX = token("jobs");
   /** XQuery prefix. */ byte[] JSON_PREFIX = token("json");
   /** XQuery prefix. */ byte[] LAZY_PREFIX = token("lazy");
   /** XQuery prefix. */ byte[] LOCAL_PREFIX = token("local");
   /** XQuery prefix. */ byte[] MAP_PREFIX = token("map");
   /** XQuery prefix. */ byte[] MATH_PREFIX = token("math");
-  /** XQuery prefix. */ byte[] OUT_PREFIX = token("out");
+  /** Obsolete.      */ byte[] OUT_PREFIX = token("out");
   /** XQuery prefix. */ byte[] OUTPUT_PREFIX = token("output");
   /** XQuery prefix. */ byte[] PERM_PREFIX = token("perm");
   /** XQuery prefix. */ byte[] PKG_PREFIX = token("pkg");
@@ -287,7 +250,9 @@ public interface QueryText {
   /** XQuery prefix. */ byte[] SESSION_PREFIX = token("session");
   /** XQuery prefix. */ byte[] SESSIONS_PREFIX = token("sessions");
   /** XQuery prefix. */ byte[] SQL_PREFIX = token("sql");
-  /** XQuery prefix. */ byte[] STRINGS_PREFIX = token("strings");
+  /** XQuery prefix. */ byte[] STORE_PREFIX = token("store");
+  /** XQuery prefix. */ byte[] STRING_PREFIX = token("string");
+  /** Obsolete.      */ byte[] STRINGS_PREFIX = token("strings");
   /** XQuery prefix. */ byte[] UNIT_PREFIX = token("unit");
   /** XQuery prefix. */ byte[] UPDATE_PREFIX = token("update");
   /** XQuery prefix. */ byte[] USER_PREFIX = token("user");
@@ -299,7 +264,6 @@ public interface QueryText {
   /** XQuery prefix. */ byte[] XS_PREFIX = token("xs");
   /** XQuery prefix. */ byte[] XSI_PREFIX = token("xsi");
   /** XQuery prefix. */ byte[] XSLT_PREFIX = token("xslt");
-  /** XQuery prefix. */ byte[] ZIP_PREFIX = token("zip");
 
   // URIS =========================================================================================
 
@@ -325,7 +289,6 @@ public interface QueryText {
   /** EXPath URI. */ byte[] GEO_URI = token(EXPATH_URI + "geo");
   /** EXPath URI. */ byte[] HTTP_URI = token(EXPATH_URI + "http-client");
   /** EXPath URI. */ byte[] PKG_URI = token(EXPATH_URI + "pkg");
-  /** EXPath URI. */ byte[] ZIP_URI = token(EXPATH_URI + "zip");
   /** EXPath URI. */ byte[] EXPERROR_URI = token(EXPATH_URI + "error");
 
   /** EXQuery URI. */ String EXQUERY_URL = "http://exquery.org/ns/";
@@ -344,16 +307,15 @@ public interface QueryText {
   /** BaseX URI. */ byte[] DB_URI = token(BXMODULES_URL + "db");
   /** BaseX URI. */ byte[] FETCH_URI = token(BXMODULES_URL + "fetch");
   /** BaseX URI. */ byte[] FT_URI = token(BXMODULES_URL + "ft");
-  /** BaseX URI. */ byte[] HASH_URI = token(BXMODULES_URL + "hash");
   /** BaseX URI. */ byte[] HOF_URI = token(BXMODULES_URL + "hof");
   /** BaseX URI. */ byte[] HTML_URI = token(BXMODULES_URL + "html");
   /** BaseX URI. */ byte[] INDEX_URI = token(BXMODULES_URL + "index");
   /** BaseX URI. */ byte[] INPUT_URI = token(BXMODULES_URL + "input");
   /** BaseX URI. */ byte[] INSPECT_URI = token(BXMODULES_URL + "inspect");
-  /** BaseX URI. */ byte[] JOBS_URI = token(BXMODULES_URL + "jobs");
+  /** BaseX URI. */ byte[] JAVA_URI = token(BXMODULES_URL + "java");
+  /** BaseX URI. */ byte[] JOB_URI = token(BXMODULES_URL + "job");
   /** BaseX URI. */ byte[] JSON_URI = token(BXMODULES_URL + "json");
   /** BaseX URI. */ byte[] LAZY_URI = token(BXMODULES_URL + "lazy");
-  /** BaseX URI. */ byte[] OUT_URI = token(BXMODULES_URL + "out");
   /** BaseX URI. */ byte[] PERM_URI = token(BXMODULES_URL + "perm");
   /** BaseX URI. */ byte[] PROC_URI = token(BXMODULES_URL + "proc");
   /** BaseX URI. */ byte[] PROF_URI = token(BXMODULES_URL + "prof");
@@ -362,7 +324,8 @@ public interface QueryText {
   /** BaseX URI. */ byte[] SQL_URI = token(BXMODULES_URL + "sql");
   /** BaseX URI. */ byte[] SESSION_URI = token(BXMODULES_URL + "session");
   /** BaseX URI. */ byte[] SESSIONS_URI = token(BXMODULES_URL + "sessions");
-  /** BaseX URI. */ byte[] STRINGS_URI = token(BXMODULES_URL + "strings");
+  /** BaseX URI. */ byte[] STORE_URI = token(BXMODULES_URL + "store");
+  /** BaseX URI. */ byte[] STRING_URI = token(BXMODULES_URL + "string");
   /** BaseX URI. */ byte[] UNIT_URI = token(BXMODULES_URL + "unit");
   /** BaseX URI. */ byte[] UPDATE_URI = token(BXMODULES_URL + "update");
   /** BaseX URI. */ byte[] USER_URI = token(BXMODULES_URL + "user");
@@ -375,8 +338,6 @@ public interface QueryText {
 
   // QUERY PLAN ===================================================================================
 
-  /** Query Info. */ String QUERY_PLAN = "QueryPlan";
-  /** Query Info. */ String COMPILED = "compiled";
   /** Query Info. */ String OP = "op";
   /** Query Info. */ String VAR = "var";
   /** Query Info. */ String INDEX = "index";
@@ -393,7 +354,7 @@ public interface QueryText {
   /** Query Info. */ String INF = "inf";
   /** Query Info. */ String TAILCALL = "tailCall";
   /** Query Info. */ String ENTRIES = "entries";
-  /** Query Info. */ String PROMOTE = "promote";
+  /** Query Info. */ String COERCE = "coerce";
   /** Query Info. */ String DATABASE = "database";
   /** Query Info. */ String ITERATIVE = "iterative";
   /** Query Info. */ String SINGLE = "single";
@@ -411,8 +372,9 @@ public interface QueryText {
   /** Optimization info. */ String OPTREWRITE = "rewrite";
   /** Optimization info. */ String OPTREWRITE_X_X = "rewrite %: %";
   /** Optimization info. */ String OPTMERGE_X = "merge: %";
+  /** Optimization info. */ String OPTREFINED_X = "refine parameter types: %";
   /** Optimization info. */ String OPTTYPE_X = "remove type check: %";
-  /** Optimization info. */ String OPTTYPE_X_X = "remove type check: % -> %";
+  /** Optimization info. */ String OPTTYPE_X_X = "remove % type check: %";
   /** Optimization info. */ String OPTFLAT_X_X = "flatten nested %: %";
   /** Optimization info. */ String OPTTCE_X = "mark as tail call: %";
   /** Optimization info. */ String OPTLET_X = "hoist let clause: %";
@@ -435,23 +397,19 @@ public interface QueryText {
   // MISCELLANEOUS ================================================================================
 
   /** Base token. */ byte[] BASE = token("base");
+  /** Status token. */ byte[] STATUS = token("status");
   /** Language attribute. */ byte[] LANG = token("xml:lang");
 
-  /** Serialization. */ byte[] SERIALIZATION_PARAMETERS = token("serialization-parameters");
   /** Serialization. */ byte[] CHARACTER = token("character");
   /** Serialization. */ byte[] CHARACTER_MAP = token("character-map");
   /** Serialization. */ byte[] MAP_STRING = token("map-string");
 
-  /** Error token. */ byte[] E_CODE = token("code");
-  /** Error token. */ byte[] E_DESCRIPTION = token("description");
-  /** Error token. */ byte[] E_VALUE = token("value");
-  /** Error token. */ byte[] E_MODULE = token("module");
-  /** Error token. */ byte[] E_LINE_NUMBER = token("line-number");
-  /** Error token. */ byte[] E_COLUMN_NUMBER = token("column-number");
-  /** Error token. */ byte[] E_ADDITIONAL = token("additional");
+  /** Debugging info. */ String DEBUG_LOCAL = "Local Variables";
+  /** Debugging info. */ String DEBUG_GLOBAL = "Global Variables";
 
-  /** Debugging info. */ String DEBUGLOCAL = "Local Variables";
-  /** Debugging info. */ String DEBUGGLOBAL = "Global Variables";
+  /** Java prefix. */ String JAVA_PREFIX_COLON = "java:";
+  /** Java keyword: new. */ String NEW = "new";
+  /** Java default namespace. */ String JAVA_LANG_DOT = "java.lang.";
 
   /** Example for a Date format.              */ String XDATE = "2000-12-31";
   /** Example for a Time format.              */ String XTIME = "23:59:59.999";

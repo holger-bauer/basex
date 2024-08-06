@@ -3,20 +3,22 @@ package org.basex.query.func.db;
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
+import java.util.*;
+
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.value.*;
+import org.basex.query.value.node.*;
 import org.basex.util.*;
-import org.basex.util.hash.*;
-import org.basex.util.http.*;
 import org.basex.util.list.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbDir extends DbList {
@@ -39,45 +41,53 @@ public final class DbDir extends DbList {
    * @throws QueryException query exception
    */
   private Value resources(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
-    byte[] path = toToken(exprs[1], qc);
-    String root = MetaData.normPath(string(path));
-    if(root == null) throw DB_PATH_X.get(info, path);
+    final Data data = toData(qc);
+    final String string = toString(arg(1), qc);
 
-    if(!root.isEmpty() && !Strings.endsWith(root, '/')) root += '/';
-    path = token(root);
+    String path = MetaData.normPath(string);
+    if(path == null) throw DB_PATH_X.get(info, string);
+    if(!path.isEmpty() && !Strings.endsWith(path, '/')) path += '/';
 
     final ValueBuilder vb = new ValueBuilder(qc);
-    final TokenSet map = new TokenSet();
+    final HashSet<String> set = new HashSet<>();
+    final Resources resources = data.resources;
 
-    final IntList docs = data.resources.docs(root, false);
-    final int ds = docs.size();
+    // list XML resources
+    final IntList docs = resources.docs(path, true);
+    final long ds = docs.size(), ts = data.meta.time;
     for(int d = 0; d < ds; d++) {
-      byte[] np = data.text(docs.get(d), true);
-      np = substring(np, path.length, np.length);
-
-      final int i = indexOf(np, SLASH);
+      final int pre = docs.get(d);
+      String name = string(substring(data.text(pre, true), path.length()));
+      final int i = name.indexOf('/');
       final boolean dir = i >= 0;
-      if(dir) np = substring(np, 0, i);
-      if(map.contains(np)) continue;
-
-      map.put(np);
-      vb.add(dir ? dir(np, data.meta.time) :
-        resource(np, false, MediaType.APPLICATION_XML, data.meta.time, null));
+      if(dir) name = name.substring(0, i);
+      if(set.add(name)) vb.add(elem(dir, name, ts, data.size(pre, Data.DOC), ResourceType.XML));
     }
-
-    final IOFile file = data.meta.binary(string(path));
-    if(file != null) {
-      for(final IOFile io : file.children()) {
-        final byte[] np = token(io.name());
-        if(map.contains(np)) continue;
-
-        map.put(np);
-        vb.add(io.isDir() ? dir(np, io.timeStamp()) :
-          resource(np, true, MediaType.get(io.path()), io.timeStamp(), io.length()));
+    // list file resources
+    if(!data.inMemory()) {
+      for(final ResourceType type : Resources.BINARIES) {
+        final IOFile bin = data.meta.file(path, type);
+        for(final IOFile file : bin.children()) {
+          final boolean dir = file.isDir();
+          final String name = dir ? file.name() : type.dbPath(file.name());
+          if(set.add(name)) vb.add(elem(file.isDir(), name, file.timeStamp(), file.length(), type));
+        }
       }
     }
-
     return vb.value(this);
+  }
+
+  /**
+   * Creates an element.
+   * @param dir directory flag
+   * @param path path
+   * @param date modified date
+   * @param size file size (can be {@code null})
+   * @param type resource type
+   * @return element node
+   */
+  private FNode elem(final boolean dir, final String path, final long date, final long size,
+      final ResourceType type) {
+    return dir ? dir(path, date) : resource(path, date, size, type);
   }
 }

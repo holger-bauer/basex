@@ -2,7 +2,6 @@ package org.basex.query.expr;
 
 import static org.basex.query.func.Function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.CmpG.*;
@@ -19,7 +18,7 @@ import org.basex.util.hash.*;
 /**
  * If expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class If extends Arr {
@@ -28,7 +27,7 @@ public final class If extends Arr {
 
   /**
    * Constructor with empty 'else' branch.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param cond condition
    * @param branch1 'then' branch
    */
@@ -38,7 +37,7 @@ public final class If extends Arr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param cond condition
    * @param branch1 'then' branch
    * @param branch2 'else' branch
@@ -60,12 +59,7 @@ public final class If extends Arr {
 
     final int el = exprs.length;
     for(int e = 0; e < el; e++) {
-      try {
-        exprs[e] = exprs[e].compile(cc);
-      } catch(final QueryException ex) {
-        // replace original expression with error
-        exprs[e] = cc.error(ex, exprs[e]);
-      }
+      exprs[e] = cc.compileOrError(exprs[e], false);
     }
     return optimize(cc);
   }
@@ -74,7 +68,7 @@ public final class If extends Arr {
   public Expr optimize(final CompileContext cc) throws QueryException {
     if(EMPTY.is(cond)) {
       // if(empty(A)) then B else C  ->  if(exists(A)) then C else B
-      cond = cc.function(EXISTS, info, cond.arg(0));
+      cond = cc.function(EXISTS, cond.info(info), cond.arg(0));
       swap();
       cc.info(QueryText.OPTSWAP_X, this);
     } else if(NOT.is(cond)) {
@@ -105,20 +99,18 @@ public final class If extends Arr {
     final boolean ndt = cond.has(Flag.NDT);
     if(ct.zero() && !ndt) return br2;
 
-    // rewrite to elvis operator:
-    //   if(exists(VALUE)) then VALUE else DEFAULT  ->  VALUE ?: DEFAULT
-    //   if(NODES) then NODES else DEFAULT  ->  NODES ?: DEFAULT
-    final Expr cmp = EXISTS.is(cond) ? cond.arg(0) :
-      ct.type instanceof NodeType ? cond : null;
-    if(!ndt && cmp != null && cmp.equals(br1)) return
-        cc.function(_UTIL_OR, info, br1, br2);
+    // rewrite to otherwise:
+    //   if(exists(VALUE)) then VALUE else DEFAULT  ->  VALUE otherwise DEFAULT
+    //   if(NODES) then NODES else DEFAULT  ->  NODES otherwise DEFAULT
+    final Expr cmp = EXISTS.is(cond) ? cond.arg(0) : ct.type instanceof NodeType ? cond : null;
+    if(!ndt && cmp != null && cmp.equals(br1)) return new Otherwise(info, br1, br2).optimize(cc);
 
-    // if(A) then B else B  ->  B (errors in A will be ignored)
-    if(br1.equals(br2)) return cc.merge(cond, br1, info);
+    // if(A) then B else B  ->  void(A), B
+    if(br1.equals(br2)) return cc.voidAndReturn(cond, br1, info);
 
     // determine type
     final SeqType st1 = br1.seqType(), st2 = br2.seqType();
-    exprType.assign(st1.union(st2));
+    exprType.assign(st1.union(st2)).data(exprs);
 
     // logical rewritings
     if(st1.eq(SeqType.BOOLEAN_O) && st2.eq(SeqType.BOOLEAN_O)) {
@@ -140,9 +132,9 @@ public final class If extends Arr {
         new And(info, cond, br1).optimize(cc);
 
       if(contradict(br1, br2, false)) return new CmpG(
-          cc.function(BOOLEAN, info, cond), br1, OpG.EQ, null, cc.sc(), info).optimize(cc);
+          info, cc.function(BOOLEAN, info, cond), br1, OpG.EQ).optimize(cc);
       if(contradict(br2, br1, false)) return new CmpG(
-          cc.function(BOOLEAN, info, cond), br2, OpG.NE, null, cc.sc(), info).optimize(cc);
+          info, cc.function(BOOLEAN, info, cond), br2, OpG.NE).optimize(cc);
     }
     return this;
   }
@@ -178,7 +170,7 @@ public final class If extends Arr {
    * @throws QueryException query exception
    */
   private Expr expr(final QueryContext qc) throws QueryException {
-    return exprs[cond.ebv(qc, info).bool(info) ? 0 : 1];
+    return exprs[cond.test(qc, info, 0) ? 0 : 1];
   }
 
   @Override
@@ -229,12 +221,9 @@ public final class If extends Arr {
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    return simplifyAll(mode, cc) ? optimize(cc) : super.simplifyFor(mode, cc);
-  }
-
-  @Override
-  public Data data() {
-    return data(exprs);
+    final Expr[] ex = simplifyAll(mode, cc);
+    return ex != exprs ? new If(info, cond, ex[0], ex[1]).optimize(cc) :
+      super.simplifyFor(mode, cc);
   }
 
   @Override
@@ -274,13 +263,13 @@ public final class If extends Arr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), cond, exprs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.token("(").token(QueryText.IF).paren(cond).token(QueryText.THEN).token(exprs[0]);
-    qs.token(QueryText.ELSE).token(exprs[1]).token(')');
+  public void toString(final QueryString qs) {
+    qs.token(QueryText.IF).paren(cond).brace(exprs[0]);
+    if(exprs[1] != Empty.VALUE) qs.token(QueryText.ELSE).brace(exprs[1]);
   }
 }

@@ -2,6 +2,7 @@ package org.basex.query.func;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
+import static org.basex.util.Token.*;
 
 import java.util.*;
 import java.util.function.*;
@@ -15,6 +16,7 @@ import org.basex.query.expr.gflwor.*;
 import org.basex.query.scope.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
+import org.basex.query.util.parse.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -25,79 +27,96 @@ import org.basex.util.hash.*;
 /**
  * A static user-defined function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class StaticFunc extends StaticDecl implements XQFunction {
   /** Formal parameters. */
   public final Var[] params;
+  /** Default expressions (entries can be {@code null} references). */
+  final Expr[] defaults;
+  /** Minimum number of arguments. */
+  final int min;
   /** Updating flag. */
   final boolean updating;
 
   /** Map with requested function properties. */
   private final EnumMap<Flag, Boolean> map = new EnumMap<>(Flag.class);
-  /** Flag that is turned on during compilation and prevents premature inlining. */
-  private boolean compiling;
 
   /**
    * Function constructor.
-   * @param anns annotations
    * @param name function name
-   * @param params formal parameters
-   * @param type declared return type (can be {@code null})
+   * @param params parameters
    * @param expr function body (can be {@code null})
-   * @param doc xqdoc string
+   * @param anns annotations
    * @param vs variable scope
-   * @param info input info
+   * @param info input info (can be {@code null})
+   * @param doc xqdoc string
    */
-  StaticFunc(final AnnList anns, final QNm name, final Var[] params, final SeqType type,
-      final Expr expr, final String doc, final VarScope vs, final InputInfo info) {
-    super(anns, name, type, vs, doc, info);
-    this.params = params;
+  StaticFunc(final QNm name, final Params params, final Expr expr, final AnnList anns,
+      final VarScope vs, final InputInfo info, final String doc) {
+    super(name, params.seqType(), anns, vs, info, doc);
+
+    this.params = params.vars();
+    this.defaults = params.defaults();
     this.expr = expr;
     updating = anns.contains(Annotation.UPDATING);
+
+    int mn = defaults.length;
+    for(final Expr dflt : defaults) {
+      if(dflt != null) mn--;
+    }
+    min = mn;
   }
 
   @Override
-  public void comp(final CompileContext cc) {
-    if(compiled || expr == null) return;
-    compiling = compiled = true;
+  public Expr compile(final CompileContext cc) {
+    if(!compiled && expr != null) {
+      compiled = true;
 
-    // compile function body, handle return type
-    cc.pushFocus(null);
-    cc.pushScope(vs);
-    try {
-      expr = expr.compile(cc);
-      if(declType != null) expr = new TypeCheck(sc, info, expr, declType, true).optimize(cc);
-    } catch(final QueryException qe) {
-      expr = cc.error(qe, expr);
-    } finally {
-      cc.removeScope(this);
-      cc.removeFocus();
-    }
+      // dynamic compilation: refine parameter types to arguments types of function call
+      final SeqType[] callTypes = cc.dynamic ? cc.qc.functions.seqTypes(this) : null;
+      final int pl = params.length;
+      if(callTypes != null) {
+        boolean refined = false;
+        for(int p = 0; p < pl; p++) {
+          final Var param = params[p];
+          final SeqType cst = callTypes[p], pst = param.seqType();
+          if(!cst.eq(pst) && cst.instanceOf(pst)) {
+            param.declType = cst;
+            refined = true;
+          }
+        }
+        if(refined) cc.info(OPTREFINED_X, concat(name.prefixId(), '#', pl));
+      }
 
-    // convert all function calls in tail position to proper tail calls
-    expr.markTailCalls(cc);
-    compiling = false;
-  }
+      // compile function body, handle return type
+      dontEnter = true;
+      cc.pushFocus(null);
+      cc.pushScope(vs);
+      try {
+        expr = expr.compile(cc);
+        if(declType != null) expr = new TypeCheck(info, expr, declType).optimize(cc);
+      } catch(final QueryException qe) {
+        expr = cc.error(qe, expr);
+      } finally {
+        cc.removeScope(this);
+        cc.removeFocus();
+      }
+      // convert all function calls in tail position to proper tail calls
+      expr.markTailCalls(cc);
+      dontEnter = false;
 
-  /**
-   * Optimize the static function.
-   * @param cc compilation context
-   */
-  public void optimize(final CompileContext cc) {
-    // check function calls, drop superfluous type checks
-    final SeqType[] seqTypes = cc.qc.funcs.seqTypes(this);
-    if(seqTypes != null) {
-      final int pl = arity();
-      for(int p = 0; p < pl; p++) {
-        if(seqTypes[p].instanceOf(params[p].seqType())) {
-          cc.info(OPTTYPE_X, params[p]);
-          params[p].declType = null;
+      // dynamic compilation: remove redundant type declarations
+      if(callTypes != null) {
+        for(int p = 0; p < pl; p++) {
+          final Var param = params[p];
+          if(callTypes[p].instanceOf(param.seqType())) param.declType = null;
         }
       }
+      if(!cc.dynamic) declType = null;
     }
-    declType = null;
+    return null;
   }
 
   /**
@@ -118,6 +137,9 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
     });
   }
 
+  /**
+   * Returns the maximum arity.
+   */
   @Override
   public int arity() {
     return params.length;
@@ -154,14 +176,14 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
 
     // reset context and evaluate function
     final QueryFocus qf = qc.focus;
-    final Value cv = qf.value;
+    final Value qv = qf.value;
     qf.value = null;
     try {
       final int pl = params.length;
       for(int p = 0; p < pl; p++) qc.set(params[p], args[p]);
       return expr.value(qc);
     } finally {
-      qf.value = cv;
+      qf.value = qv;
     }
   }
 
@@ -170,14 +192,14 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
    * @throws QueryException query exception
    */
   void checkUp() throws QueryException {
-    final boolean upd = expr.has(Flag.UPD);
-    if(upd) expr.checkUp();
-    final InputInfo ii = expr instanceof ParseExpr ? ((ParseExpr) expr).info : info;
+    final boolean exprUpdating = expr.has(Flag.UPD);
+    if(exprUpdating) expr.checkUp();
+    final InputInfo ii = expr.info(info);
     if(updating) {
       // updating function
-      if(declType != null && !declType.zero()) throw UUPFUNCTYPE.get(info);
-      if(!upd && !expr.vacuous()) throw UPEXPECTF.get(ii);
-    } else if(upd) {
+      if(!(exprUpdating || expr.vacuous())) throw UPEXPECTF.get(ii);
+      if(declType != null && !declType.zero()) throw UUPFUNCTYPE.get(ii);
+    } else if(exprUpdating) {
       // uses updates, but is not declared as such
       throw UPNOT_X.get(ii, description());
     }
@@ -205,9 +227,9 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
    * @return result of check
    * @see Expr#has(Flag...)
    */
-  boolean updating() {
+  public boolean updating() {
     // MIXUPDATES: recursive check; otherwise, rely on flag (GH-1281)
-    return sc.mixUpdates ? check(Flag.UPD) : updating;
+    return sc != null && sc.mixUpdates ? check(Flag.UPD) : updating;
   }
 
   /**
@@ -235,15 +257,17 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
 
   @Override
   public boolean visit(final ASTVisitor visitor) {
-    for(final Ann ann : anns) {
-      if(ann.sig == Annotation._BASEX_LOCK) {
-        for(final Item arg : ann.args()) {
-          for(final String lock : Locking.queryLocks(((Str) arg).string())) {
-            visitor.lock(lock, false);
+    visitor.lock(() -> {
+      final ArrayList<String> list = new ArrayList<>(1);
+      for(final Ann ann : anns) {
+        if(ann.definition == Annotation._BASEX_LOCK) {
+          for(final Item arg : ann.value()) {
+            Collections.addAll(list, Locking.queryLocks(((Str) arg).string()));
           }
         }
       }
-    }
+      return list;
+    });
 
     for(final Var var : params) {
       if(!visitor.declared(var)) return false;
@@ -252,14 +276,9 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
   }
 
   @Override
-  public byte[] id() {
-    return StaticFuncs.signature(name, params.length);
-  }
-
-  @Override
   public Expr inline(final Expr[] exprs, final CompileContext cc) throws QueryException {
-    if(!inline(cc, anns, expr) || has(Flag.CTX) || compiling || selfRecursive()) return null;
-    cc.info(OPTINLINE_X, (Supplier<?>) this::id);
+    if(!inline(cc, anns, expr) || has(Flag.CTX) || dontEnter || selfRecursive()) return null;
+    cc.info(OPTINLINE_X, (Supplier<?>) () -> concat(name.prefixId(), '#', params.length));
 
     // create let bindings for all variables
     final LinkedList<Clause> clauses = new LinkedList<>();
@@ -277,18 +296,20 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
   /**
    * Checks if inlining conditions are given.
    * @param cc compilation context
-   * @param anns annotations
+   * @param anns annotations (can be {@code null})
    * @param expr expression
    * @return result of check
    */
   public static boolean inline(final CompileContext cc, final AnnList anns, final Expr expr) {
-    final Ann ann = anns.get(Annotation._BASEX_INLINE);
+    final Ann inline = anns.get(Annotation._BASEX_INLINE);
     final long limit;
-    if(ann == null) {
-      limit = cc.qc.context.options.get(MainOptions.INLINELIMIT);
+    if(inline != null) {
+      final Value value = inline.value();
+      limit = value.isEmpty() ? Long.MAX_VALUE : ((ANum) value.itemAt(0)).itr();
+    } else if(anns.contains(Annotation._BASEX_LOCK)) {
+      limit = 0;
     } else {
-      final Item[] args = ann.args();
-      limit = args.length > 0 ? ((ANum) args[0]).itr() : Long.MAX_VALUE;
+      limit = cc.qc.context.options.get(MainOptions.INLINELIMIT);
     }
     return expr.exprSize() < limit;
   }
@@ -299,12 +320,12 @@ public final class StaticFunc extends StaticDecl implements XQFunction {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name.string()), params, expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(DECLARE).token(anns).token(FUNCTION).token(name.prefixId()).params(params);
     if(declType != null) qs.token(AS).token(declType);
     if(expr != null) qs.brace(expr);

@@ -1,10 +1,13 @@
 package org.basex.query.func;
 
+import static org.basex.query.QueryText.*;
+
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.scope.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -14,7 +17,7 @@ import org.basex.util.hash.*;
 /**
  * A named function literal.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class FuncLit extends Single implements Scope {
@@ -26,34 +29,29 @@ public final class FuncLit extends Single implements Scope {
   private final Var[] params;
   /** Annotations. */
   private final AnnList anns;
-  /** Compilation flag. */
-  private boolean compiled;
 
   /**
    * Constructor.
-   * @param anns annotations
-   * @param name function name
-   * @param params formal parameters
+   * @param info input info (can be {@code null})
    * @param expr function body
+   * @param params formal parameters
+   * @param anns annotations
    * @param seqType sequence type
+   * @param name function name
    * @param vs variable scope
-   * @param info input info
    */
-  FuncLit(final AnnList anns, final QNm name, final Var[] params, final Expr expr,
-      final SeqType seqType, final VarScope vs, final InputInfo info) {
+  FuncLit(final InputInfo info, final Expr expr, final Var[] params, final AnnList anns,
+      final SeqType seqType, final QNm name, final VarScope vs) {
 
     super(info, expr, seqType);
-    this.anns = anns;
     this.name = name;
     this.params = params;
+    this.anns = anns;
     this.vs = vs;
   }
 
   @Override
-  public void comp(final CompileContext cc) {
-    if(compiled) return;
-    compiled = true;
-
+  public Expr compile(final CompileContext cc) throws QueryException {
     cc.pushScope(vs);
     try {
       expr = expr.compile(cc);
@@ -63,30 +61,35 @@ public final class FuncLit extends Single implements Scope {
     } finally {
       cc.removeScope(this);
     }
-  }
-
-  @Override
-  public Expr compile(final CompileContext cc) throws QueryException {
-    comp(cc);
     return optimize(cc);
   }
 
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) {
-    return new FuncItem(vs.sc, anns, name, params, funcType(), expr, qc.focus.copy(),
-        vs.stackSize(), info);
+  public Expr optimize(final CompileContext cc) throws QueryException {
+    return expr instanceof Value || !expr.has(Flag.CTX) ? cc.preEval(this) : this;
+  }
+
+  @Override
+  public boolean compiled() {
+    return true;
+  }
+
+  @Override
+  public FuncItem item(final QueryContext qc, final InputInfo ii) {
+    return new FuncItem(info, expr, params, anns, funcType(), vs.stackSize(), name,
+        qc.focus.copy());
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final VarScope vsc = new VarScope(vs.sc);
+    final VarScope vsc = new VarScope();
     cc.pushScope(vsc);
     try {
       final int pl = params.length;
       final Var[] vars = new Var[pl];
       for(int p = 0; p < pl; p++) vars[p] = cc.copy(params[p], vm);
       final Expr ex = expr.copy(cc, vm);
-      return copyType(new FuncLit(anns, name, vars, ex, seqType(), vsc, info));
+      return copyType(new FuncLit(info, ex, vars, anns, seqType(), name, vsc));
     } finally {
       cc.removeScope();
     }
@@ -106,18 +109,18 @@ public final class FuncLit extends Single implements Scope {
   }
 
   @Override
-  public boolean compiled() {
-    return compiled;
-  }
-
-  @Override
   public boolean equals(final Object obj) {
-    // [CG] could be enhanced
     return this == obj;
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.concat(name.prefixId(), "#", params.length);
+  public String description() {
+    return "function literal";
+  }
+
+  @Override
+  public void toString(final QueryString qs) {
+    qs.token(anns).concat("(: ", name.prefixId(), "#", params.length, " :)");
+    qs.token(FN).params(params).token(AS).token(funcType().declType).brace(expr);
   }
 }

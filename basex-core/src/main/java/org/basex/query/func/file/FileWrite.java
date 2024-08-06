@@ -14,7 +14,7 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileWrite extends FileFn {
@@ -34,14 +34,16 @@ public class FileWrite extends FileFn {
   final synchronized void write(final boolean append, final QueryContext qc)
       throws QueryException, IOException {
 
-    final Path path = checkParentDir(toPath(0, qc));
-    final Item opts = exprs.length > 2 ? exprs[2].item(qc, info) : Empty.VALUE;
-    final SerializerOptions sopts = FuncOptions.serializer(opts, info);
+    final Path path = toParent(toPath(arg(0), qc));
+    final Iter input = arg(1).iter(qc);
+    final Item options = arg(2).item(qc, info);
+    final SerializerOptions sopts = FuncOptions.serializer(options, info);
 
     try(PrintOutput out = PrintOutput.get(new FileOutputStream(path.toFile(), append))) {
       try(Serializer ser = Serializer.get(out, sopts)) {
-        final Iter iter = exprs[1].iter(qc);
-        for(Item item; (item = iter.next()) != null;) ser.serialize(item);
+        for(Item item; (item = qc.next(input)) != null;) {
+          ser.serialize(item);
+        }
       }
     } catch(final QueryIOException ex) {
       throw ex.getCause(info);

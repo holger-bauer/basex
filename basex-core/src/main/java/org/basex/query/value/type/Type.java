@@ -1,22 +1,30 @@
 package org.basex.query.value.type;
 
+import java.io.*;
+
+import org.basex.io.in.DataInput;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
+import org.basex.util.similarity.*;
 
 /**
  * XQuery types.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public interface Type {
-  /** Type IDs for client/server communication. */
+  /** Type IDs. */
   enum ID {
     // function types
     /** function(*).              */ FUN(7),
+    /** record(*).                */ REC(29),
+    /** map(*).                   */ MAP(30),
+    /** array(*).                 */ ARRAY(31),
 
     // node types
     /** node().                   */ NOD(8),
@@ -87,39 +95,43 @@ public interface Type {
     /** xs:QName.                 */ QNM(82, true),
     /** xs:NOTATION.              */ NOT(83),
     /** xs:numeric.               */ NUM(84),
-    /** java().                   */ JAVA(86);
+    /** java().                   */ JAVA(86),
+    /** enum().                   */ ENM(87),
 
-    /** Cached enums (faster). */
-    public static final ID[] VALUES = values();
-    /** Node ID. */
-    private final byte id;
+    // item type
+    /** choice item type.         */ CIT(88),
+
+    /** last dummy type.          */ LAST(89);
+
+    /** Type index. */
+    private final byte index;
     /** Extended type information. */
-    private final boolean ext;
+    private final boolean extended;
 
     /**
      * Constructor.
-     * @param id type id
+     * @param index type index
      */
-    ID(final int id) {
-      this(id, false);
+    ID(final int index) {
+      this(index, false);
     }
 
     /**
      * Constructor.
-     * @param id type id
-     * @param ext extended type information
+     * @param index type index
+     * @param extended extended type information
      */
-    ID(final int id, final boolean ext) {
-      this.id = (byte) id;
-      this.ext = ext;
+    ID(final int index, final boolean extended) {
+      this.index = (byte) index;
+      this.extended = extended;
     }
 
     /**
-     * Returns the type ID. Also called by XQJ.
-     * @return type ID
+     * Returns the type index. Also called by XQJ.
+     * @return type index
      */
     public byte asByte() {
-      return id;
+      return index;
     }
 
     /**
@@ -127,68 +139,39 @@ public interface Type {
      * @return result of check
      */
     public boolean isExtended() {
-      return ext;
-    }
-
-    /**
-     * Gets the specified ID.
-     * @param id id
-     * @return type ID if found, {@code null} otherwise
-     */
-    public static ID get(final int id) {
-      for(final ID value : VALUES) {
-        if(value.id == id) return value;
-      }
-      return null;
-    }
-
-    /**
-     * Gets the specified type instance.
-     * @param id id
-     * @return corresponding type if found, {@code null} otherwise
-     */
-    public static Type getType(final int id) {
-      final ID i = get(id);
-      if(i == null) return null;
-      if(i == FUN) return SeqType.FUNCTION;
-      final Type type = AtomType.getType(i);
-      return type != null ? type : NodeType.getType(i);
+      return extended;
     }
   }
 
   /**
    * Casts the specified item to this type.
    * @param item item to be converted
-   * @param qc query context
-   * @param sc static context
-   * @param ii input info
+   * @param qc query context (can be {@code null} if the target type needs no reference)
+   * @param info input info (can be {@code null})
    * @return cast value
    * @throws QueryException query exception
    */
-  Value cast(Item item, QueryContext qc, StaticContext sc, InputInfo ii) throws QueryException;
+  Value cast(Item item, QueryContext qc, InputInfo info) throws QueryException;
 
   /**
    * Casts the specified Java value to this type.
    * @param value Java value
-   * @param qc query context
-   * @param sc static context
-   * @param ii input info
+   * @param qc query context (can be {@code null} if the target type needs no reference
+   * @param info input info (can be {@code null})
    * @return cast value
    * @throws QueryException query exception
    */
-  Value cast(Object value, QueryContext qc, StaticContext sc, InputInfo ii) throws QueryException;
+  Value cast(Object value, QueryContext qc, InputInfo info) throws QueryException;
 
   /**
-   * Casts the specified string to this type.
-   * @param value string object
+   * Reads an item from the input stream.
+   * @param in data input
    * @param qc query context
-   * @param sc static context
-   * @param ii input info
-   * @return cast value
+   * @return item
+   * @throws IOException I/O exception
    * @throws QueryException query exception
    */
-  Value castString(String value, QueryContext qc, StaticContext sc, InputInfo ii)
-      throws QueryException;
+  Item read(DataInput in, QueryContext qc) throws IOException, QueryException;
 
   /**
    * Returns a sequence type with a single number of occurrence.
@@ -218,6 +201,14 @@ public interface Type {
     return false;
   }
 
+  /**
+   * Returns the function type of this type, if any.
+   * @return function type, or {@code null} if type cannot represent a function
+   */
+  default FuncType funcType() {
+    return null;
+  }
+
   // PUBLIC AND STATIC METHODS ====================================================================
 
   /**
@@ -244,7 +235,7 @@ public interface Type {
 
   /**
    * Computes the intersection between this type and the given one, i.e. the least specific type
-   * that is sub-type of both types. If no such type exists, {@code null} is returned.
+   * that is subtype of both types. If no such type exists, {@code null} is returned.
    * @param type other type
    * @return intersection type or {@code null}
    */
@@ -288,10 +279,18 @@ public interface Type {
   AtomType atomic();
 
   /**
-   * Returns a type id to differentiate all types.
+   * Returns the type id.
    * @return id
    */
   ID id();
+
+  /**
+   * Returns the type index.
+   * @return id
+   */
+  default byte index() {
+    return id().asByte();
+  }
 
   /**
    * Checks if the type is namespace-sensitive.
@@ -306,10 +305,36 @@ public interface Type {
    */
   default Type refine(final Expr expr) {
     if(expr != null) {
-      final Type t = expr.seqType().type.intersect(this);
-      if(t != null) return t;
+      final Type tp = expr.seqType().type.intersect(this);
+      if(tp != null) return tp;
     }
     return this;
+  }
+
+  /**
+   * Returns an info message for a similar function.
+   * @param qname name of type
+   * @return info string
+   */
+  static byte[] similar(final QNm qname) {
+    final byte[] ln = Token.lc(qname.local());
+
+    final TokenList list = new TokenList();
+    list.add(QueryText.ITEM).add(QueryText.FUNCTION).add(QueryText.FN);
+    list.add(QueryText.MAP).add(QueryText.ARRAY);
+    for(final NodeType type : NodeType.values()) list.add(type.qname().local());
+    final byte[][] values = list.finish();
+
+    Object similar = Levenshtein.similar(ln, values);
+    if(similar == null) {
+      for(final byte[] value : values) {
+        if(Token.startsWith(value, ln)) {
+          similar = value;
+          break;
+        }
+      }
+    }
+    return QueryError.similar(qname.prefixId(Token.XML), similar);
   }
 
   @Override

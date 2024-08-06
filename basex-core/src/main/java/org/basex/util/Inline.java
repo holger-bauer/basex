@@ -14,7 +14,7 @@ import org.basex.data.*;
  * - Byte 4: integer value or inlined whitespace token
  * </pre>
  *
- * XML 1.0 whitespaces will be represented as follows:
+ * XML 1.0 whitespace will be represented as follows:
  *
  * <pre>
  * - 00: 0x0A (new line)
@@ -23,7 +23,7 @@ import org.basex.data.*;
  * - 11: 0x0D (carriage return)
  * </pre>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Inline {
@@ -61,7 +61,7 @@ public final class Inline {
       int c = 32;
       // upper bit: 09/0A = 0, 0D/20 = 1
       // lower bit: 0A/20 = 0, 09/0D = 1
-      for(final byte b : token) value |= (b < 0x0B ? 0L : 1L) << --c | (b & 1) << --c;
+      for(final byte b : token) value |= (b < 0x0B ? 0L : 1L) << --c | (long) (b & 1) << --c;
       return value;
     }
     // no inlining possible
@@ -107,7 +107,7 @@ public final class Inline {
    * @return unpacked integer
    */
   public static long unpackLong(final long value) {
-    return (value & STRING) == 0 ? (value & INLINE - 1) : toLong(unpackString(value));
+    return (value & STRING) == 0 ? value & INLINE - 1 : toLong(unpackString(value));
   }
 
   /**
@@ -116,7 +116,7 @@ public final class Inline {
    * @return unpacked double
    */
   public static double unpackDouble(final long value) {
-    return (value & STRING) == 0 ? (value & INLINE - 1) : toDouble(unpackString(value));
+    return (value & STRING) == 0 ? value & INLINE - 1 : toDouble(unpackString(value));
   }
 
   /**
@@ -150,10 +150,7 @@ public final class Inline {
       for(int t = 0, c = 24; t < tl; t++, c -= 8) token[t] = (byte) (v >> c);
     } else {
       // whitespace token
-      for(int t = 0, c = 30; t < tl; t++, c -= 2) {
-        final int o = v >> c;
-        token[t] = WS[o & 2 | o & 1];
-      }
+      for(int t = 0, c = 30; t < tl; t++, c -= 2) token[t] = WS[v >> c & 3];
     }
     return token;
   }

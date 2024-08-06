@@ -1,12 +1,13 @@
 package org.basex.query.scope;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.util.*;
 
 /**
  * Interface for all expressions defining a new variable scope.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public interface Scope {
@@ -18,11 +19,17 @@ public interface Scope {
   boolean visit(ASTVisitor visitor);
 
   /**
+   * Prepares the scope for compilation.
+   */
+  default void reset() { }
+
+  /**
    * Compiles the expression contained in this scope.
    * @param cc compilation context
+   * @return compiled expression, or {@code null} if not required
    * @throws QueryException compilation errors
    */
-  void comp(CompileContext cc) throws QueryException;
+  Expr compile(CompileContext cc) throws QueryException;
 
   /**
    * Checks if this scope has already been compiled.

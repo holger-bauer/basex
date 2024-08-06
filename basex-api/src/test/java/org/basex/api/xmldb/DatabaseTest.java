@@ -9,7 +9,7 @@ import org.xmldb.api.base.*;
 /**
  * This class tests the XMLDB/API Database implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DatabaseTest extends XMLDBBaseTest {
@@ -53,17 +53,17 @@ public final class DatabaseTest extends XMLDBBaseTest {
    */
   @Test public void testGetCollection() throws Exception {
     // directly call and close database instance
-    database.getCollection(PATH, LOGIN, PW).close();
+    database.getCollection(PATH, USERNAME, PASSWORD).close();
 
     try {
-      database.getCollection("bla", LOGIN, PW);
+      database.getCollection("bla", USERNAME, PASSWORD);
       fail("URI was invalid.");
     } catch(final XMLDBException ex) {
       checkCode(ErrorCodes.INVALID_URI, ex);
     }
     // get database from database manager
     DatabaseManager.registerDatabase(database);
-    final Collection coll = DatabaseManager.getCollection(PATH, LOGIN, PW);
+    final Collection coll = DatabaseManager.getCollection(PATH, USERNAME, PASSWORD);
     coll.close();
   }
 

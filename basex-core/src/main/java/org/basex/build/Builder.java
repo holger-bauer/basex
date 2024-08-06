@@ -11,6 +11,7 @@ import org.basex.core.jobs.*;
 import org.basex.data.*;
 import org.basex.index.name.*;
 import org.basex.index.path.*;
+import org.basex.index.resource.*;
 import org.basex.index.stats.*;
 import org.basex.io.*;
 import org.basex.util.*;
@@ -22,7 +23,7 @@ import org.basex.util.list.*;
  * are to be added or closed. The builder implementation decides whether
  * the nodes are stored on disk or kept in memory.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Builder extends Job {
@@ -54,8 +55,8 @@ public abstract class Builder extends Job {
   /** Current tree height. */
   private int level;
 
-  /** Optional path to binary files. */
-  private IOFile binDir;
+  /** Optional path to binary resources. */
+  private IOFile binariesDir;
 
   /**
    * Constructor.
@@ -75,7 +76,7 @@ public abstract class Builder extends Job {
    */
   final void parse() throws IOException {
     final Performance perf = Prop.debug ? new Performance() : null;
-    Util.debug(shortInfo() + DOTS);
+    Util.debugln(shortInfo() + DOTS);
     try {
       // add document node and parse document
       parser.parse(this);
@@ -88,14 +89,12 @@ public abstract class Builder extends Job {
   }
 
   /**
-   * Sets the path to the raw database files. The path might differ from the actual database path
+   * Sets the path to the binary database files. The path might differ from the actual database path
    * if XML data is written to a temporary instance.
-   * @param dir database directory (can be {@code null})
-   * @return self reference
+   * @param dbpath database path (can be {@code null})
    */
-  public final Builder binaryDir(final IOFile dir) {
-    if(dir != null) binDir = new IOFile(dir, IO.RAW);
-    return this;
+  public final void binariesDir(final IOFile dbpath) {
+    if(dbpath != null) binariesDir = ResourceType.BINARY.dir(dbpath);
   }
 
   /**
@@ -119,6 +118,12 @@ public abstract class Builder extends Job {
     setSize(pre, meta.size - pre);
     ++meta.ndocs;
     nspaces.close(meta.size);
+
+    // check if data ranges exceed database limits, based on the storage details in {@link Data}
+    limit(elemNames.size(), 0x8000, LIMITELEMS);
+    limit(attrNames.size(), 0x8000, LIMITATTS);
+    limit(nspaces.size(), 0x100, LIMITNS);
+    if(meta.size < 0) limit(0, 0, LIMITRANGE);
   }
 
   /**
@@ -194,7 +199,7 @@ public abstract class Builder extends Job {
    * @throws IOException I/O exception
    */
   public final void binary(final String target, final IO data) throws IOException {
-    Store.store(data.inputSource(), new IOFile(binDir, target));
+    BinaryPut.put(data.inputSource(), new IOFile(binariesDir, target));
   }
 
   // PROGRESS INFORMATION =========================================================================
@@ -297,9 +302,9 @@ public abstract class Builder extends Job {
     // get and store element references
     final int dis = level == 0 ? 1 : pre - parStack.get(level - 1);
     final int as = atts.size();
-    final byte[] pref = prefix(name);
-    int uriId = nspaces.uriIdForPrefix(pref, true);
-    if(uriId == 0 && pref.length != 0 && !eq(pref, XML))
+    final byte[] prefix = prefix(name);
+    int uriId = nspaces.uriIdForPrefix(prefix, true);
+    if(uriId == 0 && prefix.length != 0 && !eq(prefix, XML))
       throw new BuildException(WHICHNS, parser.detailedInfo(), prefix(name));
     addElem(dis, nameId, Math.min(IO.MAXATTS, as + 1), uriId, !nsp.isEmpty());
 
@@ -317,12 +322,6 @@ public abstract class Builder extends Job {
 
     // set leaf node information in index
     if(level > 1) elemNames.stats(elemStack.get(level - 1)).setLeaf(false);
-
-    // check if data ranges exceed database limits, based on the storage details in {@link Data}
-    limit(elemNames.size(), 0x8000, LIMITELEMS);
-    limit(attrNames.size(), 0x8000, LIMITATTS);
-    limit(nspaces.size(), 0x100, LIMITNS);
-    if(meta.size < 0) limit(0, 0, LIMITRANGE);
   }
 
   /**

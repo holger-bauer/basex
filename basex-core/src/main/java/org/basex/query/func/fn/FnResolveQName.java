@@ -14,24 +14,22 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnResolveQName extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] name = toTokenOrNull(exprs[0], qc);
-    final ANode base = toElem(exprs[1], qc);
-    if(name == null) return Empty.VALUE;
-    if(!XMLToken.isQName(name)) throw valueError(AtomType.QNAME, name, info);
+    final byte[] value = toTokenOrNull(arg(0), qc);
+    final ANode element = toElem(arg(1), qc);
+    if(value == null) return Empty.VALUE;
+    if(!XMLToken.isQName(value)) throw valueError(AtomType.QNAME, value, info);
 
-    final QNm qname = new QNm(name);
-    final byte[] pref = qname.prefix();
-    byte[] uri = base.uri(pref);
-    if(uri == null) uri = sc.ns.uri(pref);
-    if(uri == null) throw NSDECL_X.get(info, pref);
-    qname.uri(uri);
-    return qname;
+    final byte[] prefix = Token.prefix(value);
+    byte[] uri = element.uri(prefix);
+    if(uri == null) uri = info.sc().ns.uri(prefix);
+    if(uri == null) throw NSDECL_X.get(info, prefix);
+    return qc.shared.qName(value, uri);
   }
 
   @Override

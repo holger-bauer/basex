@@ -4,8 +4,9 @@ import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
+import org.basex.query.util.*;
+import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -14,17 +15,21 @@ import org.basex.util.hash.*;
 /**
  * Group of switch cases (case ... case ... return ...).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SwitchGroup extends Arr {
+  /** Deep equality comparison. */
+  private final DeepEqual deep;
+
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs return expression (placed first) and cases (default branch has 0 cases)
    */
   public SwitchGroup(final InputInfo info, final Expr... exprs) {
     super(info, SeqType.ITEM_ZM, exprs);
+    deep = new DeepEqual(info);
   }
 
   @Override
@@ -38,12 +43,7 @@ public final class SwitchGroup extends Arr {
     // compile and simplify branches
     final int el = exprs.length;
     for(int e = 0; e < el; e++) {
-      try {
-        exprs[e] = exprs[e].compile(cc);
-      } catch(final QueryException ex) {
-        // replace original expression with error
-        exprs[e] = cc.error(ex, exprs[e]);
-      }
+      exprs[e] = cc.compileOrError(exprs[e], false);
     }
     return optimize(cc);
   }
@@ -108,19 +108,34 @@ public final class SwitchGroup extends Arr {
 
   /**
    * Checks if the switch group matches the supplied item.
-   * @param item item to match
+   * @param cond condition
    * @param qc query context
    * @return result of check
    * @throws QueryException query exception
    */
-  boolean match(final Item item, final QueryContext qc) throws QueryException {
+  boolean match(final Item cond, final QueryContext qc) throws QueryException {
     final int el = exprs.length;
     for(int e = 1; e < el; e++) {
-      final Item cs = exprs[e].atomItem(qc, info);
-      if(item == cs || item != Empty.VALUE && cs != Empty.VALUE && item.equiv(cs, null, info))
-        return true;
+      if(match(cond, e, qc)) return true;
     }
     return el == 1;
+  }
+
+  /**
+   * Checks if the switch group matches the supplied item.
+   * @param cond condition
+   * @param e index of expression
+   * @param qc query context
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  boolean match(final Item cond, final int e, final QueryContext qc) throws QueryException {
+    final Value value = exprs[e].atomValue(qc, info);
+    if(cond.isEmpty()) return cond == value;
+    for(final Item item : value) {
+      if(deep.equal(cond, item)) return true;
+    }
+    return false;
   }
 
   /**
@@ -131,18 +146,12 @@ public final class SwitchGroup extends Arr {
     return exprs[0];
   }
 
-  /**
-   * Simplifies all expressions for requests of the specified type.
-   * @param mode mode of simplification
-   * @param cc compilation context
-   * @return {@code true} if expression has changed
-   * @throws QueryException query exception
-   */
-  boolean simplify(final Simplify mode, final CompileContext cc) throws QueryException {
-    final Expr expr = rtrn().simplifyFor(mode, cc);
-    if(expr == rtrn()) return false;
-    exprs[0] = expr;
-    return true;
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    // varying behavior: return null if return expression has changed
+    final Expr rtrn = rtrn();
+    exprs[0] = rtrn.simplifyFor(mode, cc);
+    return rtrn != exprs[0] ? null : this;
   }
 
   @Override
@@ -163,7 +172,7 @@ public final class SwitchGroup extends Arr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final int el = exprs.length;
     for(int e = 1; e < el; e++) qs.token(CASE).token(exprs[e]);
     if(el == 1) qs.token(DEFAULT);

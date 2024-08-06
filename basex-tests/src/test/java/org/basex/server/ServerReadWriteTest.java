@@ -7,7 +7,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class performs a client/server stress test with concurrent read and write operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ServerReadWriteTest extends SandboxTest {
@@ -59,14 +59,14 @@ public final class ServerReadWriteTest extends SandboxTest {
     server = createServer();
     // create test database
     try(ClientSession cs = createClient()) {
-      cs.execute("create db test <test/>");
+      cs.execute("CREATE DB test <test/>");
       // run clients
       final Client[] cl = new Client[clients];
       for(int i = 0; i < clients; ++i) cl[i] = new Client(runs, i % 2 == 0);
       for(final Client c : cl) c.start();
       for(final Client c : cl) c.join();
       // drop database and stop server
-      cs.execute("drop db test");
+      cs.execute("DROP DB test");
     }
     stopServer(server);
   }
@@ -90,17 +90,17 @@ public final class ServerReadWriteTest extends SandboxTest {
       this.runs = runs;
       this.read = read;
       session = createClient();
-      session.execute("set autoflush false");
+      session.execute("SET AUTOFLUSH false");
     }
 
     @Override
     public void run() {
       try {
         // Perform some queries
-        for(int i = 0; i < runs; ++i) {
-          final String qu = read ? "count(db:open('test'))" :
+        for(int r = 0; r < runs; ++r) {
+          final String query = read ? "count(db:get('test'))" :
             "db:add('test', <a/>, 'test.xml', map { 'intparse': true() })";
-          session.execute("xquery " + qu);
+          session.execute("XQUERY " + query);
         }
         session.close();
       } catch(final Exception ex) {

@@ -15,16 +15,15 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserGrant extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkAdmin(qc);
-    final User user = toInactiveUser(0, qc);
-    final ArrayList<Perm> perms = toPerms(1, qc);
-    final StringList patterns = toPatterns(2, qc);
+    final User user = toInactiveUser(arg(0), qc);
+    final ArrayList<Perm> perms = toPermissions(arg(1), qc);
+    final StringList patterns = toPatterns(arg(2), qc);
 
     if(user.name().equals(UserText.ADMIN)) throw USER_ADMIN.get(info);
     final int ps = perms.size();
@@ -45,7 +44,7 @@ public final class UserGrant extends UserFn {
      * @param perms permissions
      * @param patterns patterns
      * @param qc query context
-     * @param info input info
+     * @param info input info (can be {@code null})
      * @throws QueryException query exception
      */
     private Grant(final User user, final ArrayList<Perm> perms, final StringList patterns,
@@ -59,6 +58,8 @@ public final class UserGrant extends UserFn {
     }
 
     @Override
-    public String operation() { return "altered"; }
+    public String operation() {
+      return "altered";
+    }
   }
 }

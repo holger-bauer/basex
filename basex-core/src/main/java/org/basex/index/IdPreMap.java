@@ -12,7 +12,7 @@ import org.basex.util.list.*;
 /**
  * Updatable ID-PRE mapping.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public class IdPreMap {
@@ -119,7 +119,7 @@ public class IdPreMap {
    */
   public void insert(final int pre, final int id, final int c) {
     if(rows == 0 && pre == id && id == baseid + 1) {
-      // no mapping and we append at the end => nothing to do
+      // no mapping, and we append at the end => nothing to do
       baseid += c;
       return;
     }
@@ -176,7 +176,7 @@ public class IdPreMap {
    */
   public void delete(final int pre, final int id, final int c) {
     if(rows == 0 && pre == id && id - c == baseid + 1) {
-      // no mapping and we delete at the end => nothing to do
+      // no mapping, and we delete at the end => nothing to do
       baseid += c;
       return;
     }
@@ -192,7 +192,7 @@ public class IdPreMap {
 
     // remove all updates which has affected records which now have to be deleted
     final int removeStart = startIndex < rows && pres[startIndex] < pre ?
-         startIndex + 1 : startIndex;
+      startIndex + 1 : startIndex;
     int removeEnd = -1;
     for(int i = startIndex; i < rows; ++i) {
       if(end < pres[i] + nids[i] - fids[i]) break;

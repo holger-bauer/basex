@@ -17,7 +17,7 @@ import org.basex.util.hash.*;
 /**
  * FTOptions expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTWeight extends FTExpr {
@@ -26,7 +26,7 @@ public final class FTWeight extends FTExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param weight weight
    */
@@ -141,12 +141,12 @@ public final class FTWeight extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), weight, exprs[0]);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(exprs[0]).token(WEIGHT).brace(weight);
   }
 }

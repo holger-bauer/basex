@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * Tests for XQuery arrays.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayTest extends SandboxTest {
@@ -18,10 +18,10 @@ public final class ArrayTest extends SandboxTest {
     query("[]", "[]");
     query("[()]", "[()]");
     query("[ 1 ]", "[1]");
-    query("[ 1, 2 ]", "[1, 2]");
-    query("[ 1 to 2 ]", "[(1, 2)]");
+    query("[ 1, 2 ]", "[1,2]");
+    query("[ 1 to 2 ]", "[(1,2)]");
     query("[[[[[ 1 ]]]]]", "[[[[[1]]]]]");
-    query("[[[[[ 1 ], 2 ], 3 ], 4 ], 5 ]", "[[[[[1], 2], 3], 4], 5]");
+    query("[[[[[ 1 ], 2 ], 3 ], 4 ], 5 ]", "[[[[[1],2],3],4],5]");
   }
 
   /** Constructor. */
@@ -29,10 +29,10 @@ public final class ArrayTest extends SandboxTest {
     query("array {}", "[]");
     query("array { () }", "[]");
     query("array { 1 }", "[1]");
-    query("array { 1, 2 }", "[1, 2]");
-    query("array { 1, 2 }", "[1, 2]");
+    query("array { 1, 2 }", "[1,2]");
+    query("array { 1, 2 }", "[1,2]");
     query("array { array { 1 } }", "[[1]]");
-    query("array { array { 1, 2 }, array {} }", "[[1, 2], []]");
+    query("array { array { 1, 2 }, array {} }", "[[1,2],[]]");
   }
 
   /** Constructor. */
@@ -46,6 +46,8 @@ public final class ArrayTest extends SandboxTest {
 
     query("[ 1, 2, 3 ]?([ 1 ])", 1);
     query("[ 1, 2, 3 ]?([ 1, 2 ])", "1\n2");
+
+    error("[1]?(string(<_>1</_>))", INVCONVERT_X_X_X);
 
     error("[](0)", ARRAYEMPTY);
     error("[](1)", ARRAYEMPTY);
@@ -123,13 +125,13 @@ public final class ArrayTest extends SandboxTest {
     query("element a { [] }", "<a/>");
     query("element a { [()] }", "<a/>");
     query("element a { [ 1 ] }", "<a>1</a>");
-    query("element a { [ <b>c</b> ] }", "<a>\n<b>c</b>\n</a>");
-    query("element a { [ <b>c</b>, <b>d</b> ] }", "<a>\n<b>c</b>\n<b>d</b>\n</a>");
+    query("element a { [ <b>c</b> ] }", "<a><b>c</b></a>");
+    query("element a { [ <b>c</b>, <b>d</b> ] }", "<a><b>c</b><b>d</b></a>");
 
     query("element { [ 'a' ] } { }", "<a/>");
 
     error("element { [ 'a', 'b' ] } { }", SEQFOUND_X);
-    error("element { [] } { }", EMPTYFOUND_X);
+    error("element { [] } { }", STRQNM_X_X);
   }
 
   /** Attribute constructor. */
@@ -148,7 +150,7 @@ public final class ArrayTest extends SandboxTest {
     query("attribute { [ 'a' ] } { }/name()", "a");
 
     error("attribute { [ 'a', 'b' ] } { }", SEQFOUND_X);
-    error("attribute { [] } { }", EMPTYFOUND_X);
+    error("attribute { [] } { }", STRQNM_X_X);
   }
 
   /** Attribute constructor. */
@@ -214,8 +216,8 @@ public final class ArrayTest extends SandboxTest {
     query("[] cast as xs:integer?", "");
     query("xs:integer([ 1 ])", 1);
 
-    error("[] cast as xs:integer", INVTYPE_X_X_X);
-    error("[ 1, 2 ] cast as xs:integer", INVTYPE_X_X_X);
+    error("[] cast as xs:integer", INVCONVERT_X_X_X);
+    error("[ 1, 2 ] cast as xs:integer", INVCONVERT_X_X_X);
   }
 
   /** Functions. */
@@ -238,6 +240,13 @@ public final class ArrayTest extends SandboxTest {
   /** Atomize key. */
   @Test public void atomKey() {
     query("[ 'x' ]([ 1 ])", "x");
+  }
+
+  /** Coerce key. */
+  @Test public void coerceKey() {
+    query("[ 'x' ]( 1.0 )", "x");
+    query("[ 'x' ]?( 1.0 )", "x");
+    query("array:get([ 'x' ], 1.0)", "x");
   }
 
   /** Tests if {@link XQArray#members()} uses the array's offset correctly. */

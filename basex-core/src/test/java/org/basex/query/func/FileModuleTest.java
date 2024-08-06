@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the File Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class FileModuleTest extends SandboxTest {
@@ -51,11 +51,11 @@ public final class FileModuleTest extends SandboxTest {
     query(_FILE_SIZE.args(PATH1), 2);
     query(_FILE_DELETE.args(PATH1));
 
-    query(func.args(PATH1, "a\u00e4", ' ' + serialParams("<encoding value='CP1252'/>")));
+    query(func.args(PATH1, "a\u00e4", " map { 'encoding': 'CP1252' }"));
     query(_FILE_READ_TEXT.args(PATH1, "CP1252"), "a\u00e4");
     query(_FILE_DELETE.args(PATH1));
 
-    query(func.args(PATH1, "<a/>", ' ' + serialParams("<method value='text'/>")));
+    query(func.args(PATH1, "<a/>", " map { 'method': 'text' }"));
     query(_FILE_READ_TEXT.args(PATH1), "<a/>");
   }
 
@@ -78,7 +78,7 @@ public final class FileModuleTest extends SandboxTest {
     final Function func = _FILE_APPEND_TEXT;
     // queries
     error(func.args(PATH, "x"), FILE_IS_DIR_X);
-    error(func.args(PATH1, " 123"), INVTYPE_X_X_X);
+    error(func.args(PATH1, " 123"), INVCONVERT_X_X_X);
 
     query(func.args(PATH1, "x"));
     query(_FILE_SIZE.args(PATH1), 1);
@@ -91,11 +91,11 @@ public final class FileModuleTest extends SandboxTest {
     final Function func = _FILE_APPEND_TEXT_LINES;
     // queries
     error(func.args(PATH, "x"), FILE_IS_DIR_X);
-    error(func.args(PATH1, 123), INVTYPE_X_X_X);
+    error(func.args(PATH1, 123), INVCONVERT_X_X_X);
 
     query(func.args(PATH1, "x"));
     query(_FILE_SIZE.args(PATH1), 1 + Prop.NL.length());
-    query(func.args(PATH1, " ('y','z')"));
+    query(func.args(PATH1, " ('y', 'z')"));
     query(_FILE_SIZE.args(PATH1), 3 * (1 + Prop.NL.length()));
     query(func.args(PATH1, "\u00fc", "US-ASCII"));
     query(_FILE_READ_TEXT_LINES.args(PATH1), "x\ny\nz\n?");
@@ -132,6 +132,19 @@ public final class FileModuleTest extends SandboxTest {
     query(_FILE_SIZE.args(PATH1), 1);
     query(_FILE_SIZE.args(PATH2), 1);
     error(func.args(PATH1, PATH3), FILE_NO_DIR_X);
+  }
+
+  /** Test method. */
+  @Test public void copy2() {
+    final String query = _FILE_CREATE_DIR.args(PATH1) + ','
+        + _FILE_CREATE_DIR.args(PATH2) + ','
+        + _FILE_CREATE_DIR.args(PATH3) + ','
+        + _FILE_WRITE_TEXT.args(PATH4, "X") + ", "
+        + "for $i in" + _FILE_CHILDREN.args(PATH1) + ' '
+        + "return" + _FILE_COPY.args(" $i", PATH2);
+
+    query(query);
+    query(query);
   }
 
   /** Test method. */
@@ -289,6 +302,12 @@ public final class FileModuleTest extends SandboxTest {
   }
 
   /** Test method. */
+  @Test public void listRoots() {
+    final Function func = _FILE_LIST_ROOTS;
+    query("exists(" + func.args() + ")");
+  }
+
+  /** Test method. */
   @Test public void move() {
     final Function func = _FILE_MOVE;
     // queries
@@ -415,6 +434,10 @@ public final class FileModuleTest extends SandboxTest {
     query("contains(" + func.args(can1, can2) + ", \"" + can1 + "\")", true);
     query("contains(" + func.args("X", can1 + File.separator) + ", \"" +
         can1 + File.separator + "X\")", true);
+
+    query("not(contains(" + func.args("../", can1) + ", '..'))", true);
+    query("not(contains(" + func.args("../X", can1) + ", '..'))", true);
+
     error(func.args(can1, "b"), FILE_IS_RELATIVE_X);
     error(func.args("X", "b"), FILE_IS_RELATIVE_X);
   }
@@ -447,10 +470,10 @@ public final class FileModuleTest extends SandboxTest {
     query(_FILE_SIZE.args(PATH1), 1);
     query(_FILE_DELETE.args(PATH1));
 
-    query(func.args(PATH1, "a\u00e4", ' ' + serialParams("<encoding value='CP1252'/>")));
+    query(func.args(PATH1, "a\u00e4", " map { 'encoding': 'CP1252' }"));
     query(_FILE_READ_TEXT.args(PATH1, "CP1252"), "a\u00e4");
 
-    query(func.args(PATH1, "<a/>", ' ' + serialParams("<method value='text'/>")));
+    query(func.args(PATH1, "<a/>", " map { 'method': 'text' }"));
     query(_FILE_READ_TEXT.args(PATH1), "<a/>");
     query(_FILE_DELETE.args(PATH1));
 
@@ -491,12 +514,17 @@ public final class FileModuleTest extends SandboxTest {
     final Function func = _FILE_WRITE_TEXT;
     // queries
     error(func.args(PATH, "x"), FILE_IS_DIR_X);
-    error(func.args(PATH1, " 123"), INVTYPE_X_X_X);
+    error(func.args(PATH1, " 123"), INVCONVERT_X_X_X);
 
     query(func.args(PATH1, "x"));
     query(_FILE_SIZE.args(PATH1), 1);
     query(func.args(PATH1, "\u00fc", "US-ASCII"));
     query(_FILE_READ_TEXT.args(PATH1), "?");
+
+    query(func.args(PATH1, "\u00b0"));
+    query(_FILE_READ_TEXT.args(PATH1), "\u00b0");
+    query(func.args(PATH2, _FILE_READ_TEXT.args(PATH1)));
+    query(_FILE_READ_TEXT.args(PATH2), "\u00b0");
   }
 
   /** Test method. */
@@ -504,7 +532,7 @@ public final class FileModuleTest extends SandboxTest {
     final Function func = _FILE_WRITE_TEXT_LINES;
     // queries
     error(func.args(PATH, "x"), FILE_IS_DIR_X);
-    error(func.args(PATH1, " 123"), INVTYPE_X_X_X);
+    error(func.args(PATH1, " 123"), INVCONVERT_X_X_X);
 
     query(func.args(PATH1, "x"));
     query(_FILE_SIZE.args(PATH1), 1 + Prop.NL.length());

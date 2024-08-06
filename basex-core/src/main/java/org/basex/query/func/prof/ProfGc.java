@@ -9,14 +9,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProfGc extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final long l = exprs.length > 0 ? toLong(exprs[0], qc) : 1;
-    Performance.gc((int) Math.min(Integer.MAX_VALUE, l));
+    final long count = defined(0) ? toLong(arg(0), qc) : 1;
+    Performance.gc((int) Math.min(Integer.MAX_VALUE, count));
     return Empty.VALUE;
   }
 }

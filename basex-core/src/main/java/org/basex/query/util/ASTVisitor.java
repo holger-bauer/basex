@@ -1,5 +1,8 @@
 package org.basex.query.util;
 
+import java.util.*;
+import java.util.function.*;
+
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.scope.*;
@@ -10,7 +13,7 @@ import org.basex.query.var.*;
  * A visitor for all sub-expressions in an {@link Expr}. All methods return a
  * {@code boolean} which signals if the tree walk should be continued.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class ASTVisitor {
@@ -85,14 +88,24 @@ public abstract class ASTVisitor {
   }
 
   /**
-   * Notifies the visitor of a database lock. Overwritten by {@link MainModule}.
+   * Notifies the visitor of database locks. Overwritten by {@link MainModule}.
    * Returns {@code false} if the lock is not known statically.
-   * @param lock lock to be added ({@code null} if unknown)
-   * @param update updating flag
+   * @param list function supplying lock strings
    * @return if more expressions should be visited ({@code true} by default)
    */
   @SuppressWarnings("unused")
-  public boolean lock(final String lock, final boolean update) {
+  public boolean lock(final Supplier<ArrayList<String>> list) {
+    return true;
+  }
+
+  /**
+   * Notifies the visitor of a database lock. Overwritten by {@link MainModule}.
+   * Returns {@code false} if the lock is not known statically.
+   * @param lock lock string (can be {@code null})
+   * @return if more expressions should be visited ({@code true} by default)
+   */
+  @SuppressWarnings("unused")
+  public boolean lock(final String lock) {
     return true;
   }
 

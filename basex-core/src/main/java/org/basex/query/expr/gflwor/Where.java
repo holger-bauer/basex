@@ -16,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * GFLWOR {@code where} clause, filtering tuples not satisfying the predicate.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Where extends Clause {
@@ -26,7 +26,7 @@ public final class Where extends Clause {
   /**
    * Constructor.
    * @param expr predicate expression
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public Where(final Expr expr, final InputInfo info) {
     super(info, SeqType.BOOLEAN_O);
@@ -39,7 +39,7 @@ public final class Where extends Clause {
       @Override
       public boolean next(final QueryContext qc) throws QueryException {
         while(sub.next(qc)) {
-          if(expr.ebv(qc, info).bool(info)) return true;
+          if(expr.test(qc, info, 0)) return true;
         }
         return false;
       }
@@ -62,7 +62,7 @@ public final class Where extends Clause {
     // where exists(nodes)  ->  where nodes
     expr = expr.simplifyFor(Simplify.EBV, cc);
     if(expr instanceof Value && !(expr instanceof Bln)) {
-      expr = cc.replaceWith(expr, Bln.get(expr.ebv(cc.qc, info).bool(info)));
+      expr = cc.replaceWith(expr, Bln.get(expr.test(cc.qc, info, 0)));
     }
     return this;
   }
@@ -123,12 +123,12 @@ public final class Where extends Clause {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(WHERE).token(expr);
   }
 }

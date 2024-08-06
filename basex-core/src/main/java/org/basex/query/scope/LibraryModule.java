@@ -1,29 +1,22 @@
 package org.basex.query.scope;
 
 import org.basex.query.*;
-import org.basex.query.func.*;
+import org.basex.query.expr.*;
 import org.basex.query.util.*;
-import org.basex.query.var.*;
-import org.basex.util.hash.*;
 
 /**
  * An XQuery library module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class LibraryModule extends AModule {
   /**
    * Constructor.
-   * @param doc documentation
-   * @param funcs user-defined functions
-   * @param vars static variables
-   * @param modules imported modules
    * @param sc static context
    */
-  public LibraryModule(final String doc, final TokenObjMap<StaticFunc> funcs,
-      final TokenObjMap<StaticVar> vars, final TokenSet modules, final StaticContext sc) {
-    super(sc, null, doc, null, funcs, vars, modules);
+  public LibraryModule(final StaticContext sc) {
+    super(sc);
   }
 
   @Override
@@ -32,14 +25,15 @@ public final class LibraryModule extends AModule {
   }
 
   @Override
-  public void comp(final CompileContext cc) {
+  public Expr compile(final CompileContext cc) {
+    return null;
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
   }
 }

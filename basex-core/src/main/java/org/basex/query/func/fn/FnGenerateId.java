@@ -8,13 +8,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnGenerateId extends ContextFn {
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    final ANode node = toNodeOrNull(context(qc), qc);
     if(node == null) return Str.EMPTY;
 
     final TokenBuilder tb = new TokenBuilder(Token.ID);

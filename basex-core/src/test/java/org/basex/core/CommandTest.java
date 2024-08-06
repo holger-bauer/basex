@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the database commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class CommandTest extends SandboxTest {
@@ -101,7 +101,7 @@ public class CommandTest extends SandboxTest {
     ok(new AlterDB(NAME, NAME2));
     ok(new CreateDB(NAME));
     ok(new Close());
-    no(new AlterDB(NAME, NAME2));
+    ok(new AlterDB(NAME, NAME2));
     no(new AlterDB(NAME, NAME2));
     no(new AlterDB(NAME2, "?"));
     no(new AlterDB("?", NAME2));
@@ -134,6 +134,29 @@ public class CommandTest extends SandboxTest {
     no(new AlterUser(NAME, NAME2));
   }
 
+  /** Retrieves binary data. */
+  @Test public final void binaryGet() {
+    ok(new CreateDB(NAME));
+    // retrieve non-existing resource
+    no(new BinaryGet(NAME2));
+    // retrieve existing resource
+    ok(new BinaryPut(NAME2, FILE));
+    ok(new BinaryGet(NAME2));
+  }
+
+  /** Stores binary data. */
+  @Test public final void binaryPut() {
+    ok(new CreateDB(NAME));
+    ok(new BinaryPut(NAME2, FILE));
+    // file can be overwritten
+    ok(new BinaryPut(NAME2, FILE));
+    // adopt name from specified file
+    ok(new BinaryPut("", FILE));
+    // reject invalid or missing names
+    no(new BinaryPut("", "</a>"));
+    no(new BinaryPut("../x", FILE));
+  }
+
   /** Command test. */
   @Test public final void close() {
     // close is successful, even if no database is opened
@@ -152,7 +175,7 @@ public class CommandTest extends SandboxTest {
     ok(new Restore(NAME));
     ok(new Close());
     ok(new Restore(NAME));
-    ok(new CreateBackup(NAME));
+    ok(new CreateBackup(NAME, "BLA"));
     ok(new Restore(NAME));
     ok(new DropBackup(NAME));
     ok(new CreateBackup(NAME + '*'));
@@ -219,9 +242,35 @@ public class CommandTest extends SandboxTest {
     // target need not exist
     ok(new Delete(FILE));
     // delete binary file
-    ok(new Store(FN, FILE));
+    ok(new BinaryPut(FN, FILE));
     ok(new Delete(FN));
     ok(new Delete(FN));
+  }
+
+  /** Command test. */
+  @Test public final void dir() {
+    no(new Dir(FILE));
+    ok(new CreateDB(NAME, FILE));
+    ok(new Dir(FILE));
+  }
+
+  /**
+   * Dropping backups.
+   */
+  @Test public final void dropBackup() {
+    // dropping a backup with db name as argument
+    ok(new CreateDB(NAME));
+    ok(new CreateBackup(NAME));
+    ok(new DropBackup(NAME));
+
+    /* Creates 2 dbs: one with a short name (1), the other with a
+     * longer name (2). (1) is a prefix of (2). Tests then, whether
+     * backups of both dbs are deleted, when we drop backups of (1). */
+    ok(new CreateDB(NAME));
+    ok(new CreateDB(NAME2));
+    ok(new CreateBackup(NAME));
+    ok(new CreateBackup(NAME2));
+    ok(new DropBackup(NAME));
   }
 
   /** Command test. */
@@ -298,10 +347,12 @@ public class CommandTest extends SandboxTest {
 
   /** Command test. */
   @Test public final void get() {
-    ok(new Get());
-    ok(new Get(MainOptions.CHOP));
-    ok(new Get(MainOptions.TOKENINCLUDE));
+    ok(new CreateDB(NAME));
+    // retrieve non-existing resource
     no(new Get(NAME2));
+    // retrieve existing resource
+    ok(new Add(NAME2, "<x/>"));
+    ok(new Get(NAME2));
   }
 
   /** Command test. */
@@ -373,8 +424,6 @@ public class CommandTest extends SandboxTest {
     ok(new CreateDB(NAME, FILE));
     ok(new Open(NAME));
     ok(new Open(NAME));
-    ok(new Open(NAME, FILE));
-    ok(new Open(NAME, "abc"));
     no(new Open(":"));
   }
 
@@ -424,33 +473,33 @@ public class CommandTest extends SandboxTest {
   }
 
   /** Command test. */
-  @Test public final void replace() {
+  @Test public final void put() {
     // query to count number of documents
-    final String count = COUNT.args(_DB_OPEN.args(NAME));
+    final String count = COUNT.args(_DB_GET.args(NAME));
     // database must be opened to replace resources
-    no(new Replace(FILE, "xxx"));
+    no(new Put(FILE, "xxx"));
     ok(new CreateDB(NAME, FILE));
     assertEquals("1", ok(new XQuery(count)));
     // replace existing document
-    ok(new Replace(FN, "<a/>"));
+    ok(new Put(FN, "<a/>"));
     assertEquals("1", ok(new XQuery(count)));
     // replace existing document (again)
-    ok(new Replace(FN, "<a/>"));
+    ok(new Put(FN, "<a/>"));
     assertEquals("1", ok(new XQuery(count)));
     // invalid content
-    no(new Replace(FN, ""));
+    no(new Put(FN, ""));
     assertEquals("1", ok(new XQuery(count)));
     // invalid paths
-    no(new Replace(".", "<a/>"));
-    no(new Replace("..", "<a/>"));
-    no(new Replace("/", "<a/>"));
+    no(new Put(".", "<a/>"));
+    no(new Put("..", "<a/>"));
+    no(new Put("/", "<a/>"));
     // create and replace binary file
-    ok(new XQuery(_DB_STORE.args(NAME, "a", "a")));
-    ok(new Replace("a", "<b/>"));
-    assertFalse(ok(new XQuery(_DB_OPEN.args(NAME))).isEmpty());
-    ok(new XQuery(_DB_RETRIEVE.args(NAME, "a")));
+    ok(new XQuery(_DB_PUT_BINARY.args(NAME, "DATA", "path")));
+    ok(new Put("path", "<b/>"));
+    assertFalse(ok(new XQuery(_DB_GET.args(NAME))).isEmpty());
+    ok(new XQuery(_DB_GET_BINARY.args(NAME, "path")));
     // a failing replace should not remove existing documents
-    no(new Replace(FN, "<a>"));
+    no(new Put(FN, "<a>"));
     assertEquals("1", ok(new XQuery(count)));
   }
 
@@ -480,48 +529,6 @@ public class CommandTest extends SandboxTest {
     ok(new Restore(Databases.DBCHARS));
     ok(new DropBackup(Databases.DBCHARS));
     ok(new DropDB(Databases.DBCHARS));
-  }
-
-  /**
-   * Dropping backups.
-   */
-  @Test public final void dropBackup() {
-    // dropping a backup with db name as argument
-    ok(new CreateDB(NAME));
-    ok(new CreateBackup(NAME));
-    ok(new DropBackup(NAME));
-
-    /* Creates 2 dbs: one with a short name (1), the other with a
-     * longer name (2). (1) is a prefix of (2). Tests then, whether
-     * backups of both dbs are deleted, when we drop backups of (1). */
-    ok(new CreateDB(NAME));
-    ok(new CreateDB(NAME2));
-    ok(new CreateBackup(NAME));
-    ok(new CreateBackup(NAME2));
-    ok(new DropBackup(NAME));
-  }
-
-  /** Retrieves raw data. */
-  @Test public final void retrieve() {
-    ok(new CreateDB(NAME));
-    // retrieve non-existing file
-    no(new Retrieve(NAME2));
-    // retrieve existing file
-    ok(new Store(NAME2, FILE));
-    ok(new Retrieve(NAME2));
-  }
-
-  /** Stores raw data. */
-  @Test public final void store() {
-    ok(new CreateDB(NAME));
-    ok(new Store(NAME2, FILE));
-    // file can be overwritten
-    ok(new Store(NAME2, FILE));
-    // adopt name from specified file
-    ok(new Store("", FILE));
-    // reject invalid or missing names
-    no(new Store("", "</a>"));
-    no(new Store("../x", FILE));
   }
 
   /**
@@ -563,9 +570,9 @@ public class CommandTest extends SandboxTest {
 
   /** Command test. */
   @Test public final void set() {
-    ok(new Set(MainOptions.CHOP, false));
-    ok(new Set(MainOptions.CHOP, true));
-    ok(new Set("chop", true));
+    ok(new Set(MainOptions.STRIPWS, true));
+    ok(new Set(MainOptions.STRIPWS, false));
+    ok(new Set("stripws", false));
     ok(new Set("runs", 1));
     ok(new Set(MainOptions.TOKENINCLUDE, "id"));
     ok(new Set(MainOptions.TOKENINCLUDE, ""));
@@ -574,18 +581,11 @@ public class CommandTest extends SandboxTest {
   }
 
   /** Command test. */
-  @Test public final void jobsList() {
-    ok(new JobsList());
-  }
-
-  /** Command test. */
-  @Test public final void jobsResult() {
-    no(new JobsResult("job1"));
-  }
-
-  /** Command test. */
-  @Test public final void jobsStop() {
-    ok(new JobsStop("job1"));
+  @Test public final void showOptions() {
+    ok(new ShowOptions());
+    ok(new ShowOptions(MainOptions.STRIPWS));
+    ok(new ShowOptions(MainOptions.TOKENINCLUDE));
+    no(new ShowOptions(NAME2));
   }
 
   /** Command test. */
@@ -644,6 +644,7 @@ public class CommandTest extends SandboxTest {
       session.execute(cmd);
       fail("\"" + cmd + "\" was supposed to fail.");
     } catch(final IOException ex) {
+      Util.debug(ex);
       /* expected */
     }
   }

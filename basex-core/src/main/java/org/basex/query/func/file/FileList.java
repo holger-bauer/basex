@@ -1,7 +1,6 @@
 package org.basex.query.func.file;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.nio.file.*;
@@ -19,18 +18,17 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileList extends FileFn {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
     try {
-      final Path dir = toPath(0, qc).toRealPath();
-      final boolean recursive = optionalBool(1, qc);
-      final Pattern pattern = exprs.length == 3 ? Pattern.compile(IOFile.regex(
-          string(toToken(exprs[2], qc)), false), Prop.CASE ? 0 : Pattern.CASE_INSENSITIVE) : null;
+      final Path dir = toPath(arg(0), qc).toRealPath();
+      final boolean recursive = toBooleanOrFalse(arg(1), qc);
+      final Pattern pattern = defined(2) ? Pattern.compile(IOFile.regex(
+          toString(arg(2), qc), false), Prop.CASE ? 0 : Pattern.CASE_INSENSITIVE) : null;
 
       final TokenList tl = new TokenList();
       list(dir, recursive, pattern, tl, dir.getNameCount(), qc);
@@ -52,10 +50,9 @@ public class FileList extends FileFn {
    * @throws QueryException query exception
    */
   Value paths(final boolean recursive, final QueryContext qc) throws QueryException {
-    checkCreate(qc);
     try {
       final TokenList tl = new TokenList();
-      list(toPath(0, qc), recursive, null, tl, -1, qc);
+      list(toPath(arg(0), qc), recursive, null, tl, -1, qc);
       return StrSeq.get(tl);
     } catch(final NoSuchFileException | NotDirectoryException ex) {
       throw FILE_NO_DIR_X.get(info, ex);
@@ -67,7 +64,7 @@ public class FileList extends FileFn {
   }
 
   /**
-   * Collects the sub-directories and files of the specified directory.
+   * Collects the subdirectories and files of the specified directory.
    * @param root root path
    * @param recursive recursive flag
    * @param pattern file name pattern; ignored if {@code null}
@@ -76,7 +73,7 @@ public class FileList extends FileFn {
    * @param qc query context
    * @throws IOException I/O exception
    */
-  static void list(final Path root, final boolean recursive, final Pattern pattern,
+  private static void list(final Path root, final boolean recursive, final Pattern pattern,
       final TokenList list, final int index, final QueryContext qc) throws IOException {
 
     // filter function for adding results

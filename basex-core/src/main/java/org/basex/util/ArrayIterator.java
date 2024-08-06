@@ -3,9 +3,10 @@ package org.basex.util;
 import java.util.*;
 
 /**
- * This class is used to iterate through objects of an array.
+ * This class is used to iterate over the elements of an array, or parts of it.
+ * {@code null} references are skipped. An iterator cannot be used twice.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <E> generic object type
  */
@@ -45,7 +46,11 @@ public final class ArrayIterator<E> implements Iterator<E>, Iterable<E> {
 
   @Override
   public boolean hasNext() {
-    return start < end;
+    while(start < end) {
+      if(array[start] != null) return true;
+      ++start;
+    }
+    return false;
   }
 
   @Override

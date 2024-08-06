@@ -1,7 +1,6 @@
 package org.basex.query.expr;
 
 import static org.basex.query.QueryText.*;
-import static org.basex.util.Token.*;
 
 import java.util.*;
 import java.util.function.*;
@@ -11,6 +10,7 @@ import org.basex.query.expr.path.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.map.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -20,35 +20,46 @@ import org.basex.util.hash.*;
 /**
  * Catch clause.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Catch extends Single {
-  /** Error QNames. */
-  public static final QNm[] NAMES = {
-    create(E_CODE), create(E_DESCRIPTION), create(E_VALUE), create(E_MODULE),
-    create(E_LINE_NUMBER), create(E_COLUMN_NUMBER), create(E_ADDITIONAL)
+  /** Error Strings. */
+  public static final String[] NAMES = {
+    "code", "description", "value", "module", "line-number", "column-number", "additional", "map"
   };
   /** Error types. */
   public static final SeqType[] TYPES = {
     SeqType.QNAME_O, SeqType.STRING_ZO, SeqType.ITEM_ZM, SeqType.STRING_ZO,
-    SeqType.INTEGER_ZO, SeqType.INTEGER_ZO, SeqType.ITEM_ZM
+    SeqType.INTEGER_ZO, SeqType.INTEGER_ZO, SeqType.ITEM_ZM, SeqType.MAP_O
   };
+  /** Error QNames. */
+  public static final QNm[] QNAMES = new QNm[NAMES.length];
+  /** Error string items. */
+  public static final Str[] STRS = new Str[NAMES.length];
+
+  static {
+    for(int n = NAMES.length - 1; n >= 0; n--) {
+      final String name = NAMES[n];
+      QNAMES[n] = qname(name);
+      STRS[n] = Str.get(name);
+    }
+  }
 
   /** Error tests. */
-  private final ArrayList<NameTest> tests;
+  private final ArrayList<Test> tests;
   /** Error variables. */
   private final Var[] vars;
 
   /**
    * Constructor.
-   * @param info input info
-   * @param tests error tests
+   * @param info input info (can be {@code null})
    * @param vars variables to be bound
+   * @param tests error tests
    */
-  public Catch(final InputInfo info, final NameTest[] tests, final Var[] vars) {
+  public Catch(final InputInfo info, final Var[] vars, final ArrayList<Test> tests) {
     super(info, null, SeqType.ITEM_ZM);
-    this.tests = new ArrayList<>(Arrays.asList(tests));
+    this.tests = tests;
     this.vars = vars;
   }
 
@@ -83,10 +94,10 @@ public final class Catch extends Single {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final Var[] vrs = new Var[NAMES.length];
-    final int vl = vrs.length;
-    for(int v = 0; v < vl; v++) vrs[v] = cc.vs().addNew(NAMES[v], TYPES[v], false, cc.qc, info);
-    final Catch ctch = new Catch(info, tests.toArray(new NameTest[0]), vrs);
+    final int vl = QNAMES.length;
+    final Var[] vrs = new Var[vl];
+    for(int v = 0; v < vl; v++) vrs[v] = cc.vs().addNew(QNAMES[v], TYPES[v], cc.qc, info);
+    final Catch ctch = new Catch(info, vrs, new ArrayList<>(tests));
     final int val = vars.length;
     for(int v = 0; v < val; v++) vm.put(vars[v].id, ctch.vars[v]);
     ctch.expr = expr.copy(cc, vm);
@@ -127,19 +138,27 @@ public final class Catch extends Single {
    * Returns all error values.
    * @param qe exception
    * @return values
+   * @throws QueryException query exception
    */
-  public static Value[] values(final QueryException qe) {
-    final byte[] io = qe.file() == null ? EMPTY : token(qe.file());
-    final Value value = qe.value();
-    return new Value[] {
+  public static Value[] values(final QueryException qe) throws QueryException {
+    final Value[] values = {
       qe.qname(),
       Str.get(qe.getLocalizedMessage()),
-      value == null ? Empty.VALUE : value,
-      Str.get(io),
-      Int.get(qe.line()),
-      Int.get(qe.column()),
-      Str.get(qe.getMessage().replaceAll("\r\n?", "\n"))
+      qe.value() != null ? qe.value() : Empty.VALUE,
+      qe.file() != null ? Str.get(qe.file()) : Empty.VALUE,
+      qe.line() != 0 ? Int.get(qe.line()) : Empty.VALUE,
+      qe.column() != 0 ? Int.get(qe.column()) : Empty.VALUE,
+      StrSeq.get(qe.stack()),
+      null
     };
+    // assign map as last value
+    final MapBuilder mb = new MapBuilder();
+    final int nl = NAMES.length - 1;
+    for(int n = 0; n < nl; n++) {
+      if(!values[n].isEmpty()) mb.put(STRS[n], values[n]);
+    }
+    values[nl] = mb.map();
+    return values;
   }
 
   /**
@@ -148,30 +167,26 @@ public final class Catch extends Single {
    * @param cc compilation context
    * @return if catch clause contains relevant tests
    */
-  boolean simplify(final ArrayList<NameTest> list, final CompileContext cc) {
+  boolean simplify(final ArrayList<Test> list, final CompileContext cc) {
     // check if all errors are already caught
-    if(list.contains(null)) {
+    if(list.contains(KindTest.ELEMENT)) {
       cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, "*");
       return false;
     }
 
-    // check if the current clause will catch all errors
-    for(final NameTest test : tests) {
-      if(test == null) {
-        list.add(null);
-        cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, "*");
-        tests.clear();
-        tests.add(null);
-        return true;
-      }
+    // drop remaining tests in favor or wildcard test
+    if(tests.contains(KindTest.ELEMENT) && tests.size() != 1) {
+      tests.clear();
+      tests.add(KindTest.ELEMENT);
+      cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, "*");
     }
 
     // remove redundant tests
-    final Iterator<NameTest> iter = tests.iterator();
+    final Iterator<Test> iter = tests.iterator();
     while(iter.hasNext()) {
-      final NameTest test = iter.next();
+      final Test test = iter.next();
       if(list.contains(test)) {
-        cc.info(OPTREMOVE_X_X, test != null ? test : "*", (Supplier<?>) this::description);
+        cc.info(OPTREMOVE_X_X, test, (Supplier<?>) this::description);
         iter.remove();
       } else {
         list.add(test);
@@ -181,25 +196,33 @@ public final class Catch extends Single {
   }
 
   /**
+   * Checks if all errors are caught by this cause.
+   * @return result of check
+   */
+  boolean global() {
+    return tests.size() == 1 && tests.get(0) instanceof KindTest;
+  }
+
+  /**
    * Checks if one of the specified errors match the thrown error.
    * @param qe thrown error
    * @return result of check
    */
   boolean matches(final QueryException qe) {
     final QNm name = qe.qname();
-    for(final NameTest test : tests) {
-      if(test == null || test.matches(name)) return true;
+    for(final Test test : tests) {
+      if(test instanceof KindTest || ((NameTest) test).matches(name)) return true;
     }
     return false;
   }
 
   /**
-   * Creates an error QName with the specified name.
+   * Creates a QName with the specified name.
    * @param name name
    * @return QName
    */
-  private static QNm create(final byte[] name) {
-    return new QNm(concat(ERR_PREFIX, COLON, name), ERROR_URI);
+  private static QNm qname(final String name) {
+    return new QNm(ERR_PREFIX, name, ERROR_URI);
   }
 
   @Override
@@ -224,12 +247,12 @@ public final class Catch extends Single {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(CATCH);
     int c = 0;
-    for(final NameTest test : tests) {
+    for(final Test test : tests) {
       if(c++ > 0) qs.token('|');
-      qs.token(test != null ? test.toString(false) : "*");
+      qs.token(test.toString(false));
     }
     qs.brace(expr);
   }

@@ -10,7 +10,7 @@ import org.basex.util.list.*;
  * This is an input stream for project specific data types.
  * It bears resemblance to Java's {@link DataInputStream}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DataInput extends BufferInput {
@@ -117,6 +117,16 @@ public final class DataInput extends BufferInput {
       default:
         return (read() << 24) + (read() << 16) + (read() << 8) + read();
     }
+  }
+
+  /**
+   * Reads a long value.
+   * @return read value
+   * @throws IOException I/O Exception
+   */
+  public long readLong() throws IOException {
+    final int v = readNum();
+    return v == 0x3FFF ? read8() : v;
   }
 
   /**

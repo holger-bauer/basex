@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Test the {@link AtomicUpdateCache}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class AtomicUpdatesTest extends SandboxTest {
@@ -27,33 +27,32 @@ public final class AtomicUpdatesTest extends SandboxTest {
     // IDENTICAL: 0 value updates
     query(transform("<doc><tree/></doc>",
         "replace node $input//tree with <tree/>"),
-        "<doc>\n<tree/>\n</doc>");
+        "<doc><tree/></doc>");
     // FAIL: different size of trees
     query(transform("<doc><tree><n/></tree></doc>",
         "replace node $input//tree with <tree/>"),
-        "<doc>\n<tree/>\n</doc>");
+        "<doc><tree/></doc>");
     // FAIL: kind
     query(transform("<doc><tree><n/></tree></doc>",
         "replace node $input//tree with <tree>text</tree>"),
-        "<doc>\n<tree>text</tree>\n</doc>");
+        "<doc><tree>text</tree></doc>");
     // FAIL: distance (size would've already failed on ancestor axis)
     query(transform("<doc><tree><n/></tree></doc>",
         "replace node $input//tree with <tree/>"),
-        "<doc>\n<tree/>\n</doc>");
+        "<doc><tree/></doc>");
     // FAIL: replace attribute w/ sequence of attributes
     query(transform("<doc><tree id=\"0\"/></doc>",
         "replace node $input//@id with (attribute id {\"1\"}, attribute id2 {\"2\"})"),
-        "<doc>\n<tree id=\"1\" id2=\"2\"/>\n</doc>");
+        "<doc><tree id=\"1\" id2=\"2\"/></doc>");
     // LAZY REPLACE: 8 value updates -> element, attribute, text, comment, processing instruction
     query(transform("<doc><tree1 a='0'>text1<a/><!--comm1--><a/><?p1 i1?><?p11?></tree1></doc> ",
         "replace node $input//tree1 with " +
         "<tree2 b='1'>text2<a/><!--comm2--><a/><?p2 i2?><?p22?></tree2>"),
-        "<doc>\n<tree2 b=\"1\">text2<a/>\n<!--comm2-->\n<a/>\n" +
-        "<?p2 i2?>\n<?p22 ?>\n</tree2>\n</doc>");
+        "<doc><tree2 b=\"1\">text2<a/><!--comm2--><a/><?p2 i2?><?p22 ?></tree2></doc>");
     // LAZY REPLACE: 2 value updates -> single attribute
     query(transform("<doc><tree id1=\"0\"/></doc>",
         "replace node $input//@id1 with attribute id2 {\"1\"}"),
-        "<doc>\n<tree id2=\"1\"/>\n</doc>");
+        "<doc><tree id2=\"1\"/></doc>");
   }
 
   /**
@@ -108,7 +107,7 @@ public final class AtomicUpdatesTest extends SandboxTest {
     auc.addInsert(3, 1, elemClip(md, "<d/>", false));
     assertEquals(1, auc.updatesSize());
     query(transform(doc, "insert node <d/> into $input, insert node <c/> into $input/b,"
-        + "delete node $input/b"), "<a>\n<d/>\n</a>");
+        + "delete node $input/b"), "<a><d/></a>");
   }
 
   /**
@@ -122,7 +121,7 @@ public final class AtomicUpdatesTest extends SandboxTest {
     auc.addInsert(3, 1, elemClip(md, "<d/>", false));
     assertEquals(2, auc.updatesSize());
     query(transform(doc, "insert node <d/> into $input,"
-        + "replace node $input/b with <newb/>"), "<a>\n<newb/>\n<d/>\n</a>");
+        + "replace node $input/b with <newb/>"), "<a><newb/><d/></a>");
   }
 
   /**
@@ -137,7 +136,7 @@ public final class AtomicUpdatesTest extends SandboxTest {
     auc.addInsert(3, 2, elemClip(md, "<c/>", false));
     assertEquals(1, auc.updatesSize());
     query(transform(doc, "insert node <c/> into $input/b,"
-        + "replace node $input/b with <newb/>"), "<a>\n<newb/>\n</a>");
+        + "replace node $input/b with <newb/>"), "<a><newb/></a>");
   }
 
   /**
@@ -163,7 +162,7 @@ public final class AtomicUpdatesTest extends SandboxTest {
   }
 
   /**
-   * Merge atomic updates A,B with A being an insert atomic.
+   * Merge atomic updates A, B with A being an insert atomic.
    */
   @Test public void mergeSequence01() {
     // a=1, b=2
@@ -175,16 +174,15 @@ public final class AtomicUpdatesTest extends SandboxTest {
     auc.addInsert(3, 2, elemClip(md, "<c/>", false));
     auc.addInsert(3, 2, elemClip(md, "<d/>", false));
     assertEquals(2, auc.updatesSize());
-    query(transform(doc, "insert node <c/> into $input/b,insert node <d/> into $input/b"),
-        "<a>\n<b>\n<c/>\n<d/>\n</b>\n</a>");
+    query(transform(doc, "insert node <c/> into $input/b, insert node <d/> into $input/b"),
+        "<a><b><c/><d/></b></a>");
 
     // delete(x) -> insert(x+1)
     auc = atomics(doc);
     auc.addDelete(2);
     auc.addInsert(3, 1, elemClip(md, "<d/>", false));
     assertEquals(1, auc.updatesSize());
-    query(transform(doc, "insert node <d/> into $input,delete node $input/b"),
-        "<a>\n<d/>\n</a>");
+    query(transform(doc, "insert node <d/> into $input, delete node $input/b"), "<a><d/></a>");
 
     // delete(x) -> insert(x+1) with affecting insert before x
     auc = atomics("<a><b/><c/></a>");
@@ -193,14 +191,14 @@ public final class AtomicUpdatesTest extends SandboxTest {
     auc.addInsert(4, 1, elemClip(md, "<d/>", false));
     assertEquals(2, auc.updatesSize());
     query(transform("<a><b/><c/></a>", "insert node <d/> into $input," +
-        "delete node $input/c,delete node $input/b"), "<a>\n<d/>\n</a>");
+        "delete node $input/c, delete node $input/b"), "<a><d/></a>");
 
     // insert(x) <- delete(x)
     auc = atomics(doc);
     auc.addInsert(2, 1, elemClip(md, "<d/>", false));
     auc.addDelete(2);
     assertEquals(1, auc.updatesSize());
-    query(transform(doc, "insert node <d/> into $input,delete node $input/b"), "<a>\n<d/>\n</a>");
+    query(transform(doc, "insert node <d/> into $input, delete node $input/b"), "<a><d/></a>");
   }
 
   /**
@@ -385,7 +383,7 @@ public final class AtomicUpdatesTest extends SandboxTest {
     assertEquals(9, auc.calculatePreValue(6, false));
     assertEquals(1, auc.calculatePreValue(1, true));
     assertEquals(2, auc.calculatePreValue(2, true));
-    // nodes like 3,4 that have not existed prior to insert are not recalculated
+    // nodes like 3, 4 that have not existed prior to insert are not recalculated
     assertEquals(3, auc.calculatePreValue(3, true));
     assertEquals(4, auc.calculatePreValue(4, true));
     assertEquals(3, auc.calculatePreValue(5, true));

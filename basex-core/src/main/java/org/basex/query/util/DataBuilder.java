@@ -8,18 +8,19 @@ import org.basex.core.*;
 import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.DataFTBuilder.DataFTMarker;
+import org.basex.query.util.DataFTBuilder.*;
 import org.basex.query.util.ft.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
 
 /**
  * Data builder. Provides methods for copying XML nodes into a main-memory database instance.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DataBuilder {
@@ -55,19 +56,39 @@ public final class DataBuilder {
   /**
    * Adds database entries for the specified node.
    * @param node node
+   * @throws QueryException query exception
    */
-  public void build(final ANode node) {
+  public void build(final ANode node) throws QueryException {
     build(new ANodeList().add(node));
   }
 
   /**
    * Adds database entries for the specified nodes.
    * @param nodes node list
+   * @throws QueryException query exception
    */
-  public void build(final ANodeList nodes) {
+  public void build(final ANodeList nodes) throws QueryException {
     data.meta.update();
     int next = data.meta.size;
     for(final ANode node : nodes) next = addNode(node, next, -1);
+
+    // see Builder#addElem
+    limit(data.elemNames.size(), 0x8000, "distinct element names");
+    limit(data.attrNames.size(), 0x8000, "distinct attribute names");
+    limit(data.nspaces.size(), 0x100, "distinct namespaces");
+    if(next < 0) limit(0, 0, "nodes");
+  }
+
+  /**
+   * Checks a value limit and optionally throws an exception.
+   * @param value value
+   * @param limit limit
+   * @param message error message
+   * @throws QueryException query exception
+   */
+  private static void limit(final int value, final int limit, final String message)
+      throws QueryException {
+    if(value >= limit) throw QueryError.BASEX_LIMIT_X_X.get(null, message, limit);
   }
 
   /**
@@ -79,7 +100,7 @@ public final class DataBuilder {
    */
   private int addNode(final ANode node, final int pre, final int par) {
     if(qc != null) qc.checkStop();
-    switch(node.nodeType()) {
+    switch((NodeType) node.type) {
       case DOCUMENT_NODE: return addDoc(node, pre);
       case ELEMENT: return addElem(node, pre, par);
       case TEXT: return addText(node, pre, par);
@@ -211,14 +232,22 @@ public final class DataBuilder {
     final Atts ns = par == -1 ? node.nsScope(null) : node.namespaces();
     data.nspaces.open(last, ns);
 
-    // collect node name properties
+    // collect node properties
     final QNm qname = node.qname();
-    final int size = size(node, false), asize = size(node, true);
     final int nameId = data.elemNames.put(qname.string());
-    final int uriId = data.nspaces.uriId(qname.uri());
+    final int size = size(node, false), asize = size(node, true);
+
+    // find or add namespace for element name
+    final byte[] uri = qname.uri();
+    int uriId = data.nspaces.uriId(uri);
+    boolean nsFlag = !ns.isEmpty();
+    if(uriId == 0 && uri.length != 0) {
+      uriId = data.nspaces.add(last, qname.prefix(), uri, data);
+      nsFlag = true;
+    }
 
     // add element node
-    data.elem(pre - par, nameId, asize, size, uriId, !ns.isEmpty());
+    data.elem(pre - par, nameId, asize, size, uriId, nsFlag);
     data.insert(last);
 
     // add attributes and child nodes
@@ -261,12 +290,15 @@ public final class DataBuilder {
   /**
    * Returns a new node without the specified namespace.
    * @param node node to be copied
-   * @param ns namespace to be stripped
+   * @param uri namespace to be stripped
    * @param ctx database context
    * @return new node
+   * @throws QueryException query exception
    */
-  public static ANode stripNS(final ANode node, final byte[] ns, final Context ctx) {
-    if(node.type != NodeType.ELEMENT && node.type != NodeType.DOCUMENT_NODE) return node;
+  public static ANode stripNamespace(final ANode node, final byte[] uri, final Context ctx)
+      throws QueryException {
+
+    if(!node.type.oneOf(NodeType.ELEMENT, NodeType.DOCUMENT_NODE)) return node;
 
     final MemData data = new MemData(ctx.options);
     final DataBuilder db = new DataBuilder(data, null);
@@ -275,13 +307,14 @@ public final class DataBuilder {
     // flag indicating if namespace should be completely removed
     boolean del = true;
     // loop through all nodes
-    for(int pre = 0; pre < data.meta.size; pre++) {
+    final int size = data.meta.size;
+    for(int pre = 0; pre < size; pre++) {
       // only check elements and attributes
       final int kind = data.kind(pre);
       if(kind != Data.ELEM && kind != Data.ATTR) continue;
       // check if namespace is referenced
-      final byte[] uri = data.nspaces.uri(data.uriId(pre, kind));
-      if(uri == null || !eq(uri, ns)) continue;
+      final byte[] u = data.nspaces.uri(data.uriId(pre, kind));
+      if(u == null || !eq(u, uri)) continue;
 
       final byte[] nm = data.name(pre, kind);
       if(prefix(nm).length == 0) {
@@ -295,7 +328,61 @@ public final class DataBuilder {
         del = false;
       }
     }
-    if(del) data.nspaces.delete(ns);
+    if(del) data.nspaces.delete(uri);
+    return new DBNode(data);
+  }
+
+  /**
+   * Returns a new node without the specified namespaces.
+   * @param node node to be copied
+   * @param prefixes prefixes of namespaces to be stripped (if empty, strips all namespaces)
+   * @param ctx database context
+   * @param info input info (can be {@code null})
+   * @return new node
+   * @throws QueryException query exception
+   */
+  public static ANode stripNamespaces(final ANode node, final TokenSet prefixes, final Context ctx,
+      final InputInfo info) throws QueryException {
+
+    if(!node.type.oneOf(NodeType.ELEMENT, NodeType.DOCUMENT_NODE)) return node;
+
+    final MemData data = new MemData(ctx.options);
+    final DataBuilder db = new DataBuilder(data, null);
+    db.build(node);
+
+    // loop through all nodes
+    final TokenSet atts = new TokenSet(), uris = new TokenSet(), keep = new TokenSet();
+    final int size = data.meta.size;
+    for(int pre = 0; pre < size; pre++) {
+      final int kind = data.kind(pre);
+      final boolean attr = kind == Data.ATTR;
+      if(!attr) atts.clear();
+      if(attr || kind == Data.ELEM) {
+        byte[] name = data.name(pre, kind);
+        final byte[] uri = data.nspaces.uri(data.uriId(pre, kind));
+        if(uri != null) {
+          // node has namespace
+          uris.put(uri);
+          final byte[] prefix = prefix(name);
+          if(prefixes.isEmpty() || prefixes.contains(prefix)) {
+            // remove namespace: modify name and (for elements) namespace flag
+            name = local(name);
+            data.update(pre, kind, name, EMPTY);
+            if(!attr) data.nsFlag(pre, false);
+          } else {
+            // remember unmodified namespace
+            keep.put(uri);
+          }
+        }
+        // check if namespace removal leads to duplicate attribute names
+        // <x xmlns:prefix='URU' prefix:name='' name=''/>
+        if(attr && !atts.add(name)) throw QueryError.BASEX_STRIP_X.get(info, local(name));
+      }
+    }
+    // remove unused namespaces, return new node
+    for(final byte[] uri : uris) {
+      if(!keep.contains(uri)) data.nspaces.delete(uri);
+    }
     return new DBNode(data);
   }
 }

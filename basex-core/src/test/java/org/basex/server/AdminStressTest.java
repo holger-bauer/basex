@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Admin stress test.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class AdminStressTest extends SandboxTest {
@@ -45,11 +45,11 @@ public final class AdminStressTest extends SandboxTest {
   @Test public void createAndListSessions() throws Exception {
     final CountDownLatch start = new CountDownLatch(1);
     final CountDownLatch stop = new CountDownLatch(NUM);
-    final Client[] clients = new Client[NUM];
-    for(int i = 0; i < NUM; ++i) clients[i] = new Client(new ShowSessions(), start, stop);
+    final SandboxClient[] clients = new SandboxClient[NUM];
+    for(int i = 0; i < NUM; ++i) clients[i] = new SandboxClient(new ShowSessions(), start, stop);
     start.countDown(); // start all clients
     stop.await();
-    for(final Client c : clients) {
+    for(final SandboxClient c : clients) {
       if(c.error != null) fail(c.error);
     }
   }

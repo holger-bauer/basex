@@ -7,7 +7,7 @@ import org.basex.gui.view.*;
 /**
  * Defines shared things of TreeMap layout algorithms.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Joerg Hauser
  */
 final class MapLayout {
@@ -128,7 +128,7 @@ final class MapLayout {
     final int w = r.w - layout.w;
     final int h = r.h - layout.h;
 
-    // skip too small rectangles and meta data in file systems
+    // skip too small rectangles and metadata in file systems
     if(w < size && h < size || w <= 2 || h <= 2) {
       rectangles.add(r);
       return;

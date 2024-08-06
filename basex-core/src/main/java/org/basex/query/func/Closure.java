@@ -14,9 +14,11 @@ import org.basex.query.expr.gflwor.*;
 import org.basex.query.scope.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
+import org.basex.query.util.parse.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -25,7 +27,7 @@ import org.basex.util.hash.*;
 /**
  * Inline function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Closure extends Single implements Scope, XQFunctionExpr {
@@ -52,39 +54,38 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
 
   /**
    * Constructor.
-   * @param info input info
-   * @param declType declared type (can be {@code null})
-   * @param params formal parameters
+   * @param info input info (can be {@code null})
    * @param expr function body
+   * @param params parameters
    * @param anns annotations
-   * @param global bindings for non-local variables
    * @param vs scope
+   * @param global bindings for non-local variables
    */
-  public Closure(final InputInfo info, final SeqType declType, final Var[] params, final Expr expr,
-      final AnnList anns, final Map<Var, Expr> global, final VarScope vs) {
-    this(info, null, declType, params, expr, anns, global, vs);
+  public Closure(final InputInfo info, final Expr expr, final Params params, final AnnList anns,
+      final VarScope vs, final Map<Var, Expr> global) {
+    this(info, expr, params.vars(), anns, vs, global, params.seqType(), null);
   }
 
   /**
    * Package-private constructor allowing a name.
-   * @param info input info
-   * @param name name of the function (can be {@code null})
-   * @param declType declared type (can be {@code null})
-   * @param params formal parameters
+   * @param info input info (can be {@code null})
    * @param expr function expression
+   * @param params formal parameters
    * @param anns annotations
-   * @param global bindings for non-local variables (can be {@code null})
    * @param vs variable scope
+   * @param global bindings for non-local variables (can be {@code null})
+   * @param declType declared type (can be {@code null})
+   * @param name function name (can be {@code null})
    */
-  Closure(final InputInfo info, final QNm name, final SeqType declType, final Var[] params,
-      final Expr expr, final AnnList anns, final Map<Var, Expr> global, final VarScope vs) {
+  Closure(final InputInfo info, final Expr expr, final Var[] params, final AnnList anns,
+      final VarScope vs, final Map<Var, Expr> global, final SeqType declType, final QNm name) {
     super(info, expr, SeqType.FUNCTION_O);
-    this.name = name;
     this.params = params;
-    this.declType = declType == null || declType.eq(SeqType.ITEM_ZM) ? null : declType;
     this.anns = anns;
-    this.global = global == null ? Collections.emptyMap() : global;
     this.vs = vs;
+    this.global = global == null ? Collections.emptyMap() : global;
+    this.declType = declType == null || declType.eq(SeqType.ITEM_ZM) ? null : declType;
+    this.name = name;
   }
 
   @Override
@@ -104,7 +105,8 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
 
   @Override
   public FuncType funcType() {
-    return FuncType.get(anns, declType, params);
+    final FuncType ft = super.funcType();
+    return ft != null ? ft : FuncType.get(anns, declType, params);
   }
 
   @Override
@@ -113,8 +115,8 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
   }
 
   @Override
-  public void comp(final CompileContext cc) throws QueryException {
-    compile(cc);
+  public void reset() {
+    compiled = false;
   }
 
   @Override
@@ -162,7 +164,7 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
         Expr inline = null;
         if(ex instanceof Value) {
           // values are always inlined into the closure
-          inline = var.checkType((Value) ex, cc.qc, true);
+          inline = var.checkType((Value) ex, cc.qc, cc);
         } else if(ex instanceof Closure) {
           // nested closures are inlined if their size and number of closed-over variables is small
           final Closure cl = (Closure) ex;
@@ -173,7 +175,7 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
               final Var var2 = cc.copy(expr2.getKey(), null);
               if(add == null) add = new HashMap<>();
               add.put(var2, expr2.getValue());
-              expr2.setValue(new VarRef(cl.info, var2));
+              expr2.setValue(new VarRef(cl.info, var2).optimize(cc));
             }
             inline = cl;
           }
@@ -198,8 +200,7 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
     // only evaluate if:
     // - the closure is empty, so we don't lose variables
     // - the result size does not exceed a specific limit
-    return global.isEmpty() && expr.size() <= CompileContext.MAX_PREEVAL ?
-      cc.preEval(this) : this;
+    return global.isEmpty() && expr.size() <= CompileContext.MAX_PREEVAL ? cc.preEval(this) : this;
   }
 
   @Override
@@ -230,18 +231,18 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    final VarScope innerScope = new VarScope(vs.sc);
+    final VarScope vsc = new VarScope();
 
     final HashMap<Var, Expr> outer = new HashMap<>();
     global.forEach((key, value) -> outer.put(key, value.copy(cc, vm)));
 
-    cc.pushScope(innerScope);
+    cc.pushScope(vsc);
     try {
       final IntObjMap<Var> innerVars = new IntObjMap<>();
       vs.copy(cc, innerVars);
 
-      final HashMap<Var, Expr> nl = new HashMap<>();
-      outer.forEach((key, value) -> nl.put(innerVars.get(key.id), value));
+      final HashMap<Var, Expr> bindings = new HashMap<>();
+      outer.forEach((key, value) -> bindings.put(innerVars.get(key.id), value));
 
       final Var[] prms = params.clone();
       final int pl = prms.length;
@@ -249,7 +250,7 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
 
       final Expr ex = expr.copy(cc, innerVars);
       ex.markTailCalls(null);
-      return copyType(new Closure(info, name, declType, prms, ex, anns, nl, cc.vs()));
+      return copyType(new Closure(info, ex, prms, anns, cc.vs(), bindings, declType, name));
     } finally {
       cc.removeScope();
     }
@@ -274,8 +275,7 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
 
     // create the return clause
     final Expr body = expr.copy(cc, vm).optimize(cc);
-    final Expr rtrn = declType == null ? body :
-      new TypeCheck(vs.sc, info, body, declType, true).optimize(cc);
+    final Expr rtrn = declType == null ? body : new TypeCheck(info, body, declType).optimize(cc);
     return clauses.isEmpty() ? rtrn : new GFLWOR(info, clauses, rtrn).optimize(cc);
   }
 
@@ -298,25 +298,21 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
     if(declType == null || argType.instanceOf(declType)) {
       // return type is already correct
       checked = body;
-    } else if(body instanceof FuncItem && declType.type instanceof FuncType) {
-      // function item coercion
-      if(!declType.occ.check(1)) throw typeError(body, declType, null, info, true);
-      checked = ((FuncItem) body).coerceTo((FuncType) declType.type, qc, info, true);
     } else if(body instanceof Value) {
       // we can type check immediately
       final Value value = (Value) body;
-      checked = declType.instance(value) ? value :
-        declType.promote(value, null, qc, vs.sc, info, false);
+      checked = declType.coerce(value, name, qc, null, info);
     } else {
       // check at each call: reject impossible arities
       if(argType.type.instanceOf(declType.type) && argType.occ.intersect(declType.occ) == null &&
-        !body.has(Flag.NDT)) throw typeError(body, declType, null, info, true);
-
-      checked = new TypeCheck(vs.sc, info, body, declType, true);
+          !body.has(Flag.NDT)) {
+        throw typeError(body, declType, name, info);
+      }
+      checked = new TypeCheck(info, body, declType);
     }
 
-    final FuncType type = (FuncType) seqType().type;
-    return new FuncItem(vs.sc, anns, name, params, type, checked, vs.stackSize(), info);
+    final FuncType ft = (FuncType) seqType().type;
+    return new FuncItem(info, checked, params, anns, ft, vs.stackSize(), name);
   }
 
   @Override
@@ -413,11 +409,10 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
   }
 
   /**
-   * Fixes the function type of this closure after it was generated for a function literal during
-   * parsing.
+   * Sets the type of this closure that has been generated for a function literal.
    * @param ft function type
    */
-  void adoptSignature(final FuncType ft) {
+  void setSignature(final FuncType ft) {
     anns = ft.anns;
     final int pl = params.length;
     for(int p = 0; p < pl; p++) params[p].declType = ft.argTypes[p];
@@ -432,67 +427,53 @@ public final class Closure extends Single implements Scope, XQFunctionExpr {
   private void checkUpdating() throws QueryException {
     // derive updating flag from function body
     updating = expr.has(Flag.UPD);
-    final boolean updAnn = anns.contains(Annotation.UPDATING);
-    if(updating != updAnn) {
-      if(!updAnn) anns.add(new Ann(info, Annotation.UPDATING));
+    final boolean annUpdating = anns.contains(Annotation.UPDATING);
+    if(updating != annUpdating) {
+      if(!annUpdating) anns = anns.attach(new Ann(info, Annotation.UPDATING, Empty.VALUE));
       else if(!expr.vacuous()) throw UPEXPECTF.get(info);
     }
   }
 
-  /**
-   * Creates a function literal for a function that was not yet encountered while parsing.
-   * @param name function name
-   * @param arity function arity
-   * @param qc query context
-   * @param sc static context
-   * @param ii input info
-   * @return function literal
-   * @throws QueryException query exception
-   */
-  public static Closure undeclaredLiteral(final QNm name, final int arity, final QueryContext qc,
-      final StaticContext sc, final InputInfo ii) throws QueryException {
-
-    final VarScope vs = new VarScope(sc);
-    final Var[] params = new Var[arity];
-    final Expr[] args = new Expr[arity];
-    for(int a = 0; a < arity; a++) {
-      params[a] = vs.addNew(new QNm(ARG + (a + 1), ""), null, true, qc, ii);
-      args[a] = new VarRef(ii, params[a]);
-    }
-    final TypedFunc tf = qc.funcs.undeclaredFuncCall(name, args, sc, ii);
-    return new Closure(ii, name, null, params, tf.func, new AnnList(), null, vs);
-  }
-
   @Override
   public boolean equals(final Object obj) {
-    // [CG] could be enhanced
     return this == obj;
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     final ArrayList<Object> list = new ArrayList<>();
     global.forEach((key, value) -> {
       list.add(key);
       list.add(value);
     });
 
-    final FElem elem = plan.create(this);
+    final FBuilder elem = plan.create(this);
     final int pl = params.length;
     for(int p = 0; p < pl; p++) plan.addAttribute(elem, ARG + p, params[p].name.string());
     plan.add(elem, list.toArray());
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final boolean inlined = !global.isEmpty();
     if(inlined) {
       qs.token("((: inline-closure :)");
-      global.forEach((k, v) -> qs.token(LET).token(k).token(ASSIGN).token(v));
+      global.forEach((k, v) -> qs.token(LET).token(k).token(":=").token(v));
       qs.token(RETURN);
     }
-    qs.token(FUNCTION).params(params);
+    qs.token(FN).params(params);
     qs.token(AS).token(declType != null ? declType : SeqType.ITEM_ZM).brace(expr);
     if(inlined) qs.token(')');
+  }
+
+  /**
+   * Parameter names.
+   * @return parameter names
+   */
+  public QNm[] paramNames() {
+    final int pl = params.length;
+    final QNm[] names = new QNm[pl];
+    for(int p = 0; p < pl; ++p) names[p] = paramName(p);
+    return names;
   }
 }

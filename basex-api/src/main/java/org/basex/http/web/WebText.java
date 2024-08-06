@@ -10,26 +10,14 @@ import org.basex.query.value.item.*;
 /**
  * This class assembles texts which are used in the Web classes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public interface WebText {
-  /** Token "header". */
-  byte[] HEADER = token("header");
-  /** Token "response". */
-  byte[] RESPONSE = token("response");
-  /** Token "status". */
-  byte[] STATUS = token("status");
-  /** Token "reason". */
-  byte[] REASON = token("reason");
-  /** Token "message". */
-  byte[] MESSAGE = token("message");
-  /** Token "name". */
-  byte[] NAME = token("name");
-  /** Token "value". */
-  byte[] VALUE = token("value");
-  /** Token "forward". */
-  byte[] FORWARD = token("forward");
+  /** WADL prefix. */
+  byte[] WADL_PREFIX = token("wadl");
+  /** WADL namespace. */
+  byte[] WADL_URI = token("http://wadl.dev.java.net/2009/02");
 
   /** Permission token. */
   String ALLOW = "allow";
@@ -44,10 +32,6 @@ public interface WebText {
   String WEBSOCKET = "WebSocket";
   /** RESTXQ string. */
   String RESTXQ = "RESTXQ";
-  /** WADL prefix. */
-  String WADL = "wadl:";
-  /** WADL namespace. */
-  String WADL_URI = "http://wadl.dev.java.net/2009/02";
   /** XHTML namespace. */
   String XHTML_URL = "http://www.w3.org/1999/xhtml";
   /** Init call. */
@@ -56,7 +40,7 @@ public interface WebText {
   /** Error message. */
   String ANN_MISSING = "Path annotation missing.";
   /** Error message. */
-  String ANN_CONFLICT = "Conflicting path annotations found.";
+  String ANN_CONFLICT_X = "Conflicting annotations: %.";
   /** Error message. */
   String ANN_BODYVAR = "More than one body request variable specified.";
   /** Error message. */
@@ -64,7 +48,7 @@ public interface WebText {
   /** Error message. */
   String INV_TEMPLATE_X = "Invalid path template: \"%\".";
   /** Error message. */
-  String INV_ENCODING_X = "Invalid URL encoding: \"%\".";
+  String INV_ENCODING_X = "URL is invalid: \"%\".";
   /** Error message. */
   String INV_VARNAME_X = "Invalid variable name: $%.";
   /** Error message. */
@@ -76,15 +60,15 @@ public interface WebText {
   /** Error message. */
   String INV_NONS_X = "No namespace declared for '%'.";
   /** Error message. */
-  String INV_VARTYPE_X_X = "Variable $% must inherit from %.";
+  String ARG_TYPE_X_X_X = "% must be %, supplied: %.";
   /** Error message. */
-  String UNKNOWN_VAR_X = "Variable $% is not specified as argument.";
+  String PARAM_MISSING_X = "Parameter $% missing in function declaration.";
   /** Error message. */
-  String VAR_ASSIGNED_X = "Variable $% is specified more than once.";
+  String PARAM_DUPL_X = "$% is specified more than once.";
   /** Error message. */
-  String VAR_UNDEFINED_X = "Variable $% is not assigned by the annotations.";
+  String VAR_UNDEFINED_X = "No binding defined for $%.";
   /** Error message. */
-  String UNKNOWN_SER_X = "Unknown serialization parameter: %.";
+  String UNKNOWN_PARAMETER_X = "%";
   /** Error message. */
   String UNEXP_NODE_X = "Unexpected node: %.";
   /** Error message. */
@@ -92,35 +76,45 @@ public interface WebText {
   /** Error message. */
   String METHOD_VALUE_X = "Method % does not allow values.";
   /** Error message. */
-  String INPUT_CONV_X = "Input could not be converted: %";
+  String BODY_TYPE_X_X = "Body cannot be parsed as %: %.";
   /** Error message. */
-  String PATH_CONFLICT_X_X = "Several functions found for path \"%\":%";
+  String PATH_CONFLICT_X_X = "Multiple services defined for path \"%\":%";
   /** Error message. */
-  String ERROR_CONFLICT_X_X = "Several functions found for error \"%\":%";
+  String ERROR_CONFLICT_X_X = "Multiple services defined for error \"%\":%";
   /** Error message. */
   String ERROR_QS_X = "Invalid quality factor: qs=%";
   /** Error message. */
   String NO_VALUE_X = "'%' element has no string value.";
 
   /** QName. */
-  QNm Q_STATUS = new QNm(STATUS);
+  QNm Q_STATUS = new QNm("status");
   /** QName. */
-  QNm Q_REASON = new QNm(REASON);
+  QNm Q_REASON = new QNm("reason");
   /** QName. */
-  QNm Q_MESSAGE = new QNm(MESSAGE);
+  QNm Q_MESSAGE = new QNm("message");
   /** QName. */
-  QNm Q_NAME = new QNm(NAME);
+  QNm Q_NAME = new QNm("name");
   /** QName. */
-  QNm Q_VALUE = new QNm(VALUE);
+  QNm Q_VALUE = new QNm("value");
+  /** QName. */
+  QNm Q_TYPE = new QNm("type");
+  /** QName. */
+  QNm Q_STYLE = new QNm("style");
+  /** QName. */
+  QNm Q_BASE = new QNm("base");
+  /** QName. */
+  QNm Q_PATH = new QNm("path");
+  /** QName. */
+  QNm Q_MEDIA_TYPE = new QNm("mediaType");
 
   /** Serializer node test. */
-  NameTest OUTPUT_SERIAL = new NameTest(FuncOptions.Q_SPARAM);
+  NameTest T_OUTPUT_SERIAL = new NameTest(FuncOptions.Q_SERIALIZTION_PARAMETERS);
   /** HTTP Response test. */
-  NameTest HTTP_RESPONSE = new NameTest(new QNm(RESPONSE, HTTP_URI));
+  NameTest T_HTTP_RESPONSE = new NameTest(new QNm("response", HTTP_URI));
   /** RESTXQ Response test. */
-  NameTest REST_RESPONSE = new NameTest(new QNm(RESPONSE, REST_URI));
+  NameTest T_REST_RESPONSE = new NameTest(new QNm("response", REST_URI));
   /** RESTXQ Forward test. */
-  NameTest REST_FORWARD = new NameTest(new QNm(FORWARD, REST_URI));
+  NameTest T_REST_FORWARD = new NameTest(new QNm("forward", REST_URI));
   /** HTTP Header test. */
-  NameTest HTTP_HEADER = new NameTest(new QNm(HEADER, HTTP_URI));
+  NameTest T_HTTP_HEADER = new NameTest(new QNm("header", HTTP_URI));
 }

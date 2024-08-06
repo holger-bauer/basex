@@ -1,18 +1,15 @@
 package org.basex.query.value.seq;
 
-import static org.basex.query.QueryError.*;
-
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * A sequence that defines a sub-range of another sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class SubSeq extends Seq {
@@ -34,13 +31,13 @@ public final class SubSeq extends Seq {
   }
 
   @Override
-  protected Seq subSeq(final long offset, final long length, final QueryContext qc) {
+  protected Seq subSeq(final long pos, final long length, final QueryContext qc) {
     qc.checkStop();
-    return new SubSeq(sub, start + offset, length);
+    return new SubSeq(sub, start + pos, length);
   }
 
   @Override
-  public Value insert(final long pos, final Item item, final QueryContext qc) {
+  public Value insertBefore(final long pos, final Item item, final QueryContext qc) {
     return copyInsert(pos, item, qc);
   }
 
@@ -62,13 +59,6 @@ public final class SubSeq extends Seq {
   }
 
   @Override
-  public Item ebv(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item fst = itemAt(0);
-    if(fst instanceof ANode) return fst;
-    throw EBV_X.get(ii, this);
-  }
-
-  @Override
   public void cache(final boolean lazy, final InputInfo ii) throws QueryException {
     for(long i = 0; i < size; i++) itemAt(i).cache(lazy, ii);
   }
@@ -78,12 +68,5 @@ public final class SubSeq extends Seq {
     final ValueBuilder vb = new ValueBuilder(qc);
     for(long i = 0; i < size; i++) vb.add(itemAt(i).atomValue(qc, ii));
     return vb.value(AtomType.ANY_ATOMIC_TYPE);
-  }
-
-  @Override
-  public long atomSize() {
-    long sz = 0;
-    for(int i = 0; i < size; i++) sz += itemAt(i).atomSize();
-    return sz;
   }
 }

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.*;
  * Tests {@link NodeUpdateComparator} that creates an order on update primitives
  * and is part of the XQuery Update Facility implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class NodeUpdateComparatorTest extends SandboxTest {
@@ -58,7 +58,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
       new DeleteNode(4, d, null),
       new DeleteNode(2, d, null)
     });
-    query(transform(doc, "delete node ($input//b, $input//d)"), "<a>\n<c/>\n</a>");
+    query(transform(doc, "delete node ($input//b, $input//d)"), "<a><c/></a>");
   }
 
   /**
@@ -89,7 +89,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
     });
     query(transform(doc,
       "insert node <before/> before $input/b, insert node <after/> after $input/b"),
-      "<a>\n<before/>\n<b/>\n<after/>\n</a>");
+      "<a><before/><b/><after/></a>");
   }
 
   /**
@@ -108,7 +108,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
     });
     query(transform(doc,
       "insert node <smallerpre/> into $input/b, insert node <largerpre/> into $input"),
-      "<a>\n<b>\n<smallerpre/>\n</b>\n<largerpre/>\n</a>");
+      "<a><b><smallerpre/></b><largerpre/></a>");
   }
 
   /**
@@ -126,7 +126,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
     });
     query(transform(doc,
       "insert node <smallerpre/> after $input/b, insert node <largerpre/> into $input"),
-      "<a>\n<b/>\n<smallerpre/>\n<largerpre/>\n</a>");
+      "<a><b/><smallerpre/><largerpre/></a>");
   }
 
   /**
@@ -147,7 +147,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
     query(transform(doc,
       "insert node <smallerpre/> into $input/b," +
       "insert node <largerpre/> after $input/b"),
-      "<a>\n<b>\n<c/>\n<smallerpre/>\n</b>\n<largerpre/>\n</a>");
+      "<a><b><c/><smallerpre/></b><largerpre/></a>");
   }
 
   /**
@@ -272,8 +272,8 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
   @Test public void shiftInsertIntoAsFirst() {
     final Data d = data(TESTDOCUMENT);
     compare(new NodeUpdate[] {
-     new InsertIntoAsFirst(22, d, null, null),
-     new DeleteNode(23, d, null),
+      new InsertIntoAsFirst(22, d, null, null),
+      new DeleteNode(23, d, null),
     });
   }
 
@@ -449,7 +449,7 @@ public final class NodeUpdateComparatorTest extends SandboxTest {
       new InsertInto(8, d, null, null),
       new InsertInto(7, d, null, null),
     });
-    // first sibling has attribute, second one is empty
+    // first sibling has an attribute, second one is empty
     compare(new NodeUpdate[] {
       new DeleteNode(35, d, null),
       new InsertIntoAsFirst(33, d, null, null),

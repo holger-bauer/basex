@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the JSON Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JsonModuleTest extends SandboxTest {
@@ -34,42 +34,42 @@ public final class JsonModuleTest extends SandboxTest {
     parse("{}", "", "<json type=\"object\"/>");
     parse("{ } ", "", "<json type=\"object\"/>");
     parse("{ \"\\t\" : 0 }", "",
-        "<json type=\"object\">\n<_0009 type=\"number\">0</_0009>\n</json>");
-    parse("{ \"a\" :0 }", "", "<json type=\"object\">\n<a type=\"number\">0</a>\n</json>");
-    parse("{ \"\" : 0 }", "", "<json type=\"object\">\n<_ type=\"number\">0</_>\n</json>");
+        "<json type=\"object\"><_0009 type=\"number\">0</_0009></json>");
+    parse("{ \"a\" :0 }", "", "<json type=\"object\"><a type=\"number\">0</a></json>");
+    parse("{ \"\" : 0 }", "", "<json type=\"object\"><_ type=\"number\">0</_></json>");
     parse("{ \"\" : 0.0e0 }", "", "...<_ type=\"number\">0.0e0</_>");
     parse("{ \"\" : null }", "", "...<_ type=\"null\"/>");
     parse("{ \"\" : true }", "", "...<_ type=\"boolean\">true</_>");
-    parse("{ \"\" : {} }", "", "... type=\"object\">\n<_ type=\"object\"/>");
-    parse("{ \"\" : [] }", "", "... type=\"object\">\n<_ type=\"array\"/>");
-    parse("{ \"\" : 0, \"\": 1 }", "",
-        "... type=\"object\">\n<_ type=\"number\">0</_>\n<_ type=\"number\">1</_>");
-    parse("{ \"O\" : [ 1 ] }", "", "...<O type=\"array\">\n<_ type=\"number\">1</_>\n</O>");
-    parse("{ \"A\" : [ 0,1 ] }", "",
-        "...<A type=\"array\">\n<_ type=\"number\">0</_>\n<_ type=\"number\">1</_>");
-    parse("{ \"\" : 0.0 }", "", "...0.0");
+    parse("{ \"\" : {} }", "", "... type=\"object\"><_ type=\"object\"/>");
+    parse("{ \"\" : [] }", "", "... type=\"object\"><_ type=\"array\"/>");
+    parse("{ \"A\" : 0, \"B\": 1 }", "",
+        "... type=\"object\"><A type=\"number\">0</A><B type=\"number\">1</B>");
+    parse("{ \"O\" : [ 1 ] }", "", "...<O type=\"array\"><_ type=\"number\">1</_></O>");
+    parse("{ \"A\" : [ 0, 1 ] }", "",
+        "...<A type=\"array\"><_ type=\"number\">0</_><_ type=\"number\">1</_>");
+    parse("{ \"\" : 0.0 }", "", "...>0.0<");
 
     // merging data types
-    parse("[]", "'merge':true()", "<json arrays=\"json\"/>");
-    parse("{}", "'merge':true()", "<json objects=\"json\"/>");
-    parse("{ } ", "'merge':true()", "<json objects=\"json\"/>");
-    parse("{ \"\\t\" : 0 }", "'merge':true()",
-        "<json objects=\"json\" numbers=\"_0009\">\n<_0009>0</_0009>\n</json>");
-    parse("{ \"a\" :0 }", "'merge':true()",
-        "<json objects=\"json\" numbers=\"a\">\n<a>0</a>\n</json>");
-    parse("{ \"\" : 0 }", "'merge':true()",
-        "<json objects=\"json\" numbers=\"_\">\n<_>0</_>\n</json>");
-    parse("{ \"\" : 0.0e0 }", "'merge':true()", "...<_>0.0e0</_>");
-    parse("{ \"\" : null }", "'merge':true()", "...<_/>");
-    parse("{ \"\" : true }", "'merge':true()", "...<_>true</_>");
-    parse("{ \"\" : {} }", "'merge':true()", "... objects=\"json _\">\n<_/>");
-    parse("{ \"\" : [] }", "'merge':true()", "... objects=\"json\" arrays=\"_\">\n<_/>");
-    parse("{ \"\" : 0, \"\": 1 }", "'merge':true()",
-        "... objects=\"json\" numbers=\"_\">\n<_>0</_>\n<_>1</_>");
-    parse("{ \"O\" : [ 1 ] }", "'merge':true()",
-        "... objects=\"json\" arrays=\"O\" numbers=\"_\">\n<O>\n<_>1</_>\n</O>");
-    parse("{ \"A\" : [ 0,1 ] }", "'merge':true()",
-        "... objects=\"json\" arrays=\"A\" numbers=\"_\">\n<A>\n<_>0</_>\n<_>1</_>");
+    parse("[]", "'merge': true()", "<json arrays=\"json\"/>");
+    parse("{}", "'merge': true()", "<json objects=\"json\"/>");
+    parse("{ } ", "'merge': true()", "<json objects=\"json\"/>");
+    parse("{ \"\\t\" : 0 }", "'merge': true()",
+        "<json objects=\"json\" numbers=\"_0009\"><_0009>0</_0009></json>");
+    parse("{ \"a\" :0 }", "'merge': true()",
+        "<json objects=\"json\" numbers=\"a\"><a>0</a></json>");
+    parse("{ \"\" : 0 }", "'merge': true()",
+        "<json objects=\"json\" numbers=\"_\"><_>0</_></json>");
+    parse("{ \"\" : 0.0e0 }", "'merge': true()", "...<_>0.0e0</_>");
+    parse("{ \"\" : null }", "'merge': true()", "...<_/>");
+    parse("{ \"\" : true }", "'merge': true()", "...<_>true</_>");
+    parse("{ \"\" : {} }", "'merge': true()", "... objects=\"json _\"><_/>");
+    parse("{ \"\" : [] }", "'merge': true()", "... objects=\"json\" arrays=\"_\"><_/>");
+    parse("{ \"A\" : 0, \"B\": 1 }", "'merge': true()",
+        "... objects=\"json\" numbers=\"A B\"><A>0</A><B>1</B>");
+    parse("{ \"O\" : [ 1 ] }", "'merge': true()",
+        "... objects=\"json\" arrays=\"O\" numbers=\"_\"><O><_>1</_></O>");
+    parse("{ \"A\" : [ 0, 1 ] }", "'merge': true()",
+        "... objects=\"json\" arrays=\"A\" numbers=\"_\"><A><_>0</_><_>1</_>");
 
     // errors
     parseError("", "");
@@ -82,26 +82,59 @@ public final class JsonModuleTest extends SandboxTest {
     parseError("{ \"\" : 0.1. }", "");
     parseError("{ \"\" : 0.1e }", "");
     parseError("{ \"a\" : 0 }}", "");
-    parseError("{ \"a\" : 0, }", "'liberal':false()");
+    parseError("{ \"a\" : 0, }", "'liberal': false()");
+  }
+
+  /** Test method. */
+  @Test public void parseJsonML() {
+    parse("[ \"a\" ]", "'format': 'jsonml'", "<a/>");
+    parse("[ \"a\", \"A\" ]", "'format': 'jsonml'", "<a>A</a>");
+    parse("[ \"a\", { \"b\": \"c\" } ]", "'format': 'jsonml'", "<a b=\"c\"/>");
+    parse("[ \"a\", { \"b\": \"\", \"c\": \"\" } ]", "'format': 'jsonml'", "<a b=\"\" c=\"\"/>");
+
+    // duplicate attribute
+    parseError("[ \"a\", { \"b\": \"\", \"b\": \"\" } ]", "'format': 'jsonml'");
   }
 
   /** Test method. */
   @Test public void parseXQuery() {
     final Function func = _JSON_PARSE;
     // queries
-    final String map = " map { 'format':'xquery' }";
-    query(func.args("{}", map), "map {\n}");
-    query(func.args("{\"A\":1}", map), "map {\n\"A\": 1.0e0\n}");
-    query(func.args("{\"\":null}", map), "map {\n\"\": ()\n}");
+    String options = " map { 'format': 'xquery' }";
+    query(func.args("{}", options), "{}");
+    query(func.args("{\"A\":1}", options), "{\"A\":1.0e0}");
+    query(func.args("{\"\":null}", options), "{\"\":()}");
 
-    query(func.args("[]", map), "[]");
-    query(func.args("[\"A\"]", map), "[\"A\"]");
-    query(func.args("[1,true]", map), "[1.0e0, true()]");
+    query(func.args("[]", options), "[]");
+    query(func.args("[\"A\"]", options), "[\"A\"]");
+    query(func.args("[1,true]", options), "[1.0e0,true()]");
 
-    query(func.args("1", map), 1);
-    query(func.args("\"f\"", map), "f");
-    query(func.args("false", map), false);
-    query(func.args("null", map), "");
+    query(func.args("1", options), 1);
+    query(func.args("\"f\"", options), "f");
+    query(func.args("false", options), false);
+    query(func.args("null", options), "");
+
+    query(func.args("1234567890123456789012345678901234567890", options), "1.2345678901234568E39");
+    query(func.args("1234567890123456789012345678901234567890" +
+        ".123456789012345678901234567890123456789", options), "1.2345678901234568E39");
+    query(func.args("1234567890123456789012345678901234567890" +
+        "e1234567890123456789012345678901234567890", options), "INF");
+    query(func.args("0E1", options), 0);
+    query(func.args("0E-1", options), 0);
+    query(func.args("0E+1", options), 0);
+    query(func.args("-0E+1", options), "-0");
+    query(func.args("0E00", options), 0);
+    query(func.args("123e-123", options), "1.23E-121");
+    query(func.args("123.4e-123", options), "1.234E-121");
+    query(func.args("123.456E0001", options), "1234.56");
+    query(func.args("-123.456E0001", options), "-1234.56");
+    query(func.args("[ -123.456E0001, 0 ]", options), "[-1.23456e3,0.0e0]");
+
+    options = " map { 'format': 'xquery', 'number-parser': xs:decimal#1 }";
+    String input = "1234567890123456789012345678901234567890";
+    query(func.args(input, options), input);
+    input = "1234567890123456789012345678901234567890.123456789012345678901234567890123456789";
+    query(func.args(input, options), input);
   }
 
   /** Tests the configuration argument of {@code json:parse(...)}. */
@@ -121,21 +154,21 @@ public final class JsonModuleTest extends SandboxTest {
         " map { 'format': 'xquery', 'escape': false(), 'liberal': true() }") + ')',
         "9\n10");
 
-    error(func.args("42", " map { 'spec': 'garbage' }"), INVALIDOPT_X);
+    error(func.args("42", " map { 'spec': 'garbage' }"), OPTION_X);
   }
 
   /** Test method. */
   @Test public void serialize() {
-    serial("<json type='object'/>", "", "{\n}");
-    serial("<json objects='json'/>", "", "{\n}");
-    serial("<json type='array'/>", "", "[\n]");
-    serial("<json arrays='json'/>", "", "[\n]");
+    serial("<json type='object'/>", "", "{}");
+    serial("<json objects='json'/>", "", "{}");
+    serial("<json type='array'/>", "", "[]");
+    serial("<json arrays='json'/>", "", "[]");
     serial("<json type='number'>1</json>", "", 1);
-    serial("<json type='array'><_ type='null'/></json>", "", "[\nnull\n]");
-    serial("<json type='array'><_ type='string'/></json>", "", "[\n\"\"\n]");
-    serial("<json type='array'><_ type='string'>x</_></json>", "", "[\n\"x\"\n]");
-    serial("<json type='array'><_ type='number'>1</_></json>", "", "[\n1\n]");
-    serial("<json numbers=\"_\" type='array'><_>1</_></json>", "", "[\n1\n]");
+    serial("<json type='array'><_ type='null'/></json>", "", "[null]");
+    serial("<json type='array'><_ type='string'/></json>", "", "[\"\"]");
+    serial("<json type='array'><_ type='string'>x</_></json>", "", "[\"x\"]");
+    serial("<json type='array'><_ type='number'>1</_></json>", "", "[1]");
+    serial("<json numbers=\"_\" type='array'><_>1</_></json>", "", "[1]");
 
     serialError("<json type='o'/>", ""); // invalid type
     serialError("<json type='array'><_ type='number'/></json>", ""); // value needed
@@ -145,7 +178,7 @@ public final class JsonModuleTest extends SandboxTest {
 
   /** Bidirectional tests. */
   @Test public void serializeParse() {
-    query("json:serialize(<x xmlns='X'>{ json:parse('{}') }</x>/*)", "{\n}");
+    query("json:serialize(<x xmlns='X'>{ json:parse('{}') }</x>/*)", "{}");
   }
 
   /**
@@ -215,6 +248,6 @@ public final class JsonModuleTest extends SandboxTest {
   private static void error(final String input, final String options, final Function function) {
     final String query = options.isEmpty() ? function.args(input) :
       function.args(input, " map { " + options + " }");
-    error(query, INVALIDOPT_X, JSON_PARSE_X, JSON_SERIALIZE_X);
+    error(query, INVALIDOPT_X, JSON_PARSE_X, JSON_PARSE_X_X_X, JSON_SERIALIZE_X);
   }
 }

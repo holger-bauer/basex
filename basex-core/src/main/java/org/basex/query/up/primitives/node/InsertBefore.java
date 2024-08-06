@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Insert before primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class InsertBefore extends NodeCopy {
@@ -19,11 +19,11 @@ public final class InsertBefore extends NodeCopy {
    * Constructor.
    * @param pre pre
    * @param data data
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param nodes node copy insertion sequence
    */
-  public InsertBefore(final int pre, final Data data, final InputInfo ii, final ANodeList nodes) {
-    super(UpdateType.INSERTBEFORE, pre, data, ii, nodes);
+  public InsertBefore(final int pre, final Data data, final InputInfo info, final ANodeList nodes) {
+    super(UpdateType.INSERTBEFORE, pre, data, info, nodes);
   }
 
   @Override
@@ -39,5 +39,6 @@ public final class InsertBefore extends NodeCopy {
   }
 
   @Override
-  public void update(final NamePool pool) { }
+  public void update(final NamePool pool) {
+  }
 }

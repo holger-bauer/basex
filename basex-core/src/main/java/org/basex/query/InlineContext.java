@@ -11,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * Context for inlining expressions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InlineContext {
@@ -27,7 +27,7 @@ public final class InlineContext {
 
   /**
    * Constructor.
-   * @param var variable ({@link Var} reference) or context ({@code null}) to replace
+   * @param var variable ({@link Var} reference), or {@code null} for context reference
    * @param expr expression to inline
    * @param cc compilation context
    */
@@ -65,7 +65,7 @@ public final class InlineContext {
 
     // check if expression can be inlined into the specified target expressions
     for(final Expr target : targets) {
-      if(!target.inlineable(this)) return false;
+      if((var == null || target.uses(var)) && !target.inlineable(this)) return false;
     }
     return true;
   }

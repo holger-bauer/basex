@@ -12,7 +12,7 @@ import org.junit.jupiter.api.*;
 /**
  * Locking tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class LockingTest extends SandboxTest {
@@ -24,7 +24,7 @@ public final class LockingTest extends SandboxTest {
   private static final int FUZZING_THREADS = 5;
   /** Repeated locking events each thread should trigger. */
   private static final int FUZZING_REPEATS = 10;
-  /** How long each lock should be hold before releasing it and fetching the next. */
+  /** How long each lock should be held before releasing it and fetching the next. */
   private static final int HOLD_TIME = 10;
 
   /** Locking instance used for testing. */
@@ -573,8 +573,8 @@ public final class LockingTest extends SandboxTest {
       if(await != null) {
         try {
           if(!await.await(WAIT, TimeUnit.MILLISECONDS)) fail("Latch timed out.");
-        } catch(final InterruptedException e) {
-          throw new RuntimeException("Unexpectedly interrupted.");
+        } catch(final InterruptedException ex) {
+          throw new RuntimeException("Unexpectedly interrupted" + ex);
         }
       }
 
@@ -592,7 +592,7 @@ public final class LockingTest extends SandboxTest {
 
         locking.release();
       } catch(final InterruptedException ex) {
-        throw new RuntimeException("Unexpectedly interrupted.");
+        throw new RuntimeException("Unexpectedly interrupted" + ex);
       }
     }
 

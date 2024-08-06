@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Wrapper for representing an XQuery node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class XdmNode extends XdmItem {
@@ -60,6 +60,7 @@ final class XdmNode extends XdmItem {
     try {
       return node.serialize().toString();
     } catch(final QueryIOException ex) {
+      Util.debug(ex);
       return node.toString();
     }
   }

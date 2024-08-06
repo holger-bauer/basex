@@ -1,7 +1,6 @@
 package org.basex.util.ft;
 
 import static org.basex.query.QueryText.*;
-import static org.basex.util.Token.*;
 import static org.basex.util.ft.FTFlag.*;
 
 import java.util.*;
@@ -16,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * This class contains all full-text options.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTOpt extends ExprInfo {
@@ -28,10 +27,12 @@ public final class FTOpt extends ExprInfo {
   public StemDir sd;
   /** Stop words (can be {@code null}). */
   public StopWords sw;
-  /** Thesaurus (can be {@code null}). */
-  public ThesQuery th;
+  /** List of thesaurus accessors (can be {@code null}). */
+  public ThesList th;
   /** Language (can be {@code null}). */
   public Language ln;
+  /** Levenshtein error (ignored if {@code -1}). */
+  public int errors = -1;
 
   /**
    * Adopts the options of the specified argument.
@@ -46,11 +47,12 @@ public final class FTOpt extends ExprInfo {
     if(ln == null) ln = opt.ln;
     if(th == null) th = opt.th;
     else if(opt.th != null) th.merge(opt.th);
+    if(errors == -1) errors = opt.errors;
     return this;
   }
 
   /**
-   * Assigns the full-text options from the specified database meta data.
+   * Assigns the full-text options from the specified database metadata.
    * @param md meta data
    * @return self reference
    */
@@ -103,31 +105,32 @@ public final class FTOpt extends ExprInfo {
     if(this == obj) return true;
     if(!(obj instanceof FTOpt)) return false;
     final FTOpt f = (FTOpt) obj;
-    return map.equals(f.map) && cs == f.cs && Objects.equals(sd, f.sd) &&
+    return map.equals(f.map) && cs == f.cs && Objects.equals(sd, f.sd) && errors == f.errors &&
         Objects.equals(sw, f.sw) && Objects.equals(th, f.th) && Objects.equals(ln, f.ln);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.create(this,
-      WILDCARDS, is(WC) ? TRUE : null, FUZZY, is(FZ) ? TRUE : null, CASE, cs,
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.create(this,
+      WILDCARDS, is(WC) ? TRUE : null, FUZZY, is(FZ) ? TRUE : null,
+      ERRORS, errors != -1 ? errors : null, CASE, cs,
       STEMMING, is(ST) || sd != null ? TRUE : null, LANGUAGE, ln,
       THESAURUS, th != null ? TRUE : null);
-    if(elem.attributeIter().next() != null) plan.add(elem);
+    if(!elem.isEmpty()) plan.add(elem);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final StringList list = new StringList();
     if(is(WC)) list.add(WILDCARDS);
-    if(is(FZ)) list.add(FUZZY);
+    if(is(FZ)) list.add(errors != -1 ? FUZZY + ' ' + errors + ' ' + ERRORS : FUZZY);
     if(cs == FTCase.LOWER) list.add(LOWERCASE);
     else if(cs == FTCase.UPPER) list.add(UPPERCASE);
     else if(cs == FTCase.SENSITIVE) list.add(CASE + ' ' + SENSITIVE);
     if(is(DC)) list.add(DIACRITICS + ' ' + SENSITIVE);
     if(is(ST) || sd != null) list.add(STEMMING);
     if(ln != null) list.add(LANGUAGE + " \"" + ln + '"');
-    if(th != null) list.add(THESAURUS);
+    if(th != null) list.add(THESAURUS + " at " + th);
 
     for(final String opt : list) qs.token(USING).token(opt);
   }

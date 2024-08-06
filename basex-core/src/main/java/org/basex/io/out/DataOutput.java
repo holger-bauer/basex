@@ -10,7 +10,7 @@ import org.basex.util.list.*;
  * This is an output stream for project specific data types.
  * It bears resemblance to Java's {@link DataOutputStream}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DataOutput extends OutputStream {
@@ -145,8 +145,21 @@ public final class DataOutput extends OutputStream {
   }
 
   /**
-   * Writes long values.
-   * NOTE: the long values are not compressed!
+   * Writes a long value.
+   * @param v value to be written
+   * @throws IOException I/O exception
+   */
+  public void writeLong(final long v) throws IOException {
+    if(v < Integer.MIN_VALUE || v >= Integer.MAX_VALUE || v == 0x3FFF) {
+      writeNum(0x3FFF);
+      write8(v);
+    } else {
+      writeNum((int) v);
+    }
+  }
+
+  /**
+   * Writes long values. The value will not be compressed
    * @param array array to be written
    * @throws IOException I/O exception
    */

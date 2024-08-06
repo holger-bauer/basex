@@ -3,7 +3,6 @@ package org.basex.query;
 import static org.basex.query.QueryError.ErrType.*;
 import static org.basex.query.QueryText.*;
 
-import org.basex.core.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -13,7 +12,7 @@ import org.basex.util.*;
 /**
  * This class contains all query error messages.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public enum QueryError {
@@ -23,27 +22,35 @@ public enum QueryError {
   /** Error code. */
   BASEX_ANNOTATION1_X_X(BASEX, "annotation", "Annotation %% is unknown."),
   /** Error code. */
-  BASEX_ANNOTATION2_X_X(BASEX, "annotation", "%: % supplied."),
+  BASEX_ANN2_X_X(BASEX, "annotation", "%: % supplied."),
   /** Error code. */
-  BASEX_ANNOTATION3_X_X(BASEX, "annotation", "Annotation %% was declared twice."),
+  BASEX_ANN3_X_X(BASEX, "annotation", "Annotation %% is declared twice."),
   /** Error code. */
-  BASEX_ANNOTATION_X_X_X(BASEX, "annotation", "%: % expected, % found."),
+  BASEX_ANN_X_X_X(BASEX, "annotation", "%: % expected, % found."),
   /** Error code. */
   BASEX_DBPATH1_X(BASEX, "doc", "Database path '%' yields no documents."),
   /** Error code. */
   BASEX_DBPATH2_X(BASEX, "doc", "Database path '%' yields more than one document."),
   /** Error code. */
-  BASEX_FUNCTION_X(BASEX, "function", "Function items cannot be cached: %."),
+  BASEX_STORE_X(BASEX, "store", "Value cannot be stored: %."),
+  /** Error code. */
+  BASEX_WHICH_X(BASEX, "function", "Function not found: %."),
+  /** Error code. */
+  BASEX_CLASSPATH_X_X(BASEX, "function", "Function % requires missing class: %."),
   /** Error code. */
   BASEX_ERROR_X(BASEX, "error", "%"),
   /** Error code. */
   BASEX_HTTP(BASEX, "http", "HTTP connection required."),
   /** Error code. */
-  BASEX_OPTIONS1_X(BASEX, "options", "Unknown database option: %."),
+  BASEX_LIMIT_X_X(BASEX, "limit", "Too many % (limit: %)."),
   /** Error code. */
-  BASEX_OPTIONS2_X(BASEX, "options", "%"),
+  BASEX_STRIP_X(BASEX, "strip", "Duplicate attribute name: %."),
   /** Error code. */
-  BASEX_OPTIONS3_X(BASEX, "options", "Database option not allowed in library module: %."),
+  BASEX_OPTIONS_X(BASEX, "options", "%"),
+  /** Error code. */
+  BASEX_OPTIONSINV_X(BASEX, "options", "Unknown database option: %."),
+  /** Error code. */
+  BASEX_OPTIONSLIB_X(BASEX, "options", "Database option not allowed in library module: %."),
   /** Error code. */
   BASEX_OPTIONS_X_X(BASEX, "options", "Database option '%' cannot be set to '%'."),
   /** Error code. */
@@ -64,20 +71,20 @@ public enum QueryError {
   // Admin Module
 
   /** Error code. */
-  ADMIN_DELETE_X(ADMIN, "delete", "Log file could not be deleted: %."),
+  ADMIN_DELETE_X(ADMIN, "delete", "Log file cannot be deleted: %."),
   /** Error code. */
   ADMIN_TODAY(ADMIN, "today", "Today's log file cannot be deleted."),
   /** Error code. */
-  ADMIN_TYPE_X(ADMIN, "type", "Type string contains whitespaces: '%'."),
+  ADMIN_TYPE_X(ADMIN, "type", "Type string contains whitespace: '%'."),
 
   // Archive Module
 
   /** Error code. */
-  ARCHIVE_DESCRIPTOR1(ARCHIVE, "descriptor", "Name of ZIP entry must not be empty."),
+  ARCHIVE_NAME(ARCHIVE, "descriptor", "Name of ZIP entry must not be empty."),
   /** Error code. */
-  ARCHIVE_DESCRIPTOR2_X(ARCHIVE, "descriptor", "Invalid compression level: '%'."),
+  ARCHIVE_LEVEL_X(ARCHIVE, "descriptor", "Invalid compression level: '%'."),
   /** Error code. */
-  ARCHIVE_DESCRIPTOR3_X(ARCHIVE, "descriptor", "xs:dateTime value is invalid : '%'."),
+  ARCHIVE_TIMESTAMP_X(ARCHIVE, "descriptor", "xs:dateTime value is invalid : '%'."),
   /** Error code. */
   ARCHIVE_ENCODE1_X(ARCHIVE, "encode", "Unknown encoding '%'."),
   /** Error code. */
@@ -94,6 +101,8 @@ public enum QueryError {
   ARCHIVE_NUMBER_X_X(ARCHIVE, "number", "Number of entries and contents differs: % vs. %."),
   /** Error code. */
   ARCHIVE_SINGLE_X(ARCHIVE, "single", "% archives are limited to a single entry."),
+  /** Error code. */
+  ARCHIVE_ZIP_X(ARCHIVE, "zip", "Local ZIP file expected: %."),
 
   // Binary Module
 
@@ -117,7 +126,7 @@ public enum QueryError {
   // Client Module
 
   /** Error code. */
-  CLIENT_COMMAND_X(CLIENT, "command", "Command could not be executed: %"),
+  CLIENT_COMMAND_X(CLIENT, "command", "Command cannot be executed: %"),
   /** Error code. */
   CLIENT_CONNECT_X(CLIENT, "connect", "Connection failed: %"),
   /** Error code. */
@@ -127,7 +136,7 @@ public enum QueryError {
   /** Error code. */
   CLIENT_ID_X(CLIENT, "id", "Session with ID % is not available or has been closed."),
   /** Error code. */
-  CLIENT_QUERY_X(CLIENT, "query", "Query could not be executed: %"),
+  CLIENT_QUERY_X(CLIENT, "query", "Query cannot be executed: %"),
 
   // Conversion Module
 
@@ -142,7 +151,7 @@ public enum QueryError {
   /** Error code. */
   CONVERT_INTEGER_X_X(CONVERT, "integer", "Invalid digit for base %: %."),
   /** Error code. */
-  CONVERT_KEY_X(CONVERT, "key", "Key could not be decoded: %."),
+  CONVERT_KEY_X(CONVERT, "key", "Key cannot be decoded: %."),
 
   // Cryptographic Module
 
@@ -197,6 +206,8 @@ public enum QueryError {
   CSV_PARSE_X(CSV, "parse", "%"),
   /** Error code. */
   CSV_SERIALIZE_X(CSV, "serialize", "%."),
+  /** Error code. */
+  CSV_SERIALIZE_X_X(CSV, "serialize", "%: %."),
 
   // Database Module
 
@@ -211,13 +222,15 @@ public enum QueryError {
   /** Error code. */
   DB_CONFLICT4_X(DB, "conflict", "Name of source and target is equal: %."),
   /** Error code. */
+  DB_CONFLICT5_X(DB, "conflict", "Resource '%' can only be stored once."),
+  /** Error code. */
   DB_LOCK1_X(DB, "lock", "Database '%' cannot be updated, it is opened by another process."),
   /** Error code. */
   DB_LOCK2_X(DB, "lock", "%"),
   /** Error code. */
   DB_MAINMEM_X(DB, "mainmem", "Database '%' is in main memory."),
   /** Error code. */
-  DB_NAME_X(DB, "name", "Invalid database name: %."),
+  DB_NAME_X(DB, "name", "Invalid name: %."),
   /** Error code. */
   DB_NOBACKUP_X(DB, "no-backup", "No backup exists for database '%'."),
   /** Error code. */
@@ -249,7 +262,7 @@ public enum QueryError {
   // File Module
 
   /** Error code. */
-  FILE_NOT_FOUND_X(FILE, "not-found", "'%' does not exist."),
+  FILE_NOT_FOUND_X(FILE, "not-found", "'%' not found."),
   /** Error code. */
   FILE_EXISTS_X(FILE, "exists", "'%' already exists."),
   /** Error code. */
@@ -281,7 +294,7 @@ public enum QueryError {
   /** Error code. */
   GEO_WHICH(GEO, 1, "Unrecognized geometry type: %."),
   /** Error code. */
-  GEO_READ(GEO, 2, "Parsing GML 2.0: %."),
+  GEO_READ(GEO, 2, "Parsing GML: %."),
   /** Error code. */
   GEO_TYPE(GEO, 3, "Wrong geometry: % expected, % found."),
   /** Error code. */
@@ -291,11 +304,6 @@ public enum QueryError {
   /** Error code. */
   GEO_ARG(GEO, 6, "Illegal argument: %."),
 
-  // Hashing Module
-
-  /** Error code. */
-  HASH_ALGORITHM_X(HASH, "algorithm", "Algorithm not supported: '%'."),
-
   // HTML Module
 
   /** Error code. */
@@ -303,6 +311,8 @@ public enum QueryError {
 
   // HTTP Module
 
+  /** Invalid URI. */
+  HC_URI_X(HC, 1, "Invalid URI: %"),
   /** Error code. */
   HC_ERROR_X(HC, 1, "%"),
   /** Error code. */
@@ -320,29 +330,29 @@ public enum QueryError {
 
   /** Error code. */
   INSPECT_UNKNOWN_X(INSPECT, "unknown", "Component '%' does not exist."),
+  /** Error code. */
+  INSPECT_PARSE_X(INSPECT, "parse", "%"),
 
   // Jobs Module
 
   /** Error code. */
-  JOBS_ID_EXISTS_X(JOBS, "id", "Job id already exists: %."),
+  JOBS_ID_EXISTS_X(JOB, "id", "Job id already exists: %."),
   /** Error code. */
-  JOBS_ID_INVALID_X(JOBS, "id", "Invalid job name: %."),
+  JOBS_ID_INVALID_X(JOB, "id", "Invalid job name: %."),
   /** Error code. */
-  JOBS_OPTIONS(JOBS, "options", "Either 'cache' or 'interval' option is allowed."),
+  JOBS_OPTIONS(JOB, "options", "Either 'cache' or 'interval' option is allowed."),
   /** Error code. */
-  JOBS_OVERFLOW(JOBS, "overflow", "Too many queries queued."),
+  JOBS_OVERFLOW(JOB, "overflow", "Too many jobs registered."),
   /** Error code. */
-  JOBS_RANGE_X(JOBS, "range", "Value out of range: %."),
+  JOBS_RANGE_X(JOB, "range", "Value out of range: %."),
   /** Error code. */
-  JOBS_RUNNING_X(JOBS, "running", "Result is not available yet: %."),
+  JOBS_RUNNING_X(JOB, "running", "Result is not available yet: %."),
   /** Error code. */
-  JOBS_SELF_X(JOBS, "self", "Cannot wait for own job: %"),
+  JOBS_SELF_X(JOB, "self", "Cannot wait for own job: %"),
   /** Error code. */
-  JOBS_UNKNOWN_X(JOBS, "unknown", "Unknown job: %."),
+  JOBS_SERVICE(JOB, "service", "No variables allowed."),
   /** Error code. */
-  JOBS_SERVICE(JOBS, "service", "No variables allowed."),
-  /** Error code. */
-  JOBS_SERVICE_X_X(JOBS, "service", "Could not write service: %."),
+  JOBS_SERVICE_X_X(JOB, "service", "Cannot write service: %."),
 
   // JSON Module
 
@@ -356,11 +366,6 @@ public enum QueryError {
   JSON_SERIALIZE_X(JSON, "serialize", "%."),
   /** Error code. */
   JSON_OPTIONS_X(JSON, "options", "'%':'%' is not supported by the target format."),
-
-  // Output Module
-
-  /** Error code. */
-  OUTPUT_FORMAT_X_X(OUTPUT, "format", "%: %."),
 
   // Process Module
 
@@ -386,7 +391,7 @@ public enum QueryError {
   // Repository Module
 
   /** Error code. */
-  REPO_DELETE_X(REPO, "delete", "File '%' could not be deleted."),
+  REPO_DELETE_X(REPO, "delete", "File '%' cannot be deleted."),
   /** Error code. */
   REPO_DELETE_X_X(REPO, "delete", "Package '%' depends on package '%'."),
   /** Error code. */
@@ -404,20 +409,14 @@ public enum QueryError {
 
   /** Error code. */
   REQUEST_PARAMETER(REQUEST, "parameter", "Query string cannot be decoded: %."),
-  /** Error code. */
-  REQUEST_ATTRIBUTE_X(REQUEST, "attribute", "Attribute cannot be stored: %."),
 
   // Session Module
 
-  /** Error code. */
-  SESSION_SET_X(SESSION, "set", "Item cannot be stored: %."),
   /** Error code. */
   SESSION_NOTFOUND(SESSIONS, "not-found", "Session not available."),
 
   // Sessions Module
 
-  /** Error code. */
-  SESSIONS_SET_X(SESSIONS, "set", "Item cannot be stored: %."),
   /** Error code. */
   SESSIONS_NOTFOUND_X(SESSIONS, "not-found", "Session not available: %."),
 
@@ -426,7 +425,7 @@ public enum QueryError {
   /** Error code. */
   SQL_ATTRIBUTE_X(SQL, "attribute", "Attribute not expected: %."),
   /** Error code. */
-  SQL_INIT_X(SQL, "init", "Could not find driver: %"),
+  SQL_INIT_X(SQL, "init", "Cannot find driver: %"),
   /** Error code. */
   SQL_ERROR_X(SQL, "error", "An SQL exception occurred: %"),
   /** Error code. */
@@ -439,6 +438,22 @@ public enum QueryError {
   SQL_PARAMETERS(SQL, "parameters", "No parameter type supplied."),
   /** Error code. */
   SQL_TYPE_X_X(SQL, "type", "Invalid type (%): %."),
+
+  // Store Module
+
+  /** Error code. */
+  STORE_IO_X(STORE, "io", "%"),
+  /** Error code. */
+  STORE_NAME_X(STORE, "name", "Invalid name: %."),
+  /** Error code. */
+  STORE_NOTFOUND_X(STORE, "not-found", "Cache '%' not found."),
+
+  // String Module
+
+  /** Error code. */
+  STRING_FORMAT_X_X(STRING, "format", "%: %."),
+  /** Error code. */
+  STRING_BOUNDS_X(STRING, "bounds", "String exceeds maximum supported length of % characters."),
 
   // Unit Module
 
@@ -468,7 +483,7 @@ public enum QueryError {
   /** Error code. */
   USER_LOGGEDIN_X(USER, "logged-in", "User '%' is currently logged in."),
   /** Error code. */
-  USER_NAME_X(USER, "name", "Invalid user name: '%'."),
+  USER_NAME_X(USER, "name", "Invalid username: '%'."),
   /** Error code. */
   USER_PASSWORD_X(USER, "password", "Wrong password supplied for user '%'."),
   /** Error code. */
@@ -489,14 +504,14 @@ public enum QueryError {
   /** Error code. */
   VALIDATE_ERROR_X(ErrType.VALIDATE, "error", "Validation failed: %"),
   /** Error code. */
-  VALIDATE_START_X(ErrType.VALIDATE, "init", "Validation could not be started: %"),
+  VALIDATE_START_X(ErrType.VALIDATE, "init", "Validation cannot be started: %"),
   /** Error code. */
   VALIDATE_NOTFOUND_X(ErrType.VALIDATE, "not-found", "RelaxNG validation is not available."),
 
   // Web Module
 
   /** Error code. */
-  WEB_INVALID1_X(WEB, "invalid", "URL contains invalid characters: %"),
+  WEB_INVALID1_X(WEB, "invalid", "URL contains invalid character: &#%;"),
   /** Error code. */
   WEB_INVALID2_X(WEB, "invalid", "%."),
   /** Error code. */
@@ -504,8 +519,6 @@ public enum QueryError {
 
   // WebSocket Module
 
-  /** Error code. */
-  WS_SET_X(WS, "set", "Function items cannot be stored: %."),
   /** Error code. */
   WS_NOTFOUND_X(WS, "not-found", "Unknown WebSocket: %."),
 
@@ -547,12 +560,12 @@ public enum QueryError {
   // W3 Functions
 
   /** Error code. */
-  APPLY_X_X(FOAP, 1, "Arity differs from number of array members: % vs. %"),
+  APPLY_X_X(FOAP, 1, "% supplied to %: %."),
 
   /** Error code. */
   DIVZERO_X(FOAR, 1, "% cannot be divided by zero."),
   /** Error code. */
-  DIVFLOW_X(FOAR, 2, "Invalid division result: %."),
+  INVIDIV(FOAR, 2, "Invalid integer division: %."),
   /** Error code. */
   RANGE_X(FOAR, 2, "Value out of range: %."),
 
@@ -578,32 +591,34 @@ public enum QueryError {
   NORMUNI_X(FOCH, 3, "Unsupported normalization form ('%')."),
   /** Error code. */
   CHARCOLL(FOCH, 4, "Collation does not operate on character-by-character basis."),
+  /** Error code. */
+  CHARINV_X(FOCH, 5, "Invalid name, glyph or codepoint value: %."),
 
   /** Error code. */
   IDDOC(FODC, 1, "Specified node has no document node as root."),
   /** Error code. */
-  NODEERR_X_X(FODC, 2, "% could not be created: %."),
+  NODEERR_X_X(FODC, 2, "% cannot be created: %."),
   /** Error code. */
   NODEFCOLL(FODC, 2, "No default collection available."),
   /** Error code. */
   IOERR_X(FODC, 2, "%"),
   /** Error code. */
-  WHICHRES_X(FODC, 2, "Resource '%' does not exist."),
+  WHICHRES_X(FODC, 2, "Resource '%' not found."),
   /** Error code. */
-  RESDIR_X(FODC, 2, "URI '%' points to directory."),
+  RESDIR_X(FODC, 2, "URI '%' points to a directory."),
   /** Error code. */
-  INVCOLL_X(FODC, 4, "Invalid collection URI: '%'."),
+  INVCOLL_X(FODC, 4, "Invalid collection URI: %."),
   /** Error code. */
-  INVDOC_X(FODC, 5, "Invalid document URI: '%'."),
+  INVDOC_X(FODC, 5, "Invalid document URI: %."),
   /** Error code. */
   SAXERR_X(FODC, 6, "SAX: %"),
   /** Error code. */
   RESINV_X(FODC, 7, "Resource path '%' is invalid."),
-  /** Error code. */
-  INVDB_X(FODC, 7, "Invalid database name: '%'."),
 
   /** Error code. */
-  FORMNUM_X(FODF, 1280, "Unknown decimal format: '%'."),
+  FORMATWHICH_X(FODF, 1280, "Unknown decimal format: %."),
+  /** Error code. */
+  FORMATINV_X(FODF, 1290, "%"),
   /** Error code. */
   PICEMPTY(FODF, 1310, "The picture string must not be empty: '%'"),
   /** Error code. */
@@ -611,11 +626,13 @@ public enum QueryError {
   /** Error code. */
   OPTAFTER_X(FODF, 1310, "Optional digit sign follows mandatory digit signs: '%'."),
   /** Error code. */
+  OPTBEFORE_X(FODF, 1310, "Mandatory digit sign follows optional digit signs: '%'."),
+  /** Error code. */
   INVGROUP_X(FODF, 1310, "Invalid position of grouping separator signs: '%'."),
   /** Error code. */
   DIFFMAND_X(FODF, 1310, "Mandatory digits is not of the same group: '%'."),
   /** Error code. */
-  INVORDINAL_X(FODF, 1310, "Invalid specification of ordinal numbering: '%'."),
+  INVMODIFIER_X(FODF, 1310, "Invalid specification of ordinal/cardinal numbering: '%'."),
   /** Error code. */
   INVDDPATTERN_X(FODF, 1310, "Invalid decimal-digit-pattern: '%'."),
 
@@ -650,7 +667,10 @@ public enum QueryError {
   /** Error code. */
   INVFDPATTERN_X(FOFD, 1340, "%"),
   /** Error code. */
-  PICINVCOMP_X_X(FOFD, 1350, "Component '[%]' not applicable to % values."),
+  PICINVCOMP_X_X_X(FOFD, 1350, "[%] not applicable to %: %."),
+
+  /** Error code. */
+  HASH_ALGORITHM_X(FOHA, 1, "Algorithm not supported: '%'."),
 
   /** Error code. */
   PARSE_JSON_X(FOJS, 1, "%"),
@@ -668,7 +688,7 @@ public enum QueryError {
   ESCAPE_JSON_X(FOJS, 7, "Invalid escape sequence: %."),
 
   /** Error code. */
-  NSDECL_X(FONS, 4, "No namespace declared for prefix '%'."),
+  NSDECL_X(FONS, 4, "Namespace prefix not declared: %."),
 
   /** Error code. */
   INVALIDZONE_X(FORG, 1, "Invalid timezone: %."),
@@ -691,15 +711,11 @@ public enum QueryError {
   EXACTLYONE(FORG, 5, "Exactly one item expected."),
 
   /** Error code. */
-  CMP_X(FORG, 6, "Type % is not comparable."),
+  ARGTYPE_X_X_X(FORG, 6, "% expected, % found: %."),
   /** Error code. */
-  CMP_X_X_X(FORG, 6, "% expected, % found: %."),
+  COMPARE_X_X(FORG, 6, "Items of type % cannot be compared: %."),
   /** Error code. */
-  EBV_X(FORG, 6, "Effective boolean value not defined for %."),
-  /** Error code. */
-  EBV_X_X(FORG, 6, "Effective boolean value not defined for %: %."),
-  /** Error code. */
-  SUM_X_X(FORG, 6, "Argument type % is invalid: %."),
+  NUMDUR_X_X(FORG, 6, "Number or duration expected, % found: %."),
 
   /** Error code. */
   FUNZONE_X_X(FORG, 8, "% and % have different timezones."),
@@ -710,22 +726,27 @@ public enum QueryError {
   IETF_INV_X(FORG, 10, "Invalid input: '%'."),
 
   /** Error code. */
-  REGMOD_X(FORX, 1, "Invalid regular flag: '%'."),
+  INTRADIX_X(FORG, 11, "Radix out of range (2-36): %."),
   /** Error code. */
-  REGPAT_X(FORX, 2, "Invalid regular expression: %."),
-  /** Error code. */
-  REGROUP(FORX, 3, "Pattern matches empty string."),
-  /** Error code. */
-  FUNREPBS_X(FORX, 4, "Invalid backslash in replacement string: %."),
-  /** Error code. */
-  FUNREPDOL_X(FORX, 4, "Invalid dollar sign in replacement string: %."),
+  INTINVALID_X_X(FORG, 12, "Cannot parse input with radix %: %."),
 
   /** Error code. */
-  FIATOM_X(FOTY, 13, "Items of type % cannot be atomized."),
+  REGFLAG_X(FORX, 1, "Invalid regular flag: '%'."),
   /** Error code. */
-  FISTRING_X(FOTY, 14, "Items of type % have no string representation."),
+  REGINVALID_X(FORX, 2, "Invalid regular expression: %."),
   /** Error code. */
-  FICMP_X(FOTY, 15, "Type % is not comparable."),
+  REGEMPTY_X(FORX, 3, "Pattern matches empty string: '%'."),
+  /** Error code. */
+  REGBACKSLASH_X(FORX, 4, "Invalid backslash in replacement string: %."),
+  /** Error code. */
+  REGDOLLAR_X(FORX, 4, "Invalid dollar sign in replacement string: %."),
+  /** Error code. */
+  REGACTION_X(FORX, 5, "Both replacement string and action supplied: %."),
+
+  /** Error code. */
+  FIATOMIZE_X(FOTY, 13, "Atomic value required, function item found: %."),
+  /** Error code. */
+  FISTRING_X(FOTY, 14, "Function item has no string value: %."),
 
   /** Error code. */
   UPFOTYPE_X(FOUP, 1, "Document or element expected, % found."),
@@ -734,24 +755,25 @@ public enum QueryError {
   /** Error code. */
   UPFOURI_X(FOUP, 2, "Invalid URI: %."),
   /** Error code. */
-  UPPUTERR_X(FOUP, 2, "File '%' could not be written."),
+  UPPUTERR_X(FOUP, 2, "File '%' cannot be written."),
   /** Error code. */
-  UPDBPUT_X(FOUP, 2, "Resource '%' could not be written."),
+  UPDBPUT_X(FOUP, 2, "Resource '%' cannot be written."),
   /** Error code. */
-  UPDROPBACK_X_X(FOUP, 2, "Backup '%' could not be %."),
+  UPDROPBACK_X_X(FOUP, 2, "Backup '%' cannot be %."),
   /** Error code. */
-  UPDBERROR_X_X(FOUP, 2, "Database '%' could not be %."),
+  UPDBERROR_X_X(FOUP, 2, "Database '%' cannot be %."),
   /** Error code. */
   UPDBERROR_X(FOUP, 2, "%"),
 
   /** Error code. */
+  PARSE_URI_X(FOUR, 1, "Invalid IPv6/IPvFuture authority: %."),
+
+  /** Error code. */
   RESNF_X(FOUT, 1170, "Resource '%' cannot be retrieved."),
   /** Error code. */
-  FRAGID_X(FOUT, 1170, "URI contains a fragment identifier: %"),
+  FRAGID_X(FOUT, 1170, "URI contains a fragment identifier: %."),
   /** Error code. */
   INVURL_X(FOUT, 1170, "URI is invalid: %"),
-  /** Error code. */
-  STBASEURI(FOUT, 1170, "Static Base URI is undefined."),
   /** Error code. */
   ENCODING_X(FOUT, 1190, "Unknown encoding '%'."),
   /** Error code. */
@@ -775,16 +797,25 @@ public enum QueryError {
   /** Error code. */
   FTNOTOK_X(FTST, 9, "No tokenizer available for language '%'."),
   /** Error code. */
-  NOTHES_X(FTST, 18, "Thesaurus not found: '%'."),
+  NOTHES_X(FTST, 18, "Thesaurus not found: %."),
   /** Error code. */
-  FTDUP_X(FTST, 19, "Match option '%' was declared twice."),
+  FTDUP_X(FTST, 19, "Match option '%' is declared twice."),
+
+  /** Error code. */
+  IXML_GRM_X_X_X(FOIX, 1, "Failed to parse ixml grammar: cannot match % at line %, column %."),
+  /** Error code. */
+  IXML_GEN_X(FOIX, 1, "Failed to generate ixml parser: %"),
+  /** Error code. */
+  IXML_INP_X_X_X(FOIX, 2, "Failed to parse ixml input: cannot match % at line %, column %."),
+  /** Error code. */
+  IXML_RESULT_X(FOIX, 2, "Failed to process ixml parser result: %"),
 
   /** Error code. */
   SERATTR_X(SENR, 1, "Attributes cannot be serialized:%."),
   /** Error code. */
   SERNS_X(SENR, 1, "Namespaces cannot be serialized:%."),
   /** Error code. */
-  SERFUNC_X(SENR, 1, "Items of type % cannot be serialized."),
+  SERFUNC_X(SENR, 1, "% items cannot be serialized."),
   /** Error code. */
   SERSA(SEPM, 4, "If 'standalone' is specified, the root must be a single element."),
   /** Error code. */
@@ -806,17 +837,17 @@ public enum QueryError {
   /** Error code. */
   SERPI(SERE, 15, "Processing construction contains '>'."),
   /** Error code. */
-  SER_X(SEPM, 16, "%"),
+  SERPARAM_X(SEPM, 16, "%"),
   /** Error code. */
   SERMAP_X(SEPM, 17, "Character map is not valid: %."),
   /** Error code. */
   SEROPT_X(SEPM, 17, "%"),
   /** Error code. */
-  SEROPTION_X(SEPM, 17, "Serialization parameter '%' is invalid."),
+  SERINVALID_X(SEPM, 17, "Serialization parameter '%' is invalid."),
   /** Error code. */
   SERNUMBER_X(SERE, 20, "Numeric value cannot be represented: '%'"),
   /** Error code. */
-  SERJSONFUNC_X(SERE, 21, "Items of type % cannot be serialized."),
+  SERJSONFUNC_X(SERE, 21, "% items cannot be serialized."),
   /** Error code. */
   SERDUPL_X(SERE, 22, "Duplicate name found: '%'"),
   /** Error code. */
@@ -825,7 +856,7 @@ public enum QueryError {
   SERJSONSEQ(SERE, 23, "Value has more than one item."),
 
   /** Error code. */
-  NOCTX_X(XPDY, 2, "%: Context is undeclared."),
+  NOCTX_X(XPDY, 2, "%: Context value is undefined."),
   /** Error code. */
   VAREMPTY_X(XPDY, 2, "No value assigned to %."),
   /** Error code. */
@@ -838,13 +869,11 @@ public enum QueryError {
   /** Error code. */
   QUERYEMPTY(XPST, 3, "Empty query."),
   /** Error code. */
-  MODLEINV_X(XPST, 3, "Module contains illegal character: #%."),
+  MODLEINV_X(XPST, 3, "Module contains illegal character: %."),
   /** Error code. */
   NOQUOTE_X(XPST, 3, "Expecting quote%."),
   /** Error code. */
   ARITY_X(XPST, 3, "Expecting function arity, '%' found."),
-  /** Error code. */
-  NUMBERWS_X(XPST, 3, "Expecting separator after number: '%'."),
   /** Error code. */
   NUMBER_X(XPST, 3, "Incomplete number: '%'."),
   /** Error code. */
@@ -862,19 +891,31 @@ public enum QueryError {
   /** Error code. */
   NOELEMNAME(XPST, 3, "Expecting element name."),
   /** Error code. */
-  ELEMNAME_X(XPST, 3, "Expecting element name, '<%' found."),
+  ELEMNAME_X(XPST, 3, "Element name expected, '%' found."),
   /** Error code. */
   NOATTNAME(XPST, 3, "Expecting attribute name."),
   /** Error code. */
   NOEXPR(XPST, 3, "Expecting expression."),
   /** Error code. */
-  NOCONTENT(XPST, 3, "Expecting node content."),
+  NOCOMMENT(XPST, 3, "Expecting comment."),
+  /** Error code. */
+  INVALPI(XPST, 3, "Expecting name of processing instruction."),
+  /** Error code. */
+  PIXML_X(XPST, 3, "Name of processing instruction is illegal: '%'."),
+  /** Error code. */
+  NOPI(XPST, 3, "Expecting processing instruction."),
+  /** Error code. */
+  NOCDATA(XPST, 3, "Expecting CDATA section."),
   /** Error code. */
   WRONGCHAR_X_X(XPST, 3, "Expecting '%'%."),
   /** Error code. */
   INVENTITY_X(XPST, 3, "Invalid entity: '%'."),
   /** Error code. */
   INCOMPLETE(XPST, 3, "Incomplete expression."),
+  /** Error code. */
+  MAPCONSTR(XPST, 3, "Incomplete map constructor."),
+  /** Error code. */
+  ARRAYCONSTR(XPST, 3, "Incomplete array constructor."),
   /** Error code. */
   EVALUNARY(XPST, 3, "Unary operator expects a numeric value."),
   /** Error code. */
@@ -886,15 +927,13 @@ public enum QueryError {
   /** Error code. */
   FUNCNAME(XPST, 3, "Expecting function name."),
   /** Error code. */
+  TYPENAME(XPST, 3, "Expecting type name."),
+  /** Error code. */
   RESERVED_X(XPST, 3, "'%' is a reserved keyword."),
   /** Error code. */
   NOVARNAME(XPST, 3, "Variable name expected, '%' found."),
   /** Error code. */
   NOVARDECL(XPST, 3, "Expecting variable declaration."),
-  /** Error code. */
-  NOCIDECL(XPST, 3, "Expecting context item."),
-  /** Error code. */
-  PIWRONG(XPST, 3, "Expecting name of processing-instruction."),
   /** Error code. */
   NOFTSELECT_X(XPST, 3, "Expecting quote or opening curly brace%."),
   /** Error code. */
@@ -908,8 +947,6 @@ public enum QueryError {
   /** Error code. */
   NOSWITCH(XPST, 3, "Incomplete switch expression."),
   /** Error code. */
-  TYPEPAR(XPST, 3, "Expecting '(' after 'switch' or 'typeswitch'."),
-  /** Error code. */
   PRAGMAINV(XPST, 3, "Invalid pragma expression."),
   /** Error code. */
   CALCEXPR(XPST, 3, "Calculation is incomplete."),
@@ -922,19 +959,19 @@ public enum QueryError {
   /** Error code. */
   NOWHERE(XPST, 3, "Expecting valid expression after 'where'."),
   /** Error code. */
+  NOWHILE(XPST, 3, "Expecting valid expression after 'while'."),
+  /** Error code. */
   ORDERBY(XPST, 3, "Expecting valid expression after 'order by'."),
   /** Error code. */
   GRPBY(XPST, 3, "Expecting valid expression after 'group by'."),
   /** Error code. */
-  FLWORRETURN(XPST, 3, "Incomplete FLWOR expression: expecting 'return'."),
+  FLWORRETURN(XPST, 3, "Incomplete FLWOR expression, expecting 'return'."),
   /** Error code. */
   NOSOME(XPST, 3, "Incomplete quantifier expression."),
   /** Error code. */
   IFPAR(XPST, 3, "Expecting '(' after 'if' expression."),
   /** Error code. */
-  NOTERNARY(XPST, 3, "Incomplete ternary if expression."),
-  /** Error code. */
-  NOELVIS(XPST, 3, "Expecting default expression."),
+  NODEFAULT(XPST, 3, "Expecting default expression."),
   /** Error code. */
   NOIF(XPST, 3, "Incomplete 'if' expression."),
   /** Error code. */
@@ -954,11 +991,9 @@ public enum QueryError {
   /** Error code. */
   WHICHTYPE_X(XPST, 3, "Unknown type: %."),
   /** Error code. */
-  BINDNAME_X(XPST, 3, "Invalid name: '%'."),
+  INVNAME_X(XPST, 3, "Invalid QName: '%'."),
   /** Error code. */
-  PIXML_X(XPST, 3, "Processing instruction has illegal name: %."),
-  /** Error code. */
-  QNAME_X(XPST, 3, "Expecting QName, '%' found."),
+  QNAME_X(XPST, 3, "QName expected, '%' found."),
   /** Error code. */
   PROLOGORDER(XPST, 3, "Default declarations must be declared first."),
   /** Error code. */
@@ -968,8 +1003,6 @@ public enum QueryError {
   /** Error code. */
   FTMATCH_X(XPST, 3, "Unknown match option '%...'."),
   /** Error code. */
-  INVALPI(XPST, 3, "Processing instruction has invalid name: '%' found."),
-  /** Error code. */
   INTEXP(XPST, 3, "Integer expected."),
   /** Error code. */
   VARFUNC(XPST, 3, "Variable or function declaration expected."),
@@ -978,83 +1011,89 @@ public enum QueryError {
   /** Error code. */
   NOCATCH(XPST, 3, "Expecting catch clause."),
   /** Error code. */
-  ANNVALUE(XPST, 3, "Literal expected, ')' found."),
+  ANNVALUE_X(XPST, 3, "Literal expected, '%' found."),
   /** Error code. */
   UPDATINGVAR(XPST, 3, "Variable cannot be updating."),
   /** Error code. */
-  SIMPLETYPE_X(XPST, 3, "Simple type expected, '%(' found."),
+  UPDATINGTYPE(XPST, 3, "Type cannot be updating."),
+  /** Error code. */
+  SIMPLETYPE_X(XPST, 3, "Simple type expected, function found: %(."),
   /** Error code. */
   KEYSPEC(XPST, 3, "No specifier after lookup operator: '%'."),
   /** Error code. */
   ARROWSPEC(XPST, 3, "No specifier after arrow operator: '%'."),
-
+  /** Error code. */
+  FORMPROP_X(XPST, 3, "%."),
+  /** Error code. */
+  CASTTYPE_X(XPST, 3, "%"),
+  /** Error code. */
+  NOSTRNCN_X(XPST, 3, "Expecting string or NCName, found '%'."),
+  /** Error code. */
+  DUPFIELD_X(XPST, 3, "Duplicate field name: '%'."),
   /** Error code. */
   STATIC_X(XPST, 5, "No XML Schema support: %."),
-
   /** Error code. */
   VARUNDEF_X(XPST, 8, "Undeclared variable: %."),
   /** Error code. */
   CIRCREF_X(XPST, 8, "Static variable references itself: %"),
   /** Error code. */
-  VARPRIVATE_X(XPST, 8, "Variable % is not visible from this module."),
+  VARPRIVATE_X(XPST, 8, "Variable % is private."),
   /** Error code. */
   TYPEUNDEF_X(XPST, 8, "Undefined type annotation: %."),
   /** Error code. */
   SCHEMAINV_X(XPST, 8, "Undefined schema name: %."),
-
   /** Error code. */
   FUNCPRIVATE_X(XPST, 17, "Function not visible: %."),
   /** Error code. */
-  FUNCSIMILAR_X_X(XPST, 17, "Unknown function: % (similar: %)."),
-  /** Error code. */
-  FUNCARITY_X_X(XPST, 17, "%: % supplied."),
-  /** Error code. */
-  FUNCARITY_X_X_X(XPST, 17, "%: % supplied, % expected."),
+  INVNARGS_X_X_X(XPST, 17, "%: % supplied, % expected."),
   /** Error code. */
   WHICHFUNC_X(XPST, 17, "Unknown function: %."),
   /** Error code. */
+  KEYWORDTWICE_X(XPST, 17, "Keyword supplied twice: %."),
+  /** Error code. */
+  ARGMISSING_X_X(XPST, 17, "%: No argument supplied: %."),
+  /** Error code. */
+  ARGTWICE_X_X(XPST, 17, "%: Argument supplied twice: %."),
+  /** Error code. */
+  KEYWORDUNKNOWN_X_X(XPST, 17, "%: Unknown keyword: %."),
+  /** Error code. */
+  ABSTRACTFUNC_X(XPST, 17, "No function exists for abstract type: %."),
+  /** Error code. */
   FUNCNOIMPL_X(XPST, 17, "External function not implemented: %."),
   /** Error code. */
-  WHICHCLASS_X(XPST, 17, "Unknown class: %."),
-  /** Error code. */
-  JAVACONSTR_X_X(XPST, 17, "Unknown constructor: %#%."),
-  /** Error code. */
-  JAVAMULTIFUNC_X_X(XPST, 17, "%: Multiple functions with %."),
-  /** Error code. */
-  JAVAARGS_X_X(XPST, 17, "% cannot be called with (%)."),
-  /** Error code. */
   JAVAINIT_X_X(XPST, 17, "%: %."),
-
+  /** Error code. */
+  JAVACLASS_X(XPST, 17, "Unknown class: %."),
+  /** Error code. */
+  JAVAMEMBER_X(XPST, 17, "Unknown method or field: %."),
   /** Error code. */
   TYPEUNKNOWN_X(XPST, 51, "Unknown type: %."),
   /** Error code. */
-  CASTUNKNOWN_X(XPST, 80, "Invalid cast type: %."),
+  INVALIDCAST_X(XPST, 80, "Invalid cast type: %."),
   /** Error code. */
-  NOURI_X(XPST, 81, "No namespace declared for '%'."),
+  NOURI_X(XPST, 81, "Namespace prefix not declared: %."),
   /** Error code. */
   NSMISS_X(XPST, 81, "QName '%' has no namespace."),
 
   /** Error code. */
-  DYNARGS_X_X(XPTY, 4, "% cannot be called with (%)."),
+  JAVANOINSTANCE_X_X(XPTY, 4, "% instance expected as first argument, % found."),
   /** Error code. */
-  DYNMULTIFUNC_X_X(XPTY, 4, "%: Multiple functions with %."),
+  JAVAEXEC_X_X_X(XPTY, 4, "%. Caused by: %%."),
   /** Error code. */
-  DYNMULTICONS_X_X(XPTY, 4, "%: Multiple constructors with %."),
+  JAVANULL(XPTY, 17, "Java array contains null values."),
   /** Error code. */
-  JAVAARGS_X_X_X(XPTY, 4, "%(%) expected, (%) found."),
+  JAVAMULTIPLE_X_X(XPTY, 4, "Multiple % candidates. Parameters: %."),
   /** Error code. */
-  JAVAINVOKE_X_X(XPTY, 4, "% instance expected as first argument, % found."),
+  JAVANONE_X_X_X(XPTY, 4, "% cannot be called with %. Expected: %."),
   /** Error code. */
-  JAVAEVAL_X_X_X(XPTY, 4, "%. Caused by: %(%)."),
+  JAVAARGS_X_X_X(XPTY, 4, "%% expected, % found."),
+  /** Error code. */
+  JAVAARGS_X_X(XPTY, 4, "% cannot be called with %."),
 
-  /** Error code. */
-  ZEROFUNCS_X_X(XPTY, 4, "Zero-arity functions expected, % found: %."),
   /** Error code. */
   NONAME_X(XPTY, 4, "Name expected, '%' found."),
   /** Error code. */
   EMPTYFOUND(XPTY, 4, "Item expected, empty sequence found."),
-  /** Error code. */
-  EMPTYFOUND_X(XPTY, 4, "% expected, empty sequence found."),
   /** Error code. */
   SEQFOUND_X(XPTY, 4, "Item expected, sequence found: %."),
   /** Error code. */
@@ -1068,21 +1107,15 @@ public enum QueryError {
   /** Error code. */
   STRNCN_X_X(XPTY, 4, "String or NCName expected, % found: %."),
   /** Error code. */
-  INVTYPE_X_X_X(XPTY, 4, "Cannot convert % to %: %."),
-  /** Error code. */
-  INVPROMOTE_X_X_X(XPTY, 4, "Cannot promote % to %: %."),
-  /** Error code. */
-  INVTREAT_X_X_X(XPTY, 4, "Cannot treat % as %: %."),
+  INVCONVERT_X_X_X(XPTY, 4, "Cannot convert % to %: %."),
   /** Error code. */
   CALCTYPE_X_X_X(XPTY, 4, "% not defined for % and %."),
   /** Error code. */
   INVFUNCITEM_X_X(XPTY, 4, "Function expected, % found: %."),
   /** Error code. */
-  NOPAREN_X_X(XPTY, 4, "No parenthesis expected after %."),
+  CMPTYPE_X_X_X(XPTY, 4, "Items of type % cannot be compared: % vs. %."),
   /** Error code. */
-  CMPTYPE_X(XPTY, 4, "Type % is not comparable."),
-  /** Error code. */
-  CMPTYPES_X_X(XPTY, 4, "Types % and % are not comparable."),
+  CMPTYPES_X_X_X_X(XPTY, 4, "% and % cannot be compared: % vs. %."),
   /** Error code. */
   DOCATTS_X(XPTY, 4, "Cannot add attributes to a document node: %."),
   /** Error code. */
@@ -1090,17 +1123,21 @@ public enum QueryError {
   /** Error code. */
   INVARITY_X_X_X(XPTY, 4, "% supplied, % expected: %."),
   /** Error code. */
-  FUNARITY_X_X(XPTY, 4, "Function with % supplied, % expected."),
-  /** Error code. */
   INVNCNAME_X(XPTY, 4, "Invalid NCName: '%'."),
   /** Error code. */
-  CITYPES_X_X(XPTY, 4, "Incompatible types in context value declarations: % vs. %."),
+  VALUETYPES_X_X(XPTY, 4, "Incompatible types in context value declarations: % vs. %."),
   /** Error code. */
-  LOOKUP_X(XPTY, 4, "Input of lookup operator is not a map or array: %."),
+  LOOKUP_X(XPTY, 4, "Input of lookup operator must be map or array: %."),
   /** Error code. */
   INVALIDOPT_X(XPTY, 4, "%"),
   /** Error code. */
+  EXP_FOUND_X_X(XPTY, 4, "% expected, % found."),
+  /** Error code. */
+  EXP_FOUND_X_X_X(XPTY, 4, "% expected, % found: %."),
+  /** Error code. */
   BINARY_X(XPTY, 4, "Binary expected, % found."),
+  /** Error code. */
+  STRBIN_X_X(XPTY, 4, "String or binary expected, % found: %."),
   /** Error code. */
   STRNOD_X_X(XPTY, 4, "String or node expected, % found: %."),
   /** Error code. */
@@ -1110,15 +1147,21 @@ public enum QueryError {
   /** Error code. */
   ELMSTR_X_X_X(XPTY, 4, "element(%) or string expected, % found: %."),
   /** Error code. */
-  ELM_X_X(XPTY, 4, "element(%) expected: %."),
-  /** Error code. */
-  STRBIN_X_X(XPTY, 4, "String or binary expected, % found: %."),
+  ELM_X_X_X(XPTY, 4, "element(%) expected, % found: %."),
   /** Error code. */
   INVALIDOPTION_X(XPTY, 4, "Unknown option '%'."),
   /** Error code. */
-  FUNCUP_X(XPTY, 4, "Function must not be updating: %."),
+  FUNCUP_X(XPTY, 4, "Function is updating: %."),
   /** Error code. */
   FUNCNOTUP_X(XPTY, 4, "Function is not updating: %."),
+  /** Error code. */
+  UNKNOWNOP_X(XPTY, 4, "Unknown operator: %."),
+  /** Error code. */
+  INVALIDOPTION_X_X_X_X(XPTY, 4, "Option %: % expected, % found: %."),
+  /** Error code. */
+  INVALIDOPTION_X_X_X(XPTY, 4, "Option: % expected, % found: %."),
+  /** Error code. */
+  OPTION_X(XPTY, 4, "%"),
 
   /** Error code. */
   MIXEDRESULTS(XPTY, 18, "Path returns both nodes and non-nodes."),
@@ -1130,7 +1173,7 @@ public enum QueryError {
   NSSENS_X_X(XPTY, 117, "Cannot convert % to %."),
 
   /** Error code. */
-  CATTDUPL_X(XQDY, 25, "Duplicate attribute '%'."),
+  CATTDUPL_X(XQDY, 25, "Duplicate attribute name: %."),
   /** Error code. */
   CPICONT_X(XQDY, 26, "Processing instruction has invalid content: '%'."),
   /** Error code. */
@@ -1138,33 +1181,35 @@ public enum QueryError {
   /** Error code. */
   CAXML(XQDY, 44, "XML prefix and namespace cannot be rebound."),
   /** Error code. */
-  CAINV_(XQDY, 44, "Invalid attribute prefix/namespace: '%'."),
+  CAINV_(XQDY, 44, "Invalid attribute prefix/namespace: %."),
   /** Error code. */
   CIRCVAR_X(XQDY, 54, "Static variable depends on itself: %"),
   /** Error code. */
   CIRCCTX(XQDY, 54, "Context value is not defined."),
   /** Error code. */
-  CPIXML_X(XQDY, 64, "Processing instruction has illegal name: '%'."),
+  CPIXML_X(XQDY, 64, "Processing instruction has illegal name: %."),
   /** Error code. */
   COMINVALID(XQDY, 72, "Comment must not contain '--' or end with '-'."),
   /** Error code. */
-  INVNSNAME_X(XQDY, 74, "Invalid namespace prefix: '%'."),
+  INVNSPREFIX_X(XQDY, 74, "Invalid namespace prefix: %."),
   /** Error code. */
-  INVNAME_X(XQDY, 74, "Invalid QName: '%'."),
+  INVQNAME_X(XQDY, 74, "Invalid QName: %."),
   /** Error code. */
-  INVPREF_X(XQDY, 74, "No namespace declared for %."),
+  NOQNNAMENS_X(XQDY, 74, "Namespace prefix not declared: %."),
   /** Error code. */
-  CEXML(XQDY, 96, "XML prefix or namespace cannot be rebound: '%'/'%'."),
+  CEXML(XQDY, 96, "XML prefix or namespace cannot be rebound: %/%."),
   /** Error code. */
-  CEINV_X(XQDY, 96, "Invalid element prefix/namespace '%'."),
+  CEINV_X(XQDY, 96, "Invalid element prefix/namespace: %."),
   /** Error code. */
   CNXML(XQDY, 101, "XML prefix and namespace cannot be rebound."),
   /** Error code. */
-  CNINV_X(XQDY, 101, "Invalid namespace prefix '%'."),
+  CNINV_X(XQDY, 101, "Invalid namespace prefix: %."),
   /** Error code. */
-  CNINVNS_X(XQDY, 101, "Invalid namespace URI '%'."),
+  CNINVNS_X(XQDY, 101, "Invalid namespace URI: '%'."),
   /** Error code. */
-  DUPLNSCONS_X(XQDY, 102, "Duplicate namespace declaration: '%'."),
+  EMPTYNSCONS(XQDY, 102, "Element is in no namespace, no namespace can be assigned."),
+  /** Error code. */
+  DUPLNSCONS_X(XQDY, 102, "Duplicate declaration of namespace '%'."),
   /** Error code. */
   MAPDUPLKEY_X_X_X(XQDY, 137, "Key % already exists in map (values: % vs. %)."),
 
@@ -1179,7 +1224,7 @@ public enum QueryError {
   /** Error code. */
   DUPLNSDECL_X(XQST, 33, "Duplicate declaration of prefix '%'."),
   /** Error code. */
-  FUNCDEFINED_X(XQST, 34, "Duplicate declaration of function '%'."),
+  DUPLFUNC_X(XQST, 34, "Duplicate declaration of function '%'."),
   /** Error code. */
   DUPLCOLL(XQST, 38, "Duplicate 'collation' declaration."),
   /** Error code. */
@@ -1187,21 +1232,23 @@ public enum QueryError {
   /** Error code. */
   FUNCDUPL_X(XQST, 39, "Duplicate parameter name: %."),
   /** Error code. */
-  ATTDUPL_X(XQST, 40, "Duplicate attribute '%'."),
+  ATTDUPL_X(XQST, 40, "Duplicate attribute name: %."),
   /** Error code. */
   FNRESERVED_X(XQST, 45, "Function '%' is in reserved namespace."),
   /** Error code. */
   ANNWHICH_X_X(XQST, 45, "Annotation %% is in reserved namespace."),
   /** Error code. */
-  INVURI_X(XQST, 46, "URI '%' is invalid."),
+  TYPERESERVED_X(XQST, 45, "Type % is in reserved namespace."),
   /** Error code. */
-  DUPLMODULE_X(XQST, 47, "Module namespace is declared twice: '%'."),
+  INVURI_X(XQST, 46, "Invalid URI: %."),
+  /** Error code. */
+  DUPLMODULE_X(XQST, 47, "Module namespace is declared twice: %."),
   /** Error code. */
   MODULENS_X(XQST, 48, "Declaration % does not match the module namespace."),
   /** Error code. */
   VARDUPL_X(XQST, 49, "Duplicate declaration of static variable $%."),
   /** Error code. */
-  TYPE30_X(XQST, 52, "Unknown cast type: %."),
+  WHICHCAST_X(XQST, 52, "Unknown type: %."),
   /** Error code. */
   DUPLCOPYNS(XQST, 55, "Duplicate 'copy-namespace' declaration."),
   /** Error code. */
@@ -1211,11 +1258,11 @@ public enum QueryError {
   /** Error code. */
   WHICHMODCLASS_X(XQST, 59, "Java class not found: %."),
   /** Error code. */
-  MODINIT_X_X_X(XQST, 59, "Could not initialize %: % (%)."),
+  MODINIT_X_X_X(XQST, 59, "Cannot initialize %: % (%)."),
   /** Error code. */
-  MODINST_X_X(XQST, 59, "Could not instantiate %: %."),
+  MODINST_X_X(XQST, 59, "Cannot instantiate %: %."),
   /** Error code. */
-  WHICHMODFILE_X(XQST, 59, "Could not retrieve module: %."),
+  WHICHMODFILE_X(XQST, 59, "Cannot retrieve module: %."),
   /** Error code. */
   WRONGMODULE_X_X_X(XQST, 59, "Imported module '%' has unexpected namespace: '%' vs '%'."),
   /** Error code. */
@@ -1249,27 +1296,27 @@ public enum QueryError {
   /** Error code. */
   NSEMPTYURI(XQST, 85, "Namespace URI cannot be empty."),
   /** Error code. */
-  XQUERYENC2_X(XQST, 87, "Unknown encoding '%'."),
+  XQUERYENC2_X(XQST, 87, "Unknown encoding: %."),
   /** Error code. */
   NSMODURI(XQST, 88, "Module namespace cannot be empty."),
   /** Error code. */
   DUPLVAR_X(XQST, 89, "Duplicate declaration of %."),
   /** Error code. */
-  INVCHARREF_X(XQST, 90, "Invalid character reference '%'."),
+  INVCHARREF_X(XQST, 90, "Invalid XML 1.0 character: %."),
   /** Error code. */
   CIRCMODULE(XQST, 93, "Circular module declaration."),
   /** Error code. */
-  GVARNOTDEFINED_X(XQST, 94, "Undeclared grouping variable '%'."),
+  GVARNOTDEFINED_X(XQST, 94, "Undeclared grouping variable: %."),
   /** Error code. */
   INVDECFORM_X_X(XQST, 97, "Invalid decimal-format property: %='%'."),
   /** Error code. */
-  INVDECSINGLE_X_X(XQST, 97, "Decimal-format property is no single character: %='%'."),
+  INVDECSINGLE_X_X(XQST, 97, "Decimal-format property must be a single character: %='%'."),
   /** Error code. */
   INVDECZERO_X(XQST, 97, "Zero-digit property is no Unicode digit with value zero: %."),
   /** Error code. */
-  DUPLDECFORM_X(XQST, 98, "Clash of decimal format properties: '%'."),
+  DUPLDECFORM_X(XQST, 98, "Decimal-format character is assigned twice: '%'."),
   /** Error code. */
-  DUPLITEM(XQST, 99, "Duplicate declaration of context value."),
+  DUPLVALUE(XQST, 99, "Duplicate context value declaration."),
   /** Error code. */
   DUPLWIND_X(XQST, 103, "Duplicate declaration of %."),
   /** Error code. */
@@ -1277,9 +1324,9 @@ public enum QueryError {
   /** Error code. */
   DUPLFUNVIS(XQST, 106, "More than one visibility annotation declared."),
   /** Error code. */
-  OPTDECL_X(XQST, 108, "Output declaration not allowed library module: %."),
+  OUTPUTLIB_X(XQST, 108, "Output declaration not allowed in library module: %."),
   /** Error code. */
-  OUTINVALID_X(XQST, 109, "%"),
+  OUTPUT_X(XQST, 109, "%"),
   /** Error code. */
   OUTDUPL_X(XQST, 110, "Duplicate declaration of 'output:%'."),
   /** Error code. */
@@ -1287,7 +1334,7 @@ public enum QueryError {
   /** Error code. */
   DECITEM(XQST, 113, "Context value cannot be bound in library module."),
   /** Error code. */
-  DECDUPLPROP_X(XQST, 114, "Duplicate decimal-format property '%'."),
+  DECDUPLPROP_X(XQST, 114, "Property is defined twice: %."),
   /** Error code. */
   DUPLVARVIS(XQST, 116, "More than one visibility annotation declared."),
   /** Error code. */
@@ -1298,6 +1345,10 @@ public enum QueryError {
   NOVISALLOWED(XQST, 125, "No visibility annotation allowed in inline function."),
   /** Error code. */
   NSAXIS(XQST, 134, "Namespace axis is not supported."),
+  /** Error code. */
+  DUPLTYPE_X(XQST, 146, "Duplicate declaration of type %."),
+  /** Error code. */
+  PARAMOPTIONAL_X(XQST, 148, "Parameter must be declared as optional: $%."),
 
   /** Error code. */
   NOATTALL_X(XQTY, 24, "Attribute does not follow root element: %."),
@@ -1321,13 +1372,11 @@ public enum QueryError {
   /** Error code. */
   UPMULTREPV_X(XUDY, 17, "Node can only be replaced once: %."),
   /** Error code. */
-  UPATTDUPL_X(XUDY, 21, "Duplicate attribute: %."),
+  UPATTDUPL_X(XUDY, 21, "Duplicate attribute name: %."),
   /** Error code. */
   UPNSCONFL_X_X(XUDY, 23, "Namespace conflicts: % vs. %."),
   /** Error code. */
   UPNSCONFL2_X_X(XUDY, 24, "Namespaces conflicts: % vs. %."),
-  /** Error code. */
-  UPSEQEMP_X(XUDY, 27, "% target is an empty sequence."),
   /** Error code. */
   UPPAREMPTY_X(XUDY, 29, "Target has no parent: %."),
   /** Error code. */
@@ -1358,17 +1407,11 @@ public enum QueryError {
   /** Error code. */
   UPTRGTYP_X(XUTY, 5, "Target is not an element or document: %."),
   /** Error code. */
-  UPTRGSNGL_X(XUTY, 5, "Target is not a single node: %."),
-  /** Error code. */
   UPTRGTYP2_X(XUTY, 6, "Target is not an element, text, comment or pi: %."),
-  /** Error code. */
-  UPTRGSNGL2_X(XUTY, 6, "Target is not a single node: %."),
   /** Error code. */
   UPTRGDELEMPT_X(XUTY, 7, "Target is not a node: %."),
   /** Error code. */
   UPTRGNODE_X(XUTY, 8, "Target is not an element, text, attribute, comment or pi: %."),
-  /** Error code. */
-  UPTRGSINGLE_X(XUTY, 8, "Target is not a single node: %."),
   /** Error code. */
   UPWRELM_X(XUTY, 10, "Node cannot be replaced with attribute: %."),
   /** Error code. */
@@ -1376,11 +1419,9 @@ public enum QueryError {
   /** Error code. */
   UPWRTRGTYP_X(XUTY, 12, "Target is not an element, attribute or pi: %."),
   /** Error code. */
-  UPWRTRGSINGLE_X(XUTY, 12, "Target is not a single node: %."),
+  UPSOURCE_X(XUTY, 13, "Source is not a node: %."),
   /** Error code. */
   UPSINGLE_X_X(XUTY, 13, "Value of $% is not a single node: %."),
-  /** Error code. */
-  UPSOURCE_X(XUTY, 13, "Source is not a node: %."),
   /** Error code. */
   UPATTELM2_X(XUTY, 22, "Attribute cannot be added to %.");
 
@@ -1416,11 +1457,8 @@ public enum QueryError {
    * @param message message
    */
   QueryError(final ErrType type, final int number, final String message) {
-    final StringBuilder sb = new StringBuilder(8).append(type);
     final String n = Integer.toString(number);
-    final int s = 4 - n.length();
-    for(int i = 0; i < s; i++) sb.append('0');
-    code = sb.append(n).toString();
+    code = type + "0".repeat(4 - n.length()) + n;
     uri = type.uri;
     prefix = type.prefix;
     this.message = message;
@@ -1429,12 +1467,13 @@ public enum QueryError {
   /**
    * Throws a query exception. If {@link InputInfo#internal()} returns {@code true},
    * a static error instance ({@link QueryException#ERROR}) will be returned.
-   * @param ii input info (can be {@code null})
+   * @param info input info (can be {@code null})
    * @param ext extended info
    * @return query exception
    */
-  public QueryException get(final InputInfo ii, final Object... ext) {
-    return ii != null && ii.internal() ? QueryException.ERROR : new QueryException(ii, this, ext);
+  public QueryException get(final InputInfo info, final Object... ext) {
+    return info != null && info.internal() ? QueryException.ERROR :
+      new QueryException(info, this, ext);
   }
 
   /**
@@ -1457,7 +1496,7 @@ public enum QueryError {
 
   /**
    * Error types.
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Leo Woerteler
    */
   public enum ErrType {
@@ -1474,24 +1513,23 @@ public enum QueryError {
     /** Error type. */ FT(FT_PREFIX,             FT_URI),
     /** Error type. */ GEO(GEO_PREFIX,           GEO_URI),
     /** Error type. */ HTML(HTML_PREFIX,         HTML_URI),
-    /** Error type. */ HASH(HASH_PREFIX,         HASH_URI),
     /** Error type. */ INSPECT(INSPECT_PREFIX,   INSPECT_URI),
-    /** Error type. */ JOBS(JOBS_PREFIX,         JOBS_URI),
+    /** Error type. */ JOB(JOB_PREFIX,           JOB_URI),
     /** Error type. */ JSON(JSON_PREFIX,         JSON_URI),
-    /** Error type. */ OUTPUT(OUTPUT_PREFIX,     OUTPUT_URI),
     /** Error type. */ PROC(PROC_PREFIX,         PROC_URI),
     /** Error type. */ PROF(PROF_PREFIX,         PROF_URI),
     /** Error type. */ RANDOM(RANDOM_PREFIX,     RANDOM_URI),
     /** Error type. */ REPO(REPO_PREFIX,         REPO_URI),
     /** Error type. */ REQUEST(REQUEST_PREFIX,   REQUEST_URI),
-    /** Error type. */ SESSION(SESSION_PREFIX,   SESSION_URI),
     /** Error type. */ SESSIONS(SESSIONS_PREFIX, SESSIONS_URI),
-    /** Error type. */ WS(WS_PREFIX,             WS_URI),
     /** Error type. */ SQL(SQL_PREFIX,           SQL_URI),
+    /** Error type. */ STORE(STORE_PREFIX,       STORE_URI),
+    /** Error type. */ STRING(STRING_PREFIX,     STRING_URI),
     /** Error type. */ UNIT(UNIT_PREFIX,         UNIT_URI),
     /** Error type. */ USER(USER_PREFIX,         USER_URI),
     /** Error type. */ VALIDATE(VALIDATE_PREFIX, VALIDATE_URI),
     /** Error type. */ WEB(WEB_PREFIX,           WEB_URI),
+    /** Error type. */ WS(WS_PREFIX,             WS_URI),
     /** Error type. */ XQUERY(XQUERY_PREFIX,     XQUERY_URI),
     /** Error type. */ XSLT(XSLT_PREFIX,         XSLT_URI),
 
@@ -1515,12 +1553,15 @@ public enum QueryError {
     /** Error type. */ FODT,
     /** Error type. */ FOFD,
     /** Error type. */ FOER,
+    /** Error type. */ FOHA,
+    /** Error type. */ FOIX,
     /** Error type. */ FOJS,
     /** Error type. */ FONS,
     /** Error type. */ FORG,
     /** Error type. */ FORX,
     /** Error type. */ FOTY,
     /** Error type. */ FOUP,
+    /** Error type. */ FOUR,
     /** Error type. */ FOUT,
     /** Error type. */ FTDY,
     /** Error type. */ FTST,
@@ -1567,19 +1608,19 @@ public enum QueryError {
    * @return function
    */
   public final QNm qname() {
-    return new QNm(prefix + ':' + code, uri);
+    return new QNm(Token.token(prefix), code, uri);
   }
 
   /**
    * Returns an error for the specified name.
    * @param name error name
    * @param msg error message
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return exception or {@code null}
    */
-  public static QueryException get(final String name, final String msg, final InputInfo ii) {
+  public static QueryException get(final String name, final String msg, final InputInfo info) {
     for(final QueryError err : VALUES) {
-      if(err.toString().equals(name)) return new QueryException(ii, err.qname(), msg).error(err);
+      if(err.toString().equals(name)) return new QueryException(info, err.qname(), msg).error(err);
     }
     return null;
   }
@@ -1588,56 +1629,109 @@ public enum QueryError {
    * Throws a comparison exception.
    * @param item1 first item
    * @param item2 second item
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return query exception
    */
-  public static QueryException diffError(final Item item1, final Item item2, final InputInfo ii) {
+  public static QueryException compareError(final Item item1, final Item item2,
+      final InputInfo info) {
     final Type type1 = item1.type, type2 = item2.type;
-    return type1 == type2 ? CMPTYPE_X.get(ii, type1, item1) :
-      CMPTYPES_X_X.get(ii, type1, type2);
+    return type1.eq(type2) ? CMPTYPE_X_X_X.get(info, type1, item1, item2) :
+      CMPTYPES_X_X_X_X.get(info, type1, type2, item1, item2);
   }
 
   /**
    * Throws a type exception.
-   * @param ii input info
-   * @param expr expression
+   * @param value value
    * @param type target type
-   * @param name name (can be {@code null})
-   * @param promote promote or treat as
+   * @param info input info (can be {@code null})
    * @return query exception
    */
-  public static QueryException typeError(final Expr expr, final SeqType type, final QNm name,
-      final InputInfo ii, final boolean promote) {
-    return typeError(expr, type, name, ii, promote ? INVPROMOTE_X_X_X : INVTREAT_X_X_X);
+  public static QueryException typeError(final Value value, final Type type, final InputInfo info) {
+    return typeError(value, type.seqType(), info);
   }
 
   /**
    * Throws a type exception.
-   * @param ii input info
    * @param expr expression
    * @param st target type
-   * @param name variable name (can be {@code null})
-   * @param error error code
+   * @param info input info (can be {@code null})
+   * @return query exception
+   */
+  public static QueryException typeError(final Expr expr, final SeqType st, final InputInfo info) {
+    return typeError(expr, st, null, info);
+  }
+
+
+  /**
+   * Throws a type exception.
+   * @param expr expression
+   * @param st target type
+   * @param name name (can be {@code null})
+   * @param info input info (can be {@code null})
    * @return query exception
    */
   public static QueryException typeError(final Expr expr, final SeqType st, final QNm name,
-      final InputInfo ii, final QueryError error) {
-
-    final TokenBuilder tb = new TokenBuilder();
-    if(name != null) tb.add('$').add(name.string()).add(" := ");
-    final byte[] value = tb.add(normalize(expr, ii)).finish();
-    return error.get(ii, expr.seqType(), st, value);
+      final InputInfo info) {
+    return typeError(expr, st, name, info, true);
   }
 
   /**
-   * Throws a type cast exception.
-   * @param value value
-   * @param type target type
-   * @param ii input info
+   * Throws a type exception.
+   * @param expr expression
+   * @param st target type
+   * @param name variable name (can be {@code null})
+   * @param info input info (can be {@code null})
+   * @param coerce coerce or treat
    * @return query exception
    */
-  public static QueryException typeError(final Value value, final Type type, final InputInfo ii) {
-    return INVTYPE_X_X_X.get(ii, value.type, type, value);
+  public static QueryException typeError(final Expr expr, final SeqType st, final QNm name,
+      final InputInfo info, final boolean coerce) {
+
+    final TokenBuilder tb = new TokenBuilder();
+    if(name != null) tb.add('$').add(name.string()).add(" := ");
+    final QueryError error = coerce ? INVCONVERT_X_X_X : NOTREAT_X_X_X;
+    return error.get(info, expr.seqType(), st, tb.add(expr.toErrorString()).finish());
+  }
+
+  /**
+   * Throws an arity exception.
+   * @param info input info (can be {@code null})
+   * @param expr expression
+   * @param supplied expected arity
+   * @param expected supplied arity
+   * @param param parameter/argument flag
+   * @return query exception
+   */
+  public static QueryException arityError(final Expr expr, final int supplied, final int expected,
+      final boolean param, final InputInfo info) {
+    final String string = param ? "Function with " + plural(supplied, "parameter") :
+      arguments(supplied);
+    return INVARITY_X_X_X.get(info, string, expected, expr.toErrorString());
+  }
+
+  /**
+   * Throws an test exception.
+   * @param value value
+   * @param pos positional predicate
+   * @param info input info (can be {@code null})
+   * @return query exception
+   */
+  public static QueryException testError(final Value value, final boolean pos,
+      final InputInfo info) {
+    final String expected, found;
+    final Type type = value.seqType().type;
+    if(type.instanceOf(AtomType.NUMERIC) || type.instanceOf(AtomType.STRING) ||
+        type.oneOf(AtomType.BOOLEAN, AtomType.ANY_URI)) {
+      expected = "Single " + type;
+      found = "sequence";
+    } else if(pos) {
+      expected = "Numbers";
+      found = value.itemAt(value.size() - 1).seqType().toString();
+    } else {
+      expected = "Number, string, boolean, URI or nodes";
+      found = value.itemAt(0).seqType().toString();
+    }
+    return (pos ? EXP_FOUND_X_X_X : ARGTYPE_X_X_X).get(info, expected, found, value);
   }
 
   /**
@@ -1647,86 +1741,85 @@ public enum QueryError {
    * @return query exception
    */
   public static QueryException numberError(final ParseExpr expr, final Item item) {
-    return numberError(item, expr.info);
+    return numberError(item, expr.info());
   }
 
   /**
    * Throws a number exception.
    * @param item found item
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return query exception
    */
-  public static QueryException numberError(final Item item, final InputInfo ii) {
-    return NONUMBER_X_X.get(ii, item.type, item);
+  public static QueryException numberError(final Item item, final InputInfo info) {
+    return NONUMBER_X_X.get(info, item.type, item);
   }
 
   /**
    * Throws an invalid value exception.
    * @param type expected type
    * @param value value
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return query exception
    */
-  public static QueryException valueError(final Type type, final byte[] value, final InputInfo ii) {
-    return INVALUE_X_X.get(ii, type, value);
+  public static QueryException valueError(final Type type, final byte[] value,
+      final InputInfo info) {
+    return INVALUE_X_X.get(info, type, value);
   }
 
   /**
    * Returns a plural suffix or an empty string.
    * @param number long number
-   * @return suffix
+   * @return string
    */
   public static String arguments(final long number) {
-    final StringBuilder sb = new StringBuilder().append(number).append(" argument");
-    if(number != 1) sb.append('s');
-    return sb.toString();
+    return plural(number, "argument");
   }
 
   /**
-   * Removes whitespaces and chops the specified value to a maximum size.
-   * @param value value
-   * @param ii input info (can be {@code null}; an empty string will be returned if
-   * {@link InputInfo#internal()} returns {@code true})
-   * @return chopped or empty string
-   */
-  public static byte[] normalize(final Object value, final InputInfo ii) {
-    return ii != null && ii.internal() ? Token.EMPTY :
-           value instanceof byte[] ? normalize((byte[]) value, ii) :
-             normalize(value.toString(), ii);
-  }
-
-  /**
-   * Removes whitespaces and chops the specified string to a maximum size.
+   * Returns the correct singular/plural form for the specified number and string.
+   * @param number number
    * @param string string
-   * @param ii input info (can be {@code null}; an empty string will be returned if
-   * {@link InputInfo#internal()} returns {@code true})
-   * @return chopped or empty string
+   * @return string
    */
-  public static byte[] normalize(final String string, final InputInfo ii) {
-    return ii != null && ii.internal() ? Token.EMPTY : normalize(Token.token(string), ii);
+  private static String plural(final long number, final String string) {
+    final TokenBuilder tb = new TokenBuilder().addLong(number).add(' ').add(string);
+    if(number != 1) tb.add('s');
+    return tb.toString();
   }
 
   /**
-   * Removes whitespaces and chops the specified token to a maximum size.
-   * @param token token
-   * @param ii input info (can be {@code null}; an empty string will be returned if
-   * {@link InputInfo#internal()} returns {@code true})
-   * @return chopped or empty string
+   * Returns an info message for similar strings.
+   * @param string original string
+   * @param similar similar string (can be {@code null})
+   * @return info message
    */
-  public static byte[] normalize(final byte[] token, final InputInfo ii) {
-    if(ii != null && ii.internal()) return Token.EMPTY;
+  public static byte[] similar(final Object string, final Object similar) {
+    return similar == null ? Token.token(string) : Util.inf("% (similar: %)", string, similar);
+  }
+
+  /**
+   * Removes whitespace and chops the specified value to a maximum size.
+   * @param value value
+   * @param info input info (can be {@code null}; an empty token will be returned if
+   * {@link InputInfo#internal()} returns {@code true})
+   * @return chopped or empty token
+   */
+  public static byte[] normalize(final Object value, final InputInfo info) {
+    if(info != null && info.internal()) return Token.EMPTY;
 
     final TokenBuilder tb = new TokenBuilder();
-    byte l = 0;
-    for(byte b : token) {
-      final int ts = tb.size();
-      if(ts == 100) {
-        tb.add(Text.DOTS);
+    int last = 0, c = 0;
+    for(final TokenParser tp = new TokenParser(Token.token(value)); tp.more();) {
+      if(c == 200) {
+        tb.add(QueryText.DOTS);
         break;
       }
-      if(b == '\n' || b == '\r') b = ' ';
-      if(b != ' ' || l != ' ') tb.addByte(b);
-      l = b;
+      final int cp = Math.max(tp.next(), ' ');
+      if(cp != ' ' || last != ' ') {
+        tb.add(cp);
+        c++;
+      }
+      last = cp;
     }
     return tb.finish();
   }

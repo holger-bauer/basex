@@ -3,22 +3,28 @@ package org.basex.query.value.array;
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 
+import java.io.*;
 import java.util.*;
+import java.util.function.*;
 
+import org.basex.core.*;
+import org.basex.data.*;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
-import org.basex.query.func.fn.*;
-import org.basex.query.util.collation.*;
+import org.basex.query.expr.*;
+import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * An array storing {@link Value}s.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class XQArray extends XQData {
@@ -35,9 +41,10 @@ public abstract class XQArray extends XQData {
 
   /**
    * Default constructor.
+   * @param type function type
    */
-  XQArray() {
-    super(SeqType.ARRAY);
+  XQArray(final Type type) {
+    super(type);
   }
 
   /**
@@ -46,67 +53,55 @@ public abstract class XQArray extends XQData {
    * @return (unique) instance of an empty array
    */
   public static XQArray empty() {
-    return EmptyArray.INSTANCE;
+    return EmptyArray.EMPTY;
   }
 
   /**
-   * Creates a singleton array containing the given element.
-   * @param elem the contained element
-   * @return the singleton array
+   * Creates an array with a single member.
+   * @param value single member
+   * @return array
    */
-  public static XQArray singleton(final Value elem) {
-    return new SmallArray(new Value[] { elem });
+  public static XQArray singleton(final Value value) {
+    return new SingletonArray(value);
   }
 
   /**
-   * Creates an array containing the given elements.
-   * @param values elements
-   * @return the resulting array
-   */
-  @SafeVarargs
-  public static XQArray from(final Value... values) {
-    final ArrayBuilder builder = new ArrayBuilder();
-    for(final Value value : values) builder.append(value);
-    return builder.freeze();
-  }
-
-  /**
-   * Prepends an element to the front of this array.
+   * Prepends a member to the front of this array.
    * Running time: <i>O(1)*</i>
-   * @param elem element to prepend
+   * @param head value to prepend
    * @return resulting array
    */
-  public abstract XQArray cons(Value elem);
+  public abstract XQArray prepend(Value head);
 
   /**
-   * Appends an element to the back of this array.
+   * Appends a member to the end of this array.
    * Running time: <i>O(1)*</i>
-   * @param elem element to append
+   * @param last value to append
    * @return resulting array
    */
-  public abstract XQArray snoc(Value elem);
+  public abstract XQArray append(Value last);
 
   /**
-   * Gets the element at the given position in this array.
+   * Gets the member at the given position in this array.
    * Running time: <i>O(log n)</i>
-   * @param index index of the element to get
-   * @return the corresponding element
+   * @param index index of the member to get
+   * @return the corresponding member
    */
   public abstract Value get(long index);
 
   /**
-   * Returns a copy of this array where the entry at the given position is
+   * Returns a copy of this array where the member at the given position is
    * replaced by the given value.
-   * @param pos position of the entry to replace
+   * @param pos position of the member to replace
    * @param value value to put into this array
    * @return resulting array
    */
   public abstract XQArray put(long pos, Value value);
 
   /**
-   * Returns the number of elements in this array.
+   * Returns the number of members in this array.
    * Running time: <i>O(1)</i>
-   * @return number of elements
+   * @return number of members
    */
   public abstract long arraySize();
 
@@ -119,46 +114,45 @@ public abstract class XQArray extends XQData {
   public abstract XQArray concat(XQArray other);
 
   /**
-   * First element of this array, equivalent to {@code array.get(0)}.
+   * Returns the first member of this array.
    * Running time: <i>O(1)</i>
-   * @return the first element
+   * @return first member
    */
   public abstract Value head();
 
   /**
-   * Last element of this array, equivalent to {@code array.get(array.arraySize() - 1)}.
+   * Returns the last member of this array.
    * Running time: <i>O(1)</i>
-   * @return last element
+   * @return last member
    */
-  public abstract Value last();
+  public abstract Value foot();
 
   /**
-   * Initial segment of this array, i.e. an array containing all elements of this array (in the
-   * same order), except for the last one.
+   * Returns the array without the last member.
    * Running time: <i>O(1)*</i>
-   * @return initial segment
+   * @return new array
    */
-  public abstract XQArray init();
+  public abstract XQArray trunk();
 
   /**
-   * Tail segment of this array, i.e. an array containing all elements of this array (in the
+   * Returns the array without the first member.
    * same order), except for the first one.
    * Running time: <i>O(1)*</i>
-   * @return tail segment
+   * @return new array
    */
   public abstract XQArray tail();
 
   /**
    * Extracts a contiguous part of this array.
-   * @param pos position of first element
-   * @param len number of elements
+   * @param pos position of first member
+   * @param length number of member
    * @param qc query context
    * @return the sub-array
    */
-  public abstract XQArray subArray(long pos, long len, QueryContext qc);
+  public abstract XQArray subArray(long pos, long length, QueryContext qc);
 
   /**
-   * Returns an array with the same elements as this one, but their order reversed.
+   * Returns an array with the same members as this one, but their order reversed.
    * Running time: <i>O(n)</i>
    * @param qc query context
    * @return reversed version of this array
@@ -166,30 +160,31 @@ public abstract class XQArray extends XQData {
   public abstract XQArray reverseArray(QueryContext qc);
 
   /**
-   * Checks if this array is empty.
-   * Running time: <i>O(1)</i>
-   * @return {@code true} if the array is empty, {@code false} otherwise
-   */
-  public abstract boolean isEmptyArray();
-
-  /**
-   * Inserts the given element at the given position into this array.
+   * Inserts the given member at the given position into this array.
    * Running time: <i>O(log n)</i>
    * @param pos insertion position, must be between {@code 0} and {@code arraySize()}
-   * @param value element to insert
+   * @param value member to insert
    * @param qc query context
    * @return resulting array
    */
   public abstract XQArray insertBefore(long pos, Value value, QueryContext qc);
 
   /**
-   * Removes the element at the given position in this array.
+   * Removes the member at the given position in this array.
    * Running time: <i>O(log n)</i>
    * @param pos deletion position, must be between {@code 0} and {@code arraySize() - 1}
    * @param qc query context
    * @return resulting array
    */
   public abstract XQArray remove(long pos, QueryContext qc);
+
+  @Override
+  public final void write(final DataOutput out) throws IOException, QueryException {
+    out.writeLong(arraySize());
+    for(final Value member : members()) {
+      Store.write(out, member);
+    }
+  }
 
   @Override
   public final void cache(final boolean lazy, final InputInfo ii) throws QueryException {
@@ -204,7 +199,7 @@ public abstract class XQArray extends XQData {
    */
   public abstract ListIterator<Value> iterator(long start);
 
-  /** Iterable over the elements of this array. */
+  /** Iterable over the members of this array. */
   private Iterable<Value> iterable;
 
   /**
@@ -217,7 +212,7 @@ public abstract class XQArray extends XQData {
   }
 
   /**
-   * Prepends the given sequence to this array.
+   * Prepends the given array to this array.
    * @param array small array
    * @return resulting array
    */
@@ -230,8 +225,8 @@ public abstract class XQArray extends XQData {
    * If {@code to > arr.length} then the last {@code to - arr.length} entries are {@code null}.
    * If {@code from == 0 && to == arr.length}, the original array is returned.
    * @param values input values
-   * @param from first index, inclusive (may be negative)
-   * @param to last index, exclusive (may be greater than {@code arr.length})
+   * @param from first index, inclusive (can be negative)
+   * @param to last index, exclusive (can be greater than {@code arr.length})
    * @return resulting array
    */
   static Value[] slice(final Value[] values, final int from, final int to) {
@@ -257,24 +252,56 @@ public abstract class XQArray extends XQData {
   }
 
   /**
-   * Checks that this array's implementation does not violate any invariants.
+   * Creates a new array type.
+   * @param value value to be added
+   * @return union type
+   */
+  final Type union(final Value value) {
+    final SeqType mt = ((ArrayType) type).memberType, st = value.seqType();
+    return mt.eq(st) ? type : ArrayType.get(mt.union(st));
+  }
+
+  /**
+   * Checks that this array implementation does not violate any invariants.
    * @throws AssertionError if an invariant was violated
    */
   abstract void checkInvariants();
 
   @Override
-  public final Value get(final Item key, final InputInfo ii) throws QueryException {
-    if(!key.type.instanceOf(AtomType.INTEGER) && !key.type.isUntyped())
-      throw typeError(key, AtomType.INTEGER, ii);
+  public final Value invokeInternal(final QueryContext qc, final InputInfo ii, final Value[] args)
+      throws QueryException {
+    return getInternal(key(args[0], qc, ii), qc, ii, true);
+  }
 
-    final long pos = key.itr(ii), size = arraySize();
+  /**
+   * Gets the internal map value.
+   * @param key key to look for
+   * @param qc query context
+   * @param ii input info (can be {@code null})
+   * @param error if {@code true}, raise error if index is out of bounds
+   * @return value or {@code null}
+   * @throws QueryException query exception
+   */
+  public Value getInternal(final Item key, final QueryContext qc, final InputInfo ii,
+      final boolean error) throws QueryException {
+    final Item ki = (Item) SeqType.INTEGER_O.coerce(key, null, qc, null, ii);
+
+    final long pos = ki.itr(ii), size = arraySize();
     if(pos > 0 && pos <= size) return get(pos - 1);
-    throw (size == 0 ? ARRAYEMPTY : ARRAYBOUNDS_X_X).get(ii, pos, size);
+
+    if(error) throw (size == 0 ? ARRAYEMPTY : ARRAYBOUNDS_X_X).get(ii, pos, size);
+    return null;
   }
 
   @Override
   public final QNm paramName(final int pos) {
     return new QNm("pos", "");
+  }
+
+  @Override
+  public void refineType(final Expr expr) {
+    final Type tp = type.intersect(expr.seqType().type);
+    if(tp != null) type = tp;
   }
 
   @Override
@@ -288,15 +315,6 @@ public abstract class XQArray extends XQData {
   @Override
   public final Item atomItem(final QueryContext qc, final InputInfo ii) throws QueryException {
     return atomValue(qc, ii).item(qc, ii);
-  }
-
-  @Override
-  public final long atomSize() {
-    long size = 0;
-    for(final Value value : members()) {
-      for(final Item item : value) size += item.atomSize();
-    }
-    return size;
   }
 
   @Override
@@ -329,44 +347,64 @@ public abstract class XQArray extends XQData {
   }
 
   @Override
-  public Item materialize(final QueryContext qc, final boolean copy) {
+  public final Item materialize(final Predicate<Data> test, final InputInfo ii,
+      final QueryContext qc) throws QueryException {
+
+    if(materialized(test, ii)) return this;
+
+    final ArrayBuilder ab = new ArrayBuilder();
     for(final Value value : members()) {
-      for(final Item item : value) {
-        if(item.persistent() || item.materialize(null, false) == null) return null;
-      }
+      qc.checkStop();
+      ab.append(value.materialize(test, ii, qc));
     }
-    return this;
+    return ab.array(this);
   }
 
   @Override
-  public boolean instanceOf(final Type tp) {
-    if(type.instanceOf(tp)) return true;
-    if(!(tp instanceof FuncType) || tp instanceof MapType) return false;
-
-    final FuncType ft = (FuncType) tp;
-    if(ft.argTypes.length != 1 || !ft.argTypes[0].instanceOf(SeqType.INTEGER_O)) return false;
-
-    final SeqType dt = ft.declType;
-    if(dt.eq(SeqType.ITEM_ZM)) return true;
-
-    // check types of members
-    for(final Value value : members()) if(!dt.instance(value)) return false;
+  public final boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    if(!funcType().declType.type.instanceOf(AtomType.ANY_ATOMIC_TYPE)) {
+      for(final Value value : members()) {
+        if(!value.materialized(test, ii)) return false;
+      }
+    }
     return true;
   }
 
   @Override
-  public final boolean deep(final Item item, final Collation coll, final InputInfo ii)
-      throws QueryException {
+  public final boolean instanceOf(final Type tp) {
+    if(type.instanceOf(tp)) return true;
 
-    if(item instanceof FuncItem) throw FICMP_X.get(ii, type);
+    final SeqType mt;
+    if(tp instanceof ArrayType) {
+      mt = ((ArrayType) tp).memberType;
+    } else if(tp instanceof FuncType) {
+      final FuncType ft = (FuncType) tp;
+      if(ft.argTypes.length != 1 || !ft.argTypes[0].instanceOf(SeqType.INTEGER_O)) return false;
+      mt = ft.declType;
+    } else {
+      return false;
+    }
+
+    if(mt.eq(SeqType.ITEM_ZM)) return true;
+
+    // check types of members
+    for(final Value value : members()) {
+      if(!mt.instance(value)) return false;
+    }
+    return true;
+  }
+
+  @Override
+  public final boolean deepEqual(final Item item, final DeepEqual deep) throws QueryException {
+    if(this == item) return true;
     if(item instanceof XQArray) {
-      final XQArray o = (XQArray) item;
-      if(arraySize() != o.arraySize()) return false;
-      final Iterator<Value> iter1 = iterator(0), iter2 = o.iterator(0);
+      final XQArray array = (XQArray) item;
+      if(arraySize() != array.arraySize()) return false;
+      final Iterator<Value> iter1 = iterator(0), iter2 = array.iterator(0);
       while(iter1.hasNext()) {
         final Value value1 = iter1.next(), value2 = iter2.next();
-        if(value1.size() != value2.size() ||
-            !new DeepEqual(ii).collation(coll).equal(value1, value2)) return false;
+        if(!(deep != null ? deep.equal(value1, value2) : value1.equals(value2))) return false;
       }
       return true;
     }
@@ -374,11 +412,69 @@ public abstract class XQArray extends XQData {
   }
 
   @Override
-  public final Object[] toJava() throws QueryException {
-    final long size = arraySize();
-    final ArrayList<Object> list = new ArrayList<>((int) size);
-    final Iterator<Value> iter = iterator(0);
-    while(iter.hasNext()) list.add(iter.next().toJava());
+  public final Object toJava() throws QueryException {
+    // determine type (static or exact)
+    final int sz = (int) arraySize();
+    SeqType dt = funcType().declType;
+    if(sz > 0 && dt.eq(SeqType.ITEM_ZM)) {
+      dt = null;
+      for(final Value member : members()) {
+        final SeqType st = member.seqType();
+        dt = dt == null ? st : dt.union(st);
+      }
+    }
+    // convert to specific arrays
+    if(dt.one()) {
+      final Type tp = dt.type;
+      if(tp == AtomType.BOOLEAN) {
+        final BoolList list = new BoolList(sz);
+        for(final Value member : members()) list.add(((Bln) member).bool(null));
+        return list.finish();
+      }
+      if(tp == AtomType.BYTE) {
+        final ByteList list = new ByteList(sz);
+        for(final Value member : members()) list.add((byte) ((Int) member).itr());
+        return list.finish();
+      }
+      if(tp.oneOf(AtomType.SHORT, AtomType.UNSIGNED_BYTE)) {
+        final ShortList list = new ShortList(sz);
+        for(final Value member : members()) list.add((short) ((Int) member).itr());
+        return list.finish();
+      }
+      if(tp == AtomType.UNSIGNED_SHORT) {
+        final char[] chars = new char[sz];
+        int c = 0;
+        for(final Value member : members()) chars[c++] = (char) ((Int) member).itr();
+        return chars;
+      }
+      if(tp == AtomType.INT) {
+        final IntList list = new IntList(sz);
+        for(final Value member : members()) list.add((int) ((Int) member).itr());
+        return list.finish();
+      }
+      if(tp.instanceOf(AtomType.INTEGER) && tp != AtomType.UNSIGNED_LONG) {
+        final LongList list = new LongList(sz);
+        for(final Value member : members()) list.add(((Int) member).itr());
+        return list.finish();
+      }
+      if(tp == AtomType.FLOAT) {
+        final FloatList list = new FloatList(sz);
+        for(final Value member : members()) list.add(((Flt) member).flt());
+        return list.finish();
+      }
+      if(tp == AtomType.DOUBLE) {
+        final DoubleList list = new DoubleList(sz);
+        for(final Value member : members()) list.add(((Dbl) member).dbl());
+        return list.finish();
+      }
+      if(tp.instanceOf(AtomType.STRING)) {
+        final StringList list = new StringList(sz);
+        for(final Value member : members()) list.add((String) member.toJava());
+        return list.finish();
+      }
+    }
+    final ArrayList<Object> list = new ArrayList<>(sz);
+    for(final Value member : members()) list.add(member.toJava());
     return list.toArray();
   }
 
@@ -388,7 +484,7 @@ public abstract class XQArray extends XQData {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     final ExprList list = new ExprList();
     final long size = arraySize();
     final int max = (int) Math.min(size, 5);
@@ -397,20 +493,19 @@ public abstract class XQArray extends XQData {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public final void toString(final QueryString qs) {
     final TokenBuilder tb = new TokenBuilder();
-    final Iterator<Value> iter = iterator(0);
-    for(boolean fst = true; iter.hasNext(); fst = false) {
-      tb.add(fst ? " " : ", ");
-      final Value value = iter.next();
-      final long vs = value.size();
-      if(vs != 1) tb.add('(');
-      for(int i = 0; i < vs; i++) {
-        if(i != 0) tb.add(", ");
-        tb.add(value.itemAt(i));
+    for(final Value member : members()) {
+      if(!tb.moreInfo()) break;
+      tb.add(tb.isEmpty() ? " " : ", ");
+      final long ms = member.size();
+      if(ms != 1) tb.add('(');
+      for(int m = 0; m < ms; m++) {
+        if(m != 0) tb.add(", ");
+        tb.add(member.itemAt(m));
       }
-      if(vs != 1) tb.add(')');
+      if(ms != 1) tb.add(')');
     }
-    qs.bracket(tb.add(' ').finish());
+    qs.braced("[ ", tb.add(' ').finish(), " ]");
   }
 }

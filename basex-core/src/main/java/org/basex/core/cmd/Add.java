@@ -19,7 +19,7 @@ import org.basex.util.*;
  * the target path and file name have been merged and are now specified
  * as first argument.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Add extends ACreate {
@@ -53,18 +53,15 @@ public final class Add extends ACreate {
     if(!build()) return false;
     try {
       final Data data = context.data();
-      return update(data, new Code() {
-        @Override
-        boolean run() {
-          // skip update if fragment is empty
-          if(tmpData.meta.size > 1) {
-            context.invalidate();
-            final AtomicUpdateCache auc = new AtomicUpdateCache(data);
-            auc.addInsert(data.meta.size, -1, new DataClip(tmpData));
-            auc.execute(false);
-          }
-          return info(RES_ADDED_X, jc().performance);
+      return update(data, () -> {
+        // skip update if fragment is empty
+        if(tmpData.meta.size > 1) {
+          context.invalidate();
+          final AtomicUpdateCache auc = new AtomicUpdateCache(data);
+          auc.addInsert(data.meta.size, -1, new DataClip(tmpData));
+          auc.execute(false);
         }
+        return info(RES_ADDED_X, jc().performance);
       });
     } finally {
       finish();
@@ -76,13 +73,13 @@ public final class Add extends ACreate {
    * @return success flag
    */
   boolean build() {
-    String name = MetaData.normPath(args[0]);
-    if(name == null) return error(PATH_INVALID_X, args[0]);
+    String path = MetaData.normPath(args[0]);
+    if(path == null) return error(PATH_INVALID_X, args[0]);
 
     // retrieve input
     final IO source;
     try {
-      source = sourceToIO(name);
+      source = sourceToIO(path);
     } catch(final IOException ex) {
       return error(Util.message(ex));
     }
@@ -92,34 +89,37 @@ public final class Add extends ACreate {
     if(!source.exists()) return in != null ? error(RES_NOT_FOUND) :
         error(RES_NOT_FOUND_X, context.user().has(Perm.CREATE) ? source : args[1]);
 
-    if(!Strings.endsWith(name, '/') && (source.isDir() || source.isArchive())) name += '/';
+    if(!Strings.endsWith(path, '/') && (source.isDir() || source.isArchive())) path += '/';
 
     String target = "";
-    final int s = name.lastIndexOf('/');
+    final int s = path.lastIndexOf('/');
     if(s != -1) {
-      target = name.substring(0, s);
-      name = name.substring(s + 1);
+      target = path.substring(0, s);
+      path = path.substring(s + 1);
     }
 
     // get name from io reference
-    if(name.isEmpty()) name = source.name();
-    else source.name(name);
+    if(path.isEmpty()) path = source.name();
+    else source.name(path);
 
     // ensure that the final name is not empty
-    if(name.isEmpty()) return error(NAME_INVALID_X, name);
+    if(path.isEmpty()) return error(NAME_INVALID_X, path);
 
     try {
       final Data data = context.data();
+      final String name = data.meta.name;
       final Parser parser = new DirParser(source, options).target(target);
 
       // create random database name for disk-based creation
       if(cache(parser)) {
-        final String tmpName = soptions.createRandomDb(data.meta.name);
+        final String tmpName = soptions.createTempDb(name);
         builder = new DiskBuilder(tmpName, parser, soptions, options);
       } else {
-        builder = new MemBuilder(name, parser);
+        builder = new MemBuilder(path, parser);
       }
-      tmpData = builder.binaryDir(data.meta.dir).build();
+
+      if(!data.inMemory()) builder.binariesDir(soptions.dbPath(name));
+      tmpData = builder.build();
       return true;
     } catch(final IOException ex) {
       return error(Util.message(ex));
@@ -149,11 +149,12 @@ public final class Add extends ACreate {
 
     // create disk instances for large documents
     // (does not work for input streams and directories)
-    long fl = parser.source.length();
-    if(parser.source instanceof IOFile) {
-      final IOFile f = (IOFile) parser.source;
-      if(f.isDir()) {
-        for(final String d : f.descendants()) fl += new IOFile(f, d).length();
+    final IO source = parser.source();
+    long fl = source.length();
+    if(source instanceof IOFile) {
+      final IOFile src = (IOFile) source;
+      if(src.isDir()) {
+        for(final String path : src.descendants()) fl += new IOFile(src, path).length();
       }
     }
 

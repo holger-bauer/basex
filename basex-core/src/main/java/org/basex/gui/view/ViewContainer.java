@@ -13,7 +13,7 @@ import org.basex.util.*;
  * This class manages all visible and invisible views and allows drag and
  * drop operations inside the panel.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ViewContainer extends BaseXBack {
@@ -60,7 +60,7 @@ public final class ViewContainer extends BaseXBack {
     setBackground(BACK);
 
     this.gui = gui;
-    logo = BaseXImages.get("logo_256");
+    logo = BaseXImages.get("logo_large");
 
     final int vl = view.length;
     views = new ViewPanel[vl];
@@ -352,7 +352,7 @@ public final class ViewContainer extends BaseXBack {
     for(final ViewPanel view : views) {
       if(view.toString().equals(name)) return view;
     }
-    Util.debug(Util.className(this) + ": Unknown view \"%\"", name);
+    Util.debugln(Util.className(this) + ": Unknown view \"%\"", name);
     return null;
   }
 }

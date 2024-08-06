@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Wrapper for representing XQuery values.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class XdmSequence extends XdmValue {
@@ -37,7 +37,7 @@ final class XdmSequence extends XdmValue {
 
   @Override
   public Iterator<XdmItem> iterator() {
-    return new Iterator<XdmItem>() {
+    return new Iterator<>() {
       private final int ss = size();
       private int s;
 

@@ -5,7 +5,7 @@ import org.basex.query.expr.*;
 /**
  * A tri-state encoding the number of usages of a variable or context reference.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public enum VarUsage {
@@ -36,7 +36,7 @@ public enum VarUsage {
 
   /**
    * Number of usages if the code is executed {@code count} times.
-   * @param count number of executions, may be {@code -1} if not known
+   * @param count number of executions ({@code -1} if not known)
    * @return number of usages
    */
   public VarUsage times(final long count) {
@@ -44,7 +44,7 @@ public enum VarUsage {
   }
 
   /**
-   * Checks how often a variable or context reference is accessed in all of the given expressions.
+   * Checks how often a variable or context reference is accessed in all given expressions.
    * @param var variable ({@link Var} reference) or context ({@code null}) to inline
    * @param exprs expressions
    * @return number of accesses to the variable in all expressions combined

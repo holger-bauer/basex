@@ -7,6 +7,7 @@ import java.nio.*;
 import java.util.*;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
@@ -15,7 +16,7 @@ import org.basex.util.*;
 /**
  * Functions on binary data.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class BinFn extends StandardFunc {
@@ -32,15 +33,15 @@ abstract class BinFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final ByteBuffer unpack(final QueryContext qc, final long len) throws QueryException {
-    final B64 b64 = toB64(exprs[0], qc, false);
-    final Long off = toLong(exprs[1], qc);
-    final ByteOrder bo = order(2, qc);
+    final Bin binary = toBin(arg(0), qc);
+    final Item offset = arg(1).atomItem(qc, info);
+    final ByteOrder order = order(arg(2), qc);
 
-    final byte[] bytes = b64.binary(info);
+    final byte[] bytes = binary.binary(info);
     final int bl = bytes.length;
-    final int[] bounds = bounds(off, len, bl);
+    final int[] bounds = bounds(offset, Int.get(len), bl);
 
-    final ByteBuffer bb = ByteBuffer.allocate(bounds[1]).order(bo);
+    final ByteBuffer bb = ByteBuffer.allocate(bounds[1]).order(order);
     bb.put(bytes, bounds[0], bounds[1]).position(0);
     return bb;
   }
@@ -53,21 +54,21 @@ abstract class BinFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final Int unpackInteger(final QueryContext qc, final boolean signed) throws QueryException {
-    final B64 b64 = toB64(exprs[0], qc, false);
-    final Long off = toLong(exprs[1], qc);
-    final Long size = toLong(exprs[2], qc);
-    final ByteOrder bo = order(3, qc);
+    final Bin binary = toBin(arg(0), qc);
+    final Item offset = arg(1).atomItem(qc, info);
+    final Item size = arg(2).atomItem(qc, info);
+    final ByteOrder order = order(arg(3), qc);
 
-    final byte[] bytes = b64.binary(info);
+    final byte[] bytes = binary.binary(info);
     final int bl = bytes.length;
-    final int[] bounds = bounds(off, size, bl);
+    final int[] bounds = bounds(offset, size, bl);
     final int o = bounds[0], l = Math.min(8, bounds[1]);
     if(l == 0) return Int.ZERO;
 
     // place input data in long byte array, consider sign
     final byte[] tmp = new byte[8];
     final boolean neg = signed && (bytes[0] & 0x80) != 0;
-    if(bo == ByteOrder.BIG_ENDIAN) {
+    if(order == ByteOrder.BIG_ENDIAN) {
       final int s = 8 - l;
       if(neg) for(int i = 0; i < s; i++) tmp[i] = (byte) 0xFF;
       Array.copy(bytes, o, l, tmp, s);
@@ -75,7 +76,7 @@ abstract class BinFn extends StandardFunc {
       Array.copyToStart(bytes, o, l, tmp);
       if(neg) for(int i = l; i < 8; i++) tmp[i] = (byte) 0xFF;
     }
-    return Int.get(ByteBuffer.wrap(tmp).order(bo).getLong());
+    return Int.get(ByteBuffer.wrap(tmp).order(order).getLong());
   }
 
   /**
@@ -86,14 +87,11 @@ abstract class BinFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final Item bit(final Bit op, final QueryContext qc) throws QueryException {
-    final B64 b1 = toB64(exprs[0], qc, true);
-    final B64 b2 = toB64(exprs[1], qc, true);
-    if(b1 == null || b2 == null) return Empty.VALUE;
+    final Bin binary1 = toBinOrNull(arg(0), qc), binary2 = toBinOrNull(arg(1), qc);
+    if(binary1 == null || binary2 == null) return Empty.VALUE;
 
-    final byte[] bytes1 = b1.binary(info);
-    final byte[] bytes2 = b2.binary(info);
-    final int bl1 = bytes1.length;
-    final int bl2 = bytes2.length;
+    final byte[] bytes1 = binary1.binary(info), bytes2 = binary2.binary(info);
+    final int bl1 = bytes1.length, bl2 = bytes2.length;
     if(bl1 != bl2) throw BIN_DLA_X_X.get(info, bl1, bl2);
 
     // single byte
@@ -112,12 +110,12 @@ abstract class BinFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final Item pad(final QueryContext qc, final boolean left) throws QueryException {
-    final B64 b64 = toB64(exprs[0], qc, true);
-    final long size = toLong(exprs[1], qc);
-    final long octet = exprs.length > 2 ? toLong(exprs[2], qc) : 0;
-    if(b64 == null) return Empty.VALUE;
+    final Bin binary = toBinOrNull(arg(0), qc);
+    final long size = toLong(arg(1), qc);
+    final long octet = defined(2) ? toLong(arg(2), qc) : 0;
+    if(binary == null) return Empty.VALUE;
 
-    final byte[] bytes = b64.binary(info);
+    final byte[] bytes = binary.binary(info);
     final int bl = bytes.length;
 
     if(size < 0) throw BIN_NS_X.get(info, size);
@@ -136,14 +134,14 @@ abstract class BinFn extends StandardFunc {
 
   /**
    * Checks the octet order.
-   * @param o expression offset
+   * @param expr expression (can be {@code Empty#UNDEFINED})
    * @param qc query context
    * @return order
    * @throws QueryException query exception
    */
-  final ByteOrder order(final int o, final QueryContext qc) throws QueryException {
-    if(o >= exprs.length) return ByteOrder.BIG_ENDIAN;
-    final byte[] order = toToken(exprs[o], qc);
+  final ByteOrder order(final Expr expr, final QueryContext qc) throws QueryException {
+    if(expr == Empty.UNDEFINED) return ByteOrder.BIG_ENDIAN;
+    final byte[] order = toToken(expr, qc);
     if(eq(order, BIG)) return ByteOrder.BIG_ENDIAN;
     if(eq(order, LITTLE)) return ByteOrder.LITTLE_ENDIAN;
     throw BIN_USO_X.get(info, order);
@@ -151,13 +149,16 @@ abstract class BinFn extends StandardFunc {
 
   /**
    * Checks the bounds of the specified offset value.
-   * @param off offset value (may be {@code null})
-   * @param len length value (may be {@code null})
+   * @param offset offset value (may be empty sequence)
+   * @param length length value (may be empty sequence)
    * @param size size of input data
    * @return bounds (two integers)
    * @throws QueryException query exception
    */
-  final int[] bounds(final Long off, final Long len, final int size) throws QueryException {
+  final int[] bounds(final Item offset, final Item length, final int size) throws QueryException {
+    final Long off = offset.isEmpty() ? null : toLong(offset);
+    final Long len = length.isEmpty() ? null : toLong(length);
+
     int of = 0;
     if(off != null) {
       if(off < 0 || off > size) throw BIN_IOOR_X_X.get(info, off, size);
@@ -193,18 +194,5 @@ abstract class BinFn extends StandardFunc {
       }
     }
     return tmp;
-  }
-
-  /**
-   * Converts the specified expression to a string.
-   * Returns a token representation or an exception.
-   * @param offset expression offset
-   * @param qc query context
-   * @return string representation
-   * @throws QueryException query exception
-   */
-  final byte[] token(final int offset, final QueryContext qc) throws QueryException {
-    final Item item = exprs[offset].atomItem(qc, info);
-    return item == Empty.VALUE ? null : toToken(item);
   }
 }

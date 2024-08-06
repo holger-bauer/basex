@@ -55,7 +55,7 @@ import org.basex.util.list.*;
  *      merging.</li>
  * </ol>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class Updates {
@@ -108,7 +108,7 @@ public final class Updates {
   }
 
   /**
-   * Returns value to be output.
+   * Returns the value to be output.
    * @param reset reset cache
    * @return value
    */
@@ -123,27 +123,34 @@ public final class Updates {
    * which has a fragment as a target node. If an ancestor of the given target
    * node has already been added to the pending update list, the corresponding
    * data reference and the pre value of the given target node within this
-   * database table are calculated. Otherwise a new data instance is created.
+   * database table are calculated. Otherwise, a new data instance is created.
    * This function is called during query evaluation.
    *
    * @param target target fragment
    * @param qc query context
    * @return database node created from input fragment
+   * @throws QueryException query exception
    */
-  public DBNode determineDataRef(final ANode target, final QueryContext qc) {
+  public DBNode determineDataRef(final ANode target, final QueryContext qc) throws QueryException {
     if(target instanceof DBNode) return (DBNode) target;
 
     // determine highest ancestor node
     ANode tmp = target;
     final BasicNodeIter iter = target.ancestorIter();
-    for(ANode n; (n = iter.next()) != null;) tmp = n;
+    for(ANode n; (n = iter.next()) != null;) {
+      tmp = n;
+    }
     final ANode root = tmp;
 
     // see if this ancestor has already been added to the pending update list
     // if data instance does not exist, create mapping between fragment id and data reference
     MemData data;
     synchronized(fragmentIDs) {
-      data = fragmentIDs.computeIfAbsent(root.id, () -> (MemData) root.copy(qc).data());
+      data = fragmentIDs.get(root.id);
+      if(data == null) {
+        data = (MemData) root.copy(qc).data();
+        fragmentIDs.put(root.id, data);
+      }
     }
 
     // determine the pre value of the target node within its database

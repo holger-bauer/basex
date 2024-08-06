@@ -9,16 +9,18 @@ import org.xml.sax.*;
 /**
  * {@link IO} reference, representing a byte array.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IOContent extends IO {
   /** Content. */
   private final byte[] content;
+  /** Encoding (can be {@code null}). */
+  private final String encoding;
 
   /**
    * Constructor.
-   * @param content contents
+   * @param content content
    */
   public IOContent(final byte[] content) {
     this(content, "");
@@ -26,10 +28,19 @@ public final class IOContent extends IO {
 
   /**
    * Constructor.
-   * @param content contents
+   * @param content content
    */
   public IOContent(final String content) {
-    this(Token.token(content));
+    this(content, "");
+  }
+
+  /**
+   * Constructor.
+   * @param content content
+   * @param path content path
+   */
+  public IOContent(final String content, final String path) {
+    this(Token.token(content), path, Strings.UTF8);
   }
 
   /**
@@ -38,8 +49,19 @@ public final class IOContent extends IO {
    * @param path content path
    */
   public IOContent(final byte[] content, final String path) {
+    this(content, path, null);
+  }
+
+  /**
+   * Constructor.
+   * @param content content
+   * @param path content path
+   * @param encoding encoding (can be {@code null})
+   */
+  public IOContent(final byte[] content, final String path, final String encoding) {
     super(path);
     this.content = content;
+    this.encoding = encoding;
     len = content.length;
   }
 
@@ -63,6 +85,11 @@ public final class IOContent extends IO {
   @Override
   public ArrayInput inputStream() {
     return new ArrayInput(content);
+  }
+
+  @Override
+  public String encoding() {
+    return encoding;
   }
 
   @Override

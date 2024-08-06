@@ -14,21 +14,18 @@ import org.basex.core.users.*;
 import org.basex.io.in.*;
 import org.basex.io.out.*;
 import org.basex.query.*;
-import org.basex.server.Log.LogType;
+import org.basex.server.Log.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * Server-side client session in the client-server architecture.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Andreas Weiler
  * @author Christian Gruen
  */
 public final class ClientListener extends Thread implements ClientInfo {
-  /** Prints trace output to the evaluation info. */
-  private static final QueryTracer PASS = info -> true;
-
   /** Timer for authentication time out. */
   public final Timer timeout = new Timer();
   /** Timestamp of last interaction. */
@@ -70,6 +67,8 @@ public final class ClientListener extends Thread implements ClientInfo {
     this.server = server;
     last = System.currentTimeMillis();
     setDaemon(true);
+    // register the info view for trace output
+    context.setExternal((QueryTracer) info -> true);
   }
 
   @Override
@@ -97,10 +96,10 @@ public final class ClientListener extends Thread implements ClientInfo {
             create();
           } else if(sc == ServerCmd.ADD) {
             add();
-          } else if(sc == ServerCmd.REPLACE) {
-            replace();
-          } else if(sc == ServerCmd.STORE) {
-            store();
+          } else if(sc == ServerCmd.PUT) {
+            put();
+          } else if(sc == ServerCmd.PUTBINARY) {
+            putBinary();
           } else if(sc != ServerCmd.COMMAND) {
             query(sc);
           } else {
@@ -118,7 +117,6 @@ public final class ClientListener extends Thread implements ClientInfo {
         // parse input and create command instance
         try {
           command = CommandParser.get(cmd, context).parseSingle();
-          command.jc().tracer = PASS;
           log(LogType.REQUEST, command.toString(true));
         } catch(final QueryException ex) {
           // log invalid command
@@ -172,7 +170,7 @@ public final class ClientListener extends Thread implements ClientInfo {
    * @return success flag
    */
   private boolean authenticate() {
-    boolean auth = false;
+    boolean ok = false;
     try {
       final String nonce = Long.toString(System.nanoTime());
       final byte[] address = socket.getInetAddress().getAddress();
@@ -187,11 +185,11 @@ public final class ClientListener extends Thread implements ClientInfo {
       // receive {USER}0{DIGEST-HASH}0
       final String name = in.readString(), hash = in.readString();
       final User user = context.users.get(name);
-      auth = user != null &&
+      ok = user != null && user.enabled() &&
           Strings.md5(user.code(Algorithm.DIGEST, Code.HASH) + nonce).equals(hash);
 
       // write log information
-      if(auth) {
+      if(ok) {
         context.user(user);
         // send {OK}
         send(true);
@@ -204,16 +202,16 @@ public final class ClientListener extends Thread implements ClientInfo {
         send(false);
       }
     } catch(final IOException ex) {
-      if(auth) {
+      if(ok) {
         Util.stack(ex);
         log(LogType.ERROR, Util.message(ex));
-        auth = false;
+        ok = false;
       }
     }
 
     server.remove(this);
-    authenticated = auth;
-    return auth;
+    authenticated = ok;
+    return ok;
   }
 
   /**
@@ -318,19 +316,19 @@ public final class ClientListener extends Thread implements ClientInfo {
   }
 
   /**
-   * Replace a document in a database.
+   * Puts (adds or replaces) a document in the opened database.
    * @throws IOException I/O exception
    */
-  private void replace() throws IOException {
-    execute(new Replace(in.readString()));
+  private void put() throws IOException {
+    execute(new Put(in.readString()));
   }
 
   /**
-   * Stores raw data in a database.
+   * Puts (adds or replaces) a binary resource in the opened database.
    * @throws IOException I/O exception
    */
-  private void store() throws IOException {
-    execute(new Store(in.readString()));
+  private void putBinary() throws IOException {
+    execute(new BinaryPut(in.readString()));
   }
 
   /**
@@ -367,7 +365,6 @@ public final class ClientListener extends Thread implements ClientInfo {
       if(sc == ServerCmd.QUERY) {
         final String query = arg;
         qp = new ServerQuery(query, context);
-        qp.jc().tracer = PASS;
         arg = Integer.toString(id++);
         queries.put(arg, qp);
         // send {ID}0

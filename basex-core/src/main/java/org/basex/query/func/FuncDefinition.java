@@ -3,9 +3,9 @@ package org.basex.query.func;
 import static org.basex.query.QueryText.*;
 
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 
-import org.basex.query.*;
+import org.basex.core.users.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
@@ -14,22 +14,27 @@ import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
- * Definition of built-in function.
+ * Definition of a built-in function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FuncDefinition {
+  /** Result type. */
+  public final SeqType seqType;
+
   /** Function constructor. */
   final Supplier<? extends StandardFunc> supplier;
   /** Minimum and maximum number of arguments. */
   final int[] minMax;
   /** Parameter types. */
-  final SeqType[] params;
-  /** Sequence type. */
-  public final SeqType seqType;
+  final SeqType[] types;
+  /** Parameter names. */
+  final QNm[] names;
   /** URI. */
   final byte[] uri;
+  /** Minimum permission. */
+  final Perm perm;
 
   /** Description. */
   private final String desc;
@@ -43,42 +48,73 @@ public final class FuncDefinition {
    *             arguments in parentheses. Optional arguments are represented in nested
    *             square brackets; three dots indicate that the number of arguments of a
    *             function is not limited
-   * @param params parameter types
+   * @param types parameter types
    * @param seqType return type
    * @param flags static function properties
    * @param uri uri
+   * @param perm minimum permission
    */
   FuncDefinition(final Supplier<? extends StandardFunc> supplier, final String desc,
-      final SeqType[] params, final SeqType seqType, final EnumSet<Flag> flags, final byte[] uri) {
+      final SeqType[] types, final SeqType seqType, final EnumSet<Flag> flags, final byte[] uri,
+      final Perm perm) {
 
     this.supplier = supplier;
     this.desc = desc;
     this.seqType = seqType;
-    this.params = params;
+    this.types = types;
     this.flags = flags;
     this.uri = uri;
-    minMax = minMax(desc, params);
+    this.perm = perm;
+    minMax = minMax(desc);
 
-    // treat updating expressions as non-deterministic
+    // extract parameter names from function descriptions
+    final int p = desc.indexOf('(');
+    final String[] tmp = Strings.split(desc.substring(p + 1).replaceAll("[\\.\\[\\])]", ""), ',');
+    final int tl = tmp.length == 1 && tmp[0].isEmpty() ? 0 : tmp.length;
+    names = new QNm[tl];
+    for(int n = 0; n < tl; n++) names[n] = new QNm(tmp[n]);
+
+    // treat updating expressions as nondeterministic
     if(flags.contains(Flag.UPD)) flags.add(Flag.NDT);
   }
 
   /**
-   * Computes the minimum and maximum number of arguments by analyzing the description string.
+   * Computes the minimum and maximum number of parameters by analyzing the description string.
    * @param desc description
-   * @param args arguments
    * @return min/max values
    */
-  public static int[] minMax(final String desc, final SeqType[] args) {
-    // count number of minimum and maximum arguments by analyzing the description
-    final int b = desc.indexOf('['), al = args.length;
-    if(b == -1) return new int[] { al, al };
-
-    int c = b + 1 < desc.length() && desc.charAt(b + 1) == ',' ? 1 : 0;
-    for(int i = 0; i < b; i++) {
-      if(desc.charAt(i) == ',') c++;
+  public static int[] minMax(final String desc) {
+    boolean optional = false;
+    int min = 0, max = -1;
+    for(int d = desc.indexOf('(') + 1;; d++) {
+      if(d == desc.length()) {
+        throw Util.notExpected(desc);
+      }
+      final char ch = desc.charAt(d);
+      if(ch == ',') {
+        if(optional) {
+          max++;
+        } else {
+          min++;
+        }
+        d++;
+      } else if(ch == '[') {
+        optional = true;
+        max = min;
+      } else if(ch == '.') {
+        if(!optional) min -= 1;
+        max = Integer.MAX_VALUE;
+        break;
+      } else if(ch == ')') {
+        break;
+      } else if(optional) {
+        if(max == min) max++;
+      } else if(min == 0) {
+        min = 1;
+      }
     }
-    return new int[] { c, desc.contains(DOTS) ? Integer.MAX_VALUE : al };
+    if(max == -1) max = min;
+    return new int[] { min, max };
   }
 
   /**
@@ -107,43 +143,36 @@ public final class FuncDefinition {
    */
   FuncType type(final int arity, final AnnList anns) {
     final SeqType[] st = new SeqType[arity];
-    if(arity != 0 && minMax[1] == Integer.MAX_VALUE) {
-      final int pl = params.length;
-      Array.copy(params, pl, st);
-      final SeqType var = params[pl - 1];
-      for(int p = pl; p < arity; p++) st[p] = var;
+    if(arity != 0 && variadic()) {
+      final int tl = types.length;
+      Array.copy(types, tl, st);
+      final SeqType var = types[tl - 1];
+      for(int t = tl; t < arity; t++) st[t] = var;
     } else {
-      Array.copy(params, arity, st);
+      Array.copy(types, arity, st);
     }
     return FuncType.get(anns, seqType, st);
   }
 
   /**
-   * Returns the names of the function parameters.
-   * @return names of function parameters
-   */
-  String[] names() {
-    final String names = desc.replaceFirst(".*?\\(", "").replace(",...", "").
-        replaceAll("[\\[\\])\\s]", "");
-    return names.isEmpty() ? new String[0] : Strings.split(names, ',');
-  }
-
-  /**
-   * Returns the the parameter names for an instance of this function with the given arity.
+   * Returns the parameter names for an instance of this function with the given arity.
    * @param arity number of arguments
    * @return names of parameters
    */
   QNm[] paramNames(final int arity) {
-    final String[] strings = names();
-    final QNm[] names = new QNm[arity];
-    final int nl = strings.length;
-    for(int n = Math.min(arity, nl); --n >= 0;) names[n] = new QNm(strings[n]);
-    if(arity > nl) {
-      final String[] parts = strings[nl - 1].split("(?=\\d+$)", 2);
-      final int start = Integer.parseInt(parts[1]);
-      for(int n = nl; n < arity; n++) names[n] = new QNm(parts[0] + (start + n - nl + 1), "");
+    final QNm[] qnames = new QNm[arity];
+    final int params = names.length;
+    for(int n = Math.min(arity, params); --n >= 0;) {
+      qnames[n] = names[n];
     }
-    return names;
+    if(arity > params) {
+      final String name = Token.string(names[params - 1].local());
+      final int start = 1;
+      for(int n = params; n < arity; n++) {
+        qnames[n] = new QNm(name + (start + n - params), "");
+      }
+    }
+    return qnames;
   }
 
   /**
@@ -165,6 +194,14 @@ public final class FuncDefinition {
   }
 
   /**
+   * Indicates if this is a variadic function.
+   * @return result of check
+   */
+  public boolean variadic() {
+    return minMax[1] == Integer.MAX_VALUE;
+  }
+
+  /**
    * Returns a string representation of the function with the specified
    * arguments. All objects are wrapped with quotes, except for the following ones:
    * <ul>
@@ -179,11 +216,7 @@ public final class FuncDefinition {
     final TokenBuilder tb = new TokenBuilder();
     for(final Object arg : args) {
       if(!tb.isEmpty()) tb.add(", ");
-      if(arg == null) {
-        tb.add("()");
-      } else if(arg instanceof Expr) {
-        tb.add(arg);
-      } else if(arg instanceof Number) {
+      if(arg instanceof Expr || arg instanceof Number) {
         tb.add(arg);
       } else if(arg instanceof Boolean) {
         tb.add(arg + "()");
@@ -192,7 +225,7 @@ public final class FuncDefinition {
         if(Strings.startsWith(str, ' ')) {
           tb.add(str.substring(1));
         } else {
-          tb.add('"' + str.replaceAll("\"", "\"\"") + '"');
+          tb.add('"' + str.replace("\"", "\"\"") + '"');
         }
       }
     }
@@ -201,14 +234,13 @@ public final class FuncDefinition {
 
   /**
    * Creates a new function instance.
-   * @param sc static context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param args function arguments
    * @return function
    */
-  public StandardFunc get(final StaticContext sc, final InputInfo ii, final Expr... args) {
+  public StandardFunc get(final InputInfo info, final Expr... args) {
     final StandardFunc sf = supplier.get();
-    sf.init(sc, ii, this, args);
+    sf.init(info, this, args);
     return sf;
   }
 

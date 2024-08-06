@@ -3,10 +3,10 @@ package org.basex.core.locks;
 /**
  * Lock queue.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public abstract class LockQueue {
+abstract class LockQueue {
   /** Maximum number of parallel jobs. */
   protected final int parallel;
   /** Number of currently running jobs. */
@@ -27,12 +27,12 @@ public abstract class LockQueue {
    * @param write write flag
    * @throws InterruptedException interrupted exception
    */
-  public abstract void acquire(Long id, boolean read, boolean write) throws InterruptedException;
+  abstract void acquire(Long id, boolean read, boolean write) throws InterruptedException;
 
   /**
    * Notifies other jobs that a job has been completed.
    */
-  public synchronized void release() {
+  synchronized void release() {
     notifyAll();
     jobs--;
   }

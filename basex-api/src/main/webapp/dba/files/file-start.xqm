@@ -1,7 +1,7 @@
 (:~
  : Start job.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/files';
 
@@ -23,13 +23,15 @@ function dba:file-start(
   $file  as xs:string
 ) as element(rest:response) {
   let $id := replace($file, '\.\.+|/|\\', '')
+  let $uri := xs:anyURI(config:files-dir() || $id)
   let $params := try {
     (: stop running job before starting new job :)
-    jobs:stop($id),
-    prof:void(jobs:invoke(config:directory() || $id, (), map { 'cache': 'true', 'id': $file })),
-    map { 'info': 'Job was started.', 'job': $id }
+    job:remove($id),
+    job:wait($id),
+    void(job:eval($uri, (), { 'cache': 'true', 'id': $id, 'log': 'DBA job' })),
+    { 'info': 'Job was started.', 'job': $id }
   } catch * {
-    map { 'error': $err:description }
+    { 'error': $err:description }
   }
   return web:redirect($dba:CAT, $params)
 };

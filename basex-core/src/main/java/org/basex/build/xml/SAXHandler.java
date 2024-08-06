@@ -15,7 +15,7 @@ import org.xml.sax.helpers.*;
 /**
  * SAX Parser wrapper.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class SAXHandler extends DefaultHandler implements LexicalHandler {
@@ -24,6 +24,10 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
 
   /** Strip namespaces. */
   private final boolean stripNS;
+  /** Strip whitespace. */
+  private final boolean stripWS;
+  /** Whitespace handling. */
+  private final BoolList strips = new BoolList();
   /** Temporary attribute array. */
   private final Atts atts = new Atts();
   /** Temporary string builder for high surrogates. */
@@ -32,10 +36,6 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
   private final Atts nsp = new Atts();
   /** DTD flag. */
   private boolean dtd;
-  /** Whitespace handling. */
-  private final BoolList chops = new BoolList();
-  /** Whitespace chopping. */
-  private final boolean chop;
   /** Element counter. */
   int nodes;
 
@@ -49,14 +49,22 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
   /**
    * Constructor.
    * @param builder builder reference
-   * @param chop chopping flag
+   */
+  public SAXHandler(final Builder builder) {
+    this(builder, false, false);
+  }
+
+  /**
+   * Constructor.
+   * @param builder builder reference
+   * @param stripWS strip whitespace
    * @param stripNS strip namespaces
    */
-  public SAXHandler(final Builder builder, final boolean chop, final boolean stripNS) {
+  public SAXHandler(final Builder builder, final boolean stripWS, final boolean stripNS) {
     this.builder = builder;
     this.stripNS = stripNS;
-    this.chop = chop;
-    chops.push(chop);
+    this.stripWS = stripWS;
+    strips.push(stripWS);
   }
 
   @Override
@@ -66,31 +74,29 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
     try {
       finishText();
 
-      final int as = attr.getLength();
-      for(int a = 0; a < as; ++a) {
-        final byte[] an = token(attr.getQName(a));
-        final byte[] av = token(attr.getValue(a));
-        atts.add(stripNS ? local(an) : an, av);
+      final int al = attr.getLength();
+      for(int a = 0; a < al; a++) {
+        atts.add(token(attr.getQName(a)), token(attr.getValue(a)), stripNS);
       }
       final byte[] en = token(name);
       builder.openElem(stripNS ? local(en) : en, atts, nsp);
 
-      boolean c = chops.peek();
-      if(chop) {
+      boolean strip = strips.peek();
+      if(stripWS) {
         final int a = atts.get(DataText.XML_SPACE);
         if(a != -1) {
           final byte[] s = atts.value(a);
-          if(eq(s, DataText.DEFAULT)) c = true;
-          else if(eq(s, DataText.PRESERVE)) c = false;
+          if(eq(s, DataText.DEFAULT)) strip = true;
+          else if(eq(s, DataText.PRESERVE)) strip = false;
         }
       }
-      chops.push(c);
+      strips.push(strip);
 
       atts.reset();
       nsp.reset();
       ++nodes;
     } catch(final IOException ex) {
-      error(ex);
+      throw error(ex);
     }
   }
 
@@ -100,9 +106,9 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
     try {
       finishText();
       builder.closeElem();
-      chops.pop();
+      strips.pop();
     } catch(final IOException ex) {
-      error(ex);
+      throw error(ex);
     }
   }
 
@@ -118,7 +124,7 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
       finishText();
       builder.pi(token(name + ' ' + content));
     } catch(final IOException ex) {
-      error(ex);
+      throw error(ex);
     }
   }
 
@@ -129,7 +135,7 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
       finishText();
       builder.comment(token(new String(chars, start, length)));
     } catch(final IOException ex) {
-      error(ex);
+      throw error(ex);
     }
   }
 
@@ -140,7 +146,7 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
   private void finishText() throws IOException {
     if(sb.length() != 0) {
       final String s = sb.toString();
-      builder.text(token(chops.peek() ? s.trim() : s));
+      builder.text(token(strips.peek() ? s.trim() : s));
       sb.setLength(0);
     }
   }
@@ -148,12 +154,12 @@ public class SAXHandler extends DefaultHandler implements LexicalHandler {
   /**
    * Creates and throws a SAX exception for the specified exception.
    * @param ex exception
-   * @throws SAXException SAX exception
+   * @return SAX exception
    */
-  protected static void error(final IOException ex) throws SAXException {
+  protected static SAXException error(final IOException ex) {
     final SAXException ioe = new SAXException(Util.message(ex));
     ioe.setStackTrace(ex.getStackTrace());
-    throw ioe;
+    return ioe;
   }
 
   // EntityResolver

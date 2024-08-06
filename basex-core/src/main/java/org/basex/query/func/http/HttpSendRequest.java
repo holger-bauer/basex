@@ -11,26 +11,22 @@ import org.basex.util.http.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public final class HttpSendRequest extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
-
     // get request node
-    final ANode request = toNodeOrNull(exprs[0], qc);
+    final ANode request = toNodeOrNull(arg(0), qc);
 
     // get HTTP URI
-    final byte[] href = exprs.length >= 2 ? toZeroToken(exprs[1], qc) : null;
+    final byte[] href = toZeroToken(arg(1), qc);
     // get payload
     final ValueBuilder vb = new ValueBuilder(qc);
-    if(exprs.length == 3) {
-      final Iter iter = exprs[2].iter(qc);
-      for(Item item; (item = qc.next(iter)) != null;) vb.add(item);
-    }
+    final Iter iter = arg(2).iter(qc);
+    for(Item item; (item = qc.next(iter)) != null;) vb.add(item);
     // send HTTP request
-    return new HttpClient(info, qc.context.options).sendRequest(href, request, vb.value());
+    return new Client(info, qc.context.options).sendRequest(href, request, vb.value());
   }
 }

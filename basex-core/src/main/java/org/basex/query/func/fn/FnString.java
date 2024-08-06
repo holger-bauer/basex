@@ -6,54 +6,54 @@ import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnString extends ContextFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item item = ctxArg(0, qc).item(qc, info);
-    if(item == Empty.VALUE) return Str.EMPTY;
-    if(item.type == AtomType.STRING) return item;
+    final Item value = context(qc).item(qc, info);
 
-    if(item instanceof FItem) throw FISTRING_X.get(info, item.type);
-    return Str.get(item.string(info));
+    if(value.isEmpty()) return Str.EMPTY;
+    if(value.type == AtomType.STRING) return value;
+    if(!(value instanceof FItem) || value instanceof XQJava) return Str.get(value.string(info));
+
+    throw FISTRING_X.get(info, value);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
     // string(data(E))  ->  string(E)
-    simplifyAll(Simplify.STRING, cc);
+    exprs = simplifyAll(Simplify.STRING, cc);
 
     final boolean context = contextAccess();
-    final Expr expr = context ? cc.qc.focus.value : exprs[0];
-    if(expr != null && expr.seqType().eq(SeqType.STRING_O)) {
+    final Expr item = context ? cc.qc.focus.value : arg(0);
+    if(item != null && item.seqType().eq(SeqType.STRING_O)) {
       // string('x')  ->  'x'
       // $string[string() = 'a']  ->  $string[. = 'a']
-      return context && cc.nestedFocus() ? new ContextValue(info).optimize(cc) : expr;
+      return context && cc.nestedFocus() ? ContextValue.get(cc, info) : item;
     }
     return this;
   }
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    Expr expr = null;
-    final Expr expr1 = contextAccess() ? new ContextValue(info).optimize(cc) : exprs[0];
-    final SeqType st1 = expr1.seqType();
-    if(mode == Simplify.STRING && st1.type.isStringOrUntyped() && st1.one()) {
+    Expr expr = this;
+    final Expr item = contextAccess() ? ContextValue.get(cc, info) : arg(0);
+    final SeqType st = item.seqType();
+    if(mode == Simplify.STRING && st.type.isStringOrUntyped() && st.one()) {
       // $node[string() = 'x']  ->  $node[. = 'x']
-      expr = expr1;
-    } else if(mode == Simplify.EBV || mode == Simplify.PREDICATE) {
+      expr = item;
+    } else if(mode.oneOf(Simplify.EBV, Simplify.PREDICATE)) {
       // boolean(string($node))  ->  boolean($node/descendant::text())
-      expr = simplifyEbv(expr1, cc);
+      expr = simplifyEbv(item, cc, null);
     }
-    return expr != null ? cc.simplify(this, expr) : super.simplifyFor(mode, cc);
+    return cc.simplify(this, expr, mode);
   }
 }

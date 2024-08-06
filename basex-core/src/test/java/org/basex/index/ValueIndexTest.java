@@ -14,13 +14,13 @@ import org.basex.index.query.*;
 import org.basex.index.value.*;
 import org.basex.util.hash.*;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.*;
+import org.junit.jupiter.params.provider.*;
 
 /**
  * Tests for the value index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class ValueIndexTest extends SandboxTest {
@@ -128,6 +128,7 @@ public final class ValueIndexTest extends SandboxTest {
     Integer> tokens, final Collection<Set> options) {
     // set up environment
     for(final Set option : options) execute(option);
+    set(MainOptions.STRIPWS, true);
     execute(new CreateDB(NAME, FILE));
 
     // fetch index reference to be tested

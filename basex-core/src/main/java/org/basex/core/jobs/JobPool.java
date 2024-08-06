@@ -1,20 +1,28 @@
 package org.basex.core.jobs;
 
+import static org.basex.util.Token.*;
+
 import java.util.*;
 import java.util.concurrent.*;
 
 import org.basex.core.*;
-import org.basex.util.Performance;
+import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * Job pool.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JobPool {
-  /** Number of queries to be queued. */
-  public static final int MAXQUERIES = 1000;
+  /** Maximum number of jobs running in parallel. */
+  static final int MAX_RUNNING = 1 << 10;
+  /** Maximum number of cached jobs. */
+  static final int MAX_CACHED = 1 << 10;
+  /** Maximum number of registered jobs. */
+  static final int MAX_REGISTERED = 1 << 20;
+
   /** Queued or running jobs. */
   public final Map<String, Job> active = new ConcurrentHashMap<>();
   /** Cached results. */
@@ -40,7 +48,7 @@ public final class JobPool {
    * @param job job
    */
   public void register(final Job job) {
-    while(active.size() >= MAXQUERIES) Performance.sleep(1);
+    while(active.size() >= MAX_RUNNING) Performance.sleep(10);
     active.put(job.jc().id(), job);
   }
 
@@ -59,7 +67,7 @@ public final class JobPool {
     // stop running tasks and queries
     timer.cancel();
     for(final Job job : active.values()) job.stop();
-    while(!active.isEmpty()) Performance.sleep(1);
+    while(!active.isEmpty()) Performance.sleep(10);
   }
 
   /**
@@ -73,5 +81,41 @@ public final class JobPool {
         results.remove(job.jc().id());
       }
     }, timeout);
+  }
+
+  /**
+   * Returns all registered IDs.
+   * @return sorted id list
+   */
+  public TokenList ids() {
+    final Set<String> set = new HashSet<>(results.keySet());
+    set.addAll(active.keySet());
+    set.addAll(tasks.keySet());
+    final TokenList ids = new TokenList(set.size());
+    for(final String id : set) ids.add(id);
+
+    // compare default job counter, or compare custom ids as strings
+    final byte[] prefix = token(JobContext.PREFIX);
+    final int pl = prefix.length;
+    return ids.sort((id1, id2) -> startsWith(id1, prefix) && startsWith(id2, prefix) ?
+        toInt(substring(id1, pl)) - toInt(substring(id2, pl)) : compare(id1, id2), true);
+  }
+
+  /**
+   * Removes a job.
+   * @param id id
+   * @return return success flag
+   */
+  public boolean remove(final String id) {
+    // stop scheduled task
+    final TimerTask task = tasks.remove(id);
+    if(task != null) task.cancel();
+    // send stop signal to job
+    final Job job = active.get(id);
+    if(job != null) job.stop();
+    // remove potentially cached result
+    results.remove(id);
+
+    return job != null || task != null;
   }
 }

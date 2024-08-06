@@ -14,30 +14,27 @@ import org.basex.util.*;
 import org.basex.util.hash.*;
 
 /**
- * Text fragment.
+ * Text constructor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CTxt extends CNode {
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
-   * @param computed computed constructor
-   * @param text text
+   * @param info input info (can be {@code null})
+   * @param value value
    */
-  public CTxt(final StaticContext sc, final InputInfo info, final boolean computed,
-      final Expr text) {
-    super(sc, info, SeqType.TEXT_ZO, computed, text);
+  public CTxt(final InputInfo info, final Expr value) {
+    super(info, SeqType.TEXT_ZO, true, value);
   }
 
   @Override
   public Expr optimize(final CompileContext cc) throws QueryException {
-    simplifyAll(Simplify.STRING, cc);
+    exprs = simplifyAll(Simplify.STRING, cc);
 
     if(allAreValues(true) && !(exprs[0] instanceof Str)) {
-      final byte[] value = atomValue(cc.qc);
+      final byte[] value = atomValue(cc.qc, false);
       exprs[0] = value != null ? Str.get(value) : Empty.VALUE;
     }
 
@@ -52,13 +49,13 @@ public final class CTxt extends CNode {
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] value = atomValue(qc);
-    return value != null ? new FTxt(value) : Empty.VALUE;
+    final byte[] value = atomValue(qc, false);
+    return value != null ? new FTxt(qc.shared.token(value)) : Empty.VALUE;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new CTxt(sc, info, computed, exprs[0].copy(cc, vm)));
+    return copyType(new CTxt(info, exprs[0].copy(cc, vm)));
   }
 
   @Override
@@ -67,7 +64,7 @@ public final class CTxt extends CNode {
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    plan(qs, TEXT);
+  public void toString(final QueryString qs) {
+    toString(qs, TEXT);
   }
 }

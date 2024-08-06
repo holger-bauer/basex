@@ -19,12 +19,12 @@ import org.basex.util.*;
 /**
  * This superclass in inherited by all dialog windows.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class BaseXDialog extends JDialog implements BaseXWindow {
   /** Reference to the main window. */
-  public GUI gui;
+  protected final GUI gui;
   /** Used mnemonics. */
   final StringBuilder mnem = new StringBuilder();
 
@@ -130,11 +130,7 @@ public abstract class BaseXDialog extends JDialog implements BaseXWindow {
 
   @Override
   public void dispose() {
-    // modal dialog: save options, remove GUI reference
-    if(gui != null && modal()) {
-      gui.saveOptions();
-      gui = null;
-    }
+    gui.saveOptions();
     super.dispose();
   }
 
@@ -155,7 +151,7 @@ public abstract class BaseXDialog extends JDialog implements BaseXWindow {
   }
 
   /**
-   * Creates a OK and CANCEL button.
+   * Creates an OK and CANCEL button.
    * @return button list
    */
   protected final BaseXBack okCancel() {

@@ -14,12 +14,14 @@ import org.basex.util.hash.*;
 import org.basex.util.list.*;
 
 /**
- * <p>This index organizes the resources of a database (XML documents and raw files).</p>
+ * This index organizes the resources of a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Resources implements Index {
+  /** Binary resource types. */
+  public static final ResourceType[] BINARIES = { ResourceType.BINARY, ResourceType.VALUE };
   /** Document references. */
   private final Docs docs;
   /** Binary files. */
@@ -93,35 +95,36 @@ public final class Resources implements Index {
    * @return pre values (internal representation!)
    */
   public synchronized IntList docs(final String path) {
-    return docs(path, true);
+    return docs(path, false);
   }
 
   /**
    * Returns the pre values of all document nodes that start with the specified path.
    * @param path input path
-   * @param desc descendant traversal
+   * @param dir directory view
    * @return pre values (internal representation!)
    */
-  public synchronized IntList docs(final String path, final boolean desc) {
-    return docs.docs(path, desc);
+  public synchronized IntList docs(final String path, final boolean dir) {
+    return docs.docs(path, dir);
   }
 
   /**
-   * Returns the pre value of the document node that matches the specified path, or {@code -1}.
+   * Returns the pre value of the document node that matches the specified path.
    * @param path input path
-   * @return pre value, or {@code -1}
+   * @return pre value or {@code -1}
    */
   public int doc(final String path) {
     return docs.doc(path);
   }
 
   /**
-   * Returns the database paths to all binary files that start with the specified path.
+   * Returns the database paths to all file resources that start with the specified path.
+   * @param type resource type
    * @param path input path
-   * @return root nodes
+   * @return paths
    */
-  public synchronized TokenList binaries(final String path) {
-    return bins.bins(path);
+  public synchronized StringList paths(final String path, final ResourceType type) {
+    return bins.paths(path, type);
   }
 
   /**
@@ -129,21 +132,22 @@ public final class Resources implements Index {
    * @param path given path
    * @return result of check
    */
-  public synchronized boolean isDir(final byte[] path) {
-    return docs.isDir(path) || bins.isDir(Token.string(path));
+  public synchronized boolean isDir(final String path) {
+    return docs.isDir(path) || bins.isDir(path, ResourceType.BINARY) ||
+        bins.isDir(path, ResourceType.VALUE);
   }
 
   /**
    * Returns the child resources for the given path.
    * @param path path
    * @param dir returns directories
-   * @return paths; values of documents will be {@code false}
+   * @return paths with resource types
    */
-  public synchronized TokenBoolMap children(final byte[] path, final boolean dir) {
-    final TokenBoolMap tbm = new TokenBoolMap();
-    docs.children(path, dir, tbm);
-    bins.children(path, dir, tbm);
-    return tbm;
+  public synchronized TokenObjMap<ResourceType> children(final String path, final boolean dir) {
+    final TokenObjMap<ResourceType> map = new TokenObjMap<>();
+    docs.children(path, dir, map);
+    bins.children(path, dir, map);
+    return map;
   }
 
   // Inherited methods ============================================================================

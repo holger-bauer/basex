@@ -12,13 +12,13 @@ import org.basex.query.value.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class IndexElementNames extends IndexFn {
   @Override
   public final Iter iter(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
+    final Data data = toData(qc);
     final IndexType type = type();
     return entries(type == IndexType.ELEMNAME ? data.elemNames : data.attrNames,
       new IndexEntries(EMPTY, type));

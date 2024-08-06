@@ -18,14 +18,14 @@ import org.basex.util.list.*;
 /**
  * This class contains functions for generating a plain XQuery documentation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class PlainDoc extends Inspect {
   /**
    * Constructor.
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   PlainDoc(final QueryContext qc, final InputInfo info) {
     super(qc, info);
@@ -36,47 +36,48 @@ final class PlainDoc extends Inspect {
    * @return inspection element
    * @throws QueryException query exception
    */
-  FElem context() throws QueryException {
-    final FElem root = elem("context", null);
-    for(final StaticVar sv : qc.vars) variable(sv, root);
-    for(final StaticFunc sf : qc.funcs.funcs()) function(sf.name, sf, sf.funcType(), sf.anns, root);
-    return root;
+  FNode context() throws QueryException {
+    final FBuilder root = element("context");
+    for(final StaticVar sv : qc.vars) root.add(variable(sv));
+    for(final StaticFunc sf : qc.functions.funcs()) {
+      root.add(function(sf.name, sf, sf.funcType(), sf.anns));
+    }
+    return root.finish();
   }
 
   @Override
-  public FElem parse(final IO io) throws QueryException {
-    parseQuery(io);
-    final FElem root = elem("module", null);
+  public FNode parse(final IOContent content) throws QueryException {
+    final AModule module = parseModule(content);
+    final FBuilder root = element("module");
     if(module instanceof LibraryModule) {
       final QNm name = module.sc.module;
-      root.add("prefix", name.string());
-      root.add("uri", name.uri());
+      root.add(Q_PREFIX, name.string()).add(Q_URI, name.uri());
     }
 
     final TokenObjMap<TokenList> doc = module.doc();
     if(doc != null) comment(doc, root);
-    for(final StaticVar sv : module.vars().values()) variable(sv, root);
-    for(final StaticFunc sf : module.funcs().values())
-      function(sf.name, sf, sf.funcType(), sf.anns, root);
-    return root;
+    for(final StaticVar sv : module.vars) root.add(variable(sv));
+    for(final StaticFunc sf : module.funcs) root.add(function(sf.name, sf, sf.funcType(), sf.anns));
+    return root.finish();
   }
 
   /**
    * Creates a description for the specified variable.
    * @param sv static variable
-   * @param parent node
    * @return resulting value
    * @throws QueryException query exception
    */
-  private FElem variable(final StaticVar sv, final FElem parent) throws QueryException {
-    final FElem variable = elem("variable", parent);
-    variable.add("name", sv.name.string());
-    if(sv.name.uri().length != 0) variable.add("uri", sv.name.uri());
+  private FNode variable(final StaticVar sv) throws QueryException {
+    final FBuilder variable = element("variable");
+    final byte[] name = sv.name.string(), uri = sv.name.uri();
+    variable.add(Q_NAME, name);
+    if(uri.length != 0) variable.add(Q_URI, uri);
     type(sv.seqType(), variable);
-    variable.add("external", Boolean.toString(sv.external));
+    variable.add(Q_EXTERNAL, sv.external);
+
     comment(sv, variable);
     annotation(sv.anns, variable, true);
-    return variable;
+    return variable.finish();
   }
 
   /**
@@ -85,19 +86,18 @@ final class PlainDoc extends Inspect {
    * @param sf function reference (can be {@code null})
    * @param ft function type
    * @param anns annotations
-   * @param parent node
    * @return resulting value
    * @throws QueryException query exception
    */
-  FElem function(final QNm fname, final StaticFunc sf, final FuncType ft, final AnnList anns,
-      final FElem parent) throws QueryException {
+  FNode function(final QNm fname, final StaticFunc sf, final FuncType ft, final AnnList anns)
+      throws QueryException {
 
-    final FElem function = elem("function", parent);
+    final FBuilder function = element("function");
     if(fname != null) {
-      function.add("name", fname.string());
-      if(fname.uri().length != 0) function.add("uri", fname.uri());
+      function.add(Q_NAME, fname.string());
+      if(fname.uri().length != 0) function.add(Q_URI, fname.uri());
     }
-    function.add("external", Boolean.toString(sf != null && sf.expr == null));
+    function.add(Q_EXTERNAL, sf != null && sf.expr == null);
 
     final TokenObjMap<TokenList> doc = sf != null ? sf.doc() : null;
     final int al = ft.argTypes.length;
@@ -108,15 +108,16 @@ final class PlainDoc extends Inspect {
     }
 
     for(int a = 0; a < al; a++) {
-      final FElem argument = elem("argument", function);
+      final FBuilder argument = element("argument");
       if(names != null) {
         final byte[] name = names[a].string(), uri = names[a].uri(), pdoc = doc(doc, name);
-        argument.add("name", name);
-        if(uri.length != 0) argument.add("uri", uri);
+        argument.add(Q_NAME, name);
+        if(uri.length != 0) argument.add(Q_URI, uri);
 
         if(pdoc != null) add(pdoc, argument);
       }
       type(ft.argTypes[a], argument);
+      function.add(argument);
     }
 
     annotation(anns, function, true);
@@ -125,48 +126,43 @@ final class PlainDoc extends Inspect {
       for(final byte[] key : doc) {
         if(eq(key, DOC_PARAM, DOC_RETURN)) continue;
         for(final byte[] value : doc.get(key)) {
-          final FElem elem = eq(key, DOC_TAGS) ? elem(string(key), function) :
-            elem("tag", function).add("name", key);
+          final FBuilder elem = eq(key, DOC_TAGS) ? element(string(key)) :
+            element("tag").add(Q_NAME, key);
           add(value, elem);
+          function.add(elem);
         }
       }
     }
 
-    final SeqType st = sf != null ? sf.seqType() : ft.declType;
-    final FElem rtrn = elem("return", function);
-    type(st, rtrn);
+    final FBuilder rtrn = element("return");
+    type(ft.declType, rtrn);
     final TokenList returns = doc != null ? doc.get(DOC_RETURN) : null;
-    if(returns != null) for(final byte[] val : returns) add(val, rtrn);
-    return function;
+    if(returns != null) {
+      for(final byte[] value : returns) add(value, rtrn);
+    }
+    return function.add(rtrn).finish();
   }
 
-  /**
-   * Creates an element.
-   * @param name name of element
-   * @param parent parent node
-   * @return element node
-   */
   @Override
-  protected FElem elem(final String name, final FElem parent) {
-    final FElem elem = new FElem(name);
-    if(parent != null) parent.add(elem);
-    return elem;
+  protected FBuilder element(final String name) {
+    return FElem.build(new QNm(name));
   }
 
   /**
    * Creates a comment element.
    * @param scope scope
    * @param parent parent element
+   * @throws QueryException query exception
    */
-  private void comment(final StaticScope scope, final FElem parent) {
+  private void comment(final StaticScope scope, final FBuilder parent) throws QueryException {
     final TokenObjMap<TokenList> tags = scope.doc();
     if(tags != null) comment(tags, parent);
   }
 
   @Override
-  protected FElem elem(final byte[] tag, final FElem parent) {
+  protected FBuilder element(final byte[] tag) {
     final String string = string(tag);
-    return elem(eq(tag, DOC_TAGS) ? string : string + "_tag", parent);
+    return element(eq(tag, DOC_TAGS) ? string : string + "_tag");
   }
 
   /**
@@ -174,11 +170,11 @@ final class PlainDoc extends Inspect {
    * @param st sequence type
    * @param elem element
    */
-  private static void type(final SeqType st, final FElem elem) {
+  private static void type(final SeqType st, final FBuilder elem) {
     if(st != null) {
-      elem.add("type", st.typeString());
+      elem.add(Q_TYPE, st.typeString());
       final String occ = st.occ.toString();
-      if(!occ.isEmpty()) elem.add("occurrence", occ);
+      if(!occ.isEmpty()) elem.add(Q_OCCURRENCE, occ);
     }
   }
 }

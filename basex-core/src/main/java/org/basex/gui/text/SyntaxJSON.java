@@ -1,23 +1,25 @@
 package org.basex.gui.text;
 
 import static org.basex.gui.GUIConstants.*;
+import static org.basex.util.Token.*;
 
 import java.awt.*;
-import java.util.*;
+
+import org.basex.util.hash.*;
 
 /**
  * This class defines syntax highlighting for JSON files.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class SyntaxJSON extends Syntax {
   /** Keywords. */
-  private static final HashSet<String> KEYWORDS = new HashSet<>();
+  private static final TokenSet KEYWORDS;
 
   // initialize keywords
   static {
-    Collections.addAll(KEYWORDS, "false", "true", "null");
+    KEYWORDS = new TokenSet("false", "true", "null");
   }
 
   /** Quoted flag. */
@@ -40,12 +42,13 @@ final class SyntaxJSON extends Syntax {
     if(quoted) {
       back = !back && ch == '\\';
     } else {
-      if("-+0123456789".indexOf(ch) != -1) return DIGIT;
-      if("{}[]:,".indexOf(ch) != -1) return COMMENT;
-      if(KEYWORDS.contains(iter.currString())) return KEYWORD;
+      if("{}[]:,".indexOf(ch) != -1) return GRAY;
+      final byte[] token = token(iter.currString());
+      if(KEYWORDS.contains(token)) return BLUE;
+      if(digit(ch) && !Double.isNaN(toDouble(token))) return PURPLE;
     }
 
     if(quote) quoted ^= true;
-    return quote || quoted ? VALUE : RED;
+    return quote || quoted ? DGRAY : RED;
   }
 }

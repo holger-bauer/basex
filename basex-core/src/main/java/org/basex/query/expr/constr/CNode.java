@@ -3,6 +3,7 @@ package org.basex.query.expr.constr;
 import static org.basex.query.QueryText.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
@@ -13,27 +14,23 @@ import org.basex.util.*;
 /**
  * Node constructor.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class CNode extends Arr {
-  /** Static context. */
-  final StaticContext sc;
   /** Computed constructor. */
   final boolean computed;
 
   /**
    * Constructor.
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param computed computed constructor
    * @param seqType sequence type
    * @param exprs expressions
    */
-  CNode(final StaticContext sc, final InputInfo info, final SeqType seqType, final boolean computed,
+  CNode(final InputInfo info, final SeqType seqType, final boolean computed,
       final Expr... exprs) {
     super(info, seqType, exprs);
-    this.sc = sc;
     this.computed = computed;
   }
 
@@ -41,30 +38,54 @@ public abstract class CNode extends Arr {
   public abstract Item item(QueryContext qc, InputInfo ii) throws QueryException;
 
   /**
+   * Optimizes the node value.
+   * @param cc compilation context
+   * @throws QueryException query exception
+   */
+  final void optValue(final CompileContext cc) throws QueryException {
+    exprs = simplifyAll(Simplify.STRING, cc);
+    if(allAreValues(true) && (exprs.length != 1 || !(exprs[0] instanceof Str))) {
+      exprs = new Expr[] { Str.get(atomValue(cc.qc, true)) };
+    }
+  }
+
+  /**
    * Returns the atomized node value.
    * @param qc query context
    * @return resulting value or {@code null}
+   * @param empty return empty string
    * @throws QueryException query exception
    */
-  byte[] atomValue(final QueryContext qc) throws QueryException {
-    final int el = exprs.length;
-    // empty sequence: empty string
-    if(el == 0) return null;
-    // single string argument
-    if(el == 1 && exprs[0] instanceof Str) return ((Str) exprs[0]).string();
-
-    boolean more = false;
-    final TokenBuilder tb = new TokenBuilder();
+  final byte[] atomValue(final QueryContext qc, final boolean empty) throws QueryException {
+    TokenBuilder tb = null;
     for(final Expr expr : exprs) {
-      more = false;
+      boolean space = false;
       final Iter iter = expr.atomIter(qc, info);
       for(Item item; (item = qc.next(iter)) != null;) {
-        if(more) tb.add(' ');
+        if(tb == null) tb = new TokenBuilder();
+        else if(space) tb.add(' ');
         tb.add(item.string(info));
-        more = true;
+        space = true;
       }
     }
-    return more ? tb.finish() : null;
+    return tb != null ? tb.finish() : empty ? Token.EMPTY : null;
+  }
+
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    // ignore PIs and attributes as values must be normalized
+    SeqType st = null;
+    if(exprs.length == 1 && !(this instanceof CPI || this instanceof CAttr)) {
+      final SeqType st1 = exprs[0].seqType();
+      if(st1.zeroOrOne() && st1.instanceOf(SeqType.ANY_ATOMIC_TYPE_ZO) && !has(Flag.NDT)) {
+        if(mode == Simplify.STRING) {
+          st = SeqType.STRING_ZO;
+        } else if(mode.oneOf(Simplify.DATA, Simplify.NUMBER)) {
+          st = this instanceof CComm ? SeqType.STRING_ZO : SeqType.UNTYPED_ATOMIC_ZO;
+        }
+      }
+    }
+    return cc.simplify(this, st != null ? new Cast(info, exprs[0], st).optimize(cc) : this, mode);
   }
 
   @Override
@@ -84,7 +105,7 @@ public abstract class CNode extends Arr {
 
   @Override
   public final String description() {
-    return Token.string(((NodeType) seqType().type).name) + " constructor";
+    return Strings.concat(((NodeType) seqType().type).qname().local(), " constructor");
   }
 
   /**
@@ -92,7 +113,7 @@ public abstract class CNode extends Arr {
    * @param qs query string builder
    * @param kind node kind
    */
-  protected void plan(final QueryString qs, final String kind) {
+  protected void toString(final QueryString qs, final String kind) {
     if(kind != null) qs.token(kind);
     qs.token("{");
     if(exprs.length > 0) qs.tokens(exprs, SEP, false);

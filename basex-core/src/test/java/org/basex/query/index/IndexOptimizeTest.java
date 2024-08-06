@@ -2,9 +2,10 @@ package org.basex.query.index;
 
 import static org.basex.query.func.Function.*;
 
+import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.query.ast.*;
+import org.basex.index.*;
 import org.basex.query.expr.ft.*;
 import org.basex.query.expr.index.*;
 import org.basex.util.*;
@@ -14,16 +15,22 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests if queries are rewritten for index access.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class IndexOptimizeTest extends QueryPlanTest {
+public final class IndexOptimizeTest extends SandboxTest {
   /** Creates a test database. */
   @BeforeAll public static void start() {
     execute(new DropDB(NAME));
     set(MainOptions.FTINDEX, true);
     set(MainOptions.TOKENINDEX, true);
     set(MainOptions.QUERYINFO, true);
+  }
+
+  /** Resets optimizations. */
+  @AfterEach public void init() {
+    inline(false);
+    unroll(false);
   }
 
   /** Checks the open command. */
@@ -79,10 +86,10 @@ public final class IndexOptimizeTest extends QueryPlanTest {
         + "return " + func + "//*[text() = $s]", "");
   }
 
-  /** Checks the XQuery db:open() function. */
-  @Test public void dbOpenTest() {
+  /** Checks the XQuery db:get() function. */
+  @Test public void dbGetTest() {
     createColl();
-    final String func = _DB_OPEN.args(NAME);
+    final String func = _DB_GET.args(NAME);
     indexCheck(func + "//*[text() = '1']");
     indexCheck(func + "//*[text() contains text '2']");
     indexCheck(func + "//a[. = '1']");
@@ -91,10 +98,10 @@ public final class IndexOptimizeTest extends QueryPlanTest {
         + "return " + func + "//*[text() = $s]", "");
   }
 
-  /** Checks the XQuery db:open() function, using a specific path. */
-  @Test public void dbOpenExtTest() {
+  /** Checks the XQuery db:get() function, using a specific path. */
+  @Test public void dbGetExtTest() {
     createColl();
-    final String func = _DB_OPEN.args(NAME, "two");
+    final String func = _DB_GET.args(NAME, "two");
     indexCheck(func + "//*[text() = '1']", "");
     indexCheck(func + "//*[text() contains text '2']", "");
     indexCheck(func + "//a[. = '1']", "");
@@ -127,9 +134,9 @@ public final class IndexOptimizeTest extends QueryPlanTest {
     execute(new Open(NAME));
     indexCheck("data(//*[text() contains text '1'])", 1);
     indexCheck("data(//*[text() contains text '1 2' any word])", "1\n2 3");
-    indexCheck("//*[text() contains text {'2','4'} all]", "");
-    indexCheck("//*[text() contains text {'2','3'} all words]", "<a>2 3</a>");
-    indexCheck("//*[text() contains text {'2','4'} all words]", "");
+    indexCheck("//*[text() contains text { '2', '4' } all]", "");
+    indexCheck("//*[text() contains text { '2', '3' } all words]", "<a>2 3</a>");
+    indexCheck("//*[text() contains text { '2', '4' } all words]", "");
   }
 
   /** Checks if a full-text index with language option is used. */
@@ -145,6 +152,8 @@ public final class IndexOptimizeTest extends QueryPlanTest {
   /** Checks index optimizations inside functions. */
   @Test public void functionInlining() {
     createColl();
+    inline(true);
+
     // document access after inlining
     indexCheck("declare function db:a($d) { collection($d)//text()[. = '1'] }; "
         + "db:a('" + NAME + "')", 1);
@@ -152,7 +161,7 @@ public final class IndexOptimizeTest extends QueryPlanTest {
         + "db:b('" + NAME + "', '1')", 1);
 
     // text: search term must be string
-    final String db = _DB_OPEN.args(NAME);
+    final String db = _DB_GET.args(NAME);
     indexCheck("declare function db:c() {" + db + "//text()[. = '1'] }; "
         + "db:c()", 1);
     indexCheck("declare function db:d($x as xs:string) {" + db + "//text()[. = $x] }; "
@@ -168,7 +177,7 @@ public final class IndexOptimizeTest extends QueryPlanTest {
   @Test public void gh1553() {
     createColl();
 
-    indexCheck("declare function db:a() { " + _DB_OPEN.args(NAME) + "//a[text() = '1'] }; "
+    indexCheck("declare function db:a() { " + _DB_GET.args(NAME) + "//a[text() = '1'] }; "
         + "db:a()", "<a>1</a>");
     indexCheck("declare function db:b() { collection('" + NAME + "')//text()[. = '1'] }; "
         + "db:b()", 1);
@@ -198,7 +207,7 @@ public final class IndexOptimizeTest extends QueryPlanTest {
         set(MainOptions.ATTRINCLUDE, include);
         execute(new CreateDB(NAME, "<xml><a a='1'>1</a></xml>"));
 
-        final String test = exists(ValueAccess.class) + " = " + (include.equals("a") + "()");
+        final String test = exists(ValueAccess.class) + " = " + include.equals("a") + "()";
         check("data(//*[a = '1'])", 1, test);
         check("data(//*[a/text() = '1'])", 1, test);
         check("data(//a[. = '1'])", 1, test);
@@ -252,7 +261,7 @@ public final class IndexOptimizeTest extends QueryPlanTest {
   @Test public void pragma() {
     createDoc();
     final String pragma = "(# db:enforceindex #) { ";
-    final String db = _DB_OPEN.args(" <x>" + NAME + "</x>");
+    final String db = _DB_GET.args(wrap(NAME));
 
     indexCheck(pragma + db + "//a[text() = '1']/text() }", 1);
     indexCheck(pragma + db + "//a/text()[. = '1'] }", 1);
@@ -272,7 +281,8 @@ public final class IndexOptimizeTest extends QueryPlanTest {
   /** Optimizations of predicates that are changed by optimizations. */
   @Test public void gh1738() {
     execute(new CreateDB(NAME, "<x a='A'/>"));
-    check("(# db:enforceindex #) { <_>" + NAME + "</_> ! db:open(.)//*[comment() = 'A'] }", "",
+    check("(# db:enforceindex #) { "
+        + "<_>" + NAME + "</_> ! " + _DB_GET.args(" .") + "//*[comment() = 'A'] }", "",
         empty(ValueAccess.class));
   }
 
@@ -284,7 +294,34 @@ public final class IndexOptimizeTest extends QueryPlanTest {
     execute(new Add("b/doc.xml", doc));
     execute(new Optimize());
     execute(new Close());
-    indexCheck("let $db := db:open('" + NAME + "', 'a') return $db/a[@b = 'c']", doc);
+    indexCheck("let $db :=" + _DB_GET.args(NAME, "a") + " return $db/a[@b = 'c']", doc);
+  }
+
+  /** Index Rewritings: Mixture of text and attribute comparisons. */
+  @Test public void gh2211() {
+    final String first = "<a>A</a>";
+    final String second = "<b b=\"A\"/>";
+    execute(new CreateDB(NAME, "<x>" + first + second + "</x>"));
+    query("//*[text() = 'A' or @b = 'A']", first + '\n' + second);
+    query("//*[@b = 'A' or text() = 'A']", first + '\n' + second);
+  }
+
+  /** Bug on contains-token() with token index. */
+  @Test public void gh2222() {
+    final String xml = "<M v=\"a\">a</M>";
+    execute(new CreateDB(NAME, xml));
+    execute(new CreateIndex(IndexType.TOKEN));
+    query("//M/descendant-or-self::M[@v = 'a']", xml);
+    query("//M/descendant-or-self::M[text() = 'a']", xml);
+    query("//M/descendant-or-self::M[contains-token(@v, 'a')]", xml);
+
+    query("/M/descendant-or-self::M[@v = 'a']", xml);
+    query("/M/descendant-or-self::M[text() = 'a']", xml);
+    query("/M/descendant-or-self::M[contains-token(@v, 'a')]", xml);
+
+    query("M/descendant-or-self::M[@v = 'a']", xml);
+    query("M/descendant-or-self::M[text() = 'a']", xml);
+    query("M/descendant-or-self::M[contains-token(@v, 'a')]", xml);
   }
 
   /**

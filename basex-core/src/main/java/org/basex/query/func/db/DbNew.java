@@ -15,40 +15,39 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class DbNew extends DbAccess {
   /**
-   * Creates a {@link Data} instance for the specified document.
+   * Creates a container for the specified input.
    * @param input input item (node or string)
    * @param path path argument (optional, can be empty)
-   * @return database instance
+   * @return input container
    * @throws QueryException query exception
    */
-  final NewInput checkInput(final Item input, final byte[] path) throws QueryException {
+  final NewInput toNewInput(final Item input, final String path) throws QueryException {
     final NewInput ni = new NewInput();
 
     if(input instanceof ANode) {
-      if(endsWith(path, '.') || endsWith(path, '/')) throw RESINV_X.get(info, path);
+      if(Strings.endsWith(path, '/')) throw RESINV_X.get(info, path);
 
       // ensure that the final name is not empty
       final ANode node = (ANode) input;
-      byte[] name = path;
-      if(name.length == 0) {
+      String name = path;
+      if(name.isEmpty()) {
         // adopt name from document node
-        name = node.baseURI();
+        name = string(node.baseURI());
         final Data data = node.data();
         // adopt path if node is part of disk database. otherwise, only adopt file name
-        final int i = data == null || data.inMemory() ? lastIndexOf(name, '/') : indexOf(name, '/');
-        if(i != -1) name = substring(name, i + 1);
-        if(name.length == 0) throw RESINV_X.get(info, name);
+        final int i = data == null || data.inMemory() ? name.lastIndexOf('/') : name.indexOf('/');
+        if(i != -1) name = name.substring(i + 1);
+        if(name.isEmpty()) throw RESINV_X.get(info, name);
       }
 
-      // adding a document node
       if(node.type == NodeType.ATTRIBUTE) throw UPDOCTYPE_X.get(info, node);
       ni.node = node;
-      ni.path = string(name);
+      ni.path = name;
       return ni;
     }
 
@@ -59,8 +58,7 @@ abstract class DbNew extends DbAccess {
     if(!io.exists()) throw WHICHRES_X.get(info, string);
 
     // add slash to the target if the addressed file is an archive or directory
-    String name = string(path);
-    if(Strings.endsWith(name, '.')) throw RESINV_X.get(info, path);
+    String name = path;
     if(!Strings.endsWith(name, '/') && (io.isDir() || io.isArchive())) name += "/";
     String target = "";
     final int s = name.lastIndexOf('/');

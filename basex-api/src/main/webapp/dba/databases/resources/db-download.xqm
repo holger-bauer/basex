@@ -1,7 +1,7 @@
 (:~
  : Download resources.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/databases';
 
@@ -13,6 +13,7 @@ module namespace dba = 'dba/databases';
  : @return rest response and file content
  :)
 declare
+  %rest:POST
   %rest:path('/dba/db-download')
   %rest:query-param('name',     '{$name}')
   %rest:query-param('resource', '{$resource}')
@@ -22,13 +23,16 @@ function dba:db-download(
 ) as item()+ {
   try {
     web:response-header(
-      map { 'media-type': db:content-type($name, $resource) },
-      map { 'Content-Disposition': 'attachment; filename=' || $resource }
+      { 'media-type': db:content-type($name, $resource) },
+      { 'Content-Disposition': 'attachment; filename=' || $resource }
     ),
-    if(db:is-raw($name, $resource)) then (
-      db:retrieve($name, $resource)
+    let $type := db:type($name, $resource)
+    return if($type = 'xml') then (
+      db:get($name, $resource)
+    ) else if($type = 'binary') then (
+      db:get-binary($name, $resource)
     ) else (
-      db:open($name, $resource)
+      db:get-value($name, $resource)
     )
   } catch * {
     <rest:response>

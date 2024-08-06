@@ -15,7 +15,7 @@ import org.basex.util.hash.*;
 /**
  * Instance test.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Instance extends Single {
@@ -26,7 +26,7 @@ public final class Instance extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param seqType sequence type to check for
    */
@@ -55,8 +55,8 @@ public final class Instance extends Single {
     }
 
     // 1: only check item type, 2: only check occurrence indicator
-    check = et.occ.instanceOf(seqType.occ) ? 1 :
-      et.type.instanceOf(seqType.type) && et.kindInstanceOf(seqType) ? 2 : 0;
+    check = et.occ.instanceOf(seqType.occ) ? 1 : et.type.instanceOf(seqType.type) &&
+      et.kindInstanceOf(seqType) ? 2 : 0;
     return this;
   }
 
@@ -64,12 +64,11 @@ public final class Instance extends Single {
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
     // check instance of value
     final Iter iter = expr.iter(qc);
-    final Value value = iter.iterValue();
-    if(value != null) return Bln.get(seqType.instance(value));
+    if(iter.valueIter()) return Bln.get(seqType.instance(iter.value(qc, expr)));
 
     // only check item type
     if(check == 1) {
-      for(Item item; (item = iter.next()) != null;) {
+      for(Item item; (item = qc.next(iter)) != null;) {
         if(!seqType.instance(item)) return Bln.FALSE;
       }
       return Bln.TRUE;
@@ -82,7 +81,7 @@ public final class Instance extends Single {
 
     // check both occurrence indicator and type
     long c = 0;
-    for(Item item; (item = iter.next()) != null;) {
+    for(Item item; (item = qc.next(iter)) != null;) {
       if(++c > max || !seqType.instance(item)) return Bln.FALSE;
     }
     return Bln.get(c != 0 || !seqType.oneOrMore());
@@ -102,12 +101,12 @@ public final class Instance extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, OF, seqType), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(expr).token(INSTANCE).token(OF).token(seqType);
   }
 }

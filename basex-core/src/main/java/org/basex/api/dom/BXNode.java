@@ -4,6 +4,7 @@ import static org.basex.util.Token.*;
 
 import org.basex.data.*;
 import org.basex.io.*;
+import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.node.*;
@@ -13,7 +14,7 @@ import org.w3c.dom.*;
 /**
  * DOM - Node implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class BXNode implements Node {
@@ -45,7 +46,7 @@ public abstract class BXNode implements Node {
    */
   public static BXNode get(final ANode node) {
     if(node == null) return null;
-    switch(node.nodeType()) {
+    switch((NodeType) node.type) {
       case DOCUMENT_NODE: return new BXDoc(node);
       case ELEMENT: return new BXElem(node);
       case TEXT: return new BXText(node);
@@ -87,12 +88,16 @@ public abstract class BXNode implements Node {
 
   @Override
   public final BXNode cloneNode(final boolean deep) {
-    return nd.toJava();
+    try {
+      return nd.toJava();
+    } catch(final QueryException ex) {
+      throw new DOMException(DOMException.NOT_SUPPORTED_ERR, ex.getLocalizedMessage());
+    }
   }
 
   @Override
   public final short compareDocumentPosition(final Node node) {
-    return (short) Integer.compare(nd.diff(((BXNode) node).nd), 0);
+    return (short) Integer.compare(nd.compare(((BXNode) node).nd), 0);
   }
 
   @Override
@@ -155,7 +160,9 @@ public abstract class BXNode implements Node {
   @Override
   public BXDoc getOwnerDocument() {
     ANode n = nd;
-    for(ANode p; (p = n.parent()) != null;) n = p;
+    for(ANode p; (p = n.parent()) != null;) {
+      n = p;
+    }
     return n.type == NodeType.DOCUMENT_NODE ? (BXDoc) get(n) : null;
   }
 
@@ -269,7 +276,9 @@ public abstract class BXNode implements Node {
     final ANodeList nb = new ANodeList();
     final byte[] nm = "*".equals(name) ? null : token(name);
     for(final ANode n : nd.descendantIter()) {
-      if(n.type == NodeType.ELEMENT && (nm == null || eq(nm, n.name()))) nb.add(n.finish());
+      if(n.type == NodeType.ELEMENT && (nm == null || eq(nm, n.name()))) {
+        nb.add(n.finish());
+      }
     }
     return new BXNList(nb);
   }

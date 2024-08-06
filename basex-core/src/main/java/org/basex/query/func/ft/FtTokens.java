@@ -15,20 +15,20 @@ import org.basex.util.ft.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FtTokens extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
-    byte[] entry = exprs.length < 2 ? Token.EMPTY : toToken(exprs[1], qc);
-    if(entry.length != 0) {
+    final Data data = toData(qc);
+    byte[] prefix = defined(1) ? toToken(arg(1), qc) : Token.EMPTY;
+    if(prefix.length != 0) {
       final FTLexer lexer = new FTLexer(new FTOpt().assign(data.meta));
-      lexer.init(entry);
-      entry = lexer.nextToken();
+      lexer.init(prefix);
+      prefix = lexer.nextToken();
     }
-    return IndexFn.entries(data, new IndexEntries(entry, IndexType.FULLTEXT), this);
+    return IndexFn.entries(data, new IndexEntries(prefix, IndexType.FULLTEXT), this);
   }
 
   @Override
@@ -38,6 +38,6 @@ public final class FtTokens extends StandardFunc {
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
-    return dataLock(visitor, 0) && super.accept(visitor);
+    return dataLock(arg(0), false, visitor) && super.accept(visitor);
   }
 }

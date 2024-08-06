@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Wrapper for representing XQuery items.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class XdmItem extends XdmValue {
@@ -32,7 +32,7 @@ public abstract class XdmItem extends XdmValue {
 
   @Override
   public final Iterator<XdmItem> iterator() {
-    return new Iterator<XdmItem>() {
+    return new Iterator<>() {
       private boolean more = true;
 
       @Override

@@ -12,13 +12,13 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ConvertBinaryToIntegers extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final byte[] bytes = toBin(exprs[0], qc).binary(info);
+    final byte[] bytes = toBin(arg(0), qc).binary(info);
     return new BasicIter<Int>(bytes.length) {
       @Override
       public Int get(final long i) {
@@ -33,7 +33,7 @@ public final class ConvertBinaryToIntegers extends StandardFunc {
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return toValue(toBin(exprs[0], qc).binary(info));
+    return toValue(toBin(arg(0), qc).binary(info));
   }
 
   /**

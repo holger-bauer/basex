@@ -10,13 +10,13 @@ import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.*;
+import org.junit.jupiter.params.provider.*;
 
 /**
  * This class tests the update features of the {@link Data} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Tim Petrowsky
  */
 //@RunWith(Parameterized.class)
@@ -63,6 +63,7 @@ public abstract class DataUpdateTest extends SandboxTest {
    */
   public final void setUp(final boolean mainmem) {
     set(MainOptions.MAINMEM, mainmem);
+    set(MainOptions.STRIPWS, true);
     execute(new CreateDB(NAME, TESTFILE));
     size = context.data().meta.size;
   }

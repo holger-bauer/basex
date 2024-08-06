@@ -22,7 +22,7 @@ import org.basex.util.list.*;
 /**
  * This index class retrieves numeric ranges from a value index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RangeAccess extends IndexAccess {
@@ -31,7 +31,7 @@ public final class RangeAccess extends IndexAccess {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param index index token
    * @param db index database
    */
@@ -47,11 +47,11 @@ public final class RangeAccess extends IndexAccess {
 
     return new DBNodeIter(data) {
       final byte kind = type == IndexType.TEXT ? Data.TEXT : Data.ATTR;
-      final IndexIterator ii = data.iter(index);
+      final IndexIterator iter = data.iter(index);
 
       @Override
       public DBNode next() {
-        return ii.more() ? new DBNode(data, ii.pre(), kind) : null;
+        return iter.more() ? new DBNode(data, iter.pre(), kind) : null;
       }
     };
   }
@@ -61,9 +61,9 @@ public final class RangeAccess extends IndexAccess {
     final IndexType it = index.type();
     final Data data = db.data(qc, it);
 
-    final IndexIterator ii = data.iter(index);
+    final IndexIterator iter = data.iter(index);
     final IntList list = new IntList();
-    while(ii.more()) list.add(ii.pre());
+    while(iter.more()) list.add(iter.pre());
     return DBNodeSeq.get(list.finish(), data, this);
   }
 
@@ -84,12 +84,12 @@ public final class RangeAccess extends IndexAccess {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, INDEX, index.type(), MIN, index.min, MAX, index.max), db);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final Function function = index.type() == IndexType.TEXT ? Function._DB_TEXT_RANGE :
       Function._DB_ATTRIBUTE_RANGE;
     qs.function(function, db, Dbl.get(index.min), Dbl.get(index.max));

@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * Document test for inverted location paths.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class InvDocTest extends Test {
@@ -43,18 +43,18 @@ final class InvDocTest extends Test {
    */
   static Test get(final Expr rt) throws QueryException {
     // root unknown: use simple test
-    if(!(rt instanceof Value)) return KindTest.DOC;
+    if(!(rt instanceof Value)) return KindTest.DOCUMENT_NODE;
     final Value root = (Value) rt;
 
     // use simple test if database contains only one document
     final Data data = root.data();
-    if(data == null || data.meta.ndocs == 1) return KindTest.DOC;
+    if(data == null || data.meta.ndocs == 1) return KindTest.DOCUMENT_NODE;
 
     // include pre values of root nodes in document test
     final IntList pres;
     if(root instanceof DBNodeSeq) {
       final DBNodeSeq seq = (DBNodeSeq) root;
-      if(seq.all()) return KindTest.DOC;
+      if(seq.all()) return KindTest.DOCUMENT_NODE;
       pres = new IntList(seq.pres());
     } else {
       // loop through all documents and add pre values of documents
@@ -92,6 +92,6 @@ final class InvDocTest extends Test {
 
   @Override
   public String toString(final boolean full) {
-    return new TokenBuilder().add(NodeType.DOCUMENT_NODE.name).add("((: ids :))").toString();
+    return NodeType.DOCUMENT_NODE.toString("(: ids :)");
   }
 }

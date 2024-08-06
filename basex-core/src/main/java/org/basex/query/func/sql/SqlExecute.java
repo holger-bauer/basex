@@ -2,7 +2,6 @@ package org.basex.query.func.sql;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
-import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.sql.*;
@@ -19,16 +18,20 @@ import org.basex.util.options.*;
 /**
  * Functions on relational databases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Rositsa Shadura
  */
 public class SqlExecute extends SqlFn {
   /** QName. */
-  private static final QNm Q_ROW = new QNm(SQL_PREFIX, "row", SQL_URI);
+  static final QNm Q_ROW = new QNm(SQL_PREFIX, "row", SQL_URI);
   /** QName. */
-  private static final QNm Q_COLUMN = new QNm(SQL_PREFIX, "column", SQL_URI);
-  /** Name. */
-  private static final String NAME = "name";
+  static final QNm Q_COLUMN = new QNm(SQL_PREFIX, "column", SQL_URI);
+  /** QName. */
+  static final QNm Q_PARAMETERS = new QNm(SQL_PREFIX, "parameters", SQL_URI);
+  /** QName. */
+  static final QNm Q_PARAMETER = new QNm(SQL_PREFIX, "parameter", SQL_URI);
+  /** QName. */
+  static final QNm Q_NAME = new QNm("name");
 
   /** Statement Options. */
   public static class StatementOptions extends Options {
@@ -38,10 +41,9 @@ public class SqlExecute extends SqlFn {
 
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    checkCreate(qc);
     final Connection conn = connection(qc);
-    final String query = string(toToken(exprs[1], qc));
-    final StatementOptions options = toOptions(2, new StatementOptions(), qc);
+    final String query = toString(arg(1), qc);
+    final StatementOptions options = toOptions(arg(2), new StatementOptions(), qc);
 
     try {
       final Statement stmt = conn.createStatement();
@@ -88,7 +90,7 @@ public class SqlExecute extends SqlFn {
               return null;
             }
 
-            final FElem row = new FElem(Q_ROW).declareNS();
+            final FBuilder row = FElem.build(Q_ROW).declareNS();
             for(int c = 1; c <= cols; c++) {
               // for each row add column values as children
               final String name = md.getColumnLabel(c);
@@ -97,29 +99,28 @@ public class SqlExecute extends SqlFn {
               if(value == null) continue;
 
               // element <sql:column name='...'>...</sql:column>
-              final FElem col = new FElem(Q_COLUMN).add(NAME, name);
-              row.add(col);
-
+              final FBuilder column = FElem.build(Q_COLUMN).add(Q_NAME, name);
               if(value instanceof SQLXML) {
                 // add XML value as child element
                 final String xml = ((SQLXML) value).getString();
                 try {
-                  col.add(new DBNode(new IOContent(xml)).childIter().next());
+                  column.add(new DBNode(new IOContent(xml)).childIter().next());
                 } catch(final IOException ex) {
                   // fallback: add string representation
                   Util.debug(ex);
-                  col.add(xml);
+                  column.add(xml);
                 }
               } else if(value instanceof Clob) {
                 // add huge string from clob
                 final Clob clob = (Clob) value;
-                col.add(clob.getSubString(1, (int) clob.length()));
+                column.add(clob.getSubString(1, (int) clob.length()));
               } else {
                 // add string representation of other values
-                col.add(value.toString());
+                column.add(value);
               }
+              row.add(column);
             }
-            return row;
+            return row.finish();
           } catch(final SQLException ex) {
             throw SQL_ERROR_X.get(info, ex);
           }

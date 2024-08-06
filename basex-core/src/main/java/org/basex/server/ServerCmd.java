@@ -3,7 +3,7 @@ package org.basex.server;
 /**
  * This class defines the available command-line commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public enum ServerCmd {
@@ -27,10 +27,10 @@ public enum ServerCmd {
   CREATE(8),
   /** Code for adding a document to a database: {path}0{input}0. */
   ADD(9),
-  /** Code for replacing a document in a database: {path}0{input}0. */
-  REPLACE(12),
-  /** Code for storing raw data in a database: {path}0{input}0. */
-  STORE(13),
+  /** Code for putting a document in a database: {path}0{input}0. */
+  PUT(12),
+  /** Code for putting a binary resource in a database: {path}0{input}0. */
+  PUTBINARY(13),
   /** Code for binding a context value: {id}0{val}0{type}0. */
   CONTEXT(14),
   /** Code for returning the update flag: {id}0. */

@@ -1,7 +1,5 @@
 package org.basex.io.parse.csv;
 
-import static org.basex.util.Token.*;
-
 import java.io.*;
 
 import org.basex.build.csv.*;
@@ -9,60 +7,71 @@ import org.basex.build.csv.CsvOptions.*;
 import org.basex.core.jobs.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
+import org.basex.query.*;
+import org.basex.query.util.*;
 import org.basex.query.value.item.*;
 import org.basex.util.list.*;
 
 /**
  * <p>This class converts CSV input to XML.</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class CsvConverter extends Job {
-  /** CSV token. */
-  public static final byte[] CSV = token("csv");
-  /** CSV token. */
-  public static final byte[] RECORD = token("record");
-  /** CSV token. */
-  public static final byte[] ENTRY = token("entry");
-  /** CSV token. */
-  public static final byte[] NAME = token("name");
+  /** QName. */
+  protected static final QNm Q_CSV = new QNm("csv");
+  /** QName. */
+  protected static final QNm Q_RECORD = new QNm("record");
+  /** QName. */
+  protected static final QNm Q_ENTRY = new QNm("entry");
+  /** QName. */
+  protected static final QNm Q_NAME = new QNm("name");
 
+  /** Shared data references. */
+  protected final SharedData shared = new SharedData();
   /** Headers. */
   protected final TokenList headers = new TokenList(1);
   /** Attributes format. */
-  protected final boolean ats;
+  protected final boolean attributes;
   /** Lax QName conversion. */
   protected final boolean lax;
-  /** Current column. */
-  protected int col;
-  /** CSV options. */
-  private final CsvParserOptions copts;
+  /** Skip empty fields. */
+  protected final boolean skipEmpty;
+
   /** Current input. */
   protected NewlineInput nli;
+  /** Current column. */
+  protected int column = -1;
+
+  /** CSV options. */
+  private final CsvParserOptions copts;
 
   /**
    * Constructor.
-   * @param copts json options
+   * @param copts CSV options
    */
   protected CsvConverter(final CsvParserOptions copts) {
     this.copts = copts;
     lax = copts.get(CsvOptions.LAX);
-    ats = copts.get(CsvOptions.FORMAT) == CsvFormat.ATTRIBUTES;
+    attributes = copts.get(CsvOptions.FORMAT) == CsvFormat.ATTRIBUTES;
+    skipEmpty = copts.get(CsvParserOptions.SKIP_EMPTY) && copts.get(CsvOptions.HEADER);
   }
 
   /**
-   * Converts the specified input to XML.
+   * Converts the specified input to an XQuery value.
    * @param input input
    * @return result
+   * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  public final Item convert(final IO input) throws IOException {
+  public final Item convert(final IO input) throws QueryException, IOException {
+    init(input.url());
     try(NewlineInput in = new NewlineInput(input)) {
-      nli = in;
-      CsvParser.parse(in.encoding(copts.get(CsvParserOptions.ENCODING)), copts, this);
+      nli = in.encoding(copts.get(CsvParserOptions.ENCODING));
+      new CsvParser(in, copts, this).parse();
     }
-    return finish(input.url());
+    return finish();
   }
 
   /**
@@ -95,10 +104,16 @@ public abstract class CsvConverter extends Job {
   protected abstract void entry(byte[] value) throws IOException;
 
   /**
-   * Returns the resulting byte array.
+   * Initializes the conversion.
    * @param uri base URI
-   * @return result (can be {@code null})
+   */
+  protected abstract void init(String uri);
+
+  /**
+   * Returns the resulting XQuery value.
+   * @return result
+   * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  protected abstract Item finish(String uri) throws IOException;
+  protected abstract Item finish() throws QueryException, IOException;
 }

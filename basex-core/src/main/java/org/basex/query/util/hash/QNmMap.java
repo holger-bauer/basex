@@ -7,7 +7,7 @@ import org.basex.util.*;
  * This is an efficient and memory-saving hash map for storing QNames and objects.
  * {@link QNmSet hash set}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @param <E> generic value type
  */
@@ -29,7 +29,7 @@ public final class QNmMap<E> extends QNmSet {
    * @param val value
    */
   public void put(final QNm qnm, final E val) {
-    // array bounds are checked before array is resized..
+    // array bounds are checked before array is resized
     final int i = put(qnm);
     values[i] = val;
   }

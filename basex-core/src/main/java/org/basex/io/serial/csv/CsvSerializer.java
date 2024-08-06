@@ -14,7 +14,7 @@ import org.basex.util.list.*;
 /**
  * This class serializes items as CSV.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class CsvSerializer extends StandardSerializer {
@@ -26,18 +26,19 @@ abstract class CsvSerializer extends StandardSerializer {
   final boolean quotes;
   /** Generate backslashes. */
   final boolean backslashes;
+
   /** Header flag. */
   boolean header;
 
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  CsvSerializer(final OutputStream os, final SerializerOptions opts) throws IOException {
-    super(os, opts);
-    copts = opts.get(SerializerOptions.CSV);
+  CsvSerializer(final OutputStream os, final SerializerOptions sopts) throws IOException {
+    super(os, sopts);
+    copts = sopts.get(SerializerOptions.CSV);
     quotes = copts.get(CsvOptions.QUOTES);
     backslashes = copts.get(CsvOptions.BACKSLASHES);
     header = copts.get(CsvOptions.HEADER);
@@ -56,13 +57,13 @@ abstract class CsvSerializer extends StandardSerializer {
       final byte[] v = entries.get(i);
       if(i != 0) out.print(separator);
 
-      byte[] txt = v == null ? EMPTY : v;
+      byte[] txt = v != null ? v : EMPTY;
       final boolean delim = contains(txt, separator) || contains(txt, '\n');
       final boolean special = contains(txt, '\r') || contains(txt, '\t') || contains(txt, '"');
       if(delim || special || backslashes && contains(txt, '\\')) {
         final TokenBuilder tb = new TokenBuilder();
-        if(delim && !backslashes && !quotes) throw CSV_SERIALIZE_X.getIO(
-            Util.info("Output must be put into quotes: %", normalize(txt, null)));
+        if(delim && !backslashes && !quotes)
+          throw CSV_SERIALIZE_X_X.getIO("Output must be put into quotes", txt);
 
         if(quotes && (delim || special)) tb.add('"');
         final int len = txt.length;

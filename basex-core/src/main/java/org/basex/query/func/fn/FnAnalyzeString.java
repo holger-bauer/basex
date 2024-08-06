@@ -13,37 +13,38 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnAnalyzeString extends RegEx {
   /** QName. */
-  private static final QNm Q_ANALYZE = new QNm(FN_PREFIX, "analyze-string-result", FN_URI);
+  private static final QNm Q_ANALYZE = new QNm("analyze-string-result", FN_URI);
   /** QName. */
-  private static final QNm Q_MATCH = new QNm(FN_PREFIX, "match", FN_URI);
+  private static final QNm Q_MATCH = new QNm("match", FN_URI);
   /** QName. */
-  private static final QNm Q_NONMATCH = new QNm(FN_PREFIX, "non-match", FN_URI);
+  private static final QNm Q_NONMATCH = new QNm("non-match", FN_URI);
   /** QName. */
-  private static final QNm Q_MGROUP = new QNm(FN_PREFIX, "group", FN_URI);
-  /** Attribute for the analyze-string-result function. */
-  private static final String NR = "nr";
+  private static final QNm Q_MGROUP = new QNm("group", FN_URI);
+  /** QName. */
+  private static final QNm Q_NR = new QNm("nr");
 
   @Override
-  public FElem item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] value = toZeroToken(exprs[0], qc);
-    final Pattern pattern = pattern(exprs[1], exprs.length == 3 ? exprs[2] : null, qc, true);
-    final String string = string(value);
-    final Matcher matcher = pattern.matcher(string);
+  public FNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final String value = string(toZeroToken(arg(0), qc));
+    final byte[] pattern = toToken(arg(1), qc);
+    final byte[] flags = toZeroToken(arg(2), qc);
 
-    final FElem root = new FElem(Q_ANALYZE).declareNS();
+    final RegExpr regExpr = regExpr(pattern, flags, true);
+    final Matcher matcher = regExpr.pattern.matcher(value);
+    final FBuilder root = FElem.build(Q_ANALYZE).declareNS();
     int start = 0;
     while(matcher.find()) {
-      if(start != matcher.start()) nonmatch(string.substring(start, matcher.start()), root);
-      match(matcher, string, root, 0);
+      if(start != matcher.start()) nonmatch(value.substring(start, matcher.start()), root);
+      match(matcher, value, root, 0, regExpr);
       start = matcher.end();
     }
-    if(start != string.length()) nonmatch(string.substring(start), root);
-    return root;
+    if(start != value.length()) nonmatch(value.substring(start), root);
+    return root.finish();
   }
 
   /**
@@ -52,37 +53,39 @@ public final class FnAnalyzeString extends RegEx {
    * @param string string
    * @param parent parent
    * @param group group number
+   * @param regExpr regExpr
    * @return next group number and position in string
    */
-  private static int[] match(final Matcher matcher, final String string, final FElem parent,
-      final int group) {
+  private static int[] match(final Matcher matcher, final String string, final FBuilder parent,
+      final int group, final RegExpr regExpr) {
 
-    final FElem nd = new FElem(group == 0 ? Q_MATCH : Q_MGROUP);
-    if(group > 0) nd.add(NR, token(group));
+    final FBuilder node = FElem.build(group == 0 ? Q_MATCH : Q_MGROUP);
+    if(group > 0) node.add(Q_NR, group);
 
     final int start = matcher.start(group), end = matcher.end(group), gc = matcher.groupCount();
     int[] pos = { group + 1, start }; // group and position in string
-    while(pos[0] <= gc && matcher.end(pos[0]) <= end) {
+    while(pos[0] <= gc && matcher.end(pos[0]) <= end
+        && (matcher.start(pos[0]) < end || regExpr.getParentGroups()[pos[0] - 1] == group)) {
       final int st = matcher.start(pos[0]);
       if(st >= 0) { // group matched
-        if(pos[1] < st) nd.add(string.substring(pos[1], st));
-        pos = match(matcher, string, nd, pos[0]);
+        if(pos[1] < st) node.add(string.substring(pos[1], st));
+        pos = match(matcher, string, node, pos[0], regExpr);
       } else pos[0]++; // skip it
     }
     if(pos[1] < end) {
-      nd.add(string.substring(pos[1], end));
+      node.add(string.substring(pos[1], end));
       pos[1] = end;
     }
-    parent.add(nd);
+    parent.add(node);
     return pos;
   }
 
   /**
    * Processes a non-match.
    * @param text text
-   * @param par root node
+   * @param parent root node
    */
-  private static void nonmatch(final String text, final FElem par) {
-    par.add(new FElem(Q_NONMATCH).add(text));
+  private static void nonmatch(final String text, final FBuilder parent) {
+    parent.add(FElem.build(Q_NONMATCH).add(text));
   }
 }

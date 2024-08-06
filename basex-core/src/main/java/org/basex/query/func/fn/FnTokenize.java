@@ -7,6 +7,7 @@ import java.util.regex.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
+import org.basex.query.iter.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
@@ -16,56 +17,134 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnTokenize extends RegEx {
+  /** Default pattern. */
+  private static final byte[] DEFAULT = { ' ' };
   /** Placeholder for default search. */
-  private static final byte[] DEFAULT = Token.token("\\s+");
-  /** Single space. */
-  private static final byte[] SPACE = Token.token(" ");
+  private static final byte[] WHITESPACE = Token.token("\\s+");
+
+  @Override
+  public Iter iter(final QueryContext qc) throws QueryException {
+    final byte[] pattern = pattern(qc);
+    final byte[] value = input(pattern, qc);
+    final byte[] flags = toZeroToken(arg(2), qc);
+    final boolean simple = pattern == DEFAULT || flags.length == 0;
+    final int vl = value.length;
+
+    if(simple) {
+      final int ch = patternChar(pattern);
+      if(ch != -1) {
+        final int sl = pattern.length;
+        return vl == 0 ? Empty.ITER : new Iter() {
+          int start;
+
+          @Override
+          public Item next() {
+            if(start == -1) return null;
+            final int e = indexOf(value, ch, start);
+            return e != -1 ? next(e, e + sl) : next(vl, -1);
+          }
+
+          private Str next(final int end, final int next) {
+            final int b = start;
+            start = next;
+            return Str.get(substring(value, b, end));
+          }
+        };
+      }
+    }
+
+    final Pattern p = pattern(pattern, flags, true);
+    return vl == 0 ? Empty.ITER : new Iter() {
+      final String string = string(value);
+      final Matcher matcher = p.matcher(string);
+      int start;
+
+      @Override
+      public Item next() {
+        return start == -1 ? null : matcher.find() ?
+          next(matcher.start(), matcher.end()) : next(string.length(), -1);
+      }
+
+      private Str next(final int end, final int next) {
+        final int b = start;
+        start = next;
+        return Str.get(token(string.substring(b, end)));
+      }
+    };
+  }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final byte[] value = toZeroToken(exprs[0], qc);
-    if(exprs.length < 2) return StrSeq.get(split(normalize(value), ' '));
+    final byte[] pattern = pattern(qc);
+    final byte[] value = input(pattern, qc);
+    final byte[] flags = toZeroToken(arg(2), qc);
+    final boolean simple = pattern == DEFAULT || flags.length == 0;
+    final int vl = value.length;
 
-    final Pattern pattern = pattern(exprs[1], exprs.length == 3 ? exprs[2] : null, qc, true);
+    if(simple) {
+      final int ch = patternChar(pattern);
+      if(ch != -1) return vl == 0 ? Empty.VALUE : StrSeq.get(split(value, ch, true));
+    }
+
+    final Pattern p = pattern(pattern, flags, true);
+    if(vl == 0) return Empty.VALUE;
 
     final TokenList tl = new TokenList();
     final String string = string(value);
-    if(!string.isEmpty()) {
-      final Matcher matcher = pattern.matcher(string);
-      int start = 0;
-      while(matcher.find()) {
-        tl.add(string.substring(start, matcher.start()));
-        start = matcher.end();
-      }
-      tl.add(string.substring(start));
+    int start = 0;
+    for(final Matcher matcher = p.matcher(string); matcher.find();) {
+      tl.add(string.substring(start, matcher.start()));
+      start = matcher.end();
     }
-    return StrSeq.get(tl);
+    return StrSeq.get(tl.add(string.substring(start)));
+  }
+
+  /**
+   * Returns the pattern argument.
+   * @param qc query context
+   * @return pattern or {@code null}
+   * @throws QueryException query exception
+   */
+  private byte[] pattern(final QueryContext qc) throws QueryException {
+    final byte[] pattern = toTokenOrNull(arg(1), qc);
+    return pattern != null ? pattern : DEFAULT;
+  }
+
+  /**
+   * Returns the input argument.
+   * @param pattern pattern
+   * @param qc query context
+   * @return input
+   * @throws QueryException query exception
+   */
+  private byte[] input(final byte[] pattern, final QueryContext qc) throws QueryException {
+    final byte[] value = toZeroToken(arg(0), qc);
+    return pattern == DEFAULT ? normalize(value) : value;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0], ptrn = exprs.length == 2 ? exprs[1] : null;
+    final Expr value = arg(0), pattern = arg(1);
 
     // tokenize(normalize-space(A), ' ')  ->  tokenize(A)
-    if(NORMALIZE_SPACE.is(expr) && ptrn instanceof Str && eq(((Str) ptrn).string(), SPACE)) {
-      final Expr arg = expr.args().length == 1 ? expr.arg(0) : new ContextValue(info).optimize(cc);
+    if(NORMALIZE_SPACE.is(value) && pattern instanceof Str && eq(((Str) pattern).string(), SPACE)) {
+      final Expr arg = value.args().length == 1 ? value.arg(0) : ContextValue.get(cc, info);
       return cc.function(TOKENIZE, info, arg);
     }
-
     return this;
   }
 
   /**
-   * Indicates if a default whitespace tokenization is to be performed.
+   * Indicates if default whitespace tokenization is to be performed.
    * @return result of check
    */
-  public boolean whitespaces() {
-    final int el = exprs.length;
-    return el == 1 || el == 2 && exprs[1] instanceof Str &&
-        Token.eq(((Str) exprs[1]).string(), DEFAULT);
+  public boolean whitespace() {
+    final Expr pattern = arg(1);
+    return pattern == Empty.VALUE || pattern == Empty.UNDEFINED ||
+        pattern instanceof Str && eq(((Str) pattern).string(), WHITESPACE);
   }
 }

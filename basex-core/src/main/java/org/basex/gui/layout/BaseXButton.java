@@ -13,7 +13,7 @@ import org.basex.gui.listener.*;
 /**
  * Project specific button implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXButton extends JButton {
@@ -67,6 +67,7 @@ public final class BaseXButton extends JButton {
       button.setBorder(TEMPLATE.getBorder());
       button.setMargin(TEMPLATE.getMargin());
     }
+    button.setFocusable(false);
     return button;
   }
 

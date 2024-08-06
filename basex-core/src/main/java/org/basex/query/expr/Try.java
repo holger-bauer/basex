@@ -4,7 +4,6 @@ import static org.basex.query.QueryText.*;
 
 import java.util.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
@@ -19,7 +18,7 @@ import org.basex.util.hash.*;
 /**
  * Project specific try/catch expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Try extends Single {
@@ -28,7 +27,7 @@ public final class Try extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr try expression
    * @param catches catch expressions
    */
@@ -67,26 +66,24 @@ public final class Try extends Single {
 
     // remove duplicates and too specific catch clauses
     final ArrayList<Catch> list = new ArrayList<>();
-    final ArrayList<NameTest> tests = new ArrayList<>();
-    for(final Catch ctch : catches) {
-      if(ctch.simplify(tests, cc)) list.add(ctch);
+    final ArrayList<Test> tests = new ArrayList<>();
+
+    final Checks<Catch> global = Catch::global;
+    if(!global.all(catches)) {
+      for(final Catch ctch : catches) {
+        if(ctch.simplify(tests, cc)) list.add(ctch);
+      }
+      catches = list.toArray(Catch[]::new);
     }
-    catches = list.toArray(new Catch[0]);
 
     // join types of try and catch expressions
     SeqType st = expr.seqType();
     for(final Catch ctch : catches) {
       if(!Function.ERROR.is(ctch.expr)) st = st.union(ctch.seqType());
     }
-    exprType.assign(st);
-    return this;
-  }
+    exprType.assign(st).data(ExprList.concat(catches, expr));
 
-  @Override
-  public Data data() {
-    final ExprList list = new ExprList(catches.length + 1).add(expr);
-    for(final Catch ctch : catches) list.add(ctch);
-    return data(list.finish());
+    return this;
   }
 
   @Override
@@ -193,12 +190,12 @@ public final class Try extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), expr, catches);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(TRY).brace(expr).tokens(catches);
   }
 }

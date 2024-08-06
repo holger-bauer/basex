@@ -14,13 +14,13 @@ import org.basex.util.hash.*;
 /**
  * FTMildnot expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTMildNot extends FTExpr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr1 first expression
    * @param expr2 second expression
    */
@@ -108,7 +108,7 @@ public final class FTMildNot extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.tokens(exprs, ' ' + NOT + ' ' + IN + ' ', true);
   }
 }

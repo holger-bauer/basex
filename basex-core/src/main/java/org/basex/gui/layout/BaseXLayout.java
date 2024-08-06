@@ -10,22 +10,27 @@ import java.awt.dnd.*;
 import java.awt.event.*;
 import java.io.*;
 import java.nio.file.*;
+import java.text.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.*;
 
 import javax.swing.*;
 import javax.swing.border.*;
 
+import org.basex.core.*;
 import org.basex.gui.*;
+import org.basex.gui.dialog.*;
 import org.basex.gui.listener.*;
 import org.basex.gui.text.*;
+import org.basex.io.*;
 import org.basex.util.*;
 
 /**
  * This class provides static layout and paint helper methods which are used all over
  * the GUI.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXLayout {
@@ -35,8 +40,8 @@ public final class BaseXLayout {
   /** Flag for adding rendering hints. */
   private static boolean hints = true;
 
-  /** Shortcut string for meta key. */
-  // will raise a warning (Java function returns deprecated value that is deprecated in Java 9)
+  /** Shortcut string for meta key (deprecated since Java 9). */
+  @SuppressWarnings("deprecation")
   private static final String META = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask() ==
       InputEvent.CTRL_MASK ? "ctrl" : "meta";
 
@@ -74,12 +79,31 @@ public final class BaseXLayout {
   /**
    * Activates graphics anti-aliasing.
    * @param g graphics reference
-   * @return graphics reference
    */
-  public static Graphics2D antiAlias(final Graphics g) {
+  public static void antiAlias(final Graphics g) {
     final Graphics2D g2 = (Graphics2D) g;
     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-    return g2;
+  }
+
+  /**
+   * Chooses the anti-aliasing renderer.
+   * @param g graphics reference
+   * @param type anti-aliasing type
+   */
+  public static void antiAlias(final Graphics g, final String type) {
+    Object hint = null;
+    switch (type) {
+      case "Off":
+        hint = RenderingHints.VALUE_TEXT_ANTIALIAS_OFF;
+        break;
+      case "On":
+        hint = RenderingHints.VALUE_TEXT_ANTIALIAS_ON;
+        break;
+      case "GASP":
+        hint = RenderingHints.VALUE_TEXT_ANTIALIAS_GASP;
+        break;
+    }
+    if(hint != null) ((Graphics2D) g).setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, hint);
   }
 
   /**
@@ -136,8 +160,9 @@ public final class BaseXLayout {
       @Override
       public synchronized void drop(final DropTargetDropEvent dtde) {
         dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
-        final Transferable tr = dtde.getTransferable();
-        for(final Object o : contents(tr)) dnd.drop(o);
+        for(final Object clip : fromClipboard(dtde::getTransferable)) {
+          dnd.drop(clip);
+        }
         comp.requestFocusInWindow();
       }
     });
@@ -179,7 +204,7 @@ public final class BaseXLayout {
     final int ll = label.length();
     for(int l = 0; l < ll; l++) {
       final char ch = Character.toLowerCase(label.charAt(l));
-      if(!letter(ch) || mnem.indexOf(Character.toString(ch)) != -1) continue;
+      if(!letter(ch) || mnem.indexOf(String.valueOf(ch)) != -1) continue;
       b.setMnemonic(ch);
       mnem.append(ch);
       break;
@@ -187,27 +212,39 @@ public final class BaseXLayout {
   }
 
   /**
-   * Returns the contents of the specified transferable.
-   * @param tr transferable
-   * @return contents
+   * Returns the clipboard contents.
+   * @param clipboard clipboard supplier (optional)
+   * @return clipboard contents
    */
   @SuppressWarnings("unchecked")
-  public static ArrayList<Object> contents(final Transferable tr) {
+  public static ArrayList<Object> fromClipboard(final Supplier<Transferable> clipboard) {
+    // try multiple times (system clipboard may be blocked by another process)
     final ArrayList<Object> list = new ArrayList<>();
-    try {
-      if(tr.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-        list.addAll((List<File>) tr.getTransferData(DataFlavor.javaFileListFlavor));
-      } else if(tr.isDataFlavorSupported(DataFlavor.stringFlavor)) {
-        list.add(tr.getTransferData(DataFlavor.stringFlavor));
-      } else {
-        final StringBuilder sb = new StringBuilder("Data flavors not supported:\n");
-        for(final DataFlavor df : tr.getTransferDataFlavors()) {
-          sb.append("- ").append(df).append('\n');
+    final int n = 10;
+    for(int i = 1; i <= n; i++) {
+      try {
+        final Transferable tr = clipboard != null ? clipboard.get() :
+          Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+        if(tr != null) {
+          if(tr.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+            list.addAll((List<File>) tr.getTransferData(DataFlavor.javaFileListFlavor));
+          } else if(tr.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+            list.add(tr.getTransferData(DataFlavor.stringFlavor));
+          } else {
+            final StringBuilder sb = new StringBuilder("Data flavors not supported:\n");
+            for(final DataFlavor df : tr.getTransferDataFlavors()) {
+              sb.append("- ").append(df).append('\n');
+            }
+            Util.debugln(sb);
+          }
+          break;
         }
-        Util.debug(sb);
+        Util.debugln("Clipboard has no contents.");
+        break;
+      } catch(final Exception ex) {
+        Util.stack(ex);
+        Performance.sleep(i * 200L);
       }
-    } catch(final Exception ex) {
-      Util.stack(ex);
     }
     return list;
   }
@@ -216,8 +253,24 @@ public final class BaseXLayout {
    * Copies the specified string to the clipboard.
    * @param text text
    */
-  public static void copy(final String text) {
-    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+  public static void toClipboard(final String text) {
+    // try multiple times (system clipboard may be blocked by another process)
+    final int n = 10;
+    for(int i = 1; i <= n; i++) {
+      try {
+        final Clipboard clip = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clip.setContents(new StringSelection(text), null);
+        return;
+      } catch(final Exception ex) {
+        Util.stack(ex);
+        if(i == n) {
+          Util.stack(ex);
+        } else {
+          Util.debug(ex);
+          Performance.sleep(i * 200L);
+        }
+      }
+    }
   }
 
   /**
@@ -226,7 +279,7 @@ public final class BaseXLayout {
    */
   public static void copyPath(final String path) {
     try {
-      copy(Paths.get(path).toRealPath().toString());
+      toClipboard(Paths.get(path).toRealPath().toString());
     } catch(final Exception ex) {
       Util.stack(ex);
     }
@@ -234,15 +287,15 @@ public final class BaseXLayout {
 
   /**
    * Drag and drop handler.
-   * @author BaseX Team 2005-20, BSD License
+   * @author BaseX Team 2005-24, BSD License
    * @author Christian Gruen
    */
   public interface DropHandler {
     /**
      * Drops a file.
-     * @param obj object to be dropped
+     * @param object object to be dropped
      */
-    void drop(Object obj);
+    void drop(Object object);
   }
 
   /**
@@ -290,33 +343,37 @@ public final class BaseXLayout {
       // browse back/forward
       if(gui.context.data() != null) {
         if(GOBACK.is(e)) {
-          GUIMenuCmd.C_GOBACK.execute(gui);
+          GUIMenuCmd.C_GO_BACK.execute(gui);
         } else if(GOFORWARD.is(e)) {
-          GUIMenuCmd.C_GOFORWARD.execute(gui);
+          GUIMenuCmd.C_GO_FORWARD.execute(gui);
         } else if(GOUP.is(e)) {
-          GUIMenuCmd.C_GOUP.execute(gui);
+          GUIMenuCmd.C_GO_UP.execute(gui);
         } else if(GOHOME.is(e)) {
-          GUIMenuCmd.C_GOHOME.execute(gui);
+          GUIMenuCmd.C_GO_HOME.execute(gui);
+        } else if(FILTER.is(e)) {
+          GUIMenuCmd.C_FILTER_NODES.execute(gui);
         }
       }
 
       // focus input bar
       if(FOCUSINPUT.is(e)) gui.input.requestFocusInWindow();
       // focus editor
-      if(FOCUSEDITOR.is(e)) gui.editor.focusEditor();
+      else if(FOCUSEDITOR.is(e)) gui.editor.focusEditor();
+      // focus text
+      else if(FOCUSTEXT.is(e)) gui.text.focusText();
 
       // change font size
       final int fs = gui.gopts.get(GUIOptions.FONTSIZE);
-      int nfs = fs;
+      long nfs = fs;
       if(INCFONT1.is(e) || INCFONT2.is(e)) {
-        nfs = fs + 1;
+        nfs = Math.max(fs + 1, Math.round(fs * 1.05));
       } else if(DECFONT.is(e)) {
-        nfs = Math.max(1, fs - 1);
+        nfs = Math.min(fs - 1, Math.round(fs / 1.05));
       } else if(NORMFONT.is(e)) {
-        nfs = (int) (fontSize() * 1.5);
+        nfs = (long) (dmfont.getSize() * 1.4);
       }
       if(fs != nfs) {
-        gui.gopts.set(GUIOptions.FONTSIZE, nfs);
+        gui.gopts.set(GUIOptions.FONTSIZE, (int) Math.max(1, Math.min(128, nfs)));
         gui.updateLayout();
       }
     };
@@ -324,13 +381,13 @@ public final class BaseXLayout {
   }
 
   /**
-   * Adds human readable shortcuts to the specified string.
+   * Adds human-readable shortcuts to the specified string.
    * @param string tooltip string
-   * @param sc shortcut
+   * @param sc shortcut (can be {@code null})
    * @return tooltip
    */
   public static String addShortcut(final String string, final String sc) {
-    if(sc == null || string == null) return string;
+    if(sc == null) return string;
     final StringBuilder sb = new StringBuilder();
     for(final String s : sc.split(" ")) {
       String t = "%".equals(s) ? Prop.MAC ? "meta" : "control" : s;
@@ -387,7 +444,7 @@ public final class BaseXLayout {
    * @param x horizontal position
    * @param y vertical position
    * @param w width
-   * @param c color color depth
+   * @param c color depth
    */
   public static void drawTooltip(final Graphics g, final String tt, final int x, final int y,
       final int w, final int c) {
@@ -411,7 +468,7 @@ public final class BaseXLayout {
   }
 
   /**
-   * Draws the specified string. Chops the last character if space is not enough space.
+   * Draws the specified string and chops the last characters if there is not enough space.
    * @param g graphics reference
    * @param string string
    * @param x x coordinate
@@ -488,5 +545,84 @@ public final class BaseXLayout {
    */
   public static void boldFont(final JComponent comp) {
     comp.setFont(comp.getFont().deriveFont(Font.BOLD));
+  }
+
+  /**
+   * Returns the file name and a reverse representation of the file path.
+   * @param file file
+   * @return path
+   */
+  public static String reversePath(final IOFile file) {
+    final StringBuilder sb = new StringBuilder();
+    final String[] names = file.file().getParent().split("[/\\\\]");
+    for(int n = names.length - 1; n >= 0; n--) {
+      sb.append(names[n]);
+      if(n > 0) sb.append('/');
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Returns a string representation for the specified file.
+   * @param file file
+   * @param full full path
+   * @return string
+   */
+  public static String info(final IOFile file, final boolean full) {
+    final StringBuilder sb = new StringBuilder();
+    if(file != null) {
+      sb.append(full ? file.path() : file.name());
+      if(file.exists()) sb.append(" (").append(Performance.format(file.length())).append(')');
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Returns a string representation of the number of results.
+   * @param count number of results (ignored if {@code -1})
+   * @param bytes number of bytes (ignored if {@code -1})
+   * @param gui GUI reference
+   * @return result string
+   */
+  public static String results(final long count, final long bytes, final GUI gui) {
+    final GUIOptions gopts = gui.gopts;
+    final BiFunction<Long, Integer, String> more = (num, max) -> num >= max ? "\u2265" : "";
+    final StringBuilder sb = new StringBuilder();
+    if(count >= 0) {
+      final String num = new DecimalFormat("#,###,###").format(count);
+      final String text = more.apply(count, gopts.get(GUIOptions.MAXRESULTS)) + num;
+      sb.append(Util.info(count == 1 ? Text.RESULT_X : Text.RESULTS_X, text));
+      if(bytes >= 0) {
+        final int maxtext = gopts.get(GUIOptions.MAXTEXT);
+        sb.append(", ").append(more.apply(bytes, maxtext)).append(Performance.format(bytes));
+      }
+    }
+    return sb.length() > 0 ? sb.toString() : " ";
+  }
+
+  /**
+   * Assigns macOS-specific interface GUI properties.
+   * @param gui GUI reference
+   */
+  public static void initMac(final GUI gui) {
+    try {
+      // show menu in the screen menu instead of inside the application window
+      System.setProperty("apple.laf.useScreenMenuBar", "true");
+
+      final Desktop desktop = Desktop.getDesktop();
+      desktop.setAboutHandler(e -> DialogAbout.show(gui));
+      desktop.setPreferencesHandler(e -> DialogPrefs.show(gui));
+      desktop.setQuitHandler((e, r) -> {
+        if(gui.quit()) r.performQuit();
+        else r.cancelQuit();
+      });
+
+      final Taskbar taskbar = Taskbar.getTaskbar();
+      taskbar.setIconImage(BaseXImages.get("logo_large"));
+
+    } catch(final Exception ex) {
+      Util.errln("Failed to initialize native Mac OS X interface:");
+      Util.stack(ex);
+    }
   }
 }

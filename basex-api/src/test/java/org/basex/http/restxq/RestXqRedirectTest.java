@@ -5,7 +5,7 @@ import org.junit.jupiter.api.*;
 /**
  * This test contains RESTXQ redirections.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RestXqRedirectTest extends RestXqTest {
@@ -13,19 +13,15 @@ public final class RestXqRedirectTest extends RestXqTest {
    * Redirect request.
    * @throws Exception exception */
   @Test public void redirect() throws Exception {
-    final String f =
-      "declare %R:path('')  function m:a() { web:redirect('a') };" +
-      "declare %R:path('a') function m:b() { 'R' };";
-    get(f, "", "R");
+    get("R", "declare %R:path('')  function m:a() { web:redirect('a') };" +
+            "declare %R:path('a') function m:b() { 'R' };", "");
   }
 
   /**
    * Forward request.
    * @throws Exception exception */
   @Test public void forward() throws Exception {
-    final String f =
-      "declare %R:path('')  function m:a() { web:forward('a') };" +
-      "declare %R:path('a') function m:b() { 'F' };";
-    get(f, "", "F");
+    get("F", "declare %R:path('')  function m:a() { web:forward('a') };" +
+            "declare %R:path('a') function m:b() { 'F' };", "");
   }
 }

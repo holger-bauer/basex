@@ -5,6 +5,7 @@ import static org.basex.util.Token.*;
 
 import org.basex.core.users.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
@@ -12,7 +13,7 @@ import org.basex.util.list.*;
 /**
  * Evaluates the 'rename' command and renames resources or directories in a collection.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Rename extends ACreate {
@@ -33,12 +34,7 @@ public final class Rename extends ACreate {
     final String trg = MetaData.normPath(args[1]);
     if(trg == null) return error(NAME_INVALID_X, args[1]);
 
-    return update(data, new Code() {
-      @Override
-      boolean run() {
-        return rename(data, src, trg);
-      }
-    });
+    return update(data, () -> rename(data, src, trg));
   }
 
   /**
@@ -51,25 +47,30 @@ public final class Rename extends ACreate {
   private boolean rename(final Data data, final String src, final String trg) {
     boolean ok = true;
     int c = 0;
-    final IntList docs = data.resources.docs(src);
-    final int ds = docs.size();
-    for(int i = 0; i < ds; i++) {
-      final int pre = docs.get(i);
-      final String target = target(data, pre, src, trg);
-      if(target.isEmpty()) {
-        ok = !info(NAME_INVALID_X, target);
-      } else {
-        data.update(pre, Data.DOC, token(target));
-        c++;
+    if(!IO.equals(src, trg)) {
+      // rename XML documents
+      final IntList docs = data.resources.docs(src);
+      final int ds = docs.size();
+      for(int i = 0; i < ds; i++) {
+        final int pre = docs.get(i);
+        final String target = target(data, pre, src, trg);
+        if(target.isEmpty()) {
+          ok = !info(NAME_INVALID_X, target);
+        } else {
+          data.update(pre, Data.DOC, token(target));
+          c++;
+        }
       }
-    }
 
-    final IOFile file = data.inMemory() ? null : data.meta.binary(src);
-    if(file != null && file.exists()) {
-      final IOFile target = data.meta.binary(trg);
-      final IOFile trgdir = target.parent();
-      if(!trgdir.md() || !file.rename(target)) ok = !info(NAME_INVALID_X, trg);
-      c++;
+      // rename file resources
+      for(final ResourceType type : Resources.BINARIES) {
+        final IOFile source = data.meta.file(src, type);
+        if(source != null && source.exists()) {
+          final IOFile target = data.meta.file(trg, type), trgdir = target.parent();
+          if(!trgdir.md() || !source.rename(target)) ok = !info(NAME_INVALID_X, trg);
+          c++;
+        }
+      }
     }
     // return info message
     return info(RES_RENAMED_X_X, c, jc().performance) && ok;
@@ -86,7 +87,7 @@ public final class Rename extends ACreate {
   public static String target(final Data data, final int pre, final String src, final String trg) {
     // source references a file
     final String path = string(data.text(pre, true));
-    if(Prop.CASE ? path.equals(src) : path.equalsIgnoreCase(src)) return trg;
+    if(IO.equals(path, src)) return trg;
 
     // directory references: add trailing slashes to non-empty paths
     final String source = src.isEmpty() || Strings.endsWith(src, '/') ? src : src + '/';

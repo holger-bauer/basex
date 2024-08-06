@@ -47,7 +47,7 @@ import org.basex.util.*;
  *   - NOT COMPRESSED: return external text unchanged
  * </pre>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Tim Petrowsky
  */
@@ -148,7 +148,8 @@ public final class DiskData extends Data {
       resources.write(out);
       out.write(0);
     }
-    if(meta.updindex) idmap.write(meta.dbFile(DATAIDP));
+    // file may be missing if flag was just enabled
+    if(meta.updindex && idmap != null) idmap.write(meta.dbFile(DATAIDP));
     meta.dirty = false;
   }
 
@@ -236,7 +237,7 @@ public final class DiskData extends Data {
 
   @Override
   public synchronized void finishUpdate(final MainOptions opts) {
-    // OPTIMIZE ALL / db:optimize(..., true) will close the database before this function is called
+    // OPTIMIZE ALL will close the database before this function is called
     if(closed) return;
 
     // remove updating file

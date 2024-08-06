@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Insert after primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class InsertAfter extends NodeCopy {
@@ -19,11 +19,11 @@ public final class InsertAfter extends NodeCopy {
    * Constructor.
    * @param pre target pre value
    * @param data target data instance
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param nodes node copy insertion sequence
    */
-  public InsertAfter(final int pre, final Data data, final InputInfo ii, final ANodeList nodes) {
-    super(UpdateType.INSERTAFTER, pre, data, ii, nodes);
+  public InsertAfter(final int pre, final Data data, final InputInfo info, final ANodeList nodes) {
+    super(UpdateType.INSERTAFTER, pre, data, info, nodes);
   }
 
   @Override
@@ -40,5 +40,6 @@ public final class InsertAfter extends NodeCopy {
   }
 
   @Override
-  public void update(final NamePool pool) { }
+  public void update(final NamePool pool) {
+  }
 }

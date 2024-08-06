@@ -16,7 +16,7 @@ import org.basex.util.hash.*;
 /**
  * Sort key.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class OrderKey extends Single {
@@ -29,7 +29,7 @@ public final class OrderKey extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param key sort key expression
    * @param desc descending order
    * @param least empty least
@@ -75,13 +75,13 @@ public final class OrderKey extends Single {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, DIR, Token.token(desc ? DESCENDING : ASCENDING),
         Token.token(EMPTYY), Token.token(least ? LEAST : GREATEST)), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(expr);
     if(desc) qs.token(DESCENDING);
     qs.token(EMPTYY).token(least ? LEAST : GREATEST);

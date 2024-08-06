@@ -1,11 +1,13 @@
 package org.basex.query.simple;
 
+import static org.basex.query.func.Function.*;
+
 import org.basex.query.*;
 
 /**
  * Simple XQuery tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SimpleTest extends QueryTest {
@@ -37,12 +39,31 @@ public final class SimpleTest extends QueryTest {
       { "Annotation 2", integers(1), "declare %local:x(1.) variable $a := 1; $a" },
       { "Annotation 3", "declare %local:x(.) variable $a := 1; $a" },
 
-      { "Compare 1", booleans(true), "xs:QName('b') = attribute a { 'b' }" },
-      { "Compare 2", booleans(false), "<a/>/x = (c, ())" },
-      { "Compare 3", booleans(false), "(4,5,6) < (1,2)" },
-      { "Compare 4", booleans(false), "(4,5) < (1,2,3)" },
-      { "Compare 5", booleans(false), "1234567890.12345678 = 1234567890.1234567" },
-      { "Compare 6", booleans(false), "123456789012345678  = 123456789012345679" },
+      { "Compare 1",  booleans(true),  "xs:QName('b') = attribute a { 'b' }" },
+      { "Compare 2",  booleans(false), "<a/>/x = (c, ())" },
+      { "Compare 3",  booleans(false), "(4, 5, 6) < (1, 2)" },
+      { "Compare 4",  booleans(false), "(4, 5) < (1, 2, 3)" },
+      { "Compare 5",  booleans(false), "1234567890.12345678 = 1234567890.1234567" },
+      { "Compare 6",  booleans(false), "123456789012345678  = 123456789012345679" },
+      // GH-2112, GH-2115
+      { "Compare 7",  booleans(false), "xs:decimal(1.13) gt xs:double(1.13)" },
+      { "Compare 8",  booleans(false), "xs:decimal(1.13) gt xs:float(1.13)" },
+      { "Compare 9",  booleans(true),  "xs:decimal(1.13) le xs:double(1.13)" },
+      { "Compare 10", booleans(true),  "xs:decimal(1.13) le xs:float(1.13)" },
+      // GH-2113, GH-2114
+      { "Compare 11", booleans(false), "xs:float (1.13) ge xs:double(1.13)" },
+      { "Compare 12", booleans(true),  "xs:float (1.13) le xs:double(1.13)" },
+      { "Compare 13", booleans(true),  "xs:float (1.13) lt xs:double(1.13)" },
+      { "Compare 14", booleans(false), "xs:float (1.13) gt xs:double(1.13)" },
+      { "Compare 15", booleans(true),  "xs:double(1.13) ge xs:float (1.13)" },
+      { "Compare 16", booleans(false), "xs:double(1.13) le xs:float (1.13)" },
+      { "Compare 17", booleans(false), "xs:double(1.13) lt xs:float (1.13)" },
+      { "Compare 18", booleans(true),  "xs:double(1.13) gt xs:float (1.13)" },
+
+      { "Compare 50", booleans(true),  "xs:hexBinary('41') = xs:untypedAtomic('41')" },
+      { "Compare 51", booleans(true),  "xs:untypedAtomic('41') = xs:hexBinary('41')" },
+      { "Compare 52", booleans(true),  "xs:untypedAtomic('41') <= xs:hexBinary('41')" },
+      { "Compare 53", booleans(true),  "xs:hexBinary('41') <= xs:untypedAtomic('41')" },
 
       { "FLWOR 1", integers(3), "(for $i in 1 to 5 return $i)[3]" },
       { "FLWOR 2", integers(4),
@@ -50,15 +71,15 @@ public final class SimpleTest extends QueryTest {
       { "FLWOR 3", booleans(true), "declare namespace x = 'X'; " +
         "let $a := <a>0</a> let $b := $a return $b = 0" },
       { "FLWOR 4", integers(1),
-        "for $a in (1,2) let $b := 'a' where $a = 1 return $a" },
+        "for $a in (1, 2) let $b := 'a' where $a = 1 return $a" },
       { "FLWOR 5", integers(1, 2),
-        "for $a in (1,2) let $b := 'a'[$a = 1] return $a" },
-      { "FLWOR 6", empty(),
-        "for $a in (1,2) let $b := 3 where $b = 4 return $a" },
+        "for $a in (1, 2) let $b := 'a'[$a = 1] return $a" },
+      { "FLWOR 6", emptySequence(),
+        "for $a in (1, 2) let $b := 3 where $b = 4 return $a" },
       { "FLWOR 7", integers(1, 2),
-        "for $a in (1,2) let $b := 3[. = 4] return $a" },
+        "for $a in (1, 2) let $b := 3[. = 4] return $a" },
       { "FLWOR 8", integers(2),
-        "for $a at $p in (1,2) where $a = 2 return $p" },
+        "for $a at $p in (1, 2) where $a = 2 return $p" },
 
       { "ForLet 1", integers(3, 3),
         "for $a in 1 to 2 let $b := 3 return $b" },
@@ -73,6 +94,7 @@ public final class SimpleTest extends QueryTest {
 
       { "ExtVar 1", integers(1), "declare variable $a external; 1" },
       { "ExtVar 2", "declare variable $a external; $a" },
+      { "ExtVar 3", strings("a"), "declare variable $x as enum('a', 'b') := 'a'; $x" },
 
       { "If  1", booleans(true), "if(true()) then true() else false()" },
       { "If  2", booleans(false), "if(false()) then true() else false()" },
@@ -100,31 +122,31 @@ public final class SimpleTest extends QueryTest {
 
       { "Seq 1", integers(), "((( )  )    )" },
       { "Seq 2", integers(1), "((( 1 )  )    )" },
-      { "Seq 3", integers(1, 2), "((( 1,2 )  )    )" },
+      { "Seq 3", integers(1, 2), "((( 1, 2 )  )    )" },
       { "Seq 4", integers(1, 2, 3), "(1, (( 2,3 )  )    )" },
       { "Seq 5", integers(1, 2, 3, 4), "(1, (( 2,3 )  ),4   )" },
       { "Seq 6", "()()" },
       { "Seq 7", "() ()" },
 
-      { "IntersectExcept 1", empty(), "<a/> intersect <b/>" },
-      { "IntersectExcept 2", empty(), "<a/> intersect <b/> except <c/>" },
-      { "IntersectExcept 3", empty(), "<a/> except <b/> intersect <c/>" },
+      { "IntersectExcept 1", emptySequence(), "<a/> intersect <b/>" },
+      { "IntersectExcept 2", emptySequence(), "<a/> intersect <b/> except <c/>" },
+      { "IntersectExcept 3", emptySequence(), "<a/> except <b/> intersect <c/>" },
       { "IntersectExcept 4", integers(1), "count(<a/> except <b/>)" },
       { "IntersectExcept 5", strings("a"), "<a/> ! (. intersect (., <b/>))/name()" },
 
       { "Filter 1", "1[1][error()]" },
-      { "Filter 2", empty(), "1[1][<x/>/a]" },
-      { "Filter 3", strings("b"), "name(<x><a/><b c='d'/></x>/(a,b)[@c])" },
-      { "Filter 4", strings("b"), "name(<x><a/><b/></x>/(b,a)[self::b])" },
-      { "Filter 5", empty(), "<x><a><b c='d'/></a></x>/(a,b)[@c]" },
-      { "Filter 6", booleans(true), "empty((1,2,3)[3][2])" },
-      { "Filter 7", booleans(true), "empty((1,2,3)[position() = 3][2])" },
+      { "Filter 2", emptySequence(), "1[1][<x/>/a]" },
+      { "Filter 3", strings("b"), "name(<x><a/><b c='d'/></x>/(a, b)[@c])" },
+      { "Filter 4", strings("b"), "name(<x><a/><b/></x>/(b, a)[self::b])" },
+      { "Filter 5", emptySequence(), "<x><a><b c='d'/></a></x>/(a, b)[@c]" },
+      { "Filter 6", booleans(true), "empty((1, 2, 3)[3][2])" },
+      { "Filter 7", booleans(true), "empty((1, 2, 3)[position() = 3][2])" },
       { "Filter 8", integers(1), "1[boolean(max((<a>1</a>, <b>2</b>)))]" },
       { "Filter 9", strings("x"), "string(<n><a/><a>x</a></n>/a/text()[.][.])" },
       { "Filter 10", strings("x"), "string(<n><a/><a>x</a></n>/a/text()[1][1])" },
-      { "Filter 11", "1[1 to 2]" },
-      { "Filter 12", empty(), "for $n in 0 to 1 return 'a'[position()= $n to 0]" },
-      { "Filter 13", strings("a", "a"), "for $n in 0 to 1 return ('a','b')[position()= $n to 1]" },
+      { "Filter 11", integers(1), "1[1 to 2]" },
+      { "Filter 12", emptySequence(), "for $n in 0 to 1 return 'a'[position()= $n to 0]" },
+      { "Filter 13", strings("a", "a"), "for $n in 0 to 1 return ('a', 'b')[position()= $n to 1]" },
 
       { "ContextItem 0", nodes(0), "." },
       { "ContextItem 1", nodes(0), "42[not(.)], ." },
@@ -138,7 +160,7 @@ public final class SimpleTest extends QueryTest {
       { "ContextItem 7", nodes(0), "try { <a/>/(1+'') } catch * {.}" },
       { "ContextItem 8", integers(1, 1), "('a', 'b') ! count(.)" },
 
-      { "Path 1", empty(), "<a/>[./(@*)]" },
+      { "Path 1", emptySequence(), "<a/>[./(@*)]" },
       { "Path 2", strings("A", "B"), "<_><x><x>A</x>B</x></_>//x/node()[last()] ! string()" },
       { "Path 3", integers(2, 2), "<a><b/><b/></a>/b/last()" },
 
@@ -152,28 +174,45 @@ public final class SimpleTest extends QueryTest {
           + "  if($a castable as xs:double and xs:double($a) gt 0) then $a else 'bar'"
           + "};"
           + "local:shortcircuit('foo')" },
-      { "Cast 6", empty(), "xs:integer(())" },
-      { "Cast 7", empty(), "xs:integer#1(())" },
-      { "Cast 8", empty(), "xs:integer(?)(())" },
+      { "Cast 6", emptySequence(), "xs:integer(())" },
+      { "Cast 7", emptySequence(), "xs:integer#1(())" },
+      { "Cast 8", emptySequence(), "xs:integer(?)(())" },
       { "Cast 9", strings("1", "2"), "('1', '2 3') ! xs:NMTOKENS(.)[1]" },
       { "Cast 10", "exactly-one(xs:NMTOKENS(<x>1 2</x>))" },
 
-      { "Mixed 1", "(<a/>,<b/>)/(if(name() = 'a') then <a/> else 2)/." },
+      { "Mixed 1", "(<a/>, <b/>)/(if(name() = 'a') then <a/> else 2)/." },
 
       { "Typeswitch 1", integers(1),
         "typeswitch(<a>1</a>) case xs:string return 1 default return 1" },
       { "Typeswitch 2", integers(1),
         "typeswitch(<a>1</a>) case $a as xs:string return 1 default return 1" },
       { "Typeswitch 3", integers(1, 2),
-        "typeswitch(<a>1</a>) case $a as xs:string return (1,2) default return (1,2)" },
+        "typeswitch(<a>1</a>) case $a as xs:string return (1, 2) default return (1, 2)" },
+      { "Typeswitch 4", integers(1, 2, 3, 4, 5),
+        "(xs:byte(0), xs:short(0), xs:int(0), xs:long(0), 0) ! "
+        + "(typeswitch (.)"
+        + " case xs:byte return 1"
+        + " case xs:short return 2"
+        + " case xs:int return 3"
+        + " case xs:long return 4"
+        + " case xs:decimal | xs:integer return 5"
+        + " default return 6\r\n"
+        + ")" },
+      { "Typeswitch 5", integers(1, 1),
+          "(0, xs:byte(0)) ! "
+          + "(typeswitch (.)"
+          + " case xs:integer return 1"
+          + " case xs:byte return 2"
+          + " default return 3\r\n"
+          + ")" },
 
       { "FunctionContext 0", "declare function local:x() { /x }; local:x()" },
 
-      { "XQuery 3.0", empty(), "xquery version '3.0'; <a/>/node()" },
-      { "XQuery 1.0", empty(), "xquery version '1.0'; <a/>/node()" },
+      { "XQuery 3.0", emptySequence(), "xquery version '3.0'; <a/>/node()" },
+      { "XQuery 1.0", emptySequence(), "xquery version '1.0'; <a/>/node()" },
 
       { "DeclFun 1", integers(0, 1), "declare function local:x($x as xs:integer) { $x }; " +
-        "let $a := 0, $b := 1 return try { local:x( (1 to 20) ) } catch * { ($a,$b) }" },
+        "let $a := 0, $b := 1 return try { local:x( (1 to 20) ) } catch * { $a, $b }" },
 
       { "Catch 1", "try { 1+'' } catch XPTY0004 { 1 }" },
       { "Catch 2", integers(1), "try { 1+'' } catch err:XPTY0004 { 1 }" },
@@ -197,7 +236,7 @@ public final class SimpleTest extends QueryTest {
         "declare function local:bar() { 1 };" +
         "local:foo()')" },
       { "FuncTest 3", "local:a(), local:a(1)" },
-      { "FuncTest 4", empty(), "()/x[function($x as item()){1}(.)]" },
+      { "FuncTest 4", emptySequence(), "()/x[function($x as item()){1}(.)]" },
 
       { "StaticVar 1", "declare variable $CONFIG := $CONFIG; delete node <a/>" },
 
@@ -211,34 +250,35 @@ public final class SimpleTest extends QueryTest {
       { "Limits 8", "-9223372036854775808 idiv -1" },
       { "Limits 9", "-9223372036854775807 - 1024" },
       { "Limits 10", "-9223372036854775808 - 1" },
-      { "Limits 11", "0 to 9223372036854775807" },
-      { "Limits 11", "-9223372036854775807 to 9223372036854775807" },
 
-      { "Empty 1", strings(""), "format-integer(let $x := random:integer() return (), '0')" },
-      { "Empty 2", empty(), "math:sin(let $x := random:integer() return ())" },
+      { "Empty 1", strings(""), "format-integer(let $x := " + _RANDOM_INTEGER.args() +
+        " return (), '0')" },
+      { "Empty 2", emptySequence(),
+          "math:sin(let $x := " + _RANDOM_INTEGER.args() + " return ())" },
       { "Empty 3", booleans(true), "let $a := () return empty($a)" },
       { "Empty 4", booleans(false), "let $a := () return exists($a)" },
       { "Empty 5", booleans(true), "declare function local:foo($x as empty-sequence())"
           + "as xs:boolean { empty($x) }; local:foo(())" },
 
-      { "Map 1", strings("c", "a"), "<a/> ! (('b'!'c'), name())" },
+      { "Map 1", strings("c", "a"), "<a/> ! (('b' ! 'c'), name())" },
       { "Map 2", integers(5), "((1 to 100000) ! 5)[1]" },
       { "Map 3", strings("a", "b"), "<a><b/></a>/b ! ancestor-or-self::node() ! name()" },
       { "Map 4", strings("a", "b"), "<_ a='a' b='b'/> ! (@a, @b) ! string()" },
 
-      { "Constructor 1", strings("1"), "<n xmlns='u'>{attribute{'a'}{1}}</n>/@a/string()" },
+      { "Constructor 1", strings("1"), "<n xmlns='u'>{ attribute { 'a' }{ 1 }}</n>/@a/string()" },
 
       // #1140
-      { "Pred 1", empty(), "declare function local:test() {" +
+      { "Pred 1", emptySequence(), "declare function local:test() {" +
           "for $n in (1, 1) return <_><c/><w/></_>/*[$n[1]] }; local:test()/self::w" },
-      { "Pred 2", empty(), "for $n in (2,2) return (<c><c0/></c>, <d><d0/><d2/></d>)/*[$n[$n]]" },
+      { "Pred 2", emptySequence(),
+            "for $n in (2, 2) return (<c><c0/></c>, <d><d0/><d2/></d>)/*[$n[$n]]" },
       { "Pred 3", strings("XML"), "(('XML')[1])[1]" },
       { "Pred 4", integers(1), "1[position() = 1 to 2]" },
-      { "Pred 5", integers(1), "1[position() = (1,2)]" },
+      { "Pred 5", integers(1), "1[position() = (1, 2)]" },
       { "Pred 6", integers(1), "count((text { 'x' }, element x {})[. instance of element()])" },
 
       { "FItem 1", integers(1), "declare context item := 0; last#0()" },
-      { "FItem 2", integers(2), "declare context item := 1; let $f := last#0 return (2,3)[$f()]" },
+      { "FItem 2", integers(2), "declare context item := 1; let $f := last#0 return (2, 3)[$f()]" },
 
       { "List 1", integers(1, 10000000000L),
         "for $i in (1, 10000000000) return (1 to $i)[last()]" },

@@ -8,10 +8,10 @@ import org.basex.gui.layout.*;
  * This is the toolbar of the main window.
  * The toolbar contents are defined in {@link GUIConstants#TOOLBAR}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-final class GUIToolBar extends JToolBar {
+final class GUIToolBar extends BaseXToolBar {
   /** Toolbar commands. */
   private final GUICommand[] commands;
   /** Reference to the main window. */
@@ -23,7 +23,6 @@ final class GUIToolBar extends JToolBar {
    * @param gui reference to the main window
    */
   GUIToolBar(final GUICommand[] commands, final GUI gui) {
-    setFloatable(false);
     this.commands = commands;
     this.gui = gui;
 
@@ -31,9 +30,7 @@ final class GUIToolBar extends JToolBar {
       if(c == null) {
         addSeparator();
       } else {
-        final AbstractButton button = BaseXButton.command(c, gui);
-        button.setFocusable(false);
-        add(button);
+        add(BaseXButton.command(c, gui));
       }
     }
   }

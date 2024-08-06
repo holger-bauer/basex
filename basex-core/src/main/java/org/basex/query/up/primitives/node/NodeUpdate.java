@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Base class for all update primitives that operate on a specific node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public abstract class NodeUpdate extends DataUpdate {
@@ -23,7 +23,7 @@ public abstract class NodeUpdate extends DataUpdate {
    * @param type update type
    * @param pre target node pre value
    * @param data target data reference
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   NodeUpdate(final UpdateType type, final int pre, final Data data, final InputInfo info) {
     super(type, data, info);
@@ -41,11 +41,11 @@ public abstract class NodeUpdate extends DataUpdate {
   /**
    * Prepares this update primitive before execution. This includes e.g. the
    * preparation of insertion sequences.
-   * @param tmp temporary database
+   * @param memData temporary data instance
    * @param qc query context
    * @throws QueryException query exception
    */
-  public abstract void prepare(MemData tmp, QueryContext qc) throws QueryException;
+  public abstract void prepare(MemData memData, QueryContext qc) throws QueryException;
 
   /**
    * Updates the name pool, which is used to find duplicate attributes
@@ -69,7 +69,7 @@ public abstract class NodeUpdate extends DataUpdate {
    *
    * When a primitive is substituted it is still added to the list itself to be able to
    * throw exceptions when necessary. I.e. for multiple replaces on the same target node.
-   * These update primitives don't produce atomic updates, hence this won't affect the
+   * These update primitives don't produce atomic updates, hence this will not affect the
    * database.
    *
    * @param tmp temporary mem data

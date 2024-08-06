@@ -2,28 +2,25 @@ package org.basex.gui.view.project;
 
 import static org.basex.core.Text.*;
 
-import java.io.*;
 import java.util.*;
 
 import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.tree.*;
 
-import org.basex.core.cmd.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
 import org.basex.gui.listener.*;
 import org.basex.io.*;
-import org.basex.query.value.node.*;
 import org.basex.util.*;
 
 /**
  * Tree of project view.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
+final class ProjectTree extends BaseXTree implements TreeWillExpandListener, ProjectCommands {
   /** Project view. */
   private final ProjectView view;
 
@@ -42,8 +39,10 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     setCellRenderer(renderer);
     addTreeWillExpandListener(this);
     addMouseListener((MouseClickedListener) e -> {
-      if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2)
-        new OpenCmd().execute(view.gui);
+      if(SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2) {
+        final IOFile file = selectedFile();
+        if(file != null && !file.isDir()) view.open(file, "");
+      }
     });
 
     setCellEditor(new ProjectCellEditor(this, renderer));
@@ -51,12 +50,91 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     final int h = getFontMetrics(getFont()).getHeight();
     if(h > 16) setRowHeight(Math.max(32, h));
 
-    // add popup
-    new BaseXPopup(this, view.gui,
-      new OpenCmd(), new OpenExternalCmd(), new TestCmd(), new SetContextCmd(), null,
-      new DeleteCmd(), new RenameCmd(), new NewDirCmd(), null,
-      new RefreshCmd(), null, new CopyPathCmd()
-    );
+    /* Commands for editing nodes. */
+
+    // delete file or show error dialog
+    // choose free name
+    final GUIPopupCmd[] edit = {
+      new GUIPopupCmd(DELETE + DOTS, BaseXKeys.DELNEXT) {
+        @Override
+        public void execute() {
+          final ProjectNode node = selectedNode();
+          final GUI gui = view.gui;
+          if(BaseXDialog.confirm(gui, Util.info(DELETE_FILE_X, node.file))) {
+            final ProjectNode parent = (ProjectNode) node.getParent();
+            // delete file or show error dialog
+            if(gui.editor.delete(node.file)) {
+              parent.refresh();
+              setSelectionPath(parent.path());
+              view.refresh();
+            } else {
+              BaseXDialog.error(gui, Util.info(FILE_NOT_DELETED_X, node.file));
+            }
+          }
+        }
+
+        @Override
+        public boolean enabled(final GUI main) {
+          final ProjectNode node = selectedNode();
+          return node != null && !node.root();
+        }
+      },
+
+      new GUIPopupCmd(RENAME, BaseXKeys.RENAME) {
+        @Override
+        public void execute() {
+          startEditingAtPath(selectedNode().path());
+          view.refresh();
+        }
+
+        @Override
+        public boolean enabled(final GUI main) {
+          final ProjectNode node = selectedNode();
+          return node != null && !node.root();
+        }
+      },
+
+      new GUIPopupCmd(NEW_DIR, BaseXKeys.NEWDIR) {
+        @Override
+        public void execute() {
+          final ProjectNode node = selectedNode(), dir = node instanceof ProjectDir ? node :
+            (ProjectNode) node.getParent();
+
+          // choose free name
+          String name = '(' + NEW_DIR + ')';
+          IOFile file = new IOFile(dir.file, name);
+          int c = 1;
+          while(file.exists()) {
+            name = '(' + NEW_DIR + ' ' + ++c + ')';
+            file = new IOFile(dir.file, name);
+          }
+          if(file.md()) {
+            dir.expand();
+
+            final String fn = name;
+            new Thread(() -> {
+              final Enumeration<?> children = dir.children();
+              while(children.hasMoreElements()) {
+                final ProjectNode child = (ProjectNode) children.nextElement();
+                if(child.file != null && child.file.name().equals(fn)) {
+                  final TreePath tp = child.path();
+                  setSelectionPath(tp);
+                  startEditingAtPath(tp);
+                  break;
+                }
+              }
+            }).start();
+          }
+        }
+
+        @Override
+        public boolean enabled(final GUI main) {
+          return selectedNode() != null;
+        }
+      },
+      null
+    };
+    new BaseXPopup(this, view.gui, commands(edit));
   }
 
   /**
@@ -117,8 +195,6 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     }
   }
 
-  // PRIVATE METHOS ===============================================================================
-
   /**
    * Returns a single selected node, or {@code null} if zero or more than node is selected.
    * @return selected node or {@code null}
@@ -132,21 +208,42 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
     return null;
   }
 
-  /**
-   * Returns all selected nodes.
-   * @return selected nodes
-   */
-  private ArrayList<ProjectNode> selectedNodes() {
-    final ArrayList<ProjectNode> nodes = new ArrayList<>();
+  @Override
+  public void refresh() {
+    view.refresh();
+    selectedNode().refresh();
+  }
+
+  @Override
+  public ProjectView view() {
+    return view;
+  }
+
+  @Override
+  public String search() {
+    return "";
+  }
+
+  @Override
+  public IOFile selectedFile() {
+    final ProjectNode node = selectedNode();
+    return node != null ? node.file : null;
+  }
+
+  @Override
+  public List<IOFile> selectedFiles() {
+    final ArrayList<IOFile> files = new ArrayList<>();
     final TreePath[] paths = getSelectionPaths();
     if(paths != null) {
       for(final TreePath tp : paths) {
         final Object node = tp.getLastPathComponent();
-        if(node instanceof ProjectNode) nodes.add((ProjectNode) node);
+        if(node instanceof ProjectNode) files.add(((ProjectNode) node).file);
       }
     }
-    return nodes;
+    return files;
   }
+
+  // PRIVATE METHOS ===============================================================================
 
   /**
    * Returns the selected path, or returns {@code null} if zero or more than paths are selected.
@@ -155,193 +252,5 @@ final class ProjectTree extends BaseXTree implements TreeWillExpandListener {
   private TreePath selectedPath() {
     final TreePath[] tps = getSelectionPaths();
     return tps == null || tps.length > 1 ? null : tps[0];
-  }
-
-  // COMMANDS =====================================================================================
-
-  /** Refresh command. */
-  private final class RefreshCmd extends GUIPopupCmd {
-    /** Constructor. */
-    RefreshCmd() { super(REFRESH, BaseXKeys.REFRESH); }
-
-    @Override public void execute() {
-      view.refresh();
-      selectedNode().refresh();
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      return selectedNode() != null;
-    }
-  }
-
-  /** New directory command. */
-  private final class NewDirCmd extends GUIPopupCmd {
-    /** Constructor. */
-    NewDirCmd() { super(NEW_DIR, BaseXKeys.NEWDIR); }
-
-    @Override public void execute() {
-      final ProjectNode node = selectedNode();
-      final ProjectNode dir = node instanceof ProjectDir ? node : (ProjectNode) node.getParent();
-
-      // choose free name
-      String name = '(' + NEW_DIR + ')';
-      IOFile file = new IOFile(dir.file, name);
-      int c = 1;
-      while(file.exists()) {
-        name = '(' + NEW_DIR + ' ' + ++c + ')';
-        file = new IOFile(dir.file, name);
-      }
-      if(file.md()) {
-        dir.expand();
-
-        final String fn = name;
-        new Thread(() -> {
-          final Enumeration<?> children = dir.children();
-          while(children.hasMoreElements()) {
-            final ProjectNode child = (ProjectNode) children.nextElement();
-            if(child.file != null && child.file.name().equals(fn)) {
-              final TreePath tp = child.path();
-              setSelectionPath(tp);
-              startEditingAtPath(tp);
-              break;
-            }
-          }
-        }).start();
-      }
-    }
-    @Override public boolean enabled(final GUI main) {
-      return selectedNode() != null;
-    }
-  }
-
-  /** Delete command. */
-  private final class DeleteCmd extends GUIPopupCmd {
-    /** Constructor. */
-    DeleteCmd() { super(DELETE + DOTS, BaseXKeys.DELNEXT); }
-
-    @Override public void execute() {
-      final ProjectNode node = selectedNode();
-      final GUI gui = view.gui;
-      if(BaseXDialog.confirm(gui, Util.info(DELETE_FILE_X, node.file))) {
-        final ProjectNode parent = (ProjectNode) node.getParent();
-        // delete file or show error dialog
-        if(gui.editor.delete(node.file)) {
-          parent.refresh();
-          setSelectionPath(parent.path());
-          view.refresh();
-        } else {
-          BaseXDialog.error(gui, Util.info(FILE_NOT_DELETED_X, node.file));
-        }
-      }
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      final ProjectNode node = selectedNode();
-      return node != null && !node.root();
-    }
-  }
-
-  /** Rename command. */
-  private final class RenameCmd extends GUIPopupCmd {
-    /** Constructor. */
-    RenameCmd() { super(RENAME, BaseXKeys.RENAME); }
-
-    @Override public void execute() {
-      startEditingAtPath(selectedNode().path());
-      view.refresh();
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      final ProjectNode node = selectedNode();
-      return node != null && !node.root();
-    }
-  }
-
-  /** Open command. */
-  private final class OpenCmd extends GUIPopupCmd {
-    /** Constructor. */
-    OpenCmd() { super(OPEN, BaseXKeys.ENTER); }
-
-    @Override public void execute() {
-      for(final ProjectNode node : selectedNodes()) view.open(node.file, "");
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      for(final ProjectNode node : selectedNodes()) {
-        if(node.file.isDir()) return false;
-      }
-      return true;
-    }
-  }
-
-  /** Open externally command. */
-  private final class OpenExternalCmd extends GUIPopupCmd {
-    /** Constructor. */
-    OpenExternalCmd() { super(OPEN_EXTERNALLY, BaseXKeys.SHIFT_ENTER); }
-
-    @Override public void execute() {
-      for(final ProjectNode node : selectedNodes()) {
-        try {
-          node.file.open();
-        } catch(final IOException ex) {
-          Util.debug(ex);
-          BaseXDialog.error(view.gui, Util.info(FILE_NOT_OPENED_X, node.file));
-        }
-      }
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      return selectedNode() != null;
-    }
-  }
-
-  /** Test command. */
-  private final class TestCmd extends GUIPopupCmd {
-    /** Constructor. */
-    TestCmd() { super(RUN_TESTS, BaseXKeys.UNIT); }
-
-    @Override public void execute() {
-      for(final ProjectNode node : selectedNodes()) {
-        view.gui.execute(new Test(node.file.path()));
-      }
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      return selectedNode() != null;
-    }
-  }
-
-  /** Copy path command. */
-  private final class CopyPathCmd extends GUIPopupCmd {
-    /** Constructor. */
-    CopyPathCmd() { super(COPY_PATH, BaseXKeys.COPYPATH); }
-
-    @Override public void execute() {
-      BaseXLayout.copyPath(selectedNode().file.path());
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      return selectedNode() != null;
-    }
-  }
-
-  /** Set context command. */
-  private final class SetContextCmd extends GUIPopupCmd {
-    /** Constructor. */
-    SetContextCmd() { super(SET_CONTEXT); }
-
-    @Override public void execute() {
-      try {
-        view.gui.editor.setContext(new DBNode(selectedNode().file));
-      } catch(final IOException ex) {
-        Util.debug(ex);
-        BaseXDialog.error(view.gui, Util.info(ex));
-      }
-    }
-
-    @Override public boolean enabled(final GUI main) {
-      final ProjectNode pn = selectedNode();
-      return pn != null && !pn.file.isDir() && pn.file.hasSuffix(view.gui.gopts.xmlSuffixes());
-    }
   }
 }

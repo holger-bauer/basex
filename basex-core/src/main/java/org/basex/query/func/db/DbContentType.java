@@ -4,34 +4,41 @@ import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
-import org.basex.util.http.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbContentType extends DbAccess {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Data data = checkData(qc);
-    final String path = path(1, qc);
+    final Data data = toData(qc);
+    final String path = toDbPath(arg(1), qc);
+
+    String pt = null;
+    ResourceType type = null;
     final int pre = data.resources.doc(path);
-    MediaType type = null;
     if(pre != -1) {
-      // check media type; return application/xml if returned string is not of type xml
-      type = MediaType.get(string(data.text(pre, true)));
-      if(!type.isXML()) type = MediaType.APPLICATION_XML;
-    } else if(!data.inMemory()) {
-      final IOFile io = data.meta.binary(path);
-      if(io.exists() && !io.isDir()) type = MediaType.get(path);
+      pt = string(data.text(pre, true));
+      type = ResourceType.XML;
+    } else {
+      for(final ResourceType tp : Resources.BINARIES) {
+        final IOFile bin = data.meta.file(path, tp);
+        if(bin != null && bin.exists() && !bin.isDir()) {
+          type = tp;
+          pt = path;
+          break;
+        }
+      }
     }
-    if(type == null) throw WHICHRES_X.get(info, path);
-    return Str.get(type.toString());
+    if(pt == null) throw WHICHRES_X.get(info, path);
+    return Str.get(type.contentType(pt).toString());
   }
 }

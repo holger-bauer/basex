@@ -14,7 +14,7 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Leo Woerteler
  */
@@ -22,7 +22,8 @@ public final class ArrayFlatten extends ArrayFn {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
     final Deque<Iter> stack = new ArrayDeque<>();
-    stack.push(exprs[0].iter(qc));
+    stack.push(arg(0).iter(qc));
+
     return new Iter() {
       @Override
       public Item next() throws QueryException {
@@ -34,9 +35,10 @@ public final class ArrayFlatten extends ArrayFn {
             final Iterator<Value> members = ((XQArray) next).members().iterator();
             stack.push(new Iter() {
               private Iter iter = Empty.ITER;
+
               @Override
               public Item next() throws QueryException {
-                for(;;) {
+                while(true) {
                   final Item item = iter.next();
                   if(item != null) return item;
                   if(!members.hasNext()) return null;
@@ -61,15 +63,15 @@ public final class ArrayFlatten extends ArrayFn {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
     final ValueBuilder vb = new ValueBuilder(qc);
-    add(vb, exprs[0], qc);
+    add(vb, arg(0), qc);
     return vb.value(this);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    final Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-    if(!st.mayBeArray()) return expr;
+    final Expr input = arg(0);
+    final SeqType st = input.seqType();
+    if(!st.mayBeArray()) return input;
     exprType.assign(type(st.type));
     return this;
   }
@@ -80,7 +82,7 @@ public final class ArrayFlatten extends ArrayFn {
    * @return result type
    */
   private static Type type(final Type type) {
-    return type instanceof ArrayType ? type(((ArrayType) type).declType.type) : type;
+    return type instanceof ArrayType ? type(((ArrayType) type).memberType.type) : type;
   }
 
   /**
@@ -96,8 +98,9 @@ public final class ArrayFlatten extends ArrayFn {
     for(Item item; (item = qc.next(iter)) != null;) {
       if(item instanceof XQArray) {
         for(final Value value : ((XQArray) item).members()) add(vb, value, qc);
+      } else {
+        vb.add(item);
       }
-      else vb.add(item);
     }
   }
 }

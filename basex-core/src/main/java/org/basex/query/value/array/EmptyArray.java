@@ -5,20 +5,22 @@ import java.util.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * The empty array.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 final class EmptyArray extends XQArray {
   /** The empty array. */
-  static final EmptyArray INSTANCE = new EmptyArray();
+  static final EmptyArray EMPTY = new EmptyArray();
 
   /** Hidden constructor. */
   private EmptyArray() {
+    super(SeqType.ARRAY);
   }
 
   @Override
@@ -26,13 +28,13 @@ final class EmptyArray extends XQArray {
   }
 
   @Override
-  public XQArray cons(final Value elem) {
-    return new SmallArray(new Value[] { elem });
+  public XQArray prepend(final Value head) {
+    return new SingletonArray(head);
   }
 
   @Override
-  public XQArray snoc(final Value elem) {
-    return new SmallArray(new Value[] { elem });
+  public XQArray append(final Value last) {
+    return new SingletonArray(last);
   }
 
   @Override
@@ -51,8 +53,8 @@ final class EmptyArray extends XQArray {
   }
 
   @Override
-  public XQArray concat(final XQArray seq) {
-    return seq;
+  public XQArray concat(final XQArray other) {
+    return other;
   }
 
   @Override
@@ -61,12 +63,12 @@ final class EmptyArray extends XQArray {
   }
 
   @Override
-  public Value last() {
+  public Value foot() {
     throw Util.notExpected();
   }
 
   @Override
-  public XQArray init() {
+  public XQArray trunk() {
     throw Util.notExpected();
   }
 
@@ -76,13 +78,8 @@ final class EmptyArray extends XQArray {
   }
 
   @Override
-  public XQArray subArray(final long pos, final long len, final QueryContext qc) {
+  public XQArray subArray(final long pos, final long length, final QueryContext qc) {
     return this;
-  }
-
-  @Override
-  public boolean isEmptyArray() {
-    return true;
   }
 
   @Override
@@ -92,7 +89,7 @@ final class EmptyArray extends XQArray {
 
   @Override
   public XQArray insertBefore(final long pos, final Value value, final QueryContext qc) {
-    return new SmallArray(new Value[] { value });
+    return new SingletonArray(value);
   }
 
   @Override

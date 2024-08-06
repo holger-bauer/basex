@@ -4,6 +4,7 @@ import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -11,7 +12,7 @@ import org.basex.util.*;
 /**
  * Abstract single expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Single extends ParseExpr {
@@ -20,7 +21,7 @@ public abstract class Single extends ParseExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param seqType sequence type
    */
@@ -74,6 +75,16 @@ public abstract class Single extends ParseExpr {
   }
 
   @Override
+  public Expr[] args() {
+    return new Expr[] { expr };
+  }
+
+  @Override
+  public Expr arg(final int a) {
+    return a < 1 ? expr : Empty.UNDEFINED;
+  }
+
+  @Override
   public int exprSize() {
     return expr.exprSize() + 1;
   }
@@ -86,6 +97,7 @@ public abstract class Single extends ParseExpr {
    * @throws QueryException query exception
    */
   final Expr simplifyForCast(final Simplify mode, final CompileContext cc) throws QueryException {
+    Expr ex = this;
     final SeqType est = expr.seqType(), dst = seqType();
     if(est.occ.instanceOf(dst.occ)) {
       final Type et = est.type, dt = dst.type;
@@ -94,10 +106,10 @@ public abstract class Single extends ParseExpr {
          mode == Simplify.NUMBER && (et.isUntyped() && dt == AtomType.DOUBLE ||
            et.instanceOf(AtomType.INT) && et.instanceOf(dt)) ||
          mode == Simplify.DATA && et instanceof NodeType && dt == AtomType.UNTYPED_ATOMIC) {
-        return cc.simplify(this, expr);
+        ex = expr;
       }
     }
-    return super.simplifyFor(mode, cc);
+    return cc.simplify(this, ex, mode);
   }
 
   /**
@@ -110,7 +122,7 @@ public abstract class Single extends ParseExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), expr);
   }
 }

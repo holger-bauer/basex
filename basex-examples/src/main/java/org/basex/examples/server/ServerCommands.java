@@ -8,7 +8,7 @@ import org.basex.core.cmd.*;
 /**
  * This class demonstrates database access via the client/server architecture.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class ServerCommands {
   /**
@@ -22,7 +22,7 @@ public final class ServerCommands {
     // Start server on default port 1984
     BaseXServer server = new BaseXServer();
 
-    // Create a client session with host name, port, user name and password
+    // Create a client session with host name, port, username and password
     System.out.println("\n* Create a client session.");
 
     try(ClientSession session = new ClientSession("localhost", 1984, "admin", "admin")) {

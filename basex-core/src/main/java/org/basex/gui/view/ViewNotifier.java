@@ -16,7 +16,7 @@ import org.basex.util.*;
  * This class serves as a container for all existing views. The observer pattern
  * is used to inform all views on user interactions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ViewNotifier {
@@ -100,7 +100,7 @@ public final class ViewNotifier {
       if(view != vw && view.visible()) view.refreshFocus();
     }
     if(pre != -1) {
-      gui.status.setText(Token.string(ViewData.path(gui.context.data(), pre)));
+      gui.status.setText(Token.string(ViewData.path(gui.context.data(), pre)), true);
     }
   }
 
@@ -115,7 +115,6 @@ public final class ViewNotifier {
     for(final View view : views) {
       if(view != vw && view.visible()) view.refreshMark();
     }
-    gui.filter.setEnabled(!mark.isEmpty());
     gui.refreshControls(true);
   }
 
@@ -172,7 +171,7 @@ public final class ViewNotifier {
 
   /**
    * Notifies all views of a context change.
-   * @param nodes new context set (may be {@code null} if root nodes are addressed)
+   * @param nodes new context set (can be {@code null} if root nodes are addressed)
    * @param quick quick switch
    * @param vw the calling view
    */

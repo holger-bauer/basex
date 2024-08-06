@@ -1,13 +1,11 @@
 package org.basex.query;
 
 import java.io.*;
-import java.util.regex.*;
 
 import org.basex.core.*;
+import org.basex.core.cmd.*;
 import org.basex.core.jobs.*;
-import org.basex.io.parse.json.*;
 import org.basex.io.serial.*;
-import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -17,14 +15,10 @@ import org.basex.query.value.seq.*;
 /**
  * This class is an entry point for evaluating XQuery strings.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QueryProcessor extends Job implements Closeable {
-  /** Pattern for detecting library modules. */
-  private static final Pattern LIBMOD_PATTERN = Pattern.compile(
-  "^(xquery( version ['\"].*?['\"])?( encoding ['\"].*?['\"])? ?; ?)?module namespace.*");
-
   /** Static context. */
   public final StaticContext sc;
   /** Expression context. */
@@ -40,7 +34,7 @@ public final class QueryProcessor extends Job implements Closeable {
    * @param ctx database context
    */
   public QueryProcessor(final String query, final Context ctx) {
-    this(query, null, ctx);
+    this(query, null, ctx, null);
   }
 
   /**
@@ -48,12 +42,14 @@ public final class QueryProcessor extends Job implements Closeable {
    * @param query query string
    * @param uri base uri (can be {@code null})
    * @param ctx database context
+   * @param info query info (can be {@code null})
    */
-  public QueryProcessor(final String query, final String uri, final Context ctx) {
+  public QueryProcessor(final String query, final String uri, final Context ctx,
+      final QueryInfo info) {
     this.query = query;
-    qc = pushJob(new QueryContext(ctx));
+    qc = pushJob(new QueryContext(ctx, null, null, info));
     sc = new StaticContext(qc);
-    sc.baseURI(uri);
+    sc.baseURI(uri != null && uri.isEmpty() ? "./" : uri);
   }
 
   /**
@@ -80,6 +76,15 @@ public final class QueryProcessor extends Job implements Closeable {
   }
 
   /**
+   * Optimizes the query.
+   * @throws QueryException query exception
+   */
+  public void optimize() throws QueryException {
+    compile();
+    qc.optimize();
+  }
+
+  /**
    * Returns a memory-efficient result iterator. The query will only be fully evaluated if all items
    * of this iterator are requested.
    * @return result iterator
@@ -101,34 +106,16 @@ public final class QueryProcessor extends Job implements Closeable {
   }
 
   /**
-   * This function is called by the GUI; use {@link #iter()} or {@link #value()} instead.
-   * Caches and returns the result of the specified query. If all nodes are of the same database
-   * instance, the returned value will be of type {@link DBNodes}.
-   * @param max maximum number of results to cache (negative: return all values)
-   * @return result of query
+   * This function is called by the GUI.
+   * Caches the result of the specified query. If all nodes are of the same database
+   * instance, the cached value will be of type {@link DBNodes}.
+   * @param cmd query command
+   * @param max maximum number of items to cache (negative: return full result)
    * @throws QueryException query exception
    */
-  public Value cache(final int max) throws QueryException {
+  public void cache(final AQuery cmd, final int max) throws QueryException {
     parse();
-    return qc.cache(max);
-  }
-
-  /**
-   * Binds a value with the specified type to a global variable.
-   * If the value is an {@link Expr} instance, it is directly assigned.
-   * Otherwise, it is first cast to the appropriate XQuery type. If {@code "json"}
-   * is specified as type, the value is interpreted according to the rules
-   * specified in {@link JsonXQueryConverter}.
-   * @param name name of variable
-   * @param value value to be bound
-   * @param type type (may be {@code null})
-   * @return self reference
-   * @throws QueryException query exception
-   */
-  public QueryProcessor bind(final String name, final Object value, final String type)
-      throws QueryException {
-    qc.bind(name, value, type, sc);
-    return this;
+    qc.cache(cmd, max);
   }
 
   /**
@@ -138,19 +125,23 @@ public final class QueryProcessor extends Job implements Closeable {
    * @return self reference
    * @throws QueryException query exception
    */
-  public QueryProcessor bind(final String name, final Object value) throws QueryException {
-    return bind(name, value, null);
+  public QueryProcessor variable(final String name, final Object value) throws QueryException {
+    return variable(name, value, null);
   }
 
   /**
-   * Binds an XQuery value to a global variable.
-   * @param name name of variable
-   * @param value value to be bound
+   * Binds a value to a global variable or the context value.
+   * The arguments will be ignored if a value has already been assigned.
+   * @param name name of variable; context value if empty string or {@code null}
+   * @param value value to be bound (object or XDM {@link Value})
+   * @param type type (can be {@code null})
    * @return self reference
+   * @see QueryContext#bind(String, Object, String, StaticContext)
    * @throws QueryException query exception
    */
-  public QueryProcessor bind(final String name, final Value value) throws QueryException {
-    qc.bind(name, value, sc);
+  public QueryProcessor variable(final String name, final Object value, final String type)
+      throws QueryException {
+    qc.bind(name, value, type, sc);
     return this;
   }
 
@@ -165,25 +156,15 @@ public final class QueryProcessor extends Job implements Closeable {
   }
 
   /**
-   * Binds the context value.
-   * @param value XQuery value to be bound
-   * @return self reference
-   */
-  public QueryProcessor context(final Value value) {
-    qc.context(value, sc);
-    return this;
-  }
-
-  /**
    * Binds the context value with a specified type,
-   * using the same rules as for {@link #bind binding variables}.
+   * using the same rules as for {@link #variable binding variables}.
    * @param value value to be bound
-   * @param type type (may be {@code null})
+   * @param type type (can be {@code null})
    * @return self reference
    * @throws QueryException query exception
    */
   public QueryProcessor context(final Object value, final String type) throws QueryException {
-    qc.context(value, type, sc);
+    qc.bind(null, value, type, sc);
     return this;
   }
 
@@ -213,17 +194,16 @@ public final class QueryProcessor extends Job implements Closeable {
 
   /**
    * Returns a serializer for the given output stream.
-   * Optional output declarations within the query will be included in the
-   * serializer instance.
+   * Optional output declarations within the query will be included in the serializer instance.
    * @param os output stream
    * @return serializer instance
    * @throws IOException query exception
    * @throws QueryException query exception
    */
-  public Serializer getSerializer(final OutputStream os) throws IOException, QueryException {
+  public Serializer serializer(final OutputStream os) throws IOException, QueryException {
     compile();
     try {
-      return Serializer.get(os, qc.serParams()).sc(sc);
+      return Serializer.get(os, qc.parameters()).sc(sc);
     } catch(final QueryIOException ex) {
       throw ex.getCause();
     }
@@ -236,14 +216,6 @@ public final class QueryProcessor extends Job implements Closeable {
    */
   public void module(final String uri, final String file) {
     qc.modDeclared.put(uri, file);
-  }
-
-  /**
-   * Returns the query string.
-   * @return query
-   */
-  public String query() {
-    return query;
   }
 
   @Override
@@ -265,63 +237,11 @@ public final class QueryProcessor extends Job implements Closeable {
   }
 
   /**
-   * Returns query information.
-   * @return query information
+   * Returns a query plan as XML.
+   * @return query plan
    */
-  public String info() {
-    return qc.info();
-  }
-
-  /**
-   * Checks if the specified XQuery string is a library module.
-   * @param query query string
-   * @return result of check
-   */
-  public static boolean isLibrary(final String query) {
-    return LIBMOD_PATTERN.matcher(removeComments(query, 80)).matches();
-  }
-
-  /**
-   * Removes comments from the specified string and returns the first characters
-   * of a query.
-   * @param qu query string
-   * @param max maximum length of string to return
-   * @return result
-   */
-  public static String removeComments(final String qu, final int max) {
-    final StringBuilder sb = new StringBuilder();
-    int m = 0;
-    boolean s = false;
-    final int cl = qu.length();
-    for(int c = 0; c < cl && sb.length() < max; ++c) {
-      final char ch = qu.charAt(c);
-      if(ch == 0x0d) continue;
-      if(ch == '(' && c + 1 < cl && qu.charAt(c + 1) == ':') {
-        if(m == 0 && !s) {
-          sb.append(' ');
-          s = true;
-        }
-        ++m;
-        ++c;
-      } else if(m != 0 && ch == ':' && c + 1 < cl && qu.charAt(c + 1) == ')') {
-        --m;
-        ++c;
-      } else if(m == 0) {
-        if(ch > ' ') sb.append(ch);
-        else if(!s) sb.append(' ');
-        s = ch <= ' ';
-      }
-    }
-    if(sb.length() >= max) sb.append(Text.DOTS);
-    return sb.toString().trim();
-  }
-
-  /**
-   * Returns a tree representation of the query plan.
-   * @return root node
-   */
-  public FDoc plan() {
-    return new FDoc().add(qc.plan(qc.context.options.get(MainOptions.FULLPLAN)));
+  public FNode toXml() {
+    return qc.toXml(qc.context.options.get(MainOptions.FULLPLAN));
   }
 
   @Override

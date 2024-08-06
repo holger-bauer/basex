@@ -6,12 +6,13 @@ import java.io.*;
 
 import org.basex.build.*;
 import org.basex.core.*;
+import org.basex.io.*;
 
 /**
  * This class serves as a simple filesystem parser and creates an XML
  * representation, which resembles the DeepFS markup.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SimpleFSParser extends Parser {
@@ -36,7 +37,7 @@ public final class SimpleFSParser extends Parser {
    * @param pr database properties
    */
   public SimpleFSParser(final String path, final MainOptions pr) {
-    super(path, pr);
+    super(new IOFile(path), pr);
   }
 
   @Override

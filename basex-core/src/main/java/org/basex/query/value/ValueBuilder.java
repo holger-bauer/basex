@@ -14,7 +14,7 @@ import org.basex.util.*;
  * A builder for efficiently creating a {@link Value} by prepending and appending
  * {@link Item}s and {@link Value}s.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class ValueBuilder {
@@ -35,17 +35,6 @@ public final class ValueBuilder {
   }
 
   /**
-   * Constructor with initial items.
-   * @param qc query context (required for interrupting running queries)
-   * @param item1 first item to append
-   * @param item2 second item to append
-   */
-  public ValueBuilder(final QueryContext qc, final Item item1, final Item item2) {
-    this(qc);
-    builder = new TreeSeqBuilder().add(item1).add(item2);
-  }
-
-  /**
    * Concatenates two values.
    * @param value1 first value to concatenate
    * @param value2 second value to concatenate
@@ -59,10 +48,20 @@ public final class ValueBuilder {
     final long size2 = value2.size();
     if(size2 == 0) return value1;
     // prepend or append values
-    if(size1 > 1) return ((Seq) value1).insertBefore(size1, value2, qc);
-    if(size2 > 1) return ((Seq) value2).insert(0, (Item) value1, qc);
+    if(size1 > 1) return ((Seq) value1).insert(size1, value2, qc);
+    if(size2 > 1) return ((Seq) value2).insertBefore(0, (Item) value1, qc);
     // concatenate single items
-    return TreeSeqBuilder.concat((Item) value1, (Item) value2);
+    return concat((Item) value1, (Item) value2);
+  }
+
+  /**
+   * Concatenates two items.
+   * @param item1 first item to concatenate
+   * @param item2 second item to concatenate
+   * @return concatenated values
+   */
+  public static Value concat(final Item item1, final Item item2) {
+    return TreeSeqBuilder.concat(item1, item2);
   }
 
   /**
@@ -140,20 +139,21 @@ public final class ValueBuilder {
    * @return value
    */
   public Value value() {
-    return value((Type) null);
+    return value(AtomType.ITEM);
   }
 
   /**
    * Returns a {@link Value} representation of the items currently stored in this builder
    * annotated with the given item type.
-   * @param type type (can be {@code null}, only considered if new sequence is created)
+   * @param type type (only considered if new sequence is created)
    * @return value
    */
   public Value value(final Type type) {
     final Value first = firstValue;
     if(first != null) return first;
     final TreeSeqBuilder tree = builder;
-    return tree != null ? tree.seq(type) : Empty.VALUE;
+    builder = null;
+    return tree != null ? tree.sequence(type) : Empty.VALUE;
   }
 
   /**
@@ -163,7 +163,7 @@ public final class ValueBuilder {
    * @return value
    */
   public Value value(final Expr expr) {
-    return value(expr != null ? expr.seqType().type : null);
+    return expr != null ? value(expr.seqType().type) : value();
   }
 
   @Override

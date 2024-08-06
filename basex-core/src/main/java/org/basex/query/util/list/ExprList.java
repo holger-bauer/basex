@@ -7,7 +7,7 @@ import org.basex.util.list.*;
 /**
  * Resizable-array implementation for XQuery expressions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ExprList extends ObjectList<Expr, ExprList> {
@@ -15,7 +15,7 @@ public final class ExprList extends ObjectList<Expr, ExprList> {
    * Default constructor.
    */
   public ExprList() {
-    this(1);
+    this(2);
   }
 
   /**
@@ -27,12 +27,12 @@ public final class ExprList extends ObjectList<Expr, ExprList> {
   }
 
   /**
-   * Constructor, specifying an initial entry.
-   * @param element array capacity
+   * Constructor, assigning the specified array.
+   * @param elements initial array
    */
-  public ExprList(final Expr element) {
-    super(element);
-    size = 1;
+  public ExprList(final Expr... elements) {
+    super(elements);
+    size = elements.length;
   }
 
   /**

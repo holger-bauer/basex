@@ -1,12 +1,12 @@
 package org.basex.http.restxq;
 
-import static javax.servlet.http.HttpServletResponse.*;
+import static jakarta.servlet.http.HttpServletResponse.*;
 
 import java.util.stream.*;
 
 import org.basex.http.*;
 import org.basex.http.web.*;
-import org.basex.http.web.WebResponse.*;
+import org.basex.http.web.WebResponse.Response;
 import org.basex.query.*;
 import org.basex.util.http.*;
 
@@ -19,7 +19,7 @@ import org.basex.util.http.*;
  * <p>The implementation is based on Adam Retter's paper presented at XMLPrague 2012,
  * titled "RESTful XQuery - Standardised XQuery 3.0 Annotations for REST".</p>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RestXqServlet extends BaseXServlet {
@@ -47,18 +47,18 @@ public final class RestXqServlet extends BaseXServlet {
     // no function found? check alternatives
     if(func == null) {
       // OPTIONS: no custom response required
-      if(conn.method.equals(HttpMethod.OPTIONS.name())) {
-        conn.response.setHeader(HttpText.ALLOW, Stream.of(HttpMethod.values()).map(Enum::name).
+      if(conn.method.equals(Method.OPTIONS.name())) {
+        conn.response.setHeader(HTTPText.ALLOW, Stream.of(Method.values()).map(Enum::name).
             collect(Collectors.joining(",")));
         return;
       }
       // HEAD: evaluate GET, discard body
-      if(conn.method.equals(HttpMethod.HEAD.name())) {
-        conn.method = HttpMethod.GET.name();
+      if(conn.method.equals(Method.HEAD.name())) {
+        conn.method = Method.GET.name();
         func = modules.restxq(conn, null);
         body = false;
       }
-      if(func == null) throw HTTPCode.NO_XQUERY.get();
+      if(func == null) throw HTTPStatus.SERVICE_NOT_FOUND.get();
     }
 
     // create response
@@ -68,10 +68,10 @@ public final class RestXqServlet extends BaseXServlet {
       for(final RestXqFunction check : modules.checks(conn)) {
         if(response.create(check, func, body) != Response.NONE) return;
       }
-
       // run addressed function
-      if(response.create(func, null, body) != Response.CUSTOM) conn.log(SC_OK, "");
-
+      if(response.create(func, null, body) != Response.CUSTOM) {
+        conn.log(SC_OK, "");
+      }
     } catch(final QueryException ex) {
       // run optional error function
       func = modules.restxq(conn, ex.qname());

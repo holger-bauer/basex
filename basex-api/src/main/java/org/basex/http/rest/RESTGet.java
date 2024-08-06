@@ -4,16 +4,18 @@ import static org.basex.http.rest.RESTText.*;
 
 import java.io.*;
 import java.util.*;
-import java.util.Map.Entry;
+import java.util.AbstractMap.*;
+import java.util.Map.*;
 
 import org.basex.http.*;
-import org.basex.io.serial.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.options.*;
 
 /**
  * This class processes GET requests sent to the REST server.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RESTGet {
@@ -27,35 +29,33 @@ final class RESTGet {
    * @throws IOException I/O exception
    */
   public static RESTCmd get(final RESTSession session) throws IOException {
-    final Map<String, String[]> variables = new HashMap<>();
+    final Map<String, Entry<Object, String>> bindings = new HashMap<>();
 
     // parse query string
-    String op = null, input = null, value = null;
+    String op = null, input = null;
     final HTTPConnection conn = session.conn;
-    final SerializerOptions sopts = conn.sopts();
+    final Options sopts = conn.sopts(), mopts = conn.context.options;
     for(final Entry<String, String[]> param : conn.requestCtx.queryStrings().entrySet()) {
       final String key = param.getKey();
       final String[] values = param.getValue();
 
       if(Strings.eqic(key, COMMAND, QUERY, RUN)) {
-        if(op != null || values.length > 1) throw HTTPCode.ONEOP.get();
+        if(op != null || values.length > 1)
+          throw HTTPStatus.MULTIPLE_OPS_X.get(String.join(", ", values));
         op = key;
         input = values[0];
       } else if(key.equalsIgnoreCase(CONTEXT)) {
         // context parameter
-        value = values[0];
-      } else if(sopts.option(key) != null) {
-        // serialization parameters
-        for(final String val : values) sopts.assign(key, val);
-      } else if(!RESTCmd.parseOption(session, param, false)) {
-        // options or (if not found) external variables
-        variables.put(key, new String[] { values[0] });
+        bindings.put(null, new SimpleEntry<>(values, NodeType.DOCUMENT_NODE.toString()));
+      } else if(!RESTCmd.assign(sopts, param, false) && !RESTCmd.assign(mopts, param, false)) {
+        // assign database option, serialization parameter or external variable
+        bindings.put(key, new SimpleEntry<>(values, null));
       }
     }
 
     if(op == null) return RESTRetrieve.get(session);
-    if(op.equals(QUERY)) return RESTQuery.get(session, input, variables, value);
-    if(op.equals(RUN)) return RESTRun.get(session, input, variables, value);
-    return RESTCommand.get(session, input);
+    if(op.equals(QUERY)) return RESTQuery.get(session, input, bindings);
+    if(op.equals(RUN)) return RESTRun.get(session, input, bindings);
+    return RESTCommands.get(session, input, true);
   }
 }

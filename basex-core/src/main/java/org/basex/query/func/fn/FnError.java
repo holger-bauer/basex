@@ -15,7 +15,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnError extends StandardFunc {
@@ -31,15 +31,11 @@ public final class FnError extends StandardFunc {
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final int al = exprs.length;
-    if(al == 0) throw FUNERR1.get(info);
-
-    QNm name = toQNm(exprs[0], qc, true);
-    if(name == null) name = FUNERR1.qname();
-
-    final String msg = al > 1 ? Token.string(toToken(exprs[1], qc)) : FUNERR1.message;
-    final Value value = al > 2 ? exprs[2].value(qc) : null;
-    throw new QueryException(info, name, msg).value(value);
+    final QNm code = toQNmOrNull(arg(0), qc);
+    final String description = toStringOrNull(arg(1), qc);
+    final Value object = defined(2) ? arg(2).value(qc) : null;
+    throw new QueryException(info, code != null ? code : FUNERR1.qname(),
+      description != null ? description : FUNERR1.message).value(object);
   }
 
   @Override
@@ -56,14 +52,12 @@ public final class FnError extends StandardFunc {
    * Creates an error function instance.
    * @param ex query exception
    * @param st type of the expression that caused the error message
-   * @param sc static context
    * @return function
    */
-  public static StandardFunc get(final QueryException ex, final SeqType st,
-      final StaticContext sc) {
+  public static StandardFunc get(final QueryException ex, final SeqType st) {
     Util.debug(ex);
-    final Str msg = Str.get(ex.getLocalizedMessage());
-    final StandardFunc sf = ERROR.get(sc, ex.info(), ex.qname(), msg);
+    final Str desc = Str.get(ex.getLocalizedMessage());
+    final StandardFunc sf = ERROR.get(ex.info(), ex.qname(), desc);
     sf.exprType.assign(st);
     return sf;
   }

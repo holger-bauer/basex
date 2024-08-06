@@ -2,7 +2,6 @@ package org.basex.tests.bxapi;
 
 import java.io.*;
 import java.util.*;
-import java.util.Map.*;
 
 import javax.xml.namespace.*;
 
@@ -14,13 +13,12 @@ import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.tests.bxapi.xdm.*;
 import org.basex.util.*;
-import org.basex.util.hash.*;
 import org.basex.util.list.*;
 
 /**
  * Wrapper for evaluating XQuery expressions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XQuery implements Iterable<XdmItem>, Closeable {
@@ -45,8 +43,7 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    * @throws XQueryException exception
    */
   public XQuery context(final XdmValue value) {
-    qp.context(value.internal());
-    return this;
+    return variable("", value);
   }
 
   /**
@@ -56,9 +53,9 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    * @return self reference
    * @throws XQueryException exception
    */
-  public XQuery bind(final String key, final XdmValue value) {
+  public XQuery variable(final String key, final XdmValue value) {
     try {
-      qp.bind(key, value.internal());
+      qp.variable(key, value.internal());
       return this;
     } catch(final QueryException ex) {
       throw new XQueryException(ex);
@@ -85,16 +82,12 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
   /**
    * Declares a decimal format.
    * @param name qname
-   * @param map format
+   * @param format decimal format
    * @return self reference
    */
-  public XQuery decimalFormat(final QName name, final HashMap<String, String> map) {
+  public XQuery decimalFormat(final QName name, final DecFormatOptions format) {
     try {
-      final TokenMap tm = new TokenMap();
-      for(final Entry<String, String> e : map.entrySet()) {
-        tm.put(Token.token(e.getKey()), Token.token(e.getValue()));
-      }
-      qp.sc.decFormats.put(new QNm(name).id(), new DecFormatter(tm, null));
+      qp.sc.decFormats.put(new QNm(name).unique(), new DecFormatter(format, null));
       return this;
     } catch(final QueryException ex) {
       throw new XQueryException(ex);
@@ -167,7 +160,7 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
    * @throws XQueryException exception
    */
   public void addResource(final String name, final String... strings) {
-    qp.qc.resources.addResource(name, strings);
+    qp.qc.resources.addText(name, strings);
   }
 
   /**
@@ -241,7 +234,7 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
 
   @Override
   public Iterator<XdmItem> iterator() {
-    return new Iterator<XdmItem>() {
+    return new Iterator<>() {
       private XdmItem next;
 
       @Override
@@ -278,6 +271,6 @@ public final class XQuery implements Iterable<XdmItem>, Closeable {
 
   @Override
   public String toString() {
-    return qp.query();
+    return qp.toString();
   }
 }

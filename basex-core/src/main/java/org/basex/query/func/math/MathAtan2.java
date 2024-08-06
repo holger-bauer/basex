@@ -10,12 +10,12 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MathAtan2 extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return Dbl.get(atan2(toDouble(exprs[0], qc), toDouble(exprs[1], qc)));
+    return Dbl.get(atan2(toDouble(arg(0), qc), toDouble(arg(1), qc)));
   }
 }

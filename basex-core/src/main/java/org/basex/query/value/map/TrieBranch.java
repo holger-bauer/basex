@@ -1,7 +1,10 @@
 package org.basex.query.value.map;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
-import org.basex.query.util.collation.*;
+import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -11,7 +14,7 @@ import org.basex.util.*;
 /**
  * Inner node of a {@link XQMap}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 final class TrieBranch extends TrieNode {
@@ -46,13 +49,13 @@ final class TrieBranch extends TrieNode {
   }
 
   @Override
-  TrieNode put(final int hs, final Item key, final Value value, final int level,
-      final InputInfo ii) throws QueryException {
+  TrieNode put(final int hs, final Item key, final Value value, final int level)
+      throws QueryException {
     final int k = key(hs, level);
     final TrieNode sub = kids[k], nsub;
     final int bs, rem;
     if(sub != null) {
-      nsub = sub.put(hs, key, value, level + 1, ii);
+      nsub = sub.put(hs, key, value, level + 1);
       if(nsub == sub) return this;
       bs = used;
       rem = sub.size;
@@ -67,12 +70,11 @@ final class TrieBranch extends TrieNode {
   }
 
   @Override
-  TrieNode delete(final int hash, final Item key, final int level, final InputInfo ii)
-      throws QueryException {
+  TrieNode delete(final int hash, final Item key, final int level) throws QueryException {
     final int k = key(hash, level);
     final TrieNode sub = kids[k];
     if(sub == null) return this;
-    final TrieNode nsub = sub.delete(hash, key, level + 1, ii);
+    final TrieNode nsub = sub.delete(hash, key, level + 1);
     if(nsub == sub) return this;
 
     final int nu;
@@ -93,19 +95,17 @@ final class TrieBranch extends TrieNode {
   }
 
   @Override
-  Value get(final int hash, final Item key, final int level, final InputInfo ii)
-      throws QueryException {
+  Value get(final int hash, final Item key, final int level) throws QueryException {
     final int k = key(hash, level);
     final TrieNode sub = kids[k];
-    return sub == null ? null : sub.get(hash, key, level + 1, ii);
+    return sub == null ? null : sub.get(hash, key, level + 1);
   }
 
   @Override
-  boolean contains(final int hash, final Item key, final int level, final InputInfo ii)
-      throws QueryException {
+  boolean contains(final int hash, final Item key, final int level) throws QueryException {
     final int k = key(hash, level);
     final TrieNode sub = kids[k];
-    return sub != null && sub.contains(hash, key, level + 1, ii);
+    return sub != null && sub.contains(hash, key, level + 1);
   }
 
   /** End strings. */
@@ -113,20 +113,20 @@ final class TrieBranch extends TrieNode {
 
   @Override
   TrieNode addAll(final TrieNode node, final int level, final MergeDuplicates merge,
-      final QueryContext qc, final InputInfo ii) throws QueryException {
-    return node.add(this, level, merge, qc, ii);
+      final QueryContext qc, final InputInfo info) throws QueryException {
+    return node.add(this, level, merge, qc, info);
   }
 
   @Override
   TrieNode add(final TrieLeaf leaf, final int level, final MergeDuplicates merge,
-      final QueryContext qc, final InputInfo ii) throws QueryException {
+      final QueryContext qc, final InputInfo info) throws QueryException {
 
     qc.checkStop();
     final int k = key(leaf.hash, level);
     final TrieNode ch = kids[k], kid;
     int n = 1;
     if(ch != null) {
-      final TrieNode ins = ch.add(leaf, level + 1, merge, qc, ii);
+      final TrieNode ins = ch.add(leaf, level + 1, merge, qc, info);
       if(ins == ch) return this;
       n = ins.size - ch.size;
       kid = ins;
@@ -141,14 +141,14 @@ final class TrieBranch extends TrieNode {
 
   @Override
   TrieNode add(final TrieList list, final int level, final MergeDuplicates merge,
-      final QueryContext qc, final InputInfo ii) throws QueryException {
+      final QueryContext qc, final InputInfo info) throws QueryException {
 
     qc.checkStop();
     final int k = key(list.hash, level);
     final TrieNode ch = kids[k], kid;
     int n = list.size;
     if(ch != null) {
-      final TrieNode ins = ch.add(list, level + 1, merge, qc, ii);
+      final TrieNode ins = ch.add(list, level + 1, merge, qc, info);
       if(ins == ch) return this;
       n = ins.size - ch.size;
       kid = ins;
@@ -163,7 +163,7 @@ final class TrieBranch extends TrieNode {
 
   @Override
   TrieNode add(final TrieBranch branch, final int level, final MergeDuplicates merge,
-      final QueryContext qc, final InputInfo ii) throws QueryException {
+      final QueryContext qc, final InputInfo info) throws QueryException {
 
     TrieNode[] ch = null;
     int nu = used, ns = size;
@@ -171,7 +171,7 @@ final class TrieBranch extends TrieNode {
     for(int k = 0; k < kl; k++) {
       final TrieNode n = kids[k], ok = branch.kids[k];
       if(ok != null) {
-        final TrieNode kid = n == null ? ok : ok.addAll(n, level + 1, merge, qc, ii);
+        final TrieNode kid = n == null ? ok : ok.addAll(n, level + 1, merge, qc, info);
         if(kid != n) {
           if(ch == null) ch = copyKids();
           ch[k] = kid;
@@ -209,30 +209,30 @@ final class TrieBranch extends TrieNode {
   }
 
   @Override
-  void cache(final boolean lazy, final InputInfo ii) throws QueryException {
+  void cache(final boolean lazy, final InputInfo info) throws QueryException {
     for(final TrieNode nd : kids) {
-      if(nd != null) nd.cache(lazy, ii);
+      if(nd != null) nd.cache(lazy, info);
     }
   }
 
   @Override
-  boolean materialized() {
+  public boolean materialized(final Predicate<Data> test, final InputInfo info)
+      throws QueryException {
     for(final TrieNode nd : kids) {
-      if(nd != null && !nd.materialized()) return false;
+      if(nd != null && !nd.materialized(test, info)) return false;
     }
     return true;
   }
 
   @Override
-  void forEach(final ValueBuilder vb, final FItem func, final QueryContext qc, final InputInfo ii)
-      throws QueryException {
+  void apply(final QueryBiConsumer<Item, Value> func) throws QueryException {
     for(final TrieNode nd : kids) {
-      if(nd != null) nd.forEach(vb, func, qc, ii);
+      if(nd != null) nd.apply(func);
     }
   }
 
   @Override
-  boolean instanceOf(final AtomType kt, final SeqType dt) {
+  boolean instanceOf(final Type kt, final SeqType dt) {
     for(final TrieNode nd : kids) {
       if(nd != null && !nd.instanceOf(kt, dt)) return false;
     }
@@ -240,48 +240,36 @@ final class TrieBranch extends TrieNode {
   }
 
   @Override
-  int hash(final InputInfo ii) throws QueryException {
-    int hash = 0;
-    for(final TrieNode nd : kids) {
-      if(nd != null) hash = (hash << 5) - hash + nd.hash(ii);
-    }
-    return hash;
-  }
-
-  @Override
-  boolean deep(final TrieNode node, final Collation coll, final InputInfo ii)
-      throws QueryException {
+  boolean equal(final TrieNode node, final DeepEqual deep) throws QueryException {
     if(!(node instanceof TrieBranch)) return false;
+
+    // check bit usage first
     final TrieBranch ob = (TrieBranch) node;
-
-    // check bin usage first
     if(used != ob.used) return false;
-
     // recursively compare children
-    for(int i = 0; i < KIDS; i++)
-      if(kids[i] != null && !kids[i].deep(ob.kids[i], coll, ii)) return false;
-
+    if(deep != null && deep.qc != null) deep.qc.checkStop();
+    for(int k = 0; k < KIDS; k++) {
+      if(kids[k] != null && !kids[k].equal(ob.kids[k], deep)) return false;
+    }
     // everything OK
     return true;
   }
 
   @Override
-  StringBuilder append(final StringBuilder sb, final String indent) {
+  void add(final TokenBuilder tb, final String indent) {
     final int s = Integer.bitCount(used);
     for(int i = 0, j = 0; i < s; i++, j++) {
       while((used & 1 << j) == 0) j++;
       final int e = i == s - 1 ? 2 : 0;
-      sb.append(indent).append(ENDS[e]).append(String.format("%x", j)).append('\n');
-      kids[j].append(sb, indent + ENDS[e + 1]);
+      tb.add(indent).add(ENDS[e]).add(String.format("%x", j)).add('\n');
+      kids[j].add(tb, indent + ENDS[e + 1]);
     }
-    return sb;
   }
 
   @Override
-  StringBuilder append(final StringBuilder sb) {
-    for(int i = 0; i < KIDS && more(sb); i++) {
-      if(kids[i] != null) kids[i].append(sb);
+  void add(final TokenBuilder tb) {
+    for(int k = 0; k < KIDS && tb.moreInfo(); k++) {
+      if(kids[k] != null) kids[k].add(tb);
     }
-    return sb;
   }
 }

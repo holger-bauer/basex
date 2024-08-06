@@ -9,7 +9,7 @@ import org.basex.*;
  * This class is a simple example to demonstrate the REST implementation.
  * It shows the function of the HTTP DELETE method.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class RESTPost {
   /**
@@ -20,7 +20,7 @@ public final class RESTPost {
     System.out.println("=== POST: execute a query ===");
 
     // The java URL connection to the resource
-    URL url = new URL("http://admin:admin@localhost:8984/rest/factbook");
+    URL url = new URL("http://admin:admin@localhost:8080/rest/factbook");
     System.out.println("\n* URL: " + url);
 
     // Query to be sent to the server

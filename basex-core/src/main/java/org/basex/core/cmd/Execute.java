@@ -3,6 +3,7 @@ package org.basex.core.cmd;
 import static org.basex.core.Text.*;
 
 import java.util.*;
+import java.util.List;
 import java.util.stream.*;
 
 import org.basex.core.*;
@@ -16,12 +17,12 @@ import org.basex.util.*;
  * Evaluates the 'execute' command and runs a command script.
  * This command can be used to run multiple commands as a single transaction.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class Execute extends Command {
   /** Commands to execute. */
-  final java.util.List<Command> commands;
+  final List<Command> commands;
   /** Error message. */
   String error;
 
@@ -69,7 +70,7 @@ public class Execute extends Command {
         final boolean ok = pushJob(cmd).run(context, out);
         sb.append(cmd.info());
         if(!ok) {
-          exception = cmd.exception();
+          exception = cmd.exception;
           return error(sb.toString());
         }
       } finally {

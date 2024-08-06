@@ -9,6 +9,7 @@ import org.basex.core.*;
 import org.basex.core.locks.*;
 import org.basex.core.users.*;
 import org.basex.data.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.io.out.*;
 import org.basex.io.serial.*;
@@ -20,7 +21,7 @@ import org.basex.util.list.*;
  * Evaluates the 'export' command and saves the currently opened database
  * to disk.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Export extends Command {
@@ -84,25 +85,23 @@ public final class Export extends Command {
     final IOFile root = new IOFile(path);
     root.md();
 
-    // XML documents
+    // collect resources to be exported
     final IntList docs = data.resources.docs();
-    // raw files
     final IOFile source;
     final StringList files;
     if(data.inMemory()) {
       source = null;
       files = new StringList();
     } else {
-      source = data.meta.binaryDir();
+      source = data.meta.dir(ResourceType.BINARY);
       files = source.descendants();
     }
-
     if(export != null) {
       export.progPos = 0;
       export.progSize = docs.size() + files.size();
     }
 
-    // XML documents
+    // export XML documents
     final HashSet<String> target = new HashSet<>();
     final int is = docs.size();
     for(int i = 0; i < is; i++) {
@@ -122,11 +121,10 @@ public final class Export extends Command {
           ser.serialize(new DBNode(data, pre));
         }
       }
-
       if(export != null) export.progPos++;
     }
 
-    // export raw files
+    // export binary resources
     for(final String file : files) {
       final IOFile io = new IOFile(root.path(), file);
       if(export != null) {
@@ -134,7 +132,6 @@ public final class Export extends Command {
         export.progFile = io;
       }
       new IOFile(source, file).copyTo(unique(target, io.path()));
-
       if(export != null) export.progPos++;
     }
   }
@@ -175,7 +172,7 @@ public final class Export extends Command {
     String path = file;
     while(exp.contains(path)) {
       path = file.indexOf('.') == -1 ? file + '(' + ++c + ')' :
-           file.replaceAll("(.*)\\.(.*)", "$1(" + ++c + ").$2");
+             file.replaceAll("(.*)\\.(.*)", "$1(" + ++c + ").$2");
     }
     exp.add(path);
     return new IOFile(path);

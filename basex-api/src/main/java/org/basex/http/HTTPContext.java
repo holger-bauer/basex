@@ -3,7 +3,7 @@ package org.basex.http;
 import java.io.*;
 import java.util.*;
 
-import javax.servlet.*;
+import jakarta.servlet.*;
 
 import org.basex.*;
 import org.basex.core.*;
@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Global HTTP context information.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class HTTPContext {
@@ -82,7 +82,7 @@ public final class HTTPContext {
       String value = sc.getInitParameter(name);
       if(name.startsWith(Prop.DBPREFIX) && name.endsWith("path") && !new File(value).isAbsolute()) {
         // prefix relative path with absolute servlet path
-        Util.debug(name.toUpperCase(Locale.ENGLISH) + ": " + value);
+        Util.debugln(name.toUpperCase(Locale.ENGLISH) + ": " + value);
         value = new IOFile(webapp, value).path();
       }
       Prop.put(name, value);
@@ -106,9 +106,8 @@ public final class HTTPContext {
       }
     }
 
-    // start persistent jobs
-    new Jobs(context).run();
-
+    // initialize persistent jobs
+    new Jobs(context).init();
     return context;
   }
 

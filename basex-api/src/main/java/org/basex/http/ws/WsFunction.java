@@ -1,6 +1,5 @@
 package org.basex.http.ws;
 
-import static org.basex.http.web.WebText.*;
 import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
 
@@ -20,107 +19,100 @@ import org.basex.util.*;
 /**
  * This class represents a single WebSocket function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Johannes Finckh
  */
 public final class WsFunction extends WebFunction {
   /** Path of the function. */
   public WsPath path;
   /** Message parameter. */
-  public WebParam message;
+  private WebParam message;
 
   /**
    * Constructor.
    * @param function associated user function
-   * @param qc query context
    * @param module web module
+   * @param qc query context
    */
-  public WsFunction(final StaticFunc function, final QueryContext qc, final WebModule module) {
+  public WsFunction(final StaticFunc function, final WebModule module, final QueryContext qc) {
     super(function, module, qc);
   }
 
   @Override
-  public boolean parse(final Context ctx) throws QueryException {
-    final boolean[] declared = new boolean[function.params.length];
+  public boolean parseAnnotations(final Context ctx) throws QueryException {
+    final boolean[] declared = new boolean[function.arity()];
     // counter for annotations that should occur only once
     boolean found = false;
-    int count = 0;
+    AnnList starts = AnnList.EMPTY;
 
     for(final Ann ann : function.anns) {
-      final Annotation sig = ann.sig;
-      if(sig == null || !eq(sig.uri, QueryText.WS_URI)) continue;
+      final Annotation def = ann.definition;
+      if(def == null || !eq(def.uri, QueryText.WS_URI)) continue;
 
       found = true;
-      final Item[] args = ann.args();
-      switch(sig) {
+      final Value value = ann.value();
+      switch(def) {
         case _WS_HEADER_PARAM:
-          final String name = toString(args[0]);
-          final QNm var = checkVariable(toString(args[1]), declared);
-          final int al = args.length;
-          final ItemList items = new ItemList(al - 2);
-          for(int a = 2; a < al; a++) items.add(args[a]);
+          final String name = toString(value.itemAt(0));
+          final QNm var = checkVariable(toString(value.itemAt(1)), declared);
+          final long vs = value.size();
+          final ItemList items = new ItemList(vs - 2);
+          for(int v = 2; v < vs; v++) items.add(value.itemAt(v));
           headerParams.add(new WebParam(var, name, items.value()));
           break;
         case _WS_CLOSE:
         case _WS_CONNECT:
-          path = new WsPath(toString(args[0]));
-          count++;
+          path = new WsPath(toString(value.itemAt(0)));
+          starts = starts.attach(ann);
           break;
         case _WS_ERROR:
         case _WS_MESSAGE:
-          final QNm msg = checkVariable(toString(args[1]), declared);
+          final QNm msg = checkVariable(toString(value.itemAt(1)), declared);
           message = new WebParam(msg, "message", null);
-          path = new WsPath(toString(args[0]));
-          count++;
+          path = new WsPath(toString(value.itemAt(0)));
+          starts = starts.attach(ann);
           break;
         default:
           break;
       }
     }
-
-    if(found) {
-      if(count == 0) throw error(function.info, ANN_MISSING);
-      if(count > 1) throw error(function.info, ANN_CONFLICT);
-      final int dl = declared.length;
-      for(int d = 0; d < dl; d++) {
-        if(!declared[d]) throw error(function.info, VAR_UNDEFINED_X,
-            function.params[d].name.string());
-      }
-    }
-    return found;
+    return checkParsed(found, starts, declared);
   }
 
   /**
    * Binds the function parameters.
-   * @param args arguments
    * @param msg message (can be {@code null}; otherwise string or byte array)
    * @param values header values
    * @param qc query context
+   * @return arguments
    * @throws QueryException query exception
    */
-  public void bind(final Expr[] args, final Object msg, final Map<String, Value> values,
+  Expr[] bind(final Object msg, final Map<String, Value> values,
       final QueryContext qc) throws QueryException {
 
+    final Expr[] args = new Expr[function.arity()];
     if(msg != null) values.put("message", msg instanceof byte[] ?
       B64.get((byte[]) msg) : Str.get((String) msg));
 
-    for(final WebParam rxp : headerParams) {
-      bind(rxp.var, args, values.get(rxp.name), qc);
+    for(final WebParam param : headerParams) {
+      bind(param.var, args, values.get(param.name), qc, "Value of \"" + param.name + '"');
     }
     if(message != null) {
-      bind(message.var, args, values.get(message.name), qc);
+      bind(message.var, args, values.get(message.name), qc, "Message");
     }
+    return args;
   }
 
   /**
    * Checks if an WebSocket request matches this annotation and path.
-   * @param ann annotation (can be {@code null})
+   * @param definition annotation definition (can be {@code null})
    * @param pth path to compare to (can be {@code null})
    * @return boolean result of check
    */
-  public boolean matches(final Annotation ann, final WsPath pth) {
-    for(final Ann a : function.anns) {
-      if((ann == null || a.sig == ann) && (pth == null || path.compareTo(pth) == 0)) return true;
+  public boolean matches(final Annotation definition, final WsPath pth) {
+    for(final Ann ann : function.anns) {
+      if((definition == null || ann.definition == definition) &&
+          (pth == null || path.compareTo(pth) == 0)) return true;
     }
     return false;
   }
@@ -138,19 +130,19 @@ public final class WsFunction extends WebFunction {
    */
   @Override
   public QueryException error(final String msg, final Object... ext) {
-    return error(function.info, Util.info(msg, ext));
+    return error(function.info, msg, ext);
   }
 
   // PRIVATE METHODS ==============================================================================
 
   /**
    * Creates an exception with the specific message.
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param msg error message
    * @param ext error extension
    * @return exception
    */
-  private static QueryException error(final InputInfo ii, final String msg, final Object... ext) {
-    return BASEX_WS_X.get(ii, Util.info(msg, ext));
+  private static QueryException error(final InputInfo info, final String msg, final Object... ext) {
+    return BASEX_WS_X.get(info, Util.info(msg, ext));
   }
 }

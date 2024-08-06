@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests queries with path in it on collections.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Andreas Weiler
  */
 public final class PathTest extends SandboxTest {
@@ -74,13 +74,22 @@ public final class PathTest extends SandboxTest {
 
   /**
    * #905: Ensure that parser options will not affect doc() and collection().
-   * May be moved to a separate test class in future.
    */
   @Test public void docParsing() {
     final IOFile path = new IOFile(sandbox(), "doc.xml");
     write(path, "<a/>");
     set(MainOptions.PARSER, MainParser.JSON);
     assertEquals("<a/>", query("doc('" + path + "')"));
+  }
+
+  /**
+   * Tests on empty collections.
+   */
+  @Test public void emptyCollection() {
+    execute(new Open(WEEK1));
+    query("collection()//text/text() => head()", "text");
+    query("collection(())//text/text() => head()", "text");
+    query("collection('" + WEEK1 + "')//text/text() => head()", "text");
   }
 
   /**

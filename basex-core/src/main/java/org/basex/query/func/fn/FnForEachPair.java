@@ -13,64 +13,81 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnForEachPair extends StandardFunc {
   @Override
   public final Iter iter(final QueryContext qc) throws QueryException {
-    final Iter iter1 = exprs[0].iter(qc), iter2 = exprs[1].iter(qc);
-    final FItem func = checkArity(exprs[2], 2, this instanceof UpdateForEachPair, qc);
+    final Iter input1 = arg(0).iter(qc), input2 = arg(1).iter(qc);
+    final FItem action = toFunction(arg(2), 3, this instanceof UpdateForEachPair, qc);
+    final long size = action.funcType().declType.one()
+        ? Math.min(input1.size(), input2.size()) : -1;
 
     return new Iter() {
       Iter iter = Empty.ITER;
+      int p;
 
       @Override
       public Item next() throws QueryException {
-        do {
-          final Item item = qc.next(iter);
+        while(true) {
+          final Item item = iter.next();
           if(item != null) return item;
-          final Item item1 = iter1.next(), item2 = iter2.next();
+          final Item item1 = input1.next(), item2 = input2.next();
           if(item1 == null || item2 == null) return null;
-          iter = func.invoke(qc, info, item1, item2).iter();
-        } while(true);
+          iter = action.invoke(qc, info, item1, item2, Int.get(++p)).iter();
+        }
+      }
+
+      @Override
+      public Item get(final long i) throws QueryException {
+        return action.invoke(qc, info, input1.get(i), input2.get(i), Int.get(i)).item(qc, info);
+      }
+
+      @Override
+      public long size() {
+        return size;
       }
     };
   }
 
   @Override
   public final Value value(final QueryContext qc) throws QueryException {
-    final Iter iter1 = exprs[0].iter(qc), iter2 = exprs[1].iter(qc);
-    final FItem func = checkArity(exprs[2], 2, this instanceof UpdateForEachPair, qc);
+    final Iter input1 = arg(0).iter(qc), input2 = arg(1).iter(qc);
+    final FItem action = toFunction(arg(2), 3, this instanceof UpdateForEachPair, qc);
 
+    int p = 0;
     final ValueBuilder vb = new ValueBuilder(qc);
-    for(Item item1, item2; (item1 = iter1.next()) != null && (item2 = iter2.next()) != null;) {
-      vb.add(func.invoke(qc, info, item1, item2));
+    for(Item item1, item2; (item1 = input1.next()) != null && (item2 = input2.next()) != null;) {
+      vb.add(action.invoke(qc, info, item1, item2, Int.get(++p)));
     }
     return vb.value(this);
   }
 
   @Override
   protected final Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr1 = exprs[0], expr2 = exprs[1];
-    final SeqType st1 = expr1.seqType(), st2 = expr2.seqType();
-    if(st1.zero()) return expr1;
-    if(st2.zero()) return expr2;
+    final Expr input1 = arg(0), input2 = arg(1);
+    final SeqType st1 = input1.seqType(), st2 = input2.seqType();
+    if(st1.zero()) return input1;
+    if(st2.zero()) return input2;
 
-    exprs[2] = coerceFunc(exprs[2], cc, SeqType.ITEM_ZM, st1.with(Occ.EXACTLY_ONE),
-        st2.with(Occ.EXACTLY_ONE));
+    arg(2, arg -> refineFunc(arg(2), cc, SeqType.ITEM_ZM, st1.with(Occ.EXACTLY_ONE),
+        st2.with(Occ.EXACTLY_ONE), SeqType.INTEGER_O));
 
     // assign type after coercion (expression might have changed)
-    final boolean updating = this instanceof UpdateForEachPair;
-    final FuncType ft = exprs[2].funcType();
-    if(ft != null && !updating) {
+    final FuncType ft = arg(2).funcType();
+    if(ft != null) {
       final SeqType declType = ft.declType;
       final boolean oneOrMore = st1.oneOrMore() && st2.oneOrMore() && declType.oneOrMore();
       final long size = declType.zero() ? 0 : declType.one() ?
-        Math.min(expr1.size(), expr2.size()) : -1;
+        Math.min(input1.size(), input2.size()) : -1;
       exprType.assign(declType, oneOrMore ? Occ.ONE_OR_MORE : Occ.ZERO_OR_MORE, size);
     }
-
     return this;
+  }
+
+  @Override
+  public int hofIndex() {
+    return 2;
   }
 }

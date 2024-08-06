@@ -8,14 +8,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnNamespaceUri extends ContextFn {
   @Override
   public Uri item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    final ANode node = toNodeOrNull(context(qc), qc);
     final QNm qname = node != null ? node.qname() : null;
-    return qname != null ? Uri.uri(qname.uri(), false) : Uri.EMPTY;
+    return qname != null ? Uri.get(qname.uri(), false) : Uri.EMPTY;
   }
 }

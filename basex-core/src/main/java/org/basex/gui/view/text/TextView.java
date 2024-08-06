@@ -13,7 +13,7 @@ import org.basex.core.*;
 import org.basex.core.parse.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
-import org.basex.gui.layout.BaseXFileChooser.Mode;
+import org.basex.gui.layout.BaseXFileChooser.*;
 import org.basex.gui.text.*;
 import org.basex.gui.view.*;
 import org.basex.io.*;
@@ -27,15 +27,13 @@ import org.basex.util.*;
 /**
  * This class offers a fast text view, using the {@link TextPanel} class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TextView extends View {
   /** Search editor. */
   private final SearchEditor editor;
 
-  /** Header string. */
-  private final BaseXHeader header;
   /** Home button. */
   private final AbstractButton home;
   /** Info label for total time. */
@@ -56,38 +54,37 @@ public final class TextView extends View {
     super(TEXTVIEW, notifier);
     border(5).layout(new BorderLayout(0, 5));
 
-    header = new BaseXHeader(RESULT);
-
-    home = BaseXButton.command(GUIMenuCmd.C_HOME, gui);
-    home.setEnabled(false);
-
-    label = new BaseXLabel(" ").resize(1.2f);
-
     text = new TextPanel(gui, false);
     text.setSyntax(new SyntaxXML());
     editor = new SearchEditor(gui, text);
+    label = new BaseXLabel(" ").resize(1.25f);
 
     final AbstractButton save = BaseXButton.get("c_save", SAVE, false, gui);
     save.addActionListener(e -> save());
 
-    final BaseXBack buttons = new BaseXBack(false);
-    buttons.layout(new ColumnLayout());
+    home = BaseXButton.command(GUIMenuCmd.C_SHOW_HOME, gui);
+    home.setEnabled(false);
+
+    final BaseXToolBar buttons = new BaseXToolBar();
     buttons.add(save);
     buttons.add(home);
-    buttons.add(editor.button(FIND));
+    buttons.add(editor.button());
 
-    final BaseXBack top = new BaseXBack(false);
-    top.layout(new ColumnLayout(10));
-    top.add(buttons);
-    top.add(label);
-
-    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout());
-    north.add(top, BorderLayout.WEST);
-    north.add(header, BorderLayout.EAST);
+    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout(10, 10));
+    north.add(buttons, BorderLayout.WEST);
+    north.add(label, BorderLayout.CENTER);
+    north.add(new BaseXHeader(RESULT), BorderLayout.EAST);
     add(north, BorderLayout.NORTH);
 
     add(editor, BorderLayout.CENTER);
     refreshLayout();
+  }
+
+  /**
+   * Focuses the text.
+   */
+  public void focusText() {
+    text.requestFocusInWindow();
   }
 
   @Override
@@ -101,8 +98,9 @@ public final class TextView extends View {
 
   @Override
   public void refreshMark() {
-    final DBNodes nodes = gui.context.marked;
-    setText(nodes != null && nodes.isEmpty() ? gui.context.current() : nodes);
+    final Context context = gui.context;
+    final DBNodes nodes = context.marked;
+    setText(nodes != null && nodes.isEmpty() ? context.current() : nodes);
   }
 
   @Override
@@ -141,19 +139,25 @@ public final class TextView extends View {
    * @param nodes nodes to display (can be {@code null})
    */
   private void setText(final DBNodes nodes) {
+    final Context context = gui.context;
     if(visible()) {
       try {
         final ArrayOutput ao = new ArrayOutput();
-        ao.setLimit(gui.gopts.get(GUIOptions.MAXTEXT));
-        if(nodes != null) nodes.serialize(Serializer.get(ao));
-        setText(ao, nodes != null ? nodes.size() : 0);
-        cachedCmd = null;
+        long size = 0;
+        if(nodes != null) {
+          ao.setLimit(gui.gopts.get(GUIOptions.MAXTEXT));
+          nodes.serialize(Serializer.get(ao, context.options.get(MainOptions.SERIALIZER)));
+          size = nodes.size();
+        } else {
+        }
+        setText(ao, size, null);
         cachedNodes = ao.finished() ? nodes : null;
+        cachedCmd = null;
       } catch(final IOException ex) {
         Util.debug(ex);
       }
     } else {
-      home.setEnabled(gui.context.data() != null);
+      home.setEnabled(context.data() != null);
     }
   }
 
@@ -195,18 +199,25 @@ public final class TextView extends View {
    * Sets the output text.
    * @param out cached output
    * @param results number of results
+   * @param throwable error, can be {@code null}
    */
-  public void setText(final ArrayOutput out, final long results) {
+  public void setText(final ArrayOutput out, final long results, final Throwable throwable) {
     final byte[] buffer = out.buffer();
-    // will never exceed integer range as the underlying array is limited to 2^31 bytes
     final int size = (int) out.size();
     final byte[] chop = token(DOTS);
     final int cl = chop.length;
     if(out.finished() && size >= cl) Array.copyFromStart(chop, cl, buffer, size - cl);
     text.setText(buffer, size);
-    header.setText((out.finished() ? CHOPPED : "") + RESULT);
+
+    String info;
+    if(throwable != null) {
+      info = throwable.getLocalizedMessage();
+    } else {
+      info = BaseXLayout.results(results, size, gui);
+      if(out.finished()) info += " (" + CHOPPED + ')';
+    }
+    label.setText(info);
     home.setEnabled(gui.context.data() != null);
-    label.setText(gui.gopts.results(results, size));
   }
 
   /**
@@ -222,10 +233,11 @@ public final class TextView extends View {
 
     gui.cursor(CURSORWAIT, true);
     try(PrintOutput out = new PrintOutput(file)) {
+      final Context context = gui.context;
       if(cachedCmd != null) {
-        cachedCmd.execute(gui.context, out);
+        cachedCmd.execute(context, out);
       } else if(cachedNodes != null) {
-        cachedNodes.serialize(Serializer.get(out));
+        cachedNodes.serialize(Serializer.get(out, context.options.get(MainOptions.SERIALIZER)));
       } else {
         out.write(text.getText());
       }

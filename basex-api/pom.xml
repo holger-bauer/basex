@@ -7,12 +7,12 @@
   <parent>
     <groupId>org.basex</groupId>
     <artifactId>basex-parent</artifactId>
-    <version>9.4.7-SNAPSHOT</version>
+    <version>11.2-SNAPSHOT</version>
     <relativePath>..</relativePath>
   </parent>
 
   <properties>
-    <jettyVersion>9.4.35.v20201120</jettyVersion>
+    <jettyVersion>11.0.22</jettyVersion>
   </properties>
 
   <name>BaseX API</name>
@@ -49,15 +49,11 @@
     </dependency>
     <dependency>
       <groupId>org.eclipse.jetty.websocket</groupId>
-      <artifactId>websocket-server</artifactId>
+      <artifactId>websocket-jetty-server</artifactId>
     </dependency>
     <dependency>
       <groupId>com.ettrema</groupId>
       <artifactId>milton-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-fileupload</groupId>
-      <artifactId>commons-fileupload</artifactId>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -65,15 +61,7 @@
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-   </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.vividsolutions</groupId>
-      <artifactId>jts</artifactId>
+      <artifactId>junit-jupiter</artifactId>
     </dependency>
   </dependencies>
 
@@ -83,9 +71,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <useIncrementalCompilation>false</useIncrementalCompilation>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -116,9 +101,9 @@
         <artifactId>jetty-maven-plugin</artifactId>
         <version>${jettyVersion}</version>
         <configuration>
-          <jettyXml>${basedir}/src/main/webapp/WEB-INF/jetty.xml</jettyXml>
+          <jettyXmls>${basedir}/src/main/webapp/WEB-INF/jetty.xml</jettyXmls>
           <stopKey>keyToStopJetty</stopKey>
-          <stopPort>8985</stopPort>
+          <stopPort>8081</stopPort>
           <supportedPackagings>
             <supportedPackaging>jar</supportedPackaging>
           </supportedPackagings>

@@ -28,7 +28,7 @@ import org.basex.util.list.*;
  * </li>
  * </ul>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DiskValuesBuilder extends ValuesBuilder {
@@ -47,7 +47,7 @@ public final class DiskValuesBuilder extends ValuesBuilder {
 
   @Override
   public DiskValues build() throws IOException {
-    Util.debug(detailedInfo());
+    Util.debugln(detailedInfo());
 
     try {
       final boolean updindex = data.meta.updindex;
@@ -122,11 +122,11 @@ public final class DiskValuesBuilder extends ValuesBuilder {
         while(++min < splits && vm[min].values.length == 0);
         if(min == splits) break;
 
-        // find index entry with smallest key
+        // find index entry with the smallest key
         ml.reset();
         for(int i = min; i < splits; ++i) {
           if(vm[i].values.length == 0) continue;
-          final int d = diff(vm[min].key, vm[i].key);
+          final int d = compare(vm[min].key, vm[i].key);
           if(d < 0) continue;
           if(d > 0) {
             min = i;
@@ -225,7 +225,7 @@ public final class DiskValuesBuilder extends ValuesBuilder {
     int[] order = null;
     if(tokenize) {
       // tokenization: create array with offsets to ordered values
-      order = id.createOrder();
+      order = id.createOrder(true);
     } else {
       // no token index: simple sort
       id.sort();

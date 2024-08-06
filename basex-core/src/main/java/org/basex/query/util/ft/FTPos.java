@@ -6,14 +6,14 @@ import org.basex.util.list.*;
 /**
  * This class contains full-text positions for a single database node.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTPos {
   /** Pre value. */
   final int pre;
   /** Positions. */
-  IntList list;
+  private IntList list;
 
   /**
    * Constructor.

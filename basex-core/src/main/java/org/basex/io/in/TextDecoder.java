@@ -5,6 +5,7 @@ import static org.basex.util.Strings.*;
 import java.io.*;
 import java.nio.*;
 import java.nio.charset.*;
+import java.util.*;
 
 import org.basex.util.*;
 
@@ -13,7 +14,7 @@ import org.basex.util.*;
  * The inheriting classes are optimized for performance and faster than Java's
  * default decoders.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class TextDecoder {
@@ -48,19 +49,28 @@ abstract class TextDecoder {
   }
 
   /**
-   * Processes an invalid codepoint. Throws an exception if input must be valid,
-   * or returns the Unicode replacement codepoint (\\uFFFD).
-   * @param cp questionable code point
+   * Throws an exception for an incomplete codepoint or returns the replacement character (\\uFFFD).
+   * @param incomplete add placeholder for missing byte
+   * @param bytes bytes
    * @return replacement codepoint
    * @throws IOException I/O exception
    */
-  final int invalid(final int cp) throws IOException {
-    if(validate) throw new DecodingException("Decoding error: x" + Integer.toHexString(cp & 0xFF));
+  final int invalid(final boolean incomplete, final byte... bytes) throws IOException {
+    if(validate) {
+      final TokenBuilder tb = new TokenBuilder();
+      for(final int b : bytes) {
+        if(!tb.isEmpty()) tb.add(", ");
+        final int c = b >> 4 & 0x0F, d = b & 0x0F;
+        tb.add(c + (c > 9 ? '7' : '0')).add(d + (d > 9 ? '7' : '0'));
+      }
+      if(incomplete) tb.add(", ??");
+      throw new DecodingException("Invalid " + encoding + " character encoding: " + tb);
+    }
     return Token.REPLACEMENT;
   }
 
   /** UTF8 Decoder. */
-  private static class UTF8 extends TextDecoder {
+  private static final class UTF8 extends TextDecoder {
     /** UTF8 cache. */
     private final byte[] cache = new byte[4];
 
@@ -68,54 +78,54 @@ abstract class TextDecoder {
     int read(final TextInput ti) throws IOException {
       int ch = ti.readByte();
       if(ch < 0x80) return ch;
-      if(ch < 0xC0) return invalid(ch);
+      if(ch < 0xC0) return invalid(false, (byte) ch);
       cache[0] = (byte) ch;
       final int cl = Token.cl((byte) ch);
       for(int c = 1; c < cl; ++c) {
         ch = ti.readByte();
-        if(ch < 0x80) return invalid(ch);
         cache[c] = (byte) ch;
+        if(ch < 0x80) return invalid(ch < 0, Arrays.copyOf(cache, ch < 0 ? c : c + 1));
       }
       return Token.cp(cache, 0);
     }
   }
 
   /** UTF16LE Decoder. */
-  private static class UTF16LE extends TextDecoder {
+  private static final class UTF16LE extends TextDecoder {
     @Override
     int read(final TextInput ti) throws IOException {
       final int a = ti.readByte();
       if(a < 0) return a;
       final int b = ti.readByte();
-      if(b < 0) return invalid(b);
+      if(b < 0) return invalid(true, (byte) a);
       return a | b << 8;
     }
   }
 
   /** UTF16BE Decoder. */
-  private static class UTF16BE extends TextDecoder {
+  private static final class UTF16BE extends TextDecoder {
     @Override
     int read(final TextInput ti) throws IOException {
       final int a = ti.readByte();
       if(a < 0) return a;
       final int b = ti.readByte();
-      if(b < 0) return invalid(b);
+      if(b < 0) return invalid(true, (byte) a);
       return a << 8 | b;
     }
   }
 
   /** UTF32 Decoder. */
-  private static class UTF32 extends TextDecoder {
+  private static final class UTF32 extends TextDecoder {
     @Override
     int read(final TextInput ti) throws IOException {
       final int a = ti.readByte();
       if(a < 0) return a;
       final int b = ti.readByte();
-      if(b < 0) return invalid(b);
+      if(b < 0) return invalid(true, (byte) a);
       final int c = ti.readByte();
-      if(c < 0) return invalid(c);
+      if(c < 0) return invalid(true, (byte) a, (byte) b);
       final int d = ti.readByte();
-      if(d < 0) return invalid(d);
+      if(d < 0) return invalid(true, (byte) a, (byte) b, (byte) c);
       return a << 24 | b << 16 | c << 8 | d;
     }
   }
@@ -133,12 +143,12 @@ abstract class TextDecoder {
 
     /**
      * Constructor.
-     * @param enc encoding
+     * @param encoding encoding
      * @throws IOException I/O exception
      */
-    private Generic(final String enc) throws IOException {
+    private Generic(final String encoding) throws IOException {
       try {
-        csd = Charset.forName(enc).newDecoder();
+        csd = Charset.forName(encoding).newDecoder();
       } catch(final Exception ex) {
         throw new DecodingException(ex);
       }
@@ -148,22 +158,24 @@ abstract class TextDecoder {
     int read(final TextInput ti) throws IOException {
       int c = -1;
       while(++c < 4) {
-        final int ch = ti.readByte();
-        if(ch < 0) break;
-        cache[c] = (byte) ch;
+        final int a = ti.readByte();
+        if(a < 0) break;
+
+        cache[c] = (byte) a;
         outc.position(0);
         inc.position(0);
         inc.limit(c + 1);
         csd.reset();
         final CoderResult cr = csd.decode(inc, outc, true);
         if(cr.isMalformed()) continue;
+
         // return codepoint
         int i = 0;
         final int os = outc.position();
         for(int o = 0; o < os; ++o) i |= outc.get(o) << (o << 3);
         return i;
       }
-      return c == 0 ? -1 : invalid(c);
+      return c == 0 ? -1 : invalid(false, cache[0]);
     }
   }
 }

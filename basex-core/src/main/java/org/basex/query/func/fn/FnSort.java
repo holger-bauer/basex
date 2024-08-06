@@ -10,97 +10,128 @@ import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
+import org.basex.util.*;
+import org.basex.util.options.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class FnSort extends StandardFunc {
+public class FnSort extends StandardFunc {
+  /** Enumeration. */
+  private enum Order {
+    /** Ascending sort. */ ASCENDING,
+    /** Descending sort. */ DESCENDING;
+
+    @Override
+    public String toString() {
+      return EnumOption.string(this);
+    }
+  }
+
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Value value = exprs[0].value(qc), v = quickValue(value);
-    return v != null ? v.iter() : iter(value, qc);
+    final Value input = arg(0).value(qc), value = quickValue(input);
+    return value != null ? value.iter() : iter(input, qc);
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Value value = exprs[0].value(qc), v = quickValue(value);
-    return v != null ? v : iter(value, qc).value(qc, this);
+    final Value input = arg(0).value(qc), value = quickValue(input);
+    return value != null ? value : iter(input, qc).value(qc, this);
   }
 
   /**
    * Sort the input data and returns an iterator.
-   * @param value value
+   * @param input items to be sorted
    * @param qc query context
    * @return iterator with ordered items
    * @throws QueryException query exception
    */
-  private Iter iter(final Value value, final QueryContext qc) throws QueryException {
-    Collation coll = sc.collation;
-    if(exprs.length > 1) {
-      final byte[] token = toTokenOrNull(exprs[1], qc);
-      if(token != null) coll = Collation.get(token, qc, sc, info, WHICHCOLL_X);
-    }
-    final FItem key = exprs.length > 2 ? checkArity(exprs[2], 1, qc) : null;
-
-    final long size = value.size();
-    final ValueList values = new ValueList(size);
-    final Iter iter = value.iter();
-    for(Item item; (item = qc.next(iter)) != null;) {
-      values.add((key == null ? item : key.invoke(qc, info, item)).atomValue(qc, info));
-    }
-
-    final Integer[] order = sort(values, this, coll, qc);
-    return new BasicIter<Item>(size) {
+  private Iter iter(final Value input, final QueryContext qc) throws QueryException {
+    final long is = input.size();
+    final ItemList list = new ItemList(is);
+    for(final Item item : input) list.add(item);
+    final Item[] values = list.finish();
+    final Integer[] index = index(values, qc);
+    return sorted(index) ? input.iter() : new BasicIter<>(is) {
       @Override
-      public Item get(final long i) {
-        return value.itemAt(order[(int) i]);
+      public Item get(final long l) {
+        return values[index[(int) l]];
       }
     };
   }
 
   /**
-   * Sort the input data and returns integers representing the item order.
-   * @param values value list
-   * @param sf calling function
-   * @param coll collation
+   * Checks if the index is sorted.
+   * @param index index
+   * @return result of check
+   */
+  protected final boolean sorted(final Integer[] index) {
+    final int il = index.length;
+    for(int i = 0; i < il; i++) {
+      if(index[i] != i) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns an array with an index to the original values.
+   * @param values values
    * @param qc query context
-   * @return item order
+   * @return index
    * @throws QueryException query exception
    */
-  public static Integer[] sort(final ValueList values, final StandardFunc sf, final Collation coll,
-      final QueryContext qc) throws QueryException {
+  protected final Integer[] index(final Value[] values, final QueryContext qc)
+      throws QueryException {
 
-    final int al = values.size();
-    final Integer[] order = new Integer[al];
-    for(int o = 0; o < al; o++) order[o] = o;
+    final Value keys = arg(2).value(qc);
+    final int levels = (int) Math.max(1, keys.size()), size = values.length;
+    final Value collations = arg(1).value(qc), order = arg(3).value(qc);
+
+    final Value[][] cached = new Value[levels][];
+    final FItem[] key = new FItem[levels];
+    final Collation[] collation = new Collation[levels];
+    final boolean[] invert = new boolean[levels];
+
+    for(int l = 0; l < levels; l++) {
+      cached[l] = new Value[size];
+      if(l < keys.size()) key[l] = toFunction(keys.itemAt(l), 1, qc);
+      collation[l] = l < collations.size() ? toCollation(collations.itemAt(l), qc) :
+        l > 0 ? collation[l - 1] : null;
+      invert[l] = l < order.size() ? toEnum(order.itemAt(l), Order.class) == Order.DESCENDING :
+        l > 0 && invert[l - 1];
+    }
+
+    final Integer[] indexes = new Integer[size];
+    for(int o = 0; o < size; o++) indexes[o] = o;
     try {
-      Arrays.sort(order, (i1, i2) -> {
+      Arrays.sort(indexes, (i1, i2) -> {
         qc.checkStop();
         try {
-          final Value value1 = values.get(i1), value2 = values.get(i2);
-          final long size1 = value1.size(), size2 = value2.size(), il = Math.min(size1, size2);
-          for(int i = 0; i < il; i++) {
-            Item item1 = value1.itemAt(i), item2 = value2.itemAt(i);
-            if(item1 == Dbl.NAN || item1 == Flt.NAN) item1 = null;
-            if(item2 == Dbl.NAN || item2 == Flt.NAN) item2 = null;
-            if(item1 != null && item2 != null && !item1.comparable(item2))
-              throw diffError(item1, item2, sf.info);
-
-            final int diff = item1 == null ? item2 == null ? 0 : -1 : item2 == null ? 1 :
-              item1.diff(item2, coll, sf.info);
-            if(diff != 0 && diff != Item.UNDEF) return diff;
+          for(int l = 0; l < levels; l++) {
+            final int ll = l;
+            final QueryFunction<Integer, Value> value = i -> {
+              Value val = cached[ll][i];
+              if(val == null) {
+                final FItem k = key[ll];
+                val = (k == null ? values[i] : k.invoke(qc, info, values[i])).atomValue(qc, info);
+                cached[ll][i] = val;
+              }
+              return val;
+            };
+            final int diff = compare(value.apply(i1), value.apply(i2), collation[l], info);
+            if(diff != 0) return invert[l] ? -diff : diff;
           }
-          return (int) (size1 - size2);
+          return 0;
         } catch(final QueryException ex) {
           throw new QueryRTException(ex);
         }
@@ -108,63 +139,89 @@ public final class FnSort extends StandardFunc {
     } catch(final QueryRTException ex) {
       throw ex.getCause();
     }
-    return order;
+    return indexes;
+  }
+
+  /**
+   * Compares two values.
+   * @param value1 first value
+   * @param value2 second value
+   * @param info input info (can be {@code null})
+   * @param collation collation (can be {@code null})
+   * @return result of comparison (-1, 0, 1)
+   * @throws QueryException query exception
+   */
+  static int compare(final Value value1, final Value value2, final Collation collation,
+      final InputInfo info) throws QueryException {
+    final long size1 = value1.size(), size2 = value2.size(), il = Math.min(size1, size2);
+    for(int i = 0; i < il; i++) {
+      final Item item1 = value1.itemAt(i), item2 = value2.itemAt(i);
+      if(!item1.comparable(item2)) throw compareError(item1, item2, info);
+      final int diff = item1.compare(item2, collation, true, info);
+      if(diff != 0) return diff;
+    }
+    return Long.signum(size1 - size2);
+  }
+
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    return cc.simplify(this, mode == Simplify.COUNT ? arg(0) : this, mode);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
     // optimize sort on sequences
-    final Expr expr1 = exprs[0];
-    final SeqType st1 = expr1.seqType();
-    if(st1.zero()) return expr1;
+    final Expr input = arg(0);
+    final SeqType st = input.seqType();
+    if(st.zero()) return input;
 
-    // enforce pre-evaluation as remaining arguments may not be values
-    if(expr1 instanceof Value) {
-      final Value value = quickValue((Value) expr1);
-      if(value != null) return value;
+    if(defined(2)) {
+      if(arg(2).size() == 1) {
+        arg(2, arg -> refineFunc(arg, cc, SeqType.ANY_ATOMIC_TYPE_ZM, st.with(Occ.EXACTLY_ONE)));
+      }
+    } else if(!defined(1)) {
+      if(st.zeroOrOne() && st.type.isSortable()) return input;
+      // enforce pre-evaluation as remaining arguments may not be values
+      if(input instanceof Value) {
+        final Value value = quickValue((Value) input);
+        if(value != null) return value;
+      } else if(REVERSE.is(input) || SORT.is(input)) {
+        final Expr[] args = exprs.clone();
+        args[0] = args[0].arg(0);
+        return cc.function(SORT, info, args);
+      } else if(REPLICATE.is(input) && ((FnReplicate) input).singleEval(false)) {
+        final SeqType rst = input.arg(0).seqType();
+        if(rst.zeroOrOne() && rst.type.isSortable()) return input;
+      }
     }
-    if(_UTIL_REPLICATE.is(expr1)) {
-      final SeqType st = expr1.arg(0).seqType();
-      if(st.zeroOrOne() && st.type.isSortable()) return expr1;
-    }
-    if(exprs.length == 3) {
-      exprs[2] = coerceFunc(exprs[2], cc, SeqType.ANY_ATOMIC_TYPE_ZM, st1.with(Occ.EXACTLY_ONE));
-    }
-    return adoptType(expr1);
-  }
-
-  @Override
-  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    Expr expr = this;
-    if(mode == Simplify.DISTINCT && seqType().type.isSortable()) {
-      expr = cc.simplify(this, exprs[0]);
-    }
-    return expr == this ? super.simplifyFor(mode, cc) : expr.simplifyFor(mode, cc);
-  }
-
-  @Override
-  public boolean has(final Flag... flags) {
-    return Flag.HOF.in(flags) && exprs.length > 2 || super.has(flags);
+    return adoptType(input);
   }
 
   /**
    * Evaluates value arguments.
-   * @param value value
+   * @param input input value
    * @return sorted value or {@code null}
    */
-  private Value quickValue(final Value value) {
-    if(exprs.length < 2) {
+  private Value quickValue(final Value input) {
+    // empty sequence
+    if(input.isEmpty()) return input;
+    if(exprs.length == 1) {
       // range values
-      if(value instanceof RangeSeq) {
-        final RangeSeq seq = (RangeSeq) value;
-        return seq.asc ? seq : seq.reverse(null);
+      if(input instanceof RangeSeq) {
+        final RangeSeq rs = (RangeSeq) input;
+        return rs.ascending() ? rs : rs.reverse(null);
       }
       // sortable single or singleton values
-      final SeqType st = value.seqType();
-      if(st.type.isSortable() && (st.one() || (value instanceof SingletonSeq &&
-          ((SingletonSeq) value).singleItem()))) return value;
+      final SeqType st = input.seqType();
+      if(st.type.isSortable() && (st.one() || input instanceof SingletonSeq &&
+          ((SingletonSeq) input).singleItem())) return input;
     }
     // no quick evaluation possible
     return null;
+  }
+
+  @Override
+  public int hofIndex() {
+    return 2;
   }
 }

@@ -11,7 +11,7 @@ import org.basex.util.hash.*;
 /**
  * Opened database client sessions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ClientSessions implements QueryResource {
@@ -28,7 +28,7 @@ public final class ClientSessions implements QueryResource {
   synchronized Uri add(final ClientSession cs) {
     final byte[] uri = Token.token(cs + "/" + ++lastId);
     conns.put(uri, cs);
-    return Uri.uri(uri);
+    return Uri.get(uri);
   }
 
   /**

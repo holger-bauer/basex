@@ -10,12 +10,12 @@ import org.junit.jupiter.api.Test;
 /**
  * This class checks the execution order of non-locking queries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NonLockingTest extends SandboxTest {
   /** Query for returning all jobs except for the current one. */
-  private static final String LIST_JOBS = _JOBS_LIST.args() + '[' + _JOBS_CURRENT.args() + "!= .]";
+  private static final String LIST_JOBS = _JOB_LIST.args() + '[' + _JOB_CURRENT.args() + "!= .]";
   /** Very slow query. */
   private static final String SLEEP_10_SECONDS = _PROF_SLEEP.args(10000);
 
@@ -37,8 +37,8 @@ public final class NonLockingTest extends SandboxTest {
       query("let $db := <a>" + NAME + "</a> return " + _DB_ADD.args(" $db", " <a/>", "a.xml"));
 
       // stop sleeping process, wait for its completion
-      query(_JOBS_STOP.args(id));
-      query(_JOBS_WAIT.args(id));
+      query(_JOB_REMOVE.args(id));
+      query(_JOB_WAIT.args(id));
 
     } finally {
       execute(new DropDB(NAME));
@@ -52,7 +52,7 @@ public final class NonLockingTest extends SandboxTest {
 
   /** Test. */
   @Test public void nonLockingAfterGlobalWrite() {
-    nonLockingAfterWrite(_DB_CREATE.args(" <_>" + NAME + "</_>"));
+    nonLockingAfterWrite(_DB_CREATE.args(wrap(NAME)));
   }
 
   /**
@@ -62,13 +62,13 @@ public final class NonLockingTest extends SandboxTest {
   private static void nonLockingAfterWrite(final String query) {
     try {
       // start slow query, global write lock
-      new Thread(() -> query(SLEEP_10_SECONDS + ',' + query)).start();
+      new Thread(() -> query(SLEEP_10_SECONDS + ", " + query)).start();
 
       // check if query execution causes a longer delay.
       assertEquals("1", query("1"));
 
       // stop sleeping jobs
-      query(LIST_JOBS + '!' + _JOBS_STOP.args(" ."));
+      query(LIST_JOBS + '!' + _JOB_REMOVE.args(" ."));
 
     } finally {
       execute(new DropDB(NAME));

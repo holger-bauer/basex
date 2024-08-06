@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Time item ({@code xs:time}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Tim extends ADate {
@@ -25,12 +25,12 @@ public final class Tim extends ADate {
   /**
    * Constructor.
    * @param value time
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public Tim(final byte[] value, final InputInfo ii) throws QueryException {
+  public Tim(final byte[] value, final InputInfo info) throws QueryException {
     super(AtomType.TIME);
-    time(value, XTIME, ii);
+    time(value, XTIME, info);
     clean();
   }
 
@@ -47,18 +47,20 @@ public final class Tim extends ADate {
   }
 
   @Override
-  public void timeZone(final DTDur zone, final boolean spec, final InputInfo ii)
+  public Tim timeZone(final DTDur dur, final boolean undefined, final InputInfo info)
       throws QueryException {
-    tz(zone, spec, ii);
-    clean();
+    final Tim tim = new Tim(this);
+    tim.tz(dur, undefined, info);
+    tim.clean();
+    return tim;
   }
 
   /**
    * Cleans the item and removes invalid components.
    */
   private void clean() {
-    yea = Long.MAX_VALUE;
-    mon = -1;
+    year = Long.MAX_VALUE;
+    month = -1;
     day = -1;
   }
 }

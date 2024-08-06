@@ -11,7 +11,7 @@ import org.basex.util.ft.*;
 /**
  * Abstract FTFilter expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class FTFilter extends FTExpr {
@@ -20,7 +20,7 @@ public abstract class FTFilter extends FTExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    */
   FTFilter(final InputInfo info, final FTExpr expr) {
@@ -29,7 +29,7 @@ public abstract class FTFilter extends FTExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr expression
    * @param unit unit
    */

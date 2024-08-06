@@ -15,90 +15,83 @@ import org.basex.util.*;
 /**
  * Static variable to which an expression can be assigned.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class StaticVar extends StaticDecl {
-  /** If this variable can be bound from outside the query. */
+  /** Indicates if this variable can be bound from outside the query. */
   public final boolean external;
   /** Flag for lazy evaluation. */
   private final boolean lazy;
 
-  /** Bound value. */
-  Value value;
-
   /**
    * Constructor for a variable declared in a query.
-   * @param vs variable scope
-   * @param anns annotations
    * @param var variable
    * @param expr expression to be bound
+   * @param anns annotations
    * @param external external flag
+   * @param vs variable scope
    * @param doc xqdoc string
    */
-  StaticVar(final VarScope vs, final AnnList anns, final Var var, final Expr expr,
-      final boolean external, final String doc) {
-    super(anns, var.name, var.declType, vs, doc, var.info);
+  StaticVar(final Var var, final Expr expr, final AnnList anns, final boolean external,
+      final VarScope vs, final String doc) {
+    super(var.name, var.declType, anns, vs, var.info, doc);
     this.expr = expr;
     this.external = external;
     lazy = anns.contains(Annotation._BASEX_LAZY);
   }
 
   @Override
-  public void comp(final CompileContext cc) throws QueryException {
+  public Expr compile(final CompileContext cc) throws QueryException {
     if(expr == null) throw VAREMPTY_X.get(info, name());
     if(dontEnter) throw CIRCVAR_X.get(info, name());
-    if(compiled) return;
-    compiled = true;
+    if(!compiled) {
+      compiled = dontEnter = true;
 
-    dontEnter = true;
-    cc.pushScope(vs);
-    try {
-      expr = expr.compile(cc);
-    } catch(final QueryException qe) {
-      declType = null;
-      if(lazy) {
+      final QueryFocus focus = pushFocus(cc.qc);
+      cc.pushScope(vs);
+      try {
+        expr = expr.compile(cc);
+      } catch(final QueryException qe) {
+        if(!lazy) throw qe.notCatchable();
         expr = cc.error(qe, expr);
-        return;
+      } finally {
+        cc.removeScope(this);
+        cc.qc.focus = focus;
       }
-      throw qe.notCatchable();
-    } finally {
-      cc.removeScope(this);
       dontEnter = false;
-    }
 
-    // by default, pre-evaluate deterministic, non-lazy expressions
-    if(expr instanceof Value || !(lazy || expr.has(Flag.NDT))) cc.replaceWith(expr, value(cc.qc));
+      // dynamic compilation, eager evaluation: pre-evaluate expressions
+      if(expr instanceof Value || cc.dynamic && !lazy) {
+        try {
+          cc.replaceWith(expr, value(cc.qc));
+        } catch(final QueryException ex) {
+          if(ex.error() != NOCTX_X) throw ex;
+        }
+      }
+    }
+    return null;
   }
 
-  /**
-   * Evaluates this variable.
-   * @param qc query context
-   * @return value of this variable
-   * @throws QueryException query exception
-   */
-  Value value(final QueryContext qc) throws QueryException {
+  @Override
+  public Value value(final QueryContext qc) throws QueryException {
     if(dontEnter) throw CIRCVAR_X.get(info, name());
+    if(!lazy && expr == null) throw VAREMPTY_X.get(info, name());
 
-    if(lazy) {
-      if(!compiled) throw Util.notExpected(this + " was not compiled.");
-    } else {
-      if(expr == null) throw VAREMPTY_X.get(info, name());
+    if(value == null) {
+      dontEnter = true;
+      final QueryFocus focus = pushFocus(qc);
+      try {
+        super.value(qc);
+      } catch(final QueryException qe) {
+        if(lazy) qe.notCatchable();
+        throw qe;
+      } finally {
+        qc.focus = focus;
+        dontEnter = false;
+      }
     }
-
-    if(value != null) return value;
-    dontEnter = true;
-
-    final int fp = vs.enter(qc);
-    try {
-      return bindValue(expr.value(qc), qc);
-    } catch(final QueryException qe) {
-      if(lazy) qe.notCatchable();
-      throw qe;
-    } finally {
-      VarScope.exit(fp, qc);
-      dontEnter = false;
-    }
+    return value;
   }
 
   /**
@@ -116,23 +109,10 @@ public final class StaticVar extends StaticDecl {
    * @throws QueryException query exception
    */
   void bind(final Value val, final QueryContext qc) throws QueryException {
-    if(!external || compiled) return;
-    bindValue(declType == null || declType.instance(val) ? val :
-      declType.cast(val, true, qc, sc, info), qc);
-  }
-
-  /**
-   * Binds the specified value to the variable.
-   * @param val value to be set
-   * @param qc query context
-   * @return self reference
-   * @throws QueryException query exception
-   */
-  private Value bindValue(final Value val, final QueryContext qc) throws QueryException {
-    expr = val;
-    value = val;
-    if(declType != null) declType.treat(val, name, qc, info);
-    return value;
+    if(external && !compiled) {
+      value = declType == null || declType.instance(val) ? val : declType.cast(val, true, qc, info);
+      expr = value;
+    }
   }
 
   @Override
@@ -140,9 +120,12 @@ public final class StaticVar extends StaticDecl {
     return expr == null || expr.accept(visitor);
   }
 
-  @Override
+  /**
+   * Returns a unique identifier for this variable.
+   * @return identifier
+   */
   public byte[] id() {
-    return Token.concat(Token.DOLLAR, name.id());
+    return Token.concat(Token.DOLLAR, name.unique());
   }
 
   /**
@@ -163,9 +146,21 @@ public final class StaticVar extends StaticDecl {
   boolean has(final Flag... flags) {
     if(dontEnter || expr == null) return false;
     dontEnter = true;
-    final boolean res = expr.has(flags);
+    final boolean has = expr.has(flags);
     dontEnter = false;
-    return res;
+    return has;
+  }
+
+  /**
+   * Assigns a new query focus with the global context value.
+   * @param qc query context
+   * @return old focus
+   */
+  private static QueryFocus pushFocus(final QueryContext qc) {
+    final QueryFocus focus = qc.focus, qf = new QueryFocus();
+    qf.value = qc.finalContext ? qc.contextValue.value : null;
+    qc.focus = qf;
+    return focus;
   }
 
   @Override
@@ -174,16 +169,16 @@ public final class StaticVar extends StaticDecl {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, NAME, name.string()), expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(DECLARE).token(anns).token(VARIABLE).token(name());
     if(declType != null) qs.token(AS).token(declType);
     if(external) qs.token(EXTERNAL);
-    if(expr != null) qs.token(ASSIGN).token(expr);
+    if(expr != null) qs.token(":=").token(expr);
     qs.token(';');
   }
 }

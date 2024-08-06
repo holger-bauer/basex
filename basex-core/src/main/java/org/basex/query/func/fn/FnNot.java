@@ -6,6 +6,7 @@ import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
+import org.basex.query.util.list.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -13,48 +14,69 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnNot extends StandardFunc {
   @Override
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return Bln.get(!exprs[0].ebv(qc, info).bool(info));
+    return Bln.get(!arg(0).test(qc, info, 0));
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
+    final Expr input = arg(0), inverted = invert(input, cc);
+    return inverted != input ? inverted : this;
+  }
 
-    // not(empty(A))  ->  exists(A)
-    if(EMPTY.is(expr)) return cc.function(EXISTS, info, expr.args());
-    // not(exists(A))  ->  empty(A)
-    if(EXISTS.is(expr)) return cc.function(EMPTY, info, expr.args());
-    // not(not(A))  ->  boolean(A)
-    if(NOT.is(expr)) return cc.function(BOOLEAN, info, expr.args());
+  /**
+   * Inverts the specified expression.
+   * @param input input info
+   * @param cc compilation context
+   * @return inverted or original expression
+   * @throws QueryException query exception
+   */
+  private Expr invert(final Expr input, final CompileContext cc) throws QueryException {
+    // exists(A)  ->  empty(A)
+    if(EXISTS.is(input)) return cc.function(EMPTY, info, input.args());
+    // empty(A)  ->  exists(A)
+    if(EMPTY.is(input)) return cc.function(EXISTS, info, input.args());
+    // not(A)  ->  boolean(A)
+    if(NOT.is(input)) return cc.function(BOOLEAN, info, input.args());
 
-    // not('a' = 'b')  ->  'a' != 'b'
-    if(expr instanceof Cmp) {
-      final Expr ex = ((Cmp) expr).invert(cc);
-      if(ex != expr) return ex;
+    // 'a' = 'b'  ->  'a' != 'b'
+    if(input instanceof Cmp) {
+      final Expr inverted = ((Cmp) input).invert(cc);
+      if(inverted != input) return inverted;
     }
-    // not(position() = 1)  ->  position() != 1
-    // not(position() = <_>3</_>)  ->  position() != 3
-    if(expr instanceof CmpPos) {
-      final Expr ex = ((CmpPos) expr).invert(cc);
-      if(ex != expr) return ex;
+    // position() = 1  ->  position() != 1
+    if(input instanceof CmpPos) {
+      final Expr ex = ((CmpPos) input).invert(cc);
+      if(ex != null) return ex;
     }
-    // not($node/text())  ->  empty($node/text())
-    final SeqType st = expr.seqType();
-    if(st.type instanceof NodeType) return cc.function(EMPTY, info, expr);
+    // $node/text()  ->  empty($node/text())
+    final SeqType st = input.seqType();
+    if(st.type instanceof NodeType) return cc.function(EMPTY, info, input);
 
-    return this;
+    // A = 1 or position() = 1  ->  A != 1 and position() != 1
+    if(input instanceof Logical) {
+      Expr[] args = input.args();
+      final ExprList tmp = new ExprList(args.length);
+      for(final Expr arg : args) {
+        final Expr inverted = invert(arg, cc);
+        if(inverted == arg) return input;
+        tmp.add(inverted);
+      }
+      args = tmp.finish();
+      return (input instanceof And ? new Or(info, args) : new And(info, args)).optimize(cc);
+    }
+    return input;
   }
 
   @Override
   protected void simplifyArgs(final CompileContext cc) throws QueryException {
     // not(boolean(A))  ->  not(A)
-    exprs[0] = exprs[0].simplifyFor(Simplify.EBV, cc);
+    arg(0, arg -> arg.simplifyFor(Simplify.EBV, cc));
   }
 
   @Override

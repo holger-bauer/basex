@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Dialog window for displaying the progress of a command execution.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DialogProgress extends BaseXDialog implements ActionListener {
@@ -24,7 +24,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
   private static final int MAX = 600;
   /** Refresh action. */
   private final Timer timer = new Timer(100, this);
-   /** Information label. */
+  /** Information label. */
   private BaseXLabel info;
   /** Cancel button. */
   private BaseXButton cancel;
@@ -50,7 +50,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
    * @param dialog dialog window
    * @param cmd progress reference
    */
-  public DialogProgress(final BaseXDialog dialog, final Command cmd) {
+  private DialogProgress(final BaseXDialog dialog, final Command cmd) {
     super(dialog, "");
     init(dialog, cmd);
   }
@@ -147,15 +147,15 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
    * @param cmds commands to be run
    */
   static void execute(final BaseXDialog dialog, final Runnable post, final Command... cmds) {
-    execute(dialog.gui, dialog, post, cmds);
+    execute(dialog.gui(), dialog, post, cmds);
   }
 
   /**
    * Runs the specified commands, decorated by a progress dialog, and calls
    * {@link BaseXDialog#action} if the dialog is closed.
    * @param gui reference to the main window
-   * @param dialog reference to the dialog window (may be {@code null})
-   * @param post post-processing step (may be {@code null})
+   * @param dialog reference to the dialog window (can be {@code null})
+   * @param post post-processing step (can be {@code null})
    * @param cmds commands to be run
    */
   private static void execute(final GUI gui, final BaseXDialog dialog, final Runnable post,
@@ -190,7 +190,7 @@ public final class DialogProgress extends BaseXDialog implements ActionListener 
         // return status information
         final String time = perf.toString();
         gui.info.setInfo(info, cmd, time, ok, true);
-        gui.status.setText(cmd + ": " + time);
+        gui.status.setText(cmd + ": " + time, true);
 
         // close progress window and show error if command failed
         wait.dispose();

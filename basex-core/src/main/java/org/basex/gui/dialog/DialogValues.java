@@ -10,7 +10,7 @@ import org.basex.util.options.*;
 /**
  * Value index creation dialog.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogValues extends DialogIndex {
@@ -29,7 +29,7 @@ final class DialogValues extends DialogIndex {
 
     layout(new RowLayout());
 
-    final MainOptions opts = dialog.gui.context.options;
+    final MainOptions opts = dialog.gui().context.options;
     final String text = type == IndexType.TOKEN ? H_TOKEN_INDEX : type == IndexType.TEXT
         ? H_TEXT_INDEX : H_ATTR_INDEX;
     add(new BaseXLabel(text, true, false).border(0, 0, 8, 0));
@@ -47,6 +47,6 @@ final class DialogValues extends DialogIndex {
 
   @Override
   void setOptions() {
-    dialog.gui.set(inc, include.getText());
+    dialog.gui().set(inc, include.getText());
   }
 }

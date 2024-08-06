@@ -13,7 +13,7 @@ import org.basex.util.*;
 /**
  * Panel for adding new resources.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 final class DialogAdd extends BaseXBack {
@@ -35,7 +35,7 @@ final class DialogAdd extends BaseXBack {
     this.dialog = dialog;
     setLayout(new BorderLayout());
 
-    add(new BaseXLabel(ADD_RESOURCES).large().border(0,  0, 16, 0), BorderLayout.NORTH);
+    add(new BaseXLabel(ADD_RESOURCES).large().border(0, 0, 16, 0), BorderLayout.NORTH);
 
     target = new BaseXTextField(dialog, "/");
 

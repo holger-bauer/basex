@@ -1,17 +1,22 @@
 package org.basex.query.value.seq;
 
+import java.io.*;
 import java.util.*;
 
+import org.basex.core.*;
+import org.basex.io.in.DataInput;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
+import org.basex.util.list.*;
 
 /**
  * Sequence of items of type {@link Int xs:float}, containing at least two of them.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FltSeq extends NativeSeq {
@@ -25,6 +30,29 @@ public final class FltSeq extends NativeSeq {
   private FltSeq(final float[] values) {
     super(values.length, AtomType.FLOAT);
     this.values = values;
+  }
+
+  /**
+   * Creates a value from the input stream. Called from {@link Store#read(DataInput, QueryContext)}.
+   * @param in data input
+   * @param type type
+   * @param qc query context
+   * @return value
+   * @throws IOException I/O exception
+   * @throws QueryException query exception
+   */
+  public static Value read(final DataInput in, final Type type, final QueryContext qc)
+      throws IOException, QueryException {
+    final int size = in.readNum();
+    final float[] values = new float[size];
+    for(int s = 0; s < size; s++) values[s] = Flt.parse(in.readToken(), null);
+    return get(values);
+  }
+
+  @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeNum((int) size);
+    for(final double v : values) out.writeToken(Token.token(v));
   }
 
   @Override
@@ -54,7 +82,7 @@ public final class FltSeq extends NativeSeq {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Creates a sequence with the specified items.
+   * Creates a sequence with the specified values.
    * @param values values
    * @return value
    */
@@ -70,19 +98,16 @@ public final class FltSeq extends NativeSeq {
    * @return value
    * @throws QueryException query exception
    */
-  static Value get(final int size, final Value... values) throws QueryException {
-    final float[] tmp = new float[size];
-    int t = 0;
+  public static Value get(final long size, final Value... values) throws QueryException {
+    final FloatList tmp = new FloatList(size);
     for(final Value value : values) {
       // speed up construction, depending on input
       if(value instanceof FltSeq) {
-        final int vs = (int) value.size();
-        Array.copyFromStart(((FltSeq) value).values, vs, tmp, t);
-        t += vs;
+        tmp.add(((FltSeq) value).values);
       } else {
-        for(final Item item : value) tmp[t++] = item.flt(null);
+        for(final Item item : value) tmp.add(item.flt(null));
       }
     }
-    return get(tmp);
+    return get(tmp.finish());
   }
 }

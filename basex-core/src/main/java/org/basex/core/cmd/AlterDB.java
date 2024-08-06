@@ -10,7 +10,7 @@ import org.basex.core.parse.Commands.CmdAlter;
 /**
  * Evaluates the 'alter database' command and renames a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class AlterDB extends ACreate {
@@ -36,8 +36,6 @@ public final class AlterDB extends ACreate {
 
     // database does not exist
     if(!soptions.dbExists(src)) return error(DB_NOT_FOUND_X, src);
-    // target database already exists
-    if(soptions.dbExists(trg)) return error(DB_EXISTS_X, trg);
 
     // close database if it's currently opened and not opened by others
     if(!closed) closed = close(context, src);

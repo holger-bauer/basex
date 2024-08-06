@@ -5,8 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.math.*;
 
 import org.basex.*;
+import org.basex.core.*;
 import org.basex.core.cmd.*;
-import org.basex.query.func.fn.*;
+import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
@@ -17,16 +18,14 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests query evaluation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class QueryTest extends SandboxTest {
   /** Queries. */
   protected static Object[][] queries;
 
-  /**
-   * Tests the specified instance.
-   */
+  /** Tests the specified instance. */
   @Test public void test() {
     final StringBuilder sb = new StringBuilder();
     int fail = 0;
@@ -58,7 +57,7 @@ public abstract class QueryTest extends SandboxTest {
           sb.append('[').append(qu[0]).append("] ").append(query).append("\n[E] ");
           sb.append(cp).append("\n[F] ").append(msg == null ? Util.className(ex) : normNL(msg));
           sb.append(' ').append(details()).append('\n');
-          ex.printStackTrace();
+          Util.stack(ex);
           ++fail;
         }
       }
@@ -126,6 +125,7 @@ public abstract class QueryTest extends SandboxTest {
    * @param doc document
    */
   protected static void create(final String doc) {
+    set(MainOptions.STRIPWS, true);
     execute(new CreateDB(Util.className(SandboxTest.class), doc));
   }
 
@@ -133,7 +133,7 @@ public abstract class QueryTest extends SandboxTest {
    * Creates a container for the specified node values.
    * @return node array
    */
-  protected static Value empty() {
+  protected static Value emptySequence() {
     return Empty.VALUE;
   }
 
@@ -172,7 +172,7 @@ public abstract class QueryTest extends SandboxTest {
    * @return iterator
    */
   protected static Item decimal(final int integer) {
-    return Dec.get(new BigDecimal(integer));
+    return Dec.get(BigDecimal.valueOf(integer));
   }
 
   /**

@@ -1,7 +1,10 @@
 package org.basex.query.func.xquery;
 
-import static org.basex.util.Token.*;
+import static org.basex.query.QueryError.*;
 
+import java.io.*;
+
+import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.scope.*;
@@ -13,20 +16,20 @@ import org.basex.util.options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class XQueryParse extends StandardFunc {
-  /** Token. */
-  private static final byte[] LIBRARY_MODULE = token("LibraryModule");
-  /** Token. */
-  private static final byte[] MAIN_MODULE = token("MainModule");
-  /** Token. */
-  private static final byte[] UPDATING = token("updating");
-  /** Token. */
-  private static final byte[] PREFIX = token("prefix");
-  /** Token. */
-  private static final byte[] URI = token("uri");
+  /** QName. */
+  private static final QNm Q_LIBRARY_MODULE = new QNm("LibraryModule");
+  /** QName. */
+  private static final QNm Q_MAIN_MODULE = new QNm("MainModule");
+  /** QName. */
+  private static final QNm Q_UPDATING = new QNm("updating");
+  /** QName. */
+  private static final QNm Q_PREFIX = new QNm("prefix");
+  /** QName. */
+  private static final QNm Q_URI = new QNm("uri");
 
   /** XQuery options. */
   public static class XQueryOptions extends Options {
@@ -41,43 +44,30 @@ public class XQueryParse extends StandardFunc {
   }
 
   @Override
-  public FElem item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    return parse(qc, toToken(exprs[0], qc), null);
-  }
-
-  /**
-   * Parses the specified query and returns the resulting query plan.
-   * @param qc query context
-   * @param query query
-   * @param path file path (may be {@code null})
-   * @return query plan
-   * @throws QueryException query exception
-   */
-  protected final FElem parse(final QueryContext qc, final byte[] query, final String path)
-      throws QueryException {
-
-    final XQueryOptions opts = toOptions(1, new XQueryOptions(), qc);
+  public FNode item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final IO query = toContent(arg(0), qc);
+    final XQueryOptions options = toOptions(arg(1), new XQueryOptions(), qc);
 
     // base-uri: choose uri specified in options, file path, or base-uri from parent query
     try(QueryContext qctx = new QueryContext(qc.context)) {
-      final AModule mod = qctx.parse(string(query), toBaseUri(path, opts));
-      final FElem root;
-      if(mod instanceof LibraryModule) {
-        final QNm module = mod.sc.module;
-        root = new FElem(LIBRARY_MODULE);
-        root.add(PREFIX, module.string());
-        root.add(URI, module.uri());
-      } else {
-        root = new FElem(MAIN_MODULE);
-        root.add(UPDATING, token(qctx.updating));
-      }
+      final AModule module = qctx.parse(query.string(),
+          toBaseUri(query.path(), options, XQueryOptions.BASE_URI));
+      if(options.get(XQueryOptions.COMPILE)) qctx.compile();
 
-      if(opts.get(XQueryOptions.COMPILE)) qctx.compile();
-      if(opts.get(XQueryOptions.PLAN)) root.add(qctx.plan(false));
-      return root;
+      final FBuilder root;
+      if(module instanceof MainModule) {
+        root = FElem.build(Q_MAIN_MODULE).add(Q_UPDATING, qctx.updating);
+      } else {
+        final QNm name = module.sc.module;
+        root = FElem.build(Q_LIBRARY_MODULE).add(Q_PREFIX, name.string()).add(Q_URI, name.uri());
+      }
+      if(options.get(XQueryOptions.PLAN)) root.add(qctx.toXml(false));
+      return root.finish();
     } catch(final QueryException ex) {
-      if(!opts.get(XQueryOptions.PASS)) ex.info(info);
+      if(!options.get(XQueryOptions.PASS)) ex.info(info);
       throw ex;
+    } catch(final IOException ex) {
+      throw IOERR_X.get(info, ex);
     }
   }
 }

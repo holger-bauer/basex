@@ -9,7 +9,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the functions of the Unit Module.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UnitModuleTest extends SandboxTest {
@@ -17,7 +17,7 @@ public final class UnitModuleTest extends SandboxTest {
   @Test public void assrt() {
     final Function func = _UNIT_ASSERT;
     query(func.args(1), "");
-    query(func.args(" (<a/>,<b/>)"), "");
+    query(func.args(" (<a/>, <b/>)"), "");
     error(func.args(" ()"), UNIT_FAIL);
     error(func.args(" ()", "X"), UNIT_FAIL_X);
   }

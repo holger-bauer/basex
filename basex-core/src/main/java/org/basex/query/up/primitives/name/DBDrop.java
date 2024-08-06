@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_DROP} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class DBDrop extends NameUpdate {
@@ -19,14 +19,15 @@ public final class DBDrop extends NameUpdate {
    * Constructor.
    * @param name name of database
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public DBDrop(final String name, final QueryContext qc, final InputInfo info) {
     super(UpdateType.DBDROP, name, qc, info);
   }
 
   @Override
-  public void prepare() { }
+  public void prepare() {
+  }
 
   @Override
   public void apply() throws QueryException {
@@ -36,5 +37,7 @@ public final class DBDrop extends NameUpdate {
   }
 
   @Override
-  protected String operation() { return "dropped"; }
+  protected String operation() {
+    return "dropped";
+  }
 }

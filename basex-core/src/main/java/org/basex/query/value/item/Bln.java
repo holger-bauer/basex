@@ -1,7 +1,9 @@
 package org.basex.query.value.item;
 
+import java.io.*;
 import java.math.*;
 
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
@@ -10,7 +12,7 @@ import org.basex.util.*;
 /**
  * Boolean item ({@code xs:boolean}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Bln extends Item {
@@ -20,6 +22,8 @@ public final class Bln extends Item {
   public static final Bln FALSE = new Bln(false);
   /** Data. */
   private final boolean value;
+  /** Score value. */
+  private double score;
 
   /**
    * Constructor, adding a full-text score.
@@ -41,12 +45,11 @@ public final class Bln extends Item {
 
   /**
    * Constructor, adding a full-text score.
-   * @param value boolean value
    * @param score score value
    * @return item
    */
-  public static Bln get(final boolean value, final double score) {
-    return value && score != 0 ? new Bln(score) : get(value);
+  public static Bln get(final double score) {
+    return score != 0 ? new Bln(score) : Bln.FALSE;
   }
 
   /**
@@ -59,8 +62,18 @@ public final class Bln extends Item {
   }
 
   @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeBool(value);
+  }
+
+  @Override
   public byte[] string(final InputInfo ii) {
     return Token.token(value);
+  }
+
+  @Override
+  public int hash() {
+    return Boolean.hashCode(value);
   }
 
   @Override
@@ -89,15 +102,21 @@ public final class Bln extends Item {
   }
 
   @Override
-  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    return value == (item.type == type ? item.bool(ii) : parse(item, ii));
+  public boolean equal(final Item item, final Collation coll, final InputInfo ii)
+      throws QueryException {
+    return value == (item.type == AtomType.BOOLEAN ? item.bool(ii) : parse(item, ii));
   }
 
   @Override
-  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
-    final boolean n = item.type == type ? item.bool(ii) : parse(item, ii);
-    return value ? n ? 0 : 1 : n ? -1 : 0;
+  public int compare(final Item item, final Collation coll, final boolean transitive,
+      final InputInfo ii) throws QueryException {
+    final boolean b = item.type == AtomType.BOOLEAN ? item.bool(ii) : parse(item, ii);
+    return value == b ? 0 : b ? -1 : 1;
+  }
+
+  @Override
+  public double score() {
+    return score;
   }
 
   @Override
@@ -111,7 +130,7 @@ public final class Bln extends Item {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(value ? Token.TRUE : Token.FALSE).paren("");
   }
 
@@ -120,14 +139,14 @@ public final class Bln extends Item {
   /**
    * Converts the specified item to a boolean.
    * @param item item to be converted
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return resulting boolean value
    * @throws QueryException query exception
    */
-  public static boolean parse(final Item item, final InputInfo ii) throws QueryException {
-    final Boolean b = parse(item.string(ii));
+  public static boolean parse(final Item item, final InputInfo info) throws QueryException {
+    final Boolean b = parse(item.string(info));
     if(b != null) return b;
-    throw AtomType.BOOLEAN.castError(item, ii);
+    throw AtomType.BOOLEAN.castError(item, info);
   }
 
   /**

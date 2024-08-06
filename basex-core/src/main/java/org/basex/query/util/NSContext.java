@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This class references all statically known namespaces.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NSContext {
@@ -23,13 +23,14 @@ public final class NSContext {
    * Validates and adds the specified namespace at parsing time.
    * @param prefix namespace prefix
    * @param uri namespace URI
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public void add(final byte[] prefix, final byte[] uri, final InputInfo ii) throws QueryException {
-    if(eq(prefix, XML, XMLNS)) throw BINDXML_X.get(ii, prefix);
-    if(eq(uri, XML_URI)) throw BINDXMLURI_X_X.get(ii, uri, XML);
-    if(eq(uri, XMLNS_URI)) throw BINDXMLURI_X_X.get(ii, uri, XMLNS);
+  public void add(final byte[] prefix, final byte[] uri, final InputInfo info)
+      throws QueryException {
+    if(eq(prefix, XML, XMLNS)) throw BINDXML_X.get(info, prefix);
+    if(eq(uri, XML_URI)) throw BINDXMLURI_X_X.get(info, uri, XML);
+    if(eq(uri, XMLNS_URI)) throw BINDXMLURI_X_X.get(info, uri, XMLNS);
     list.add(prefix, uri);
   }
 
@@ -101,15 +102,6 @@ public final class NSContext {
   }
 
   /**
-   * Returns the namespace stack.
-   * @return stack
-   */
-  public Atts stack() {
-    if(stack == null) stack = new Atts();
-    return stack;
-  }
-
-  /**
    * Adds the namespaces that are currently in scope.
    * @param atts namespaces
    */
@@ -120,5 +112,14 @@ public final class NSContext {
         if(!atts.contains(nm)) atts.add(nm, stack.value(s));
       }
     }
+  }
+
+  /**
+   * Returns the namespace stack.
+   * @return stack
+   */
+  private Atts stack() {
+    if(stack == null) stack = new Atts();
+    return stack;
   }
 }

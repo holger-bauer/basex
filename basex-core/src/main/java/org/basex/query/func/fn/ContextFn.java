@@ -7,21 +7,22 @@ import org.basex.query.expr.path.*;
 import org.basex.query.func.*;
 import org.basex.query.util.*;
 import org.basex.query.util.list.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 
 /**
  * Context-based function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ContextFn extends StandardFunc {
   /**
-   * Argument that provides the context.
-   * @return context argument.
+   * Index of the context argument.
+   * @return index
    */
-  public int contextArg() {
+  public int contextIndex() {
     return 0;
   }
 
@@ -30,28 +31,28 @@ public abstract class ContextFn extends StandardFunc {
    * @return result of check
    */
   public final boolean contextAccess() {
-    return exprs.length == contextArg();
+    return !defined(contextIndex());
   }
 
   /**
-   * Returns the specified argument, or the context value if it does not exist.
-   * @param i index of argument
+   * Returns the context argument, or the context value if it does not exist.
    * @param qc query context
    * @return expression
    * @throws QueryException query exception
    */
-  protected final Expr ctxArg(final int i, final QueryContext qc) throws QueryException {
-    return exprs.length == i ? ctxValue(qc) : exprs[i];
+  protected final Expr context(final QueryContext qc) throws QueryException {
+    final Expr expr = arg(contextIndex());
+    return expr != Empty.UNDEFINED ? expr : ctxValue(qc);
   }
 
   @Override
-  public final boolean has(final Flag... flags) {
-    return Flag.CTX.in(flags) && contextAccess() || super.has(flags);
+  public boolean hasCTX() {
+    return contextAccess();
   }
 
   @Override
   public final boolean accept(final ASTVisitor visitor) {
-    return (!contextAccess() || visitor.lock(Locking.CONTEXT, false)) && super.accept(visitor);
+    return (!contextAccess() || visitor.lock(Locking.CONTEXT)) && super.accept(visitor);
   }
 
   /**
@@ -59,7 +60,7 @@ public abstract class ContextFn extends StandardFunc {
    * @return result of check
    */
   public boolean inlineable() {
-    return (contextAccess() || exprs[contextArg()] instanceof ContextValue) &&
+    return (contextAccess() || arg(contextIndex()) instanceof ContextValue) &&
         definition.seqType.occ == Occ.ZERO_OR_ONE;
   }
 
@@ -71,23 +72,34 @@ public abstract class ContextFn extends StandardFunc {
 
   @Override
   public final Expr inline(final InlineContext ic) throws QueryException {
-    return inline(ic, () -> {
-      if(!contextAccess()) return null;
-      final Expr[] args = new ExprList(exprs.length + 1).add(exprs).add(ic.copy()).finish();
-      return definition.get(ic.cc.sc(), info, args);
-    });
+    // try to inline arguments
+    final Expr[] args = args();
+    Expr expr = ic.inline(args) ? this : null;
+    // create new expression with inlined context value
+    if(ic.var == null && !(ic.expr instanceof ContextValue) && contextAccess()) {
+      // $v ! string()  ->  string($v)
+      final Expr[] newArgs = new ExprList(args.length + 1).add(args).add(ic.copy()).finish();
+      expr = definition.get(info, newArgs);
+    }
+    return expr != null ? expr.optimize(ic.cc) : null;
   }
 
   /**
    * Optimizes EBV checks.
    * @param cc compilation context
    * @param expr context expression (can be {@code null})
-   * @return optimized expression or {@code null}
+   * @param pred function for creating a predicate (can be {@code null})
+   * @return optimized or original expression
    * @throws QueryException query exception
    */
-  public final Expr simplifyEbv(final Expr expr, final CompileContext cc) throws QueryException {
+  public final Expr simplifyEbv(final Expr expr, final CompileContext cc,
+      final QuerySupplier<Expr> pred) throws QueryException {
     final SeqType st = expr.seqType();
-    return st.instanceOf(SeqType.ELEMENT_O) || st.instanceOf(SeqType.DOCUMENT_NODE_O) ?
-      Path.get(cc, info, expr, Step.get(cc, expr, info, Axis.DESCENDANT, KindTest.TXT)) : null;
+    if(st.instanceOf(SeqType.ELEMENT_O) || st.instanceOf(SeqType.DOCUMENT_NODE_O)) {
+      final Expr[] preds = pred != null ? new Expr[] { pred.get() } : new Expr[0];
+      final Expr step = Step.get(cc, expr, info, Axis.DESCENDANT, KindTest.TEXT, preds);
+      return Path.get(cc, info, expr, step);
+    }
+    return this;
   }
 }

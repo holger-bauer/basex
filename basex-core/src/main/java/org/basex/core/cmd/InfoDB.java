@@ -14,7 +14,7 @@ import org.basex.util.*;
  * Evaluates the 'info database' command and returns information on the
  * currently opened database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InfoDB extends AInfo {
@@ -50,10 +50,9 @@ public final class InfoDB extends AInfo {
     info(tb, MetaProp.NAME, meta);
     info(tb, MetaProp.SIZE.name(), Performance.format(meta.dbSize()));
     info(tb, MetaProp.NODES, meta);
-
-    // count number of raw files
     info(tb, MetaProp.DOCUMENTS, meta);
     info(tb, MetaProp.BINARIES, meta);
+    info(tb, MetaProp.VALUES, meta);
     info(tb, MetaProp.TIMESTAMP, meta);
     info(tb, MetaProp.UPTODATE, meta);
     if(meta.corrupt) tb.add(' ' + DB_CORRUPT + NL);
@@ -68,7 +67,7 @@ public final class InfoDB extends AInfo {
       if(meta.oldindex()) {
         tb.add(' ' + H_INDEX_FORMAT + NL);
       } else {
-        for(final MetaProp prop : MetaProp.VALUES) {
+        for(final MetaProp prop : MetaProp.ENUMS) {
           if(prop.index) info(tb, prop, meta);
         }
       }

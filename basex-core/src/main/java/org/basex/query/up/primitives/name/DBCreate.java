@@ -4,7 +4,6 @@ import static org.basex.query.QueryError.*;
 
 import java.io.*;
 import java.util.*;
-import java.util.List;
 
 import org.basex.build.*;
 import org.basex.core.*;
@@ -14,43 +13,42 @@ import org.basex.query.*;
 import org.basex.query.func.*;
 import org.basex.query.up.primitives.*;
 import org.basex.util.*;
-import org.basex.util.options.*;
 
 /**
  * Update primitive for the {@link Function#_DB_CREATE} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class DBCreate extends NameUpdate {
-  /** Database update options. */
-  private final DBOptions options;
-  /** Container for new database documents. */
+  /** Container for new documents. */
   private final DBNew newDocs;
+  /** Main options. */
+  private final MainOptions options;
+  /** Data clip with input. */
+  private DataClip clip;
 
   /**
    * Constructor.
    * @param name name for created database
    * @param inputs inputs (ANode and QueryInput references)
-   * @param opts database options
+   * @param qopts query options
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DBCreate(final String name, final NewInput[] inputs, final Options opts,
+  public DBCreate(final String name, final NewInput[] inputs, final HashMap<String, String> qopts,
       final QueryContext qc, final InputInfo info) throws QueryException {
 
     super(UpdateType.DBCREATE, name, qc, info);
-    final List<Option<?>> supported = new ArrayList<>();
-    Collections.addAll(supported, DBOptions.INDEXING);
-    Collections.addAll(supported, DBOptions.PARSING);
-    options = new DBOptions(opts, supported, info);
+    final DBOptions dbopts = new DBOptions(qopts, MainOptions.CREATING, info);
+    options = dbopts.assignTo(new MainOptions(qc.context.options, false));
     newDocs = new DBNew(qc, options, info, inputs);
   }
 
   @Override
   public void prepare() throws QueryException {
-    newDocs.prepare(name, true);
+    clip = newDocs.prepare(name, true);
   }
 
   @Override
@@ -60,32 +58,34 @@ public final class DBCreate extends NameUpdate {
       close();
 
       // create new database
-      final MainOptions mopts = options.assignTo(new MainOptions(qc.context.options, true));
-      final Data data = CreateDB.create(name, Parser.emptyParser(mopts), qc.context, mopts);
+      final Data data = CreateDB.create(name, Parser.emptyParser(options), qc.context, options);
 
       // add initial documents and optimize database
-      if(newDocs.data != null) {
-        data.startUpdate(mopts);
+      if(clip != null) {
+        data.startUpdate(options);
         try {
-          newDocs.add(data);
+          newDocs.addTo(data);
           Optimize.optimize(data, null);
         } finally {
-          data.finishUpdate(mopts);
+          data.finishUpdate(options);
         }
       }
       Close.close(data, qc.context);
 
     } catch(final IOException ex) {
-      newDocs.finish();
       throw UPDBERROR_X.get(info, ex);
+    } finally {
+      if(clip != null) clip.finish();
     }
+  }
+
+  @Override
+  public String operation() {
+    return "created";
   }
 
   @Override
   public String toString() {
     return Util.className(this) + '[' + newDocs.inputs + ']';
   }
-
-  @Override
-  public String operation() { return "created"; }
 }

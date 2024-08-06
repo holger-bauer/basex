@@ -1,6 +1,6 @@
 package org.basex.build.csv;
 
-import java.util.*;
+import static org.basex.query.QueryError.*;
 
 import org.basex.core.*;
 import org.basex.query.*;
@@ -12,7 +12,7 @@ import org.basex.util.options.*;
 /**
  * Options for parsing and serializing CSV data.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class CsvOptions extends Options {
@@ -38,7 +38,7 @@ public class CsvOptions extends Options {
 
     @Override
     public String toString() {
-      return name().toLowerCase(Locale.ENGLISH);
+      return EnumOption.string(this);
     }
   }
 
@@ -63,29 +63,21 @@ public class CsvOptions extends Options {
 
     @Override
     public String toString() {
-      return name().toLowerCase(Locale.ENGLISH);
+      return EnumOption.string(this);
     }
   }
 
   @Override
   public synchronized void assign(final String name, final String value) throws BaseXException {
     super.assign(name, value);
-    check();
+    if(separator() == -1) throw new BaseXException("Invalid separator: '%'", get(SEPARATOR));
   }
 
   @Override
-  public synchronized void assign(final Item name, final Value value, final boolean error,
-      final InputInfo ii) throws BaseXException, QueryException {
-    super.assign(name, value, error, ii);
-    check();
-  }
-
-  /**
-   * Checks the separator character.
-   * @throws BaseXException database exception
-   */
-  private void check() throws BaseXException {
-    if(separator() == -1) throw new BaseXException("Invalid separator: '%'", get(SEPARATOR));
+  public synchronized void assign(final Item name, final Value value, final QueryError error,
+      final InputInfo info) throws QueryException {
+    super.assign(name, value, error, info);
+    if(separator() == -1) throw OPTION_X.get(info, "Invalid separator: '%'", get(SEPARATOR));
   }
 
   /**

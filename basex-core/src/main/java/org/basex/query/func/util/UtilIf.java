@@ -9,7 +9,7 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UtilIf extends StandardFunc {
@@ -29,6 +29,6 @@ public final class UtilIf extends StandardFunc {
    * @return new if expression
    */
   private If create() {
-    return new If(info, exprs[0], exprs[1], exprs.length == 2 ? Empty.VALUE : exprs[2]);
+    return new If(info, arg(0), arg(1), defined(2) ? arg(2) : Empty.VALUE);
   }
 }

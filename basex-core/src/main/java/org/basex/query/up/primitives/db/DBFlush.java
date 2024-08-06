@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_FLUSH} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DBFlush extends DBUpdate {
@@ -21,7 +21,7 @@ public final class DBFlush extends DBUpdate {
    * Constructor.
    * @param data data
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public DBFlush(final Data data, final QueryContext qc, final InputInfo info) {
     super(UpdateType.DBFLUSH, data, info);
@@ -29,7 +29,8 @@ public final class DBFlush extends DBUpdate {
   }
 
   @Override
-  public void merge(final Update update) { }
+  public void prepare() {
+  }
 
   @Override
   public void apply() {
@@ -37,10 +38,11 @@ public final class DBFlush extends DBUpdate {
   }
 
   @Override
-  public int size() {
-    return 1;
+  public void merge(final Update update) {
   }
 
   @Override
-  public void prepare() { }
+  public int size() {
+    return 1;
+  }
 }

@@ -12,13 +12,13 @@ import org.basex.util.hash.*;
 /**
  * Step expression: iterative evaluation (no positional access).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IterStep extends Step {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param axis axis
    * @param test node test
    * @param preds predicates

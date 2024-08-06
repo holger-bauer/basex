@@ -2,19 +2,17 @@ package org.basex.http.web;
 
 import java.io.*;
 
-import javax.servlet.*;
+import jakarta.servlet.*;
 
 import org.basex.core.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
-import org.basex.query.scope.*;
-import org.basex.util.*;
 
 /**
  * This abstract class defines common methods of Web responses.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class WebResponse {
@@ -51,21 +49,15 @@ public abstract class WebResponse {
   public final Response create(final WebFunction function, final Object data, final boolean body)
       throws QueryException, IOException, ServletException {
 
-    final WebModule module = function.module;
-    final StaticFunc func = function.function;
+    final StaticFunc sf = function.function;
     try {
-      qc = module.qc(ctx);
-      init(function);
-      final StaticFunc sf = WebModule.find(qc, func);
-      final Expr[] args = new Expr[sf.params.length];
-      bind(args, data);
-      qc.jc().description(toString(func, args));
-      if(ctx.soptions.get(StaticOptions.LOGTRACE)) qc.jc().tracer = ctx.log;
-
-      qc.mainModule(MainModule.get(sf, args));
+      final Expr[] args = init(function, data);
+      qc.assign(sf, args);
+      qc.jc().description("(: " + sf.info + " :) " + qc.main);
+      qc.compile();
       return serialize(body);
     } catch(final QueryException ex) {
-      if(ex.file() == null) ex.info(func.info);
+      if(ex.file() == null) ex.info(sf.info);
       throw ex;
     } finally {
       if(qc != null) qc.close();
@@ -73,21 +65,15 @@ public abstract class WebResponse {
   }
 
   /**
-   * Creates and returns a function instance that can be evaluated.
-   * @param function function template
-   * @throws QueryException query exception
-   * @throws IOException I/O exception
-   */
-  protected abstract void init(WebFunction function) throws QueryException, IOException;
-
-  /**
-   * Binds values to the function parameters.
-   * @param args arguments
+   * Initializes the evaluation of the specified function and binds function arguments.
+   * @param function web function
    * @param data additional data (result, function, error, can be {@code null})
+   * @return function arguments
    * @throws QueryException query exception
    * @throws IOException I/O exception
    */
-  protected abstract void bind(Expr[] args, Object data) throws QueryException, IOException;
+  protected abstract Expr[] init(WebFunction function, Object data)
+      throws QueryException, IOException;
 
   /**
    * Serializes the response.
@@ -99,21 +85,4 @@ public abstract class WebResponse {
    */
   protected abstract Response serialize(boolean body) throws QueryException, IOException,
       ServletException;
-
-  /**
-   * Returns a job description for the specified function.
-   * @param func function
-   * @param args arguments
-   * @return description
-   */
-  private static String toString(final StaticFunc func, final Expr[] args) {
-    final TokenBuilder tb = new TokenBuilder().add(func.info).add(Text.COLS);
-    tb.add(func.name.prefixString()).add('(');
-    final int al = args.length;
-    for(int a = 0; a < al; a++) {
-      if(a != 0) tb.add(", ");
-      tb.add(func.params[a].toErrorString()).add(" := ").add(args[a]);
-    }
-    return tb.add(')').toString();
-  }
 }

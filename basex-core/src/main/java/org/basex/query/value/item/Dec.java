@@ -3,8 +3,10 @@ package org.basex.query.value.item;
 import static org.basex.util.Token.*;
 
 import java.math.*;
+import java.util.function.*;
 
 import org.basex.query.*;
+import org.basex.query.func.fn.FnRound.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -12,11 +14,13 @@ import org.basex.util.*;
 /**
  * Decimal item ({@code xs:decimal}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Dec extends ANum {
   /** Maximum long value. */
+  public static final BigDecimal BD_MINLONG = BigDecimal.valueOf(Long.MIN_VALUE);
+ /** Maximum long value. */
   public static final BigDecimal BD_MAXLONG = BigDecimal.valueOf(Long.MAX_VALUE);
   /** Decimal representing a million. */
   public static final BigDecimal BD_1000000 = BigDecimal.valueOf(1000000);
@@ -122,26 +126,62 @@ public final class Dec extends ANum {
   }
 
   @Override
-  public Dec round(final int scale, final boolean even) {
-    final int s = value.signum();
-    return s == 0 ? this : get(value.setScale(scale, even ? RoundingMode.HALF_EVEN :
-           s == 1 ? RoundingMode.HALF_UP : RoundingMode.HALF_DOWN));
+  public Dec round(final int prec, final RoundMode mode) {
+    if(value.signum() == 0) return this;
+    final BigDecimal v = round(value, prec, mode);
+    return v.equals(value) ? this : get(v);
+  }
+
+  /**
+   * Returns a rounded value.
+   * @param value decimal value
+   * @param prec precision
+   * @param mode rounding mode
+   * @return rounded value
+   */
+  static BigDecimal round(final BigDecimal value, final int prec, final RoundMode mode) {
+    if(prec >= value.scale()) return value;
+
+    final BigDecimal l = value.setScale(prec, RoundingMode.FLOOR);
+    final BigDecimal u = value.setScale(prec, RoundingMode.CEILING);
+    final boolean pos = value.signum() >= 0;
+    final BooleanSupplier mw = () -> l.add(u).divide(BigDecimal.valueOf(2)).compareTo(value) == 0;
+    final Supplier<BigDecimal> n = () -> value.setScale(prec, RoundingMode.HALF_UP);
+    switch(mode) {
+      case FLOOR:               return l;
+      case CEILING:             return u;
+      case TOWARD_ZERO:         return pos ? l : u;
+      case AWAY_FROM_ZERO:      return pos ? u : l;
+      case HALF_TO_FLOOR:       return mw.getAsBoolean() ? l : n.get();
+      case HALF_TO_CEILING:     return mw.getAsBoolean() ? u : n.get();
+      case HALF_TOWARD_ZERO:    return mw.getAsBoolean() ? pos ? l : u : n.get();
+      case HALF_AWAY_FROM_ZERO: return mw.getAsBoolean() ? pos ? u : l : n.get();
+      default:                  return value.setScale(prec, RoundingMode.HALF_EVEN);
+    }
   }
 
   @Override
-  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    final Type t = item.type;
-    return t.isUntyped() ? dbl() == item.dbl(ii) :
-      t == AtomType.DOUBLE || t == AtomType.FLOAT ? item.eq(this, coll, sc, ii) :
+  public boolean equal(final Item item, final Collation coll, final InputInfo ii)
+      throws QueryException {
+    final Type tp = item.type;
+    return tp.isUntyped() ? dbl() == item.dbl(ii) :
+      tp == AtomType.DOUBLE || tp == AtomType.FLOAT ? item.equal(this, coll, ii) :
       value.compareTo(item.dec(ii)) == 0;
   }
 
   @Override
-  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
-    final double d = item.dbl(ii);
-    return d == Double.NEGATIVE_INFINITY ? -1 : d == Double.POSITIVE_INFINITY ? 1 :
-      Double.isNaN(d) ? UNDEF : value.compareTo(item.dec(ii));
+  public int compare(final Item item, final Collation coll, final boolean transitive,
+      final InputInfo ii) throws QueryException {
+
+    if(!transitive && (item instanceof Dbl || item instanceof Flt))
+      return -item.compare(this, coll, transitive, ii);
+
+    final double n = item.dbl(ii);
+    if(transitive) {
+      if(n == Double.NEGATIVE_INFINITY || Double.isNaN(n)) return 1;
+      if(n == Double.POSITIVE_INFINITY) return -1;
+    }
+    return value.compareTo(item.dec(ii));
   }
 
   @Override
@@ -158,17 +198,16 @@ public final class Dec extends ANum {
 
   /**
    * Converts the given token into a decimal value.
-   * @param item item to be converted
-   * @param ii input info
+   * @param value value to be converted
+   * @param info input info (can be {@code null})
    * @return double value
    * @throws QueryException query exception
    */
-  public static BigDecimal parse(final Item item, final InputInfo ii) throws QueryException {
-    final byte[] value = item.string(ii);
+  public static BigDecimal parse(final byte[] value, final InputInfo info) throws QueryException {
     try {
       if(!contains(value, 'e') && !contains(value, 'E'))
         return new BigDecimal(Token.string(value).trim());
     } catch(final NumberFormatException ex) { Util.debug(ex); }
-    throw AtomType.DECIMAL.castError(item, ii);
+    throw AtomType.DECIMAL.castError(value, info);
   }
 }

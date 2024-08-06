@@ -2,16 +2,14 @@ package org.basex.query.func.ws;
 
 import static org.basex.query.QueryError.*;
 
-import org.basex.http.*;
 import org.basex.http.ws.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
-import org.basex.util.*;
 
 /**
  * WebSocket function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class WsFn extends StandardFunc {
@@ -22,9 +20,9 @@ abstract class WsFn extends StandardFunc {
    * @throws QueryException QueryException
    */
   final WebSocket ws(final QueryContext qc) throws QueryException {
-    final Object ws = qc.getProperty(HTTPText.WEBSOCKET);
-    if(ws != null) return (WebSocket) ws;
-    throw BASEX_WS.get(info);
+    final WebSocket ws = (WebSocket) qc.context.getExternal(WebSocket.class);
+    if(ws == null) throw BASEX_WS.get(info);
+    return ws;
   }
 
   /**
@@ -34,8 +32,8 @@ abstract class WsFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final WebSocket client(final QueryContext qc) throws QueryException {
-    final byte[] id = toToken(exprs[0], qc);
-    final WebSocket ws = WsPool.get(Token.string(id));
+    final String id = toString(arg(0), qc);
+    final WebSocket ws = WsPool.get(id);
     if(ws == null) throw WS_NOTFOUND_X.get(null, id);
     return ws;
   }

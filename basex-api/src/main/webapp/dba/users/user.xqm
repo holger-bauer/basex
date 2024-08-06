@@ -1,12 +1,12 @@
 (:~
  : User page.
  :
- : @author Christian Grün, BaseX Team 2005-20, BSD License
+ : @author Christian Grün, BaseX Team 2005-24, BSD License
  :)
 module namespace dba = 'dba/users';
 
+import module namespace config = 'dba/config' at '../lib/config.xqm';
 import module namespace html = 'dba/html' at '../lib/html.xqm';
-import module namespace options = 'dba/options' at '../lib/options.xqm';
 
 (:~ Top category :)
 declare variable $dba:CAT := 'users';
@@ -15,7 +15,7 @@ declare variable $dba:SUB := 'user';
 
 (:~
  : Returns a single user page.
- : @param  $name     user name
+ : @param  $name     username
  : @param  $newname  new name
  : @param  $pw       password
  : @param  $perm     permission
@@ -33,6 +33,7 @@ declare
   %rest:query-param('error',    '{$error}')
   %rest:query-param('info',     '{$info}')
   %output:method('html')
+  %output:html-version('5')
 function dba:user(
   $name     as xs:string,
   $newname  as xs:string?,
@@ -43,22 +44,17 @@ function dba:user(
 ) as element(html) {
   let $user := user:list-details($name)
   let $admin := $name eq 'admin'
-  return html:wrap(
-    map {
-      'header': ($dba:CAT, $name), 'info': $info, 'error': $error,
-      'css': 'codemirror/lib/codemirror.css',
-      'scripts': ('codemirror/lib/codemirror.js', 'codemirror/mode/xml/xml.js')
-    },
+  return html:wrap({ 'header': ($dba:CAT, $name), 'info': $info, 'error': $error },
     <tr>
-      <td width='49%'>
-        <form action='user-edit' method='post' autocomplete='off'>
-          <!--  force chrome not to autocomplete form -->
+      <td>
+        <form method='post' autocomplete='off'>
+          <!--  prevent chrome from auto-completing form -->
           <input style='display:none' type='text' name='fake1'/>
           <input style='display:none' type='password' name='fake2'/>
           <h2>{
             html:link('Users', $dba:CAT), ' » ',
             $name, ' » ',
-            html:button('save', 'Save')
+            html:button('user-update', 'Update')
           }</h2>
           <input type='hidden' name='name' value='{ $name }'/>
           <table>{
@@ -68,8 +64,7 @@ function dba:user(
                   <td>Name:</td>
                   <td>
                     <input type='text' name='newname'
-                      value='{ head(($newname, $name)) }' id='newname'/>
-                    { html:focus('newname') }
+                      value='{ $newname otherwise $name }' autofocus='autofocus'/>
                     <div class='small'/>
                   </td>
                 </tr>
@@ -77,7 +72,8 @@ function dba:user(
               <tr>
                 <td>Password:</td>
                 <td>
-                  <input type='password' name='pw' value='{ $pw }' id='pw'/> &#xa0;
+                  <input type='password' name='pw' value='{ $pw }' autofocus='autofocus'/>
+                  &#xa0;
                   <span class='note'>
                     …only changed if a new one is entered<br/>
                   </span>
@@ -89,9 +85,9 @@ function dba:user(
                   <td>Permission:</td>
                   <td>
                     <select name='perm' size='5'>{
-                      let $perm := head(($perm, $user/@permission))
-                      for $p in $options:PERMISSIONS
-                      return element option { attribute selected { }[$p = $perm], $p }
+                      let $prm := $perm otherwise $user/@permission
+                      for $p in $config:PERMISSIONS
+                      return element option { if($p = $prm) then attribute selected { }, $p }
                     }</select>
                     <div class='small'/>
                   </td>
@@ -101,7 +97,7 @@ function dba:user(
                 <td>Information:</td>
                 <td>
                   <textarea name='info' id='editor' spellcheck='false'>{
-                    serialize(user:info($name))
+                    serialize(user:info($name), { 'indent': true() } )
                   }</textarea>
                 </td>
               </tr>,
@@ -111,26 +107,26 @@ function dba:user(
         </form>
       </td>
       <td class='vertical'/>
-      <td width='49%'>{
+      <td>{
         if($admin) then () else <_>
           <h3>Local Permissions</h3>
-          <form action='{ $dba:SUB }' method='post' id='{ $dba:SUB }' class='update'>
+          <form method='post'>
             <input type='hidden' name='name' value='{ $name }' id='name'/>
             <div class='small'/>
             {
               let $headers := (
-                map { 'key': 'pattern', 'label': 'Pattern' },
-                map { 'key': 'permission', 'label': 'Local Permission' }
+                { 'key': 'pattern', 'label': 'Pattern' },
+                { 'key': 'permission', 'label': 'Local Permission' }
               )
-              let $entries := $user/database ! map {
+              let $entries := $user/database ! {
                 'pattern': @pattern,
                 'permission': @permission
               }
               let $buttons := if($admin) then () else (
                 html:button('pattern-add', 'Add…'),
-                html:button('pattern-drop', 'Drop', true())
+                html:button('pattern-drop', 'Drop', ('CHECK', 'CONFIRM'))
               )
-              return html:table($headers, $entries, $buttons, map { }, map { })
+              return html:table($headers, $entries, $buttons)
             }
           </form>
           <div class='note'>
@@ -143,25 +139,4 @@ function dba:user(
       }</td>
     </tr>
   )
-};
-
-(:~
- : Redirects to the specified action.
- : @param  $action    action to perform
- : @param  $name      user name
- : @param  $patterns  patterns
- : @return redirection
- :)
-declare
-  %rest:POST
-  %rest:path('/dba/user')
-  %rest:form-param('action',  '{$action}')
-  %rest:form-param('name',    '{$name}')
-  %rest:form-param('pattern', '{$patterns}')
-function dba:user-redirect(
-  $action    as xs:string,
-  $name      as xs:string,
-  $patterns  as xs:string*
-) as element(rest:response) {
-  web:redirect($action, map { 'name': $name, 'pattern': $patterns })
 };

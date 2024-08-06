@@ -8,7 +8,7 @@ import org.basex.util.list.*;
 /**
  * This class determines nodes per level and caches them.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Wolfgang Miller
  */
 final class TreeNodeCache {
@@ -45,7 +45,7 @@ final class TreeNodeCache {
       }
     }
     maxLevel = alil.size();
-    nodes = alil.toArray(new IntList[0]);
+    nodes = alil.toArray(IntList[]::new);
   }
 
   /**

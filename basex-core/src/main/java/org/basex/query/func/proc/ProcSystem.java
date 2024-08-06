@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProcSystem extends ProcFn {
@@ -21,7 +21,7 @@ public final class ProcSystem extends ProcFn {
     if(result.code == 0) return Str.get(result.output.normalize().finish());
 
     // create error message
-    final QNm name = new QNm(CODE + String.format("%04d", result.code), QueryText.PROC_URI);
+    final QNm name = new QNm("code" + String.format("%04d", result.code), QueryText.PROC_URI);
     result.error.normalize();
     throw new QueryException(info, name, string(result.error.normalize().finish()));
   }

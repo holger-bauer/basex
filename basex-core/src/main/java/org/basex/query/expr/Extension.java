@@ -1,6 +1,5 @@
 package org.basex.query.expr;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.util.*;
 import org.basex.query.util.index.*;
@@ -13,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * Pragma extension.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Extension extends Single {
@@ -22,7 +21,7 @@ public final class Extension extends Single {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param pragma pragma
    * @param expr enclosed expression
    */
@@ -49,7 +48,8 @@ public final class Extension extends Single {
 
   @Override
   public Expr optimize(final CompileContext cc) {
-    return adoptType(expr);
+    return pragma.simplify() && expr instanceof Value &&
+        !expr.seqType().mayBeFunction() ? expr : adoptType(expr);
   }
 
   @Override
@@ -90,23 +90,18 @@ public final class Extension extends Single {
   }
 
   @Override
-  public Data data() {
-    return expr.data();
-  }
-
-  @Override
   public boolean equals(final Object obj) {
     return this == obj || obj instanceof Extension &&
         pragma.equals(((Extension) obj).pragma) && super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), pragma, expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(pragma).brace(expr);
   }
 }

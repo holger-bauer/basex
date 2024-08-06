@@ -2,10 +2,12 @@ package org.basex.query.util;
 
 import java.util.regex.*;
 
+import org.basex.util.*;
+
 /**
  * A parser for RFC 3986 URIs.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 public final class UriParser {
@@ -179,25 +181,30 @@ public final class UriParser {
    */
   public static ParsedUri parse(final String uri) {
     final Matcher matcher = URI_REF.matcher(uri);
-    if(!matcher.matches()) return ParsedUri.INVALID;
-
-    final ParsedUri pu = new ParsedUri();
-    pu.scheme = matcher.group("scheme");
-    pu.valid = true;
-    return pu;
+    try {
+      if(uri.length() <= 2048 && matcher.matches()) {
+        final ParsedUri pu = new ParsedUri();
+        pu.absolute = matcher.group("scheme") != null;
+        pu.valid = true;
+        return pu;
+      }
+    } catch(final StackOverflowError er) {
+      Util.debug(er);
+    }
+    return ParsedUri.INVALID;
   }
 
   /**
-   * URI builder.
-   * @author BaseX Team 2005-20, BSD License
+   * URI data.
+   * @author BaseX Team 2005-24, BSD License
    * @author Dimitar Popov
    */
   public static final class ParsedUri {
     /** Invalid URI. */
     private static final ParsedUri INVALID = new ParsedUri();
 
-    /** Scheme. */
-    private String scheme;
+    /** Absolute flag. */
+    private boolean absolute;
     /** Valid flag. */
     private boolean valid;
 
@@ -210,11 +217,11 @@ public final class UriParser {
     }
 
     /**
-     * Returns the scheme.
-     * @return scheme
+     * Indicates if the URI is absolute.
+     * @return absolute flag
      */
-    public String scheme() {
-      return scheme;
+    public boolean absolute() {
+      return absolute;
     }
   }
 }

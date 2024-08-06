@@ -1,5 +1,6 @@
 package org.basex.server;
 
+import static org.basex.query.func.Function.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the execution of parallel commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Andreas Weiler
  */
 public final class ConcurrencyTest extends SandboxTest {
@@ -24,7 +25,7 @@ public final class ConcurrencyTest extends SandboxTest {
   private static final String FILE = "src/test/resources/factbook.zip";
   /** Test queries. */
   private static final String [] QUERIES = {
-    "(db:open('" + NAME + "')//province)[position() < 10] ! (insert node <test/> into .)",
+    '(' + _DB_GET.args(NAME) + "//province)[position() < 10] ! (insert node <test/> into .)",
     "(1 to 100000)[. = 0]"
   };
 
@@ -112,7 +113,7 @@ public final class ConcurrencyTest extends SandboxTest {
   private static final Random RANDOM = new Random();
 
   /** Single client. */
-  private static class CommandClient extends Thread {
+  private static final class CommandClient extends Thread {
     @Override
     public void run() {
       try {

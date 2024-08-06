@@ -1,107 +1,75 @@
 package org.basex.query.func.fn;
 
-import static org.basex.query.QueryError.*;
 import static org.basex.util.Token.*;
+
+import java.util.*;
 
 import org.basex.core.locks.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.func.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 
 /**
  * Document and collection functions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public abstract class Docs extends StandardFunc {
+public abstract class Docs extends DynamicFn {
   /** Query input. */
-  private QueryInput queryInput;
-
-  /**
-   * Returns a collection.
-   * @param qc query context
-   * @return collection
-   * @throws QueryException query exception
-   */
-  final Value collection(final QueryContext qc) throws QueryException {
-    // return default collection or parse specified collection
-    QueryInput qi = queryInput;
-    if(qi == null) {
-      final Item item = exprs.length == 0 ? Empty.VALUE : exprs[0].atomItem(qc, info);
-      if(item != Empty.VALUE) {
-        final byte[] uri = toToken(item);
-        qi = queryInput(uri);
-        if(qi == null) throw INVCOLL_X.get(info, uri);
-      }
-    }
-    return qc.resources.collection(qi, info);
-  }
-
-  /**
-   * Performs the doc function.
-   * @param qc query context
-   * @return document or {@link Empty#VALUE}
-   * @throws QueryException query exception
-   */
-  final Item doc(final QueryContext qc) throws QueryException {
-    QueryInput qi = queryInput;
-    if(qi == null) {
-      final byte[] uri = toTokenOrNull(exprs[0], qc);
-      if(uri == null) return Empty.VALUE;
-      qi = queryInput(uri);
-      if(qi == null) throw INVDOC_X.get(info, uri);
-    }
-    return qc.resources.doc(qi, info);
-  }
-
-  @Override
-  public final boolean accept(final ASTVisitor visitor) {
-    if(sc.withdb) {
-      if(exprs.length == 0) {
-        // lock default collection (only collection functions can have 0 arguments)
-        visitor.lock(Locking.COLLECTION, false);
-      } else {
-        // check if input argument is a static string
-        final Expr expr = exprs[0];
-        if(expr instanceof Str) {
-          // add local lock if argument may reference a database
-          queryInput = queryInput(((Str) expr).string());
-          if(queryInput != null) visitor.lock(queryInput.dbName, false);
-        } else if(expr != Empty.VALUE) {
-          // otherwise, database cannot be locked statically
-          if(!visitor.lock(null, false)) return false;
-        }
-      }
-    }
-    return super.accept(visitor);
-  }
-
-  @Override
-  public final boolean has(final Flag... flags) {
-    // remote URLs: return non-deterministic flag to suppress pre-evaluation
-    if(Flag.NDT.in(flags) && exprs.length > 0) {
-      final Expr expr = exprs[0];
-      if(expr instanceof Str) {
-        queryInput = queryInput(((Str) expr).string());
-        if(queryInput != null && queryInput.io instanceof IOUrl) return true;
-      }
-    }
-    return super.has(flags);
-  }
+  QueryInput queryInput;
 
   /**
    * Converts the specified URI to a query input reference.
    * @param uri URI
    * @return query input, or {@code null} if the URI is invalid
    */
-  private QueryInput queryInput(final byte[] uri) {
+  QueryInput queryInput(final byte[] uri) {
     return queryInput != null ? queryInput :
-      Uri.uri(uri).isValid() ? new QueryInput(string(uri), sc) : null;
+      Uri.get(uri).isValid() ? new QueryInput(string(uri), sc()) : null;
+  }
+
+  @Override
+  protected Expr opt(final CompileContext cc) throws QueryException {
+    // pre-evaluate during dynamic compilation
+    if(cc.dynamic && arg(0) instanceof Value) {
+      // target is empty
+      final Item item = arg(0).atomItem(cc.qc, info);
+      if(item.isEmpty()) return value(cc.qc);
+      // target is not a remote URL
+      queryInput = queryInput(toToken(item));
+      if(queryInput == null || !(queryInput.io instanceof IOUrl)) return value(cc.qc);
+    }
+    return this;
+  }
+
+  @Override
+  public final boolean accept(final ASTVisitor visitor) {
+    return visitor.lock(() -> {
+      final ArrayList<String> list = new ArrayList<>(1);
+      if(sc().withdb) {
+        // lock default collection (only collection functions can have 0 arguments)
+        if(defined(0)) {
+          // check if input argument is a static string
+          final Expr expr = arg(0);
+          final byte[] uri = expr instanceof Str ? ((Str) expr).string() :
+            expr instanceof Atm ? ((Atm) expr).string(null) : null;
+          if(uri != null) {
+            // add local lock if argument may reference a database
+            queryInput = queryInput(uri);
+            if(queryInput != null && queryInput.dbName != null) list.add(queryInput.dbName);
+          } else {
+            // empty sequence: default collection; otherwise, enforce global lock
+            list.add(expr.seqType().zero() ? Locking.COLLECTION : null);
+          }
+        } else {
+          list.add(Locking.COLLECTION);
+        }
+      }
+      return list;
+    }) && super.accept(visitor);
   }
 }

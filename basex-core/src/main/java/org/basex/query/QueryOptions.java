@@ -13,7 +13,7 @@ import org.basex.util.options.*;
 /**
  * Query-specific database options.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class QueryOptions {
@@ -43,8 +43,9 @@ final class QueryOptions {
    */
   void add(final String name, final byte[] value, final QueryParser parser) throws QueryException {
     final String key = name.toUpperCase(Locale.ENGLISH);
-    final Option<?> opt = qc.context.options.option(key);
-    if(opt == null) throw BASEX_OPTIONS1_X.get(parser.info(), name);
+    final MainOptions options = qc.context.options;
+    final Option<?> option = options.option(key);
+    if(option == null) throw BASEX_OPTIONSINV_X.get(parser.info(), options.similar(name));
 
     // try to assign option to dummy options
     if(dummyOptions == null) dummyOptions = new MainOptions(false);
@@ -55,7 +56,7 @@ final class QueryOptions {
       throw BASEX_OPTIONS_X_X.get(parser.info(), key, value);
     }
     // if successful, cache assigned value
-    localOpts.put(opt, dummyOptions.get(opt));
+    localOpts.put(option, dummyOptions.get(option));
   }
 
   /**
@@ -64,11 +65,11 @@ final class QueryOptions {
   void compile() {
     // cache old database options at compile time; assign local ones
     dummyOptions = null;
-    final MainOptions options = qc.context.options;
+    final MainOptions mopts = qc.context.options;
     for(final Entry<Option<?>, Object> entry : localOpts.entrySet()) {
       final Option<?> option = entry.getKey();
-      cachedOpts.put(option, options.get(option));
-      options.put(option, entry.getValue());
+      cachedOpts.put(option, mopts.get(option));
+      mopts.put(option, entry.getValue());
     }
   }
 

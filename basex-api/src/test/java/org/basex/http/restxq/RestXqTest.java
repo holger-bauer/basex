@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
 /**
  * This class contains RESTXQ tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class RestXqTest extends HTTPTest {
@@ -36,45 +36,43 @@ public abstract class RestXqTest extends HTTPTest {
 
   /**
    * Executes the specified GET request and tests the result.
+   * @param expected expected result
    * @param function function to test
    * @param query request
-   * @param exp expected result
    * @throws IOException I/O exception
    */
-  protected static void get(final String function, final String query, final String exp)
+  protected static void get(final String expected, final String function, final String query)
       throws IOException {
-    install(function);
-    assertEquals(exp, get(query));
+    register(function);
+    get(expected, query);
   }
 
   /**
-   * Executes the specified GET request and tests for an error.
+   * Executes the specified GET request and tests for a status code.
+   * @param status status code to check
    * @param function function to test
    * @param query request
    * @throws IOException I/O exception
    */
-  protected static void getE(final String function, final String query) throws IOException {
-    install(function);
-    try {
-      get(query);
-      fail("Error expected: " + query);
-    } catch(final BaseXException ignored) {
-    }
+  protected static void get(final int status, final String function, final String query)
+      throws IOException {
+    register(function);
+    get(status, query);
   }
 
   /**
    * Executes the specified POST request and tests the result.
+   * @param expected expected result
    * @param function function to test
    * @param query request
-   * @param request request
+   * @param payload payload
    * @param type media type
-   * @param exp expected result
    * @throws IOException I/O exception
    */
-  protected static void post(final String function, final String query, final String request,
-      final MediaType type, final String exp) throws IOException {
-    install(function);
-    assertEquals(exp, post(query, request, type));
+  protected static void post(final String expected, final String function, final String query,
+      final String payload, final MediaType type) throws IOException {
+    register(function);
+    assertEquals(expected, post(payload, type, query));
   }
 
   /**
@@ -82,7 +80,7 @@ public abstract class RestXqTest extends HTTPTest {
    * @param function function to be tested
    * @throws IOException I/O exception
    */
-  protected static void install(final String function) throws IOException {
+  protected static void register(final String function) throws IOException {
     // delete old module
     final String path = context.soptions.get(StaticOptions.WEBPATH);
     for(final IOFile f : new IOFile(path).children()) assertTrue(f.delete());

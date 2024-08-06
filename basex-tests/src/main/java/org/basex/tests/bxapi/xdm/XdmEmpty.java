@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Wrapper for representing an empty sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XdmEmpty extends XdmValue {
@@ -34,7 +34,7 @@ public final class XdmEmpty extends XdmValue {
 
   @Override
   public Iterator<XdmItem> iterator() {
-    return new Iterator<XdmItem>() {
+    return new Iterator<>() {
       @Override
       public boolean hasNext() {
         return false;

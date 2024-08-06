@@ -5,9 +5,8 @@ import java.io.*;
 import org.basex.build.csv.*;
 import org.basex.build.html.*;
 import org.basex.build.json.*;
-import org.basex.build.text.*;
 import org.basex.core.*;
-import org.basex.core.MainOptions.MainParser;
+import org.basex.core.MainOptions.*;
 import org.basex.core.cmd.*;
 import org.basex.http.*;
 import org.basex.util.http.*;
@@ -15,7 +14,7 @@ import org.basex.util.http.*;
 /**
  * REST-based evaluation of PUT operations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RESTPut {
@@ -32,17 +31,16 @@ final class RESTPut {
     // create new database or update resource
     final HTTPConnection conn = session.conn;
     final String db = conn.db();
-    if(db.isEmpty()) throw HTTPCode.NO_PATH.get();
+    if(db.isEmpty()) throw HTTPStatus.NO_DATABASE_SPECIFIED.get();
 
-    RESTCmd.parseOptions(session);
+    RESTCmd.assignOptions(session);
 
     final MainOptions options = conn.context.options;
     final InputStream is = conn.request.getInputStream();
-    final MediaType mt = conn.contentType();
+    final MediaType mt = conn.mediaType();
 
     // choose correct importer
     boolean xml = true;
-    final String ct = mt.type();
     if(mt.isJSON()) {
       final JsonParserOptions opts = new JsonParserOptions();
       opts.assign(mt);
@@ -58,16 +56,11 @@ final class RESTPut {
       opts.assign(mt);
       options.set(MainOptions.HTMLPARSER, opts);
       options.set(MainOptions.PARSER, MainParser.HTML);
-    } else if(mt.isText()) {
-      final TextOptions opts = new TextOptions();
-      opts.assign(mt);
-      options.set(MainOptions.TEXTPARSER, opts);
-      options.set(MainOptions.PARSER, MainParser.TEXT);
-    } else if(!ct.isEmpty() && !mt.isXML()) {
+    } else if(!mt.is(MediaType.ALL_ALL) && !mt.isXml()) {
       xml = false;
     }
 
-    // store data as XML or raw file, depending on content type
+    // store data as XML or binary resource, depending on content type
     final String path = conn.dbpath();
     if(path.isEmpty()) {
       // do not OPEN database
@@ -75,14 +68,12 @@ final class RESTPut {
       if(xml) {
         session.add(new CreateDB(db), is);
       } else {
-        session.add(new CreateDB(db)).add(new Store(db), is);
+        session.add(new CreateDB(db)).add(new BinaryPut(db), is);
       }
+    } else if(xml) {
+      session.add(new Put(path), is);
     } else {
-      if(xml) {
-        session.add(new Replace(path), is);
-      } else {
-        session.add(new Delete(path)).add(new Store(path), is);
-      }
+      session.add(new Delete(path)).add(new BinaryPut(path), is);
     }
     return new RESTExec(session, true);
   }

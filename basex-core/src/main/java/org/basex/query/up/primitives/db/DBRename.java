@@ -15,7 +15,7 @@ import org.basex.util.*;
 /**
  * Update primitive for the {@link Function#_DB_RENAME} function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DBRename extends DBUpdate {
@@ -27,7 +27,7 @@ public final class DBRename extends DBUpdate {
    * @param data target data
    * @param src source path
    * @param trg target path
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public DBRename(final Data data, final String src, final String trg, final InputInfo info) {
     super(UpdateType.DBRENAME, data, info);
@@ -35,12 +35,7 @@ public final class DBRename extends DBUpdate {
   }
 
   @Override
-  public void merge(final Update update) throws QueryException {
-    for(final Entry<String, String> e : ((DBRename) update).map.entrySet()) {
-      final String src = e.getKey();
-      if(map.containsKey(src)) throw UPPATHREN_X.get(info, src);
-      map.put(src, e.getValue());
-    }
+  public void prepare() {
   }
 
   @Override
@@ -59,10 +54,16 @@ public final class DBRename extends DBUpdate {
   }
 
   @Override
-  public int size() {
-    return map.size();
+  public void merge(final Update update) throws QueryException {
+    for(final Entry<String, String> e : ((DBRename) update).map.entrySet()) {
+      final String src = e.getKey();
+      if(map.containsKey(src)) throw UPPATHREN_X.get(info, src);
+      map.put(src, e.getValue());
+    }
   }
 
   @Override
-  public void prepare() { }
+  public int size() {
+    return map.size();
+  }
 }

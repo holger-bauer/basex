@@ -1,22 +1,20 @@
 package org.basex.query.func.unit;
 
 import static org.basex.query.QueryError.*;
-import static org.basex.query.func.unit.Constants.*;
 import static org.basex.query.ann.Annotation.*;
+import static org.basex.query.func.unit.Constants.*;
 import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.util.*;
 
-import org.basex.core.Context;
+import org.basex.core.*;
 import org.basex.core.jobs.*;
 import org.basex.io.*;
 import org.basex.query.*;
 import org.basex.query.ann.*;
-import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
-import org.basex.query.scope.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
@@ -26,7 +24,7 @@ import org.basex.util.*;
 /**
  * XQUnit tests: Testing single modules.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class Unit {
@@ -68,8 +66,8 @@ final class Unit {
    * @param suites root element
    * @throws IOException query exception
    */
-  public void test(final FElem suites) throws IOException {
-    final FElem suite = new FElem(TESTSUITE).add(NAME, file.url());
+  public void test(final FBuilder suites) throws IOException {
+    final FBuilder suite = FElem.build(Q_TESTSUITE).add(Q_NAME, file.url());
     final ArrayList<StaticFunc> beforeModule = new ArrayList<>(0);
     final ArrayList<StaticFunc> afterModule = new ArrayList<>(0);
     final ArrayList<StaticFunc> before = new ArrayList<>(0);
@@ -80,20 +78,22 @@ final class Unit {
     final Performance perf = new Performance();
 
     try(QueryContext qc = new QueryContext(ctx)) {
-      input = string(file.read());
+      input = file.string();
       qc.parse(input, file.path());
 
       // loop through all functions
-      for(final StaticFunc sf : qc.funcs.funcs()) {
+      for(final StaticFunc sf : qc.functions.funcs()) {
         // find Unit annotations
         final AnnList anns = sf.anns;
-        boolean xq = false;
-        for(final Ann ann : anns) xq |= ann.sig != null && eq(ann.sig.uri, QueryText.UNIT_URI);
-        if(!xq) continue;
+        boolean unit = false;
+        for(final Ann ann : anns) {
+          unit = unit || ann.definition != null && eq(ann.definition.uri, QueryText.UNIT_URI);
+        }
+        if(!unit) continue;
 
         // Unit function:
         if(anns.contains(PRIVATE)) throw UNIT_PRIVATE_X.get(null, sf.name.local());
-        if(sf.params.length > 0) throw UNIT_NOARGS_X.get(null, sf.name.local());
+        if(sf.arity() > 0) throw UNIT_NOARGS_X.get(null, sf.name.local());
 
         if(anns.contains(_UNIT_BEFORE_MODULE)) beforeModule.add(sf);
         if(anns.contains(_UNIT_AFTER_MODULE)) afterModule.add(sf);
@@ -117,18 +117,18 @@ final class Unit {
         // check arguments
         final AnnList anns = sf.anns;
         final Ann ann = anns.get(_UNIT_TEST);
-        final Item[] args = ann.args();
-        final int vs = args.length;
+        final Value value = ann.value();
+        final long vs = value.size();
 
         // expected error code
         QNm code = null;
-        if(vs == 2 && eq(EXPECTED, args[0].string(null))) {
-          code = QNm.resolve(args[1].string(null), QueryText.ERROR_URI, sf.sc, sf.info);
+        if(vs == 2 && eq(Q_EXPECTED.string(), value.itemAt(0).string(null))) {
+          code = QNm.parse(value.itemAt(1).string(null), QueryText.ERROR_URI, sf.sc, sf.info);
         } else if(vs != 0) {
-          throw BASEX_ANNOTATION2_X_X.get(ann.info, ann, arguments(vs));
+          throw BASEX_ANN2_X_X.get(ann.info, ann, arguments(vs));
         }
 
-        final FElem testcase = new FElem(TESTCASE).add(NAME, sf.name.local());
+        final FBuilder testcase = FElem.build(Q_TESTCASE).add(Q_NAME, sf.name.local());
         tests++;
 
         final Performance perf2 = new Performance();
@@ -152,19 +152,19 @@ final class Unit {
 
             if(code != null) {
               failures++;
-              testcase.add(new FElem(FAILURE).add(new FElem(EXPECTED).add(code.prefixId())));
+              testcase.add(FElem.build(Q_FAILURE).add(FElem.build(Q_EXPECTED).
+                  add(code.prefixId())));
             }
           } catch(final QueryException ex) {
             addError(ex, testcase, code);
           }
         } else {
           // skip test
-          final Item[] iargs = ignore.args();
-          testcase.add(SKIPPED, iargs.length == 0 ? EMPTY : iargs[0].string(null));
+          final Value ignored = ignore.value();
+          testcase.add(Q_SKIPPED, ignored.isEmpty() ? EMPTY : ignored.itemAt(0).string(null));
           skipped++;
         }
-        testcase.add(TIME, time(perf2));
-        suite.add(testcase);
+        suite.add(testcase.add(Q_TIME, time(perf2)));
       }
 
       // run finalizing tests
@@ -176,19 +176,16 @@ final class Unit {
         addError(ex, suite, null);
       } else {
         // handle errors caused by initializing or finalizing unit functions
-        final FElem tc = new FElem(TESTINIT).add(NAME, current.name.local()).add(TIME, time(perf));
-        suite.add(tc);
-        addError(ex, tc, null);
+        final FBuilder init = FElem.build(Q_TESTINIT).add(Q_NAME, current.name.local()).
+            add(Q_TIME, time(perf));
+        addError(ex, init, null);
+        suite.add(init);
       }
     }
 
-    if(suite.hasChildren()) {
-      suite.add(TIME, time(perf));
-      suite.add(TESTS, token(tests));
-      suite.add(FAILURES, token(failures));
-      suite.add(ERRORS, token(errors));
-      suite.add(SKIPPED, token(skipped));
-      suites.add(suite);
+    if(!suite.isEmpty()) {
+      suites.add(suite.add(Q_TIME, time(perf)).add(Q_TESTS, tests).add(Q_FAILURES, failures).
+        add(Q_ERRORS, errors).add(Q_SKIPPED, skipped));
     }
   }
 
@@ -200,10 +197,10 @@ final class Unit {
    * @throws QueryException query exception
    */
   private static QNm name(final StaticFunc sf, final Ann ann) throws QueryException {
-    final Item[] args = ann.args();
-    if(args.length != 0) {
-      final byte[] name = args[0].string(null);
-      if(name.length != 0) return QNm.resolve(name, sf.name.uri(), sf.sc, sf.info);
+    final Value value = ann.value();
+    if(!value.isEmpty()) {
+      final byte[] name = value.itemAt(0).string(null);
+      if(name.length != 0) return QNm.parse(name, sf.name.uri(), sf.sc, sf.info);
     }
     return null;
   }
@@ -212,42 +209,41 @@ final class Unit {
    * Adds an error element to the specified test case.
    * @param ex exception
    * @param testcase testcase element
-   * @param code error code (may be {@code null})
+   * @param code error code (can be {@code null})
    */
-  private void addError(final QueryException ex, final FElem testcase, final QNm code) {
+  private void addError(final QueryException ex, final FBuilder testcase, final QNm code) {
     final QNm name = ex.qname();
     if(code == null || !code.eq(name)) {
-      final FElem error;
+      final FBuilder error;
       final boolean fail = UNIT_FAIL.eq(name);
       if(fail) {
         failures++;
-        error = new FElem(FAILURE);
+        error = FElem.build(Q_FAILURE);
       } else {
         errors++;
-        error = new FElem(ERROR);
+        error = FElem.build(Q_ERROR);
       }
-      error.add(LINE, token(ex.line()));
-      error.add(COLUMN, token(ex.column()));
+      error.add(Q_LINE, ex.line()).add(Q_COLUMN, ex.column());
       final String url = IO.get(ex.file()).url();
-      if(!file.url().equals(url)) error.add(URI, url);
+      if(!file.url().equals(url)) error.add(Q_URI, url);
 
       if(ex instanceof UnitException) {
         // unit exception: add expected and returned values
         final UnitException ue = (UnitException) ex;
-        error.add(element(ue.returned, RETURNED, ue.count));
-        error.add(element(ue.expected, EXPECTED, ue.count));
+        error.add(element(ue.returned, Q_RETURNED, ue.count));
+        error.add(element(ue.expected, Q_EXPECTED, ue.count));
       } else if(!fail) {
         // exception other than failure: add type
-        error.add(TYPE, ex.qname().prefixId(QueryText.ERROR_URI));
+        error.add(Q_TYPE, ex.qname().prefixId(QueryText.ERROR_URI));
       }
 
       // add info
       final Value value = ex.value();
       if(value != null && value.isItem()) {
-        error.add(element((Item) value, INFO, -1));
+        error.add(element((Item) value, Q_INFO, -1));
       } else {
         // otherwise, add error message
-        error.add(new FElem(INFO).add(ex.getLocalizedMessage()));
+        error.add(FElem.build(Q_INFO).add(ex.getLocalizedMessage()));
       }
       testcase.add(error);
     }
@@ -258,23 +254,24 @@ final class Unit {
    * @param item item
    * @param name name (expected/returned)
    * @param count item count (ignore it {@code -1})
-   * @return new element
+   * @return element
    */
-  private static FElem element(final Item item, final byte[] name, final int count) {
-    final FElem exp = new FElem(name);
+  private static FBuilder element(final Item item, final QNm name, final int count) {
+    final FBuilder elem = FElem.build(name);
     if(item != null) {
       if(item instanceof ANode) {
-        exp.add((ANode) item);
+        elem.add((ANode) item);
       } else {
         try {
-          exp.add(item.string(null));
-        } catch(final QueryException ignored) {
-          exp.add(normalize(item.toString(), null));
+          elem.add(item.string(null));
+        } catch(final QueryException ex) {
+          Util.debug(ex);
+          elem.add(item);
         }
       }
-      if(count != -1) exp.add(ITEM, token(count)).add(TYPE, item.type.toString());
+      if(count != -1) elem.add(Q_ITEM, count).add(Q_TYPE, item.type);
     }
-    return exp;
+    return elem;
   }
 
   /**
@@ -285,28 +282,14 @@ final class Unit {
   private void eval(final StaticFunc func) throws QueryException {
     current = func;
 
-    try(QueryContext qctx = job.pushJob(new QueryContext(ctx))) {
-      qctx.parse(input, file.path());
-      qctx.mainModule(MainModule.get(find(qctx, func), new Expr[0]));
+    try(QueryContext qc = job.pushJob(new QueryContext(ctx))) {
+      qc.parse(input, file.path());
+      qc.assign(func);
       // ignore results
-      final Iter iter = qctx.iter();
-      while(qctx.next(iter) != null);
+      for(final Iter iter = qc.iter(); qc.next(iter) != null;);
     } finally {
       job.popJob();
     }
-  }
-
-  /**
-   * Returns the specified function from the given query context.
-   * @param qctx query context
-   * @param func function to be found
-   * @return function or {@code null}
-   */
-  private static StaticFunc find(final QueryContext qctx, final StaticFunc func) {
-    for(final StaticFunc sf : qctx.funcs.funcs()) {
-      if(func.info.equals(sf.info)) return sf;
-    }
-    return null;
   }
 
   /**

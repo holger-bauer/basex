@@ -1,20 +1,26 @@
 package org.basex.query.value.seq;
 
-import static org.basex.query.QueryError.*;
 import static org.basex.query.func.Function.*;
 
+import java.io.*;
+import java.util.function.*;
+
+import org.basex.core.*;
+import org.basex.data.*;
+import org.basex.io.in.DataInput;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.node.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
- * Sequence of a single item.
+ * Singleton value sequence.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SingletonSeq extends Seq {
@@ -31,11 +37,26 @@ public final class SingletonSeq extends Seq {
     this.value = value;
   }
 
+  /**
+   * Creates a value from the input stream. Called from {@link Store#read(DataInput, QueryContext)}.
+   * @param in data input
+   * @param type type
+   * @param qc query context
+   * @return value
+   * @throws IOException I/O exception
+   * @throws QueryException query exception
+   */
+  public static Value read(final DataInput in, final Type type, final QueryContext qc)
+      throws IOException, QueryException {
+    final long count = in.readLong();
+    final Value value = Store.read(in, qc);
+    return get(value, count);
+  }
+
   @Override
-  public Item ebv(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Item head = value.itemAt(0);
-    if(head instanceof ANode) return head;
-    throw EBV_X.get(ii, this);
+  public void write(final DataOutput out) throws IOException, QueryException {
+    out.writeLong(count());
+    Store.write(out, value);
   }
 
   @Override
@@ -49,28 +70,23 @@ public final class SingletonSeq extends Seq {
   }
 
   @Override
-  public long atomSize() {
-    return value.atomSize();
+  protected Seq subSeq(final long pos, final long length, final QueryContext qc) {
+    return singleItem() ? new SingletonSeq(length, value) : super.subSeq(pos, length, qc);
   }
 
   @Override
-  protected Seq subSeq(final long offset, final long length, final QueryContext qc) {
-    return value.size() == 1 ? new SingletonSeq(length, value) : super.subSeq(offset, length, qc);
-  }
-
-  @Override
-  public Value insert(final long pos, final Item item, final QueryContext qc) {
+  public Value insertBefore(final long pos, final Item item, final QueryContext qc) {
     return item.equals(value) ? get(value, size + 1) : copyInsert(pos, item, qc);
   }
 
   @Override
   public Value remove(final long pos, final QueryContext qc) {
-    return value.size() == 1 ? get(value, size - 1) : copyRemove(pos, qc);
+    return singleItem() ? get(value, size - 1) : copyRemove(pos, qc);
   }
 
   @Override
   public Value reverse(final QueryContext qc) {
-    return get(value.reverse(qc), size / value.size());
+    return singleItem() ? this : get(value.reverse(qc), count());
   }
 
   @Override
@@ -80,7 +96,27 @@ public final class SingletonSeq extends Seq {
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
-    return mode == Simplify.DISTINCT ? cc.replaceWith(this, value) : super.simplifyFor(mode, cc);
+    Expr expr = this;
+    if(mode == Simplify.DISTINCT || mode == Simplify.PREDICATE && type.isNumber()) {
+      expr = value;
+    } else if(type instanceof NodeType && mode.oneOf(Simplify.DATA, Simplify.NUMBER,
+        Simplify.STRING)) {
+      expr = get((Value) value.simplifyFor(mode, cc), count());
+    }
+    return cc.simplify(this, expr, mode);
+  }
+
+  @Override
+  public Value materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+    return materialized(test, ii) ? this :
+      new SingletonSeq(size, value.materialize(test, ii, qc));
+  }
+
+  @Override
+  public boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    return value.materialized(test, ii);
   }
 
   @Override
@@ -89,13 +125,13 @@ public final class SingletonSeq extends Seq {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), value);
   }
 
   @Override
-  public void plan(final QueryString qs) {
-    qs.function(_UTIL_REPLICATE, value, size / value.size());
+  public void toString(final QueryString qs) {
+    qs.function(REPLICATE, value, count());
   }
 
   /**
@@ -103,7 +139,20 @@ public final class SingletonSeq extends Seq {
    * @return result of check
    */
   public boolean singleItem() {
-    return value instanceof Item;
+    return value.size() == 1;
+  }
+
+  /**
+   * Value count.
+   * @return count
+   */
+  public long count() {
+    return size / value.size();
+  }
+
+  @Override
+  public void refineType() {
+    refineType(value);
   }
 
   // STATIC METHODS ===============================================================================
@@ -120,6 +169,7 @@ public final class SingletonSeq extends Seq {
     // zero results: return empty sequence
     final long vs = value.size(), size = vs * count;
     if(size == 0) return Empty.VALUE;
+    if(!Util.inBounds(vs, count)) throw new OutOfMemoryError("Memory limit reached.");
 
     // if all items are equal, reduce value to single item
     Value val = value;

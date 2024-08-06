@@ -21,7 +21,7 @@ import org.basex.util.*;
 /**
  * Project file tree.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProjectView extends BaseXPanel {
@@ -86,12 +86,15 @@ public final class ProjectView extends BaseXPanel {
       }
     );
 
-    final AbstractButton browse = BaseXButton.get("c_editopen", OPEN, false, gui);
+    final BaseXToolBar buttons = new BaseXToolBar();
+
+    final AbstractButton browse = BaseXButton.get("c_edit_open", OPEN, false, gui);
     browse.setToolTipText(CHOOSE_DIR + DOTS);
     browse.addActionListener(e -> chooseRoot());
+    buttons.add(browse);
 
     back.add(rootPath, BorderLayout.CENTER);
-    back.add(browse, BorderLayout.EAST);
+    back.add(buttons, BorderLayout.EAST);
     back.add(filter, BorderLayout.SOUTH);
 
     // add scroll bars
@@ -139,10 +142,10 @@ public final class ProjectView extends BaseXPanel {
    * @param file file to be opened
    * @param rename file has been renamed
    * @param xquery file is XQuery module
-   * @param library XQuery module is a library
+   * @param enforce enforce parsing of XQuery files
    */
   public void save(final IOFile file, final boolean rename, final boolean xquery,
-      final boolean library) {
+      final boolean enforce) {
 
     SwingUtilities.invokeLater(() -> {
       final IOFile io = file.normalize();
@@ -150,7 +153,7 @@ public final class ProjectView extends BaseXPanel {
         if(xquery) ProjectFiles.parse(file.path(), gui.context, files.errors());
         refreshTree(io);
       }
-      refresh(rename, library);
+      refresh(rename, enforce);
     });
   }
 
@@ -218,9 +221,10 @@ public final class ProjectView extends BaseXPanel {
         final Performance perf = new Performance();
         files.parse(root.file, gui.context);
         parsed = true;
-        gui.status.setText(PARSING_CC + perf.getTime());
+        gui.status.setText(PARSING_CC + perf.getTime(), true);
         return true;
       }
+
       @Override
       protected void done(final Boolean refresh) {
         if(refresh) refreshHighlight(root);
@@ -246,7 +250,7 @@ public final class ProjectView extends BaseXPanel {
 
   /**
    * Refreshes the rendering of the specified file, and its parents, in the tree.
-   * It may possibly be hidden in the current tree.
+   * It may, possibly, be hidden in the current tree.
    * @param file file to be refreshed
    */
   private void refreshTree(final IOFile file) {
@@ -329,9 +333,7 @@ public final class ProjectView extends BaseXPanel {
    * Shows a dialog for changing the root directory.
    */
   private void chooseRoot() {
-    final ProjectNode child = tree.selectedNode();
-    final IOFile file = (child != null ? child : root).file;
-    final BaseXFileChooser fc = new BaseXFileChooser(gui, CHOOSE_DIR, file.path());
+    final BaseXFileChooser fc = new BaseXFileChooser(gui, CHOOSE_DIR, root.file.path());
     final IOFile io = fc.select(Mode.DOPEN);
     if(io != null) {
       rootPath.setText(io.normalize().path());

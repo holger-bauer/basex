@@ -17,18 +17,18 @@ import org.basex.util.*;
  * <ul>
  *   <li><b>Time</b>: timestamp (format: {@code xs:time})</li>
  *   <li><b>Address</b>: host name and port of the requesting client</li>
- *   <li><b>User</b>: user name</li>
+ *   <li><b>User</b>: username</li>
  *   <li><b>Type</b>: Type of log message: REQUEST, OK or ERROR</li>
  *   <li><b>Info</b>: Log message</li>
  *   <li><b>Performance</b>: Measured time in milliseconds</li>
  * </ul>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Log implements QueryTracer {
   /** Server string. */
-  public static final String SERVER = "SERVER";
+  private static final String SERVER = "SERVER";
   /** Log types. */
   public enum LogType {
     /** Request. */ REQUEST,

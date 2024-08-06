@@ -6,7 +6,6 @@ import org.basex.*;
 import org.basex.build.csv.*;
 import org.basex.build.html.*;
 import org.basex.build.json.*;
-import org.basex.build.text.*;
 import org.basex.core.*;
 import org.basex.io.*;
 import org.basex.query.func.archive.*;
@@ -20,21 +19,20 @@ import org.junit.jupiter.api.*;
 /**
  * Tests on options.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class OptionsTest extends SandboxTest {
   /** Initializes various options. */
   @AfterAll public static void init() {
     // instantiate options at least once
-    new UCAOptions();
+    new UCAOptions(false);
     new CsvOptions();
     new CsvParserOptions();
     new HtmlOptions();
     new JsonOptions();
     new JsonParserOptions();
     new JsonSerialOptions();
-    new TextOptions();
     new CreateOptions();
     new FtIndexOptions();
     new FtContainsOptions();
@@ -47,11 +45,11 @@ public final class OptionsTest extends SandboxTest {
 
   /** Tests the effect of setting system properties. */
   @Test public void systemProperty() {
-    final BooleanOption name = MainOptions.CHOP;
-    final Boolean value = Boolean.FALSE;
-    System.setProperty(Prop.DBPREFIX + name.name(), value.toString());
+    final BooleanOption name = MainOptions.STRIPWS;
+    final boolean value = true;
+    System.setProperty(Prop.DBPREFIX + name.name(), Boolean.toString(value));
     try {
-      assertEquals(false, new MainOptions().get(name));
+      assertEquals(true, new MainOptions().get(name));
     } finally {
       System.clearProperty(Prop.DBPREFIX + name.name());
     }

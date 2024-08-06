@@ -12,20 +12,18 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ClientConnect extends ClientFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkCreate(qc);
-
-    final String host = Token.string(toToken(exprs[0], qc));
-    final String user = Token.string(toToken(exprs[2], qc));
-    final String pass = Token.string(toToken(exprs[3], qc));
-    final int port = (int) toLong(exprs[1], qc);
+    final String host = toString(arg(0), qc);
+    final String username = toString(arg(2), qc);
+    final String password = toString(arg(3), qc);
+    final int port = (int) toLong(arg(1), qc);
     try {
-      return sessions(qc).add(new ClientSession(host, port, user, pass));
+      return sessions(qc).add(new ClientSession(host, port, username, password));
     } catch(final IOException ex) {
       throw CLIENT_CONNECT_X.get(info, ex);
     }

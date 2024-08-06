@@ -5,16 +5,17 @@ import static org.basex.query.QueryError.*;
 import java.io.*;
 import java.nio.file.*;
 
-import org.basex.io.in.*;
+import org.basex.io.*;
 import org.basex.io.out.*;
 import org.basex.query.*;
+import org.basex.query.func.archive.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileWriteBinary extends FileFn {
@@ -34,23 +35,27 @@ public class FileWriteBinary extends FileFn {
   final synchronized void write(final boolean append, final QueryContext qc)
       throws QueryException, IOException {
 
-    final Path path = checkParentDir(toPath(0, qc));
-    final Bin bin = toBin(exprs[1], qc);
+    final Path path = toParent(toPath(arg(0), qc));
+    if(defined(2)) {
+      // write file chunk
+      final Bin binary = toBin(arg(1), qc);
+      final long offset = toLong(arg(2), qc);
 
-    // write full file
-    if(exprs.length == 2) {
-      try(BufferOutput out = new BufferOutput(new FileOutputStream(path.toFile(), append));
-          BufferInput in = bin.input(info)) {
-        for(int b; (b = in.read()) != -1;) out.write(b);
+      try(RandomAccessFile raf = new RandomAccessFile(path.toFile(), "rw")) {
+        final long length = raf.length();
+        if(offset < 0 || offset > length) throw FILE_OUT_OF_RANGE_X_X.get(info, offset, length);
+        raf.seek(offset);
+        raf.write(binary.binary(info));
       }
     } else {
-      // write file chunk
-      final long off = toLong(exprs[2], qc);
-      try(RandomAccessFile raf = new RandomAccessFile(path.toFile(), "rw")) {
-        final long dlen = raf.length();
-        if(off < 0 || off > dlen) throw FILE_OUT_OF_RANGE_X_X.get(info, off, dlen);
-        raf.seek(off);
-        raf.write(bin.binary(info));
+      // write full file
+      try(BufferOutput out = BufferOutput.get(new FileOutputStream(path.toFile(), append))) {
+        if(arg(1).getClass() == ArchiveCreate.class) {
+          // optimization: stream archive to disk (no support for ArchiveCreateFrom)
+          ((ArchiveCreate) arg(1)).create(out, qc);
+        } else {
+          IO.write(toBin(arg(1), qc).input(info), out);
+        }
       }
     }
   }

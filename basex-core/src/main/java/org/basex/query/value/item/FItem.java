@@ -2,87 +2,132 @@ package org.basex.query.value.item;
 
 import static org.basex.query.QueryError.*;
 
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.util.collation.*;
-import org.basex.query.util.list.*;
 import org.basex.query.value.map.*;
 import org.basex.query.value.type.*;
+import org.basex.query.var.*;
 import org.basex.util.*;
 
 /**
  * Abstract super class for function items.
  * This class is inherited by {@link XQMap}, {@link Array}, and {@link FuncItem}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class FItem extends Item implements XQFunction {
-  /** Annotations. */
-  final AnnList anns;
-
   /**
    * Constructor.
-   * @param type type
-   * @param anns this function item's annotations
+   * @param type function type
    */
-  protected FItem(final FuncType type, final AnnList anns) {
+  protected FItem(final Type type) {
     super(type);
-    this.anns = anns;
   }
 
   @Override
-  public final AnnList annotations() {
-    return anns;
+  public final boolean equal(final Item item, final Collation coll, final InputInfo ii)
+      throws QueryException {
+    throw FIATOMIZE_X.get(info(ii), this);
   }
 
   @Override
-  public final byte[] string(final InputInfo ii) throws QueryException {
-    throw FIATOM_X.get(ii, type);
-  }
-
-  @Override
-  public final boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
-    throw FIATOM_X.get(ii, type);
-  }
-
-  @Override
-  public final boolean sameKey(final Item item, final InputInfo ii) {
+  public final boolean atomicEqual(final Item item) {
     return false;
   }
 
   @Override
-  public void refineType(final Expr expr) {
-    final Type t = type.intersect(expr.seqType().type);
-    if(t != null) type = t;
+  public final FuncType funcType() {
+    return type.funcType();
   }
 
   @Override
-  public final FuncType funcType() {
-    return (FuncType) type;
+  public Item materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+    throw BASEX_STORE_X.get(info(ii), this);
+  }
+
+  @Override
+  public boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    throw BASEX_STORE_X.get(info(ii), this);
   }
 
   /**
-   * Coerces this function item to the given function type.
+   * Converts this function item to the given function type.
    * @param ft function type
    * @param qc query context
-   * @param ii input info
-   * @param optimize optimize resulting item
+   * @param cc compilation context ({@code null} during runtime)
+   * @param ii input info (can be {@code null})
    * @return coerced item
    * @throws QueryException query exception
    */
-  public abstract FItem coerceTo(FuncType ft, QueryContext qc, InputInfo ii, boolean optimize)
-      throws QueryException;
+  public FItem coerceTo(final FuncType ft, final QueryContext qc, final CompileContext cc,
+      final InputInfo ii) throws QueryException {
+
+    final InputInfo info = info(ii);
+    final SeqType[] argTypes = ft.argTypes;
+    final int arity = arity(), nargs = argTypes.length;
+    if(nargs < arity) throw arityError(this, arity, nargs, false, info);
+
+    // optimize: continue with coercion if current type is only an instance of new type
+    if(type instanceof FuncType && (cc != null ? type.eq(ft) : type.instanceOf(ft))) return this;
+
+    // create new compilation context and variable scope
+    final VarScope vs = new VarScope();
+    final Var[] vars = new Var[nargs];
+    final Expr[] args = new Expr[arity];
+    for(int a = 0; a < arity; a++) {
+      vars[a] = vs.addNew(paramName(a), argTypes[a], qc, info);
+      args[a] = new VarRef(info, vars[a]).optimize(cc);
+    }
+    for(int a = arity; a < nargs; a++) {
+      vars[a] = vs.addNew(QNm.EMPTY, argTypes[a], qc, info);
+    }
+
+    try {
+      if(cc != null) cc.pushScope(vs);
+
+      // create new function call (will immediately be inlined/simplified when optimized)
+      Expr body = new DynFuncCall(info, updating(), false, this, args);
+      if(cc != null) body = body.optimize(cc);
+
+      // add type check if return types differ
+      final SeqType dt = ft.declType;
+      FuncType tp = funcType();
+      if(!tp.declType.instanceOf(dt)) {
+        body = new TypeCheck(info, body, dt);
+        if(cc != null) body = body.optimize(cc);
+      }
+
+      // adopt type of optimized body if it is more specific than passed on type
+      final SeqType bt = body.seqType();
+      tp = cc != null && !bt.eq(dt) && bt.instanceOf(dt) ? FuncType.get(bt, argTypes) : ft;
+      body.markTailCalls(null);
+      return new FuncItem(info, body, vars, annotations(), tp, vs.stackSize(), funcName());
+    } finally {
+      if(cc != null) cc.removeScope();
+    }
+  }
 
   /**
-   * Performs a deep comparison of two items.
-   * @param item item to be compared
-   * @param coll collation (can be {@code null})
-   * @param ii input info
+   * Indicates if the function item is updating.
    * @return result of check
-   * @throws QueryException query exception
    */
-  public abstract boolean deep(Item item, Collation coll, InputInfo ii) throws QueryException;
+  abstract boolean updating();
+
+  @Override
+  public final boolean equals(final Object obj) {
+    try {
+      return obj instanceof FItem && deepEqual((FItem) obj, null);
+    } catch(final QueryException ex) {
+      Util.debug(ex);
+      return false;
+    }
+  }
 }

@@ -9,7 +9,7 @@ import org.basex.util.*;
 /**
  * Executes a simple REST operation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RESTExec extends RESTCmd {
@@ -30,6 +30,6 @@ final class RESTExec extends RESTCmd {
   protected void run0() throws IOException {
     for(final Command cmd : session) run(cmd);
     session.conn.response.getOutputStream().write(Token.token(info()));
-    if(create) code = HTTPCode.CREATED_X;
+    if(create) status = HTTPStatus.CREATED_X;
   }
 }

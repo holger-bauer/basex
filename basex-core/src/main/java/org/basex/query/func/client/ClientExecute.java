@@ -14,15 +14,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ClientExecute extends ClientFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkCreate(qc);
     final ClientSession cs = session(qc, false);
-    final String cmd = Token.string(toToken(exprs[1], qc));
+    final String cmd = toString(arg(1), qc);
 
     try {
       final ArrayOutput ao = new ArrayOutput();

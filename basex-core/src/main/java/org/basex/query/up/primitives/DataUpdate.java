@@ -6,7 +6,7 @@ import org.basex.util.*;
 /**
  * Update that operates on a data reference.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public abstract class DataUpdate extends Update {
@@ -17,7 +17,7 @@ public abstract class DataUpdate extends Update {
    * Constructor.
    * @param type type of this operation
    * @param data target data reference
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   protected DataUpdate(final UpdateType type, final Data data, final InputInfo info) {
     super(type, info);

@@ -19,7 +19,7 @@ import org.basex.util.*;
 /**
  * This class defines syntax highlighting for XQuery files.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class SyntaxXQuery extends Syntax {
@@ -76,7 +76,7 @@ final class SyntaxXQuery extends Syntax {
     // opened quote
     if(quote != 0) {
       if(ch == quote) quote = 0;
-      return VALUE;
+      return DGRAY;
     }
 
     // comment
@@ -91,36 +91,36 @@ final class SyntaxXQuery extends Syntax {
     }
     if(comment != 0) {
       var = false;
-      return COMMENT;
+      return GRAY;
     }
 
     // quotes
-    if(ch == '"' || ch == '\'') {
+    if(ch == '"' || ch == '\'' || ch == '`') {
       quote = ch;
-      return VALUE;
+      return DGRAY;
     }
 
     // variables
     if(ch == '$') {
       var = true;
-      return VARIABLE;
+      return GREEN;
     }
     if(var) {
       var = XMLToken.isChar(ch);
-      return VARIABLE;
+      return GREEN;
     }
 
     // integers
-    if(digit(ch) && toLong(token(iter.currString())) != Long.MIN_VALUE) return DIGIT;
+    if(digit(ch) && !Double.isNaN(toDouble(token(iter.currString())))) return PURPLE;
 
     // special characters
     if(!XMLToken.isNCChar(ch)) {
       elem = ch == '<' || ch == '%';
-      return COMMENT;
+      return GRAY;
     }
 
     // check for keywords
-    if(!elem && KEYWORDS.contains(iter.currString())) return KEYWORD;
+    if(!elem && KEYWORDS.contains(iter.currString())) return BLUE;
 
     // standard text
     elem = false;
@@ -155,14 +155,14 @@ final class SyntaxXQuery extends Syntax {
           tb.add('\n');
           for(int i = 0; i < ind; i++) tb.add(spaces);
         }
-      } else if(close != -1 && (prev != ':' || ch != ')')) {
-        ind--;
-        if(!spaces(tb) && !matches(OPENING.charAt(close), t, text, -3)) {
-          tb.add('\n');
-          for(int i = 0; i < ind; i++) tb.add(spaces);
-        }
-        tb.addByte(ch);
       } else {
+        if(close != -1 && (prev != ':' || ch != ')')) {
+          ind--;
+          if(!spaces(tb) && !matches(OPENING.charAt(close), t, text, -3)) {
+            tb.add('\n');
+            for(int i = 0; i < ind; i++) tb.add(spaces);
+          }
+        }
         tb.addByte(ch);
       }
     }

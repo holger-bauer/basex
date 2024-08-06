@@ -2,7 +2,6 @@ package org.basex.query.func.fn;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.CmpV.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.collation.*;
@@ -15,23 +14,26 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnIndexOf extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
+    final Iter input = arg(0).atomIter(qc, info);
+    final Item search = toAtomItem(arg(1), qc);
+    final Collation collation = toCollation(arg(2), qc);
+
     return new Iter() {
-      final Iter iter = exprs[0].atomIter(qc, info);
-      final Item srch = toAtomItem(exprs[1], qc);
-      final Collation coll = toCollation(2, qc);
       int c;
 
       @Override
       public Int next() throws QueryException {
-        for(Item item; (item = qc.next(iter)) != null;) {
+        for(Item item; (item = qc.next(input)) != null;) {
           ++c;
-          if(item.comparable(srch) && OpV.EQ.eval(item, srch, coll, sc, info)) return Int.get(c);
+          if(item.comparable(search) && item.equal(search, collation, info)) {
+            return Int.get(c);
+          }
         }
         return null;
       }
@@ -40,24 +42,24 @@ public final class FnIndexOf extends StandardFunc {
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final Iter iter = exprs[0].atomIter(qc, info);
-    final Item srch = toAtomItem(exprs[1], qc);
-    final Collation coll = toCollation(2, qc);
-    int c = 0;
+    final Iter input = arg(0).atomIter(qc, info);
+    final Item search = toAtomItem(arg(1), qc);
+    final Collation collation = toCollation(arg(2), qc);
 
     final LongList list = new LongList();
-    for(Item item; (item = qc.next(iter)) != null;) {
+    int c = 0;
+    for(Item item; (item = qc.next(input)) != null;) {
       ++c;
-      if(item.comparable(srch) && OpV.EQ.eval(item, srch, coll, sc, info)) list.add(c);
+      if(item.comparable(search) && item.equal(search, collation, info)) list.add(c);
     }
     return IntSeq.get(list.finish());
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    final Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-    if(st.zero()) return expr;
+    final Expr input = arg(0);
+    final SeqType st = input.seqType();
+    if(st.zero()) return input;
     if(st.zeroOrOne() && !st.mayBeArray()) exprType.assign(Occ.ZERO_OR_ONE);
     return this;
   }

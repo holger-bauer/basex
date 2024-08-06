@@ -4,9 +4,11 @@ import static org.basex.query.QueryError.*;
 import static org.basex.query.QueryText.*;
 import static org.basex.query.value.item.Dec.*;
 
+import java.io.*;
 import java.math.*;
 import java.util.regex.*;
 
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
@@ -15,7 +17,7 @@ import org.basex.util.*;
 /**
  * DayTime Duration item ({@code xs:dayTimeDuration}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DTDur extends Dur {
@@ -25,7 +27,7 @@ public final class DTDur extends Dur {
    */
   public DTDur(final Dur dur) {
     super(AtomType.DAY_TIME_DURATION);
-    sec = dur.sec == null ? BigDecimal.ZERO : dur.sec;
+    seconds = dur.seconds == null ? BigDecimal.ZERO : dur.seconds;
   }
 
   /**
@@ -35,33 +37,33 @@ public final class DTDur extends Dur {
    */
   public DTDur(final long hours, final long minutes) {
     super(AtomType.DAY_TIME_DURATION);
-    sec = BigDecimal.valueOf(hours).multiply(BD_60).add(BigDecimal.valueOf(minutes)).
+    seconds = BigDecimal.valueOf(hours).multiply(BD_60).add(BigDecimal.valueOf(minutes)).
         multiply(BD_60);
   }
 
   /**
    * Constructor.
-   * @param sec seconds
+   * @param seconds seconds
    */
-  public DTDur(final BigDecimal sec) {
+  public DTDur(final BigDecimal seconds) {
     super(AtomType.DAY_TIME_DURATION);
-    this.sec = sec;
+    this.seconds = seconds;
   }
 
   /**
    * Constructor.
    * @param value value
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DTDur(final byte[] value, final InputInfo ii) throws QueryException {
+  public DTDur(final byte[] value, final InputInfo info) throws QueryException {
     super(AtomType.DAY_TIME_DURATION);
 
     final String val = Token.string(value).trim();
     final Matcher mt = DTD.matcher(val);
     if(!mt.matches() || Strings.endsWith(val, 'P') || Strings.endsWith(val, 'T'))
-      throw dateError(value, XDTD, ii);
-    dayTime(value, mt, 2, ii);
+      throw dateError(value, XDTD, info);
+    dayTime(value, mt, 2, info);
   }
 
   /**
@@ -69,16 +71,16 @@ public final class DTDur extends Dur {
    * @param dur duration item
    * @param add duration to be added/subtracted
    * @param plus plus/minus flag
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DTDur(final DTDur dur, final DTDur add, final boolean plus, final InputInfo ii)
+  public DTDur(final DTDur dur, final DTDur add, final boolean plus, final InputInfo info)
       throws QueryException {
 
     this(dur);
-    sec = plus ? sec.add(add.sec) : sec.subtract(add.sec);
-    final double d = sec.doubleValue();
-    if(d <= Long.MIN_VALUE || d >= Long.MAX_VALUE) throw SECDURRANGE_X.get(ii, d);
+    seconds = plus ? seconds.add(add.seconds) : seconds.subtract(add.seconds);
+    final double d = seconds.doubleValue();
+    if(d <= Long.MIN_VALUE || d >= Long.MAX_VALUE) throw SECDURRANGE_X.get(info, d);
   }
 
   /**
@@ -86,45 +88,49 @@ public final class DTDur extends Dur {
    * @param dur  duration item
    * @param factor factor
    * @param mult multiplication flag
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DTDur(final Dur dur, final double factor, final boolean mult, final InputInfo ii)
+  public DTDur(final Dur dur, final double factor, final boolean mult, final InputInfo info)
       throws QueryException {
 
     this(dur);
-    if(Double.isNaN(factor)) throw DATECALC_X_X.get(ii, description(), factor);
-    if(mult ? Double.isInfinite(factor) : factor == 0) throw DATEZERO_X_X.get(ii, type, factor);
+    if(Double.isNaN(factor)) throw DATECALC_X_X.get(info, description(), factor);
+    if(mult ? Double.isInfinite(factor) : factor == 0) throw DATEZERO_X_X.get(info, type, factor);
     if(mult ? factor == 0 : Double.isInfinite(factor)) {
-      sec = BigDecimal.ZERO;
+      seconds = BigDecimal.ZERO;
     } else {
       BigDecimal d = BigDecimal.valueOf(factor);
       try {
-        sec = mult ? sec.multiply(d) : sec.divide(d, MathContext.DECIMAL64);
+        seconds = mult ? seconds.multiply(d) : seconds.divide(d, MathContext.DECIMAL64);
       } catch(final ArithmeticException ex) {
         Util.debug(ex);
         // catch cases in which a computation yields no exact result; eg:
         // xs:dayTimeDuration("P1D") div xs:double("-1.7976931348623157E308")
         d = BigDecimal.valueOf(1 / factor);
-        sec = mult ? sec.divide(d, MathContext.DECIMAL64) : sec.multiply(d);
+        seconds = mult ? seconds.divide(d, MathContext.DECIMAL64) : seconds.multiply(d);
       }
     }
-    if(Math.abs(sec.doubleValue()) < 1.0E-13) sec = BigDecimal.ZERO;
+    if(Math.abs(seconds.doubleValue()) < 1.0E-13) seconds = BigDecimal.ZERO;
   }
 
   /**
    * Constructor for subtracting two date/time items.
    * @param date date item
    * @param sub date/time to be subtracted
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public DTDur(final ADate date, final ADate sub, final InputInfo ii) throws QueryException {
+  public DTDur(final ADate date, final ADate sub, final InputInfo info) throws QueryException {
     super(AtomType.DAY_TIME_DURATION);
-    sec = date.days().subtract(sub.days()).multiply(BD_864000).add(
-        date.seconds().subtract(sub.seconds()));
-    final double d = sec.doubleValue();
-    if(d <= Long.MIN_VALUE || d >= Long.MAX_VALUE) throw SECRANGE_X.get(ii, d);
+    seconds = date.seconds().subtract(sub.seconds());
+    final double d = seconds.doubleValue();
+    if(d <= Long.MIN_VALUE || d >= Long.MAX_VALUE) throw SECRANGE_X.get(info, d);
+  }
+
+  @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeToken(string(null));
   }
 
   /**
@@ -132,13 +138,13 @@ public final class DTDur extends Dur {
    * @return year
    */
   public BigDecimal dtd() {
-    return sec;
+    return seconds;
   }
 
   @Override
   public byte[] string(final InputInfo ii) {
     final TokenBuilder tb = new TokenBuilder();
-    final int ss = sec.signum();
+    final int ss = seconds.signum();
     if(ss < 0) tb.add('-');
     tb.add('P');
     if(day() != 0) { tb.addLong(Math.abs(day())); tb.add('D'); }
@@ -148,9 +154,10 @@ public final class DTDur extends Dur {
   }
 
   @Override
-  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
-    if(item.type == type) return sec.subtract(((ADateDur) item).sec).signum();
-    throw diffError(item, this, ii);
+  public int compare(final Item item, final Collation coll, final boolean transitive,
+      final InputInfo ii) throws QueryException {
+    return item.type == type ? seconds.subtract(((Dur) item).seconds).signum() :
+      super.compare(item, coll, transitive, ii);
   }
 
   /**

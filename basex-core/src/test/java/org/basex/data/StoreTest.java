@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the stability of the database store.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StoreTest extends SandboxTest {
@@ -36,7 +36,7 @@ public final class StoreTest extends SandboxTest {
     execute(new CreateDB(NAME, "<X><A>q</A><A>q</A></X>"));
     final long size = context.data().meta.dbFile(DataText.DATATXT).length();
     for(int n = 0; n < 500; n++) {
-      query("for $a in //text() return replace node $a with random:double()");
+      query("for $a in //text() return replace node $a with " + _RANDOM_DOUBLE.args());
     }
     assertEquals(size, context.data().meta.dbFile(DataText.DATATXT).length());
   }
@@ -52,7 +52,7 @@ public final class StoreTest extends SandboxTest {
       String qu = "for $a in //text() return delete node $a";
       query(qu);
       qu = "for $a in //text() " +
-          "let $d := random:integer(" + Integer.MAX_VALUE + ") " +
+          "let $d := " + _RANDOM_INTEGER.args(Integer.MAX_VALUE) +
           "return insert node $a into $d";
       query(qu);
     }
@@ -86,7 +86,7 @@ public final class StoreTest extends SandboxTest {
           execute(new CreateDB(NAME));
           final String input = "<a>0</a>";
           execute(new Add("a.xml", input));
-          final String query = _DB_OPEN.args(NAME) + "//*[text()='0']";
+          final String query = _DB_GET.args(NAME) + "//*[text()='0']";
           assertEquals(input, query(query));
           execute(new Close());
           assertEquals(input, query(query));
@@ -103,8 +103,8 @@ public final class StoreTest extends SandboxTest {
    */
   @Test public void gh1662() {
     final String[] adds = {
-      _DB_ADD.args(NAME, " element x { (1 to 254) ! element y {} }", "a"),
-      _DB_ADD.args(NAME, " element x {}", "b")
+      _DB_ADD.args(NAME, " element x { (1 to 254) ! element y { } }", "a"),
+      _DB_ADD.args(NAME, " element x { }", "b")
     };
     final String[] deletes = {
       _DB_DELETE.args(NAME, "a"),
@@ -118,7 +118,7 @@ public final class StoreTest extends SandboxTest {
       query("count(//y)", 254);
       query(deletes[i % 2]);
       query(deletes[1 - i % 2]);
-      query(_DB_ADD.args(NAME, " element x { (1 to 256) ! element y {} }", "a"));
+      query(_DB_ADD.args(NAME, " element x { (1 to 256) ! element y { } }", "a"));
       query("count(//y)", 256);
       assertTrue(execute(new Inspect()).contains("No inconsistencies found."));
       execute(new Close());
@@ -130,7 +130,32 @@ public final class StoreTest extends SandboxTest {
    */
   @Test public void gh1711() {
     query(_DB_CREATE.args(NAME, GH1711));
-    query(_DB_REPLACE.args(NAME, "/", GH1711));
-    query(_DB_OPEN.args(NAME));
+    query(_DB_PUT.args(NAME, GH1711, "/"));
+    query(_DB_GET.args(NAME));
+  }
+
+  /**
+   * Update, replace nodes: AIOOB.
+   */
+  @Test public void gh2208() {
+    query(_DB_CREATE.args(NAME, " <a xmlns:a='a'>{ (1 to 4095) ! <b/> }</a>", "x.xml"));
+    query(_DB_GET.args(NAME) +
+        " update { replace node /a with <c>{ (1 to 4096) ! <d/> }</c> }");
+
+    query(_DB_CREATE.args(NAME, " <a xmlns:a='a'>{ (1 to 4095) ! <b/> }</a>", "x.xml"));
+    query(_DB_GET.args(NAME) +
+        " update { replace node /a with <c xmlns:c='c'>{ (1 to 4096) ! <d/> }</c> }");
+
+    query(_DB_CREATE.args(NAME, " <a xmlns:a='a'>{ (1 to 4095) ! <b/> }</a>", "x.xml"));
+    query(_DB_GET.args(NAME) +
+        " update { replace node /a with <c xmlns:c='c'>{ (1 to 4096) ! <d/> }</c> }");
+
+    query(_DB_CREATE.args(NAME, " <a>{ (1 to 40950) ! <b/> }</a>", "x.xml"));
+    query(_DB_GET.args(NAME) +
+        " update { replace node /a with <c xmlns:c='c'>{ (1 to 40960) ! <d/> }</c> }");
+
+    query(_DB_CREATE.args(NAME, " <a><b/></a>", "x.xml"));
+    query(_DB_GET.args(NAME) +
+        " update { replace node /a with <c xmlns:c='c'>{ (1 to 40960) ! <d/> }</c> }");
   }
 }

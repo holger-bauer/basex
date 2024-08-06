@@ -3,10 +3,11 @@ package org.basex.query.func.fetch;
 import static org.basex.query.QueryError.*;
 
 import java.io.*;
+import java.net.http.*;
+import java.util.*;
 
 import org.basex.io.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
 import org.basex.util.http.*;
@@ -14,30 +15,26 @@ import org.basex.util.http.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class FetchContentType extends StandardFunc {
+public final class FetchContentType extends FetchDoc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] uri = toToken(exprs[0], qc);
-    final IO io = IO.get(Token.string(uri));
+    final IO io = toIO(arg(0), qc);
 
-    final String path = io.path();
     MediaType mt = null;
     if(io instanceof IOUrl) {
       try {
-        final String ct = ((IOUrl) io).connection().getContentType();
-        if(ct != null) mt = new MediaType(ct);
+        final HttpHeaders headers = ((IOUrl) io).response().headers();
+        final Optional<String> value = headers.firstValue(HTTPText.CONTENT_TYPE);
+        if(value.isPresent()) mt = new MediaType(value.get());
       } catch(final IOException ex) {
         throw FETCH_OPEN_X.get(info, ex);
       }
     } else if(io instanceof IOContent) {
       mt = MediaType.APPLICATION_XML;
-    } else if(io.exists()) {
-      mt = MediaType.get(path);
     }
-    if(mt == null) throw FETCH_OPEN_X.get(info, new FileNotFoundException(path));
-    return Str.get(mt.toString());
+    return Str.get((mt == null ? MediaType.get(io.path()) : mt).toString());
   }
 }

@@ -4,9 +4,9 @@ import org.basex.query.*;
 import org.basex.query.value.*;
 
 /**
- * Cached job result.
+ * Result of a query job.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QueryJobResult {
@@ -18,6 +18,15 @@ public final class QueryJobResult {
   public QueryException exception;
   /** Evaluation time (ns). */
   public long time;
+
+  /**
+   * Initializes the job result.
+   */
+  public void init() {
+    value = null;
+    exception = null;
+    time = 0;
+  }
 
   /**
    * Job.

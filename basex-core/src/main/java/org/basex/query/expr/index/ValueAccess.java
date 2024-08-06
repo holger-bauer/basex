@@ -28,7 +28,7 @@ import org.basex.util.list.*;
 /**
  * This index class retrieves texts and attribute values from the index.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ValueAccess extends IndexAccess {
@@ -43,7 +43,7 @@ public final class ValueAccess extends IndexAccess {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param tokens tokens
    * @param type index type
    * @param test name test (can be {@code null})
@@ -56,10 +56,10 @@ public final class ValueAccess extends IndexAccess {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param expr search expression
    * @param type index type
-   * @param test test test (can be {@code null})
+   * @param test test (can be {@code null})
    * @param db index database
    */
   public ValueAccess(final InputInfo info, final Expr expr, final IndexType type,
@@ -69,10 +69,10 @@ public final class ValueAccess extends IndexAccess {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param type index type ({@link IndexType#TEXT}, {@link IndexType#TOKEN},
    *   {@link IndexType#ATTRIBUTE})
-   * @param test test test (can be {@code null})
+   * @param test test (can be {@code null})
    * @param db index database
    * @param expr search expression
    * @param tokens tokens (can be {@code null})
@@ -87,21 +87,6 @@ public final class ValueAccess extends IndexAccess {
     this.tokens = tokens;
   }
 
-  /**
-   * Assigns the result size.
-   * @param size result size
-   */
-  public void size(final int size) {
-    // result size can be determined statically if:
-    // - index access is not followed by a name test,
-    // - all search tokens are known, and
-    // - at most token is looked up, or it is not looked up in a token index
-    if(test == null && tokens != null && (tokens.size() <= 1 || type != IndexType.TOKEN)) {
-      // example: //text()[. = ('A', 'B')]
-      exprType.assign(seqType(), size);
-    }
-  }
-
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
     // cache distinct search terms
@@ -109,7 +94,9 @@ public final class ValueAccess extends IndexAccess {
     if(tokens == null) {
       cache = new TokenSet();
       final Iter ir = expr.iter(qc);
-      for(Item item; (item = qc.next(ir)) != null;) cache.add(toToken(item));
+      for(Item item; (item = qc.next(ir)) != null;) {
+        cache.add(toToken(item));
+      }
     } else {
       cache = tokens;
     }
@@ -159,7 +146,7 @@ public final class ValueAccess extends IndexAccess {
         tl > 0 && tl <= data.meta.maxlen
     );
 
-    final IndexIterator ii = index ? data.iter(new StringToken(type, term)) : scan(term, data);
+    final IndexIterator iter = index ? data.iter(new StringToken(type, term)) : scan(term, data);
     final int kind = type == IndexType.TEXT ? Data.TEXT : Data.ATTR;
     final DBNode tmp = new DBNode(data, 0, test == null ? kind : Data.ELEM);
 
@@ -168,8 +155,8 @@ public final class ValueAccess extends IndexAccess {
       return new DBNodeIter(data) {
         @Override
         public DBNode next() {
-          while(ii.more()) {
-            tmp.pre(data.parent(ii.pre(), kind));
+          while(iter.more()) {
+            tmp.pre(data.parent(iter.pre(), kind));
             if(test.matches(tmp)) return tmp.finish();
           }
           return null;
@@ -182,8 +169,8 @@ public final class ValueAccess extends IndexAccess {
       return new DBNodeIter(data) {
         @Override
         public DBNode next() {
-          if(ii.more()) {
-            tmp.pre(ii.pre());
+          if(iter.more()) {
+            tmp.pre(iter.pre());
             return tmp.finish();
           }
           return null;
@@ -197,8 +184,8 @@ public final class ValueAccess extends IndexAccess {
 
       @Override
       public DBNode next() {
-        if(ii.more()) {
-          final int pre = ii.pre();
+        if(iter.more()) {
+          final int pre = iter.pre();
           tmp.pre(pre);
           list.add(pre);
           return tmp.finish();
@@ -213,7 +200,7 @@ public final class ValueAccess extends IndexAccess {
       }
       @Override
       public long size() {
-        return ii.size();
+        return iter.size();
       }
     };
   }
@@ -238,9 +225,7 @@ public final class ValueAccess extends IndexAccess {
       @Override
       public boolean more() {
         while(++pre < sz) {
-          if(data.kind(pre) == kind) {
-            if(eq(data.text(pre, text), value)) return true;
-          }
+          if(data.kind(pre) == kind && eq(data.text(pre, text), value)) return true;
         }
         return false;
       }
@@ -324,12 +309,12 @@ public final class ValueAccess extends IndexAccess {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, INDEX, type, NAME, test), db, toExpr());
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final Function function = type == IndexType.TEXT ? Function._DB_TEXT :
       type == IndexType.ATTRIBUTE ? Function._DB_ATTRIBUTE : Function._DB_TOKEN;
     qs.function(function, db, toExpr());

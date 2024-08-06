@@ -12,28 +12,28 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class HofScanLeft extends StandardFunc {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    final Iter outer = exprs[0].iter(qc);
-    final FItem func = checkArity(exprs[2], 2, qc);
+    final Iter input = arg(0).iter(qc);
+    final FItem action = toFunction(arg(2), 2, qc);
 
     return new Iter() {
-      private Value acc = exprs[1].value(qc);
+      private Value acc = arg(1).value(qc);
       private Iter inner = acc.iter();
 
       @Override
       public Item next() throws QueryException {
         while(true) {
-          final Item in = qc.next(inner);
+          final Item in = inner.next();
           if(in != null) return in;
-          final Item out = outer.next();
+          final Item out = input.next();
           if(out == null) return null;
 
-          acc = func.invoke(qc, info, acc, out);
+          acc = action.invoke(qc, info, acc, out);
           inner = acc.iter();
         }
       }
@@ -47,11 +47,15 @@ public final class HofScanLeft extends StandardFunc {
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    final Expr expr1 = exprs[0], expr2 = exprs[1];
-    if(expr1 == Empty.VALUE) return expr2;
+    final Expr input = arg(0), zero = arg(1);
+    if(input == Empty.VALUE) return zero;
 
-    exprType.assign(expr1.seqType().union(Occ.ZERO));
-    data(expr1.data());
+    exprType.assign(input.seqType().union(Occ.ZERO)).data(input);
     return this;
+  }
+
+  @Override
+  public int hofIndex() {
+    return 2;
   }
 }

@@ -14,28 +14,27 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnZeroOrOne extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Iter iter = exprs[0].iter(qc);
-    final Item item = iter.next();
+    final Iter input = arg(0).iter(qc);
+    final Item item = input.next();
     if(item == null) return Empty.VALUE;
-    if(iter.next() == null) return item;
+    if(input.next() == null) return item;
     throw ZEROORONE.get(info);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-    if(st.zeroOrOne()) return expr;
-    if(expr.size() > 1) throw ZEROORONE.get(info);
+    final Expr input = arg(0);
+    final SeqType st = input.seqType();
+    if(st.zeroOrOne()) return input;
+    if(input.size() > 1) throw ZEROORONE.get(info);
 
-    exprType.assign(st.with(Occ.ZERO_OR_ONE));
-    data(expr.data());
+    exprType.assign(st.with(Occ.ZERO_OR_ONE)).data(input);
     return this;
   }
 }

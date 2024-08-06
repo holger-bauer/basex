@@ -16,25 +16,18 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnPath extends ContextFn {
   /** Root function string. */
   private static final byte[] ROOT = QNm.eqName(QueryText.FN_URI, Token.token("root()"));
   /** Path cache. Caches the 1000 last accessed elements. */
-  private final Map<ANode, byte[]> paths = Collections.synchronizedMap(
-    new LinkedHashMap<ANode, byte[]>(16, 0.75f, true) {
-      @Override
-      protected boolean removeEldestEntry(final Map.Entry<ANode, byte[]> eldest) {
-        return size() > 1000;
-      }
-    }
-  );
+  private final Map<ANode, byte[]> paths = Collections.synchronizedMap(new PathMap());
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    ANode node = toNodeOrNull(ctxArg(0, qc), qc);
+    ANode node = toNodeOrNull(context(qc), qc);
     if(node == null) return Empty.VALUE;
 
     final TokenBuilder tb = new TokenBuilder();
@@ -50,22 +43,22 @@ public final class FnPath extends ContextFn {
       }
       // root node: finalize traversal
       final ANode parent = node.parent();
+      final NodeType type = (NodeType) node.type;
       if(parent == null) {
-        if(node.type != NodeType.DOCUMENT_NODE) tb.add(ROOT);
+        if(type != NodeType.DOCUMENT_NODE) tb.add(ROOT);
         break;
       }
 
       final QNm qname = node.qname();
-      final NodeType type = (NodeType) node.type;
       if(type == NodeType.ATTRIBUTE) {
-        tb.add('@').add(qname.id());
+        tb.add('@').add(qname.unique());
       } else if(type == NodeType.ELEMENT) {
         tb.add(qname.eqName()).add('[').addInt(element(node, qname, qc)).add(']');
-      } else if(type == NodeType.COMMENT || type == NodeType.TEXT) {
-        tb.add(node.seqType().toString()).add('[').addInt(textComment(node, qc)).add(']');
       } else if(type == NodeType.PROCESSING_INSTRUCTION) {
-        tb.add(type.name).add('(').add(qname.local()).add(')').add('[').
-          addInt(pi(node, qname, qc)).add(']');
+        final String name = type.toString(Token.string(qname.local()));
+        tb.add(name).add('[').addInt(pi(node, qname, qc)).add(']');
+      } else if(type.oneOf(NodeType.COMMENT, NodeType.TEXT)) {
+        tb.add(type.toString()).add('[').addInt(textComment(node, qc)).add(']');
       }
       steps.add(tb.next());
       nodes.add(node);
@@ -100,7 +93,7 @@ public final class FnPath extends ContextFn {
   }
 
   /**
-   * Returns the child index of an text or comment.
+   * Returns the child index of a text or comment.
    * @param node node
    * @param qc query context
    * @return index
@@ -125,9 +118,10 @@ public final class FnPath extends ContextFn {
   private static int pi(final ANode node, final QNm qname, final QueryContext qc) {
     final BasicNodeIter iter = node.precedingSiblingIter();
     int p = 1;
+    final Type type = node.type;
     for(ANode fs; (fs = iter.next()) != null;) {
       qc.checkStop();
-      if(fs.type == node.type && fs.qname().eq(qname)) p++;
+      if(fs.type == type && fs.qname().eq(qname)) p++;
     }
     return p;
   }
@@ -135,5 +129,23 @@ public final class FnPath extends ContextFn {
   @Override
   protected Expr opt(final CompileContext cc) {
     return optFirst(true, false, cc.qc.focus.value);
+  }
+
+  /**
+   * Path cache.
+   *
+   * @author BaseX Team 2005-24, BSD License
+   * @author Christian Gruen
+   */
+  private static final class PathMap extends LinkedHashMap<ANode, byte[]> {
+    /** Constructor. */
+    private PathMap() {
+      super(16, 0.75f, true);
+    }
+
+    @Override
+    protected boolean removeEldestEntry(final Map.Entry<ANode, byte[]> eldest) {
+      return size() > 1000;
+    }
   }
 }

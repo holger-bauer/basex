@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * This class serves as a container for updated names.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NamePool {
@@ -35,9 +35,12 @@ public final class NamePool {
    * @param node node
    */
   public void remove(final ANode node) {
-    if(node.type != NodeType.ATTRIBUTE && node.type != NodeType.ELEMENT) return;
-    final int i = index(node.qname(), node.type == NodeType.ATTRIBUTE);
-    cache[i].del = true;
+    final Type type = node.type;
+    final boolean elem = type == NodeType.ELEMENT, attr = type == NodeType.ATTRIBUTE;
+    if(elem || attr) {
+      final int i = index(node.qname(), attr);
+      cache[i].del = true;
+    }
   }
 
   /**
@@ -63,12 +66,11 @@ public final class NamePool {
       final NameCache nc = cache[i];
       if(nc.add <= (nc.del ? 1 : 0)) continue;
       final QNm nm = nc.name;
-      final byte[] pref = nm.prefix();
-      final byte[] uri = nm.uri();
+      final byte[] prefix = nm.prefix(), uri = nm.uri();
       // attributes with empty URI don't conflict with anything
       if(nc.attr && uri.length == 0) continue;
-      final byte[] u = at.value(pref);
-      if(u == null) at.add(pref, uri);
+      final byte[] u = at.value(prefix);
+      if(u == null) at.add(prefix, uri);
       // check if only one uri is assigned to a prefix
       else if(!eq(uri, u)) return new byte[][] { uri, u };
     }

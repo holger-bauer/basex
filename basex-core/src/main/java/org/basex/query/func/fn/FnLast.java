@@ -2,6 +2,7 @@ package org.basex.query.func.fn;
 
 import org.basex.core.locks.*;
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.func.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
@@ -10,7 +11,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnLast extends StandardFunc {
@@ -22,6 +23,12 @@ public final class FnLast extends StandardFunc {
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
-    return visitor.lock(Locking.CONTEXT, false) && super.accept(visitor);
+    return visitor.lock(Locking.CONTEXT) && super.accept(visitor);
+  }
+
+  @Override
+  protected Expr opt(final CompileContext cc) {
+    final long size = cc.qc.focus.size;
+    return size > 1 ? Int.get(size) : this;
   }
 }

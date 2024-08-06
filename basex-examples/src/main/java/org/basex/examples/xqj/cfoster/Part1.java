@@ -11,7 +11,7 @@ import net.xqj.basex.*;
  *
  * Part 1: Setting up your environment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class Part1 extends Main {
   /**
@@ -25,7 +25,7 @@ public final class Part1 extends Main {
     // Connect and disconnect
     info("Connect and disconnect");
 
-    // Default User name and Password
+    // Default Username and Password
     XQDataSource xqs = new BaseXXQDataSource();
     XQConnection conn = xqs.getConnection("admin", "admin");
     info("Connected.");

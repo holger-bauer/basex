@@ -15,12 +15,13 @@ import org.basex.io.out.*;
 import org.basex.io.serial.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
+import org.basex.util.options.Options.*;
 
 /**
  * This is the starter class for the stand-alone console mode.
  * It executes all commands locally.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class BaseX extends CLI {
@@ -73,12 +74,16 @@ public class BaseX extends CLI {
           case 'b':
             if(bind.length() != 0) bind.append(',');
             // commas are escaped by a second comma
-            value = bind.append(value.replaceAll(",", ",,")).toString();
+            value = bind.append(value.replace(",", ",,")).toString();
             execute(new Set(MainOptions.BINDINGS, value), false);
             break;
           case 'c':
             console = false;
-            if(!execute(input(value))) return;
+            if(!execute(commands(value))) return;
+            break;
+          case 'C':
+            console = false;
+            if(!execute(script(value))) return;
             break;
           case 'i':
             execute(new Set(MainOptions.MAINMEM, true), false);
@@ -88,7 +93,7 @@ public class BaseX extends CLI {
           case 'I':
             if(bind.length() != 0) bind.append(',');
             // commas are escaped by a second comma
-            value = bind.append('=').append(value.replaceAll(",", ",,")).toString();
+            value = bind.append('=').append(value.replace(",", ",,")).toString();
             execute(new Set(MainOptions.BINDINGS, value), false);
             break;
           case 'o':
@@ -101,10 +106,9 @@ public class BaseX extends CLI {
             execute(new XQuery(value), verbose);
             break;
           case 'Q':
-            // hidden: run query with base uri
             console = false;
-            final Pair<String, String> input = input(value);
-            execute(new XQuery(input.value()).baseURI(input.name()), verbose);
+            final IO io = IO.get(value);
+            execute(new XQuery(io.string()).baseURI(io.path()), verbose);
             break;
           case 'r':
             execute(new Set(MainOptions.RUNS, Strings.toInt(value)), false);
@@ -133,15 +137,16 @@ public class BaseX extends CLI {
             execute(new Set(MainOptions.QUERYINFO, null), false);
             break;
           case 'w':
-            execute(new Set(MainOptions.CHOP, null), false);
+            execute(new Set(MainOptions.STRIPWS, null), false);
+            break;
+          case 'W':
+            if(sopts == null) sopts = new SerializerOptions();
+            sopts.set(SerializerOptions.INDENT, YesNo.YES);
+            execute(new Set(MainOptions.SERIALIZER, sopts), false);
             break;
           case 'x':
             execute(new Set(MainOptions.XMLPLAN, null), false);
             qp ^= true;
-            break;
-          case 'X':
-            // hidden: toggle query plan creation before/after query compilation
-            execute(new Set(MainOptions.COMPPLAN, null), false);
             break;
           case 'z':
             execute(new Set(MainOptions.SERIALIZE, null), false);
@@ -159,7 +164,7 @@ public class BaseX extends CLI {
    * Launches the console mode, which reads and executes user input.
    */
   private void console() {
-    Util.outln(header() + NL + TRY_MORE_X);
+    Util.println(header() + NL + TRY_MORE_X);
     verbose = true;
 
     // create console reader
@@ -176,7 +181,7 @@ public class BaseX extends CLI {
         try {
           if(!execute(CommandParser.get(in, context).pwReader(cr))) {
             // show goodbye message if method returns false
-            Util.outln(BYE[new Random().nextInt(4)]);
+            Util.println(BYE[new Random().nextInt(4)]);
             break;
           }
         } catch(final IOException ex) {
@@ -211,11 +216,11 @@ public class BaseX extends CLI {
           // activate debug mode
           Prop.debug = true;
         } else if(c == 'b' || c == 'c' || c == 'C' || c == 'i' || c == 'I' || c == 'o' ||
-            c == 'q' || c == 'r' || c == 's' || c == 't' && local()) {
+            c == 'q' || c == 'Q' || c == 'r' || c == 's' || c == 't' && local()) {
           // options followed by a string
           v = arg.string();
         } else if(c == 'D' && local() || c == 'u' && local() || c == 'R' ||
-            c == 'v' || c == 'V' || c == 'w' || c == 'x' || c == 'X' || c == 'z') {
+            c == 'v' || c == 'V' || c == 'w' || c == 'W' || c == 'x' || c == 'X' || c == 'z') {
           // options to be toggled
           v = "";
         } else if(!local()) {
@@ -227,7 +232,7 @@ public class BaseX extends CLI {
             case 'p': context.soptions.set(StaticOptions.PORT, arg.number()); break;
             // specify password
             case 'P': context.soptions.set(StaticOptions.PASSWORD, arg.string()); break;
-            // specify user name
+            // specify username
             case 'U': context.soptions.set(StaticOptions.USER, arg.string()); break;
             default: throw arg.usage();
           }
@@ -236,8 +241,7 @@ public class BaseX extends CLI {
         }
       } else {
         v = arg.string().trim();
-        // interpret as command file if input string ends with command script suffix
-        c = v.endsWith(IO.BXSSUFFIX) ? 'c' : 'Q';
+        c = isFile(v) ? v.endsWith(IO.BXSSUFFIX) ? 'C' : 'Q' : 'q';
       }
       if(v != null) {
         ops.add(c);

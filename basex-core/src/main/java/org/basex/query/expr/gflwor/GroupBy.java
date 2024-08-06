@@ -7,7 +7,6 @@ import java.util.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
-import org.basex.query.util.collation.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
@@ -19,7 +18,7 @@ import org.basex.util.hash.*;
 /**
  * The GFLWOR {@code group by} expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class GroupBy extends Clause {
@@ -37,7 +36,7 @@ public final class GroupBy extends Clause {
    * @param specs grouping specs
    * @param pre references to pre-grouping variables
    * @param post post-grouping variables
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   public GroupBy(final GroupSpec[] specs, final VarRef[] pre, final Var[] post,
       final InputInfo info) {
@@ -59,7 +58,7 @@ public final class GroupBy extends Clause {
    * @param pre pre-grouping expressions
    * @param post post-grouping variables
    * @param nonOcc number of non-occluded grouping variables
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   private GroupBy(final GroupSpec[] specs, final Expr[] pre, final Var[] post, final int nonOcc,
       final InputInfo info) {
@@ -109,7 +108,7 @@ public final class GroupBy extends Clause {
           }
         }
         final int pl = post.length;
-        for(int i = 0; i < pl; i++) qc.set(post[i], curr.ngv[i].value());
+        for(int i = 0; i < pl; i++) qc.set(post[i], curr.ngv[i].value(preExpr[i]));
         return true;
       }
 
@@ -121,10 +120,10 @@ public final class GroupBy extends Clause {
       private Group[] init(final QueryContext qc) throws QueryException {
         final ArrayList<Group> grps = new ArrayList<>();
         final IntObjMap<Group> map = new IntObjMap<>();
-        final Collation[] colls = new Collation[nonOcc];
+        final DeepEqual[] deeps = new DeepEqual[nonOcc];
         int c = 0;
         for(final GroupSpec spec : specs) {
-          if(!spec.occluded) colls[c++] = spec.coll;
+          if(!spec.occluded) deeps[c++] = new DeepEqual(info, spec.coll, qc);
         }
 
         while(sub.next(qc)) {
@@ -137,7 +136,7 @@ public final class GroupBy extends Clause {
               // If the values are compared using a special collation, we let them collide
               // here and let the comparison do all the work later.
               // This enables other non-collation specs to avoid the collision.
-              hash = 31 * hash + (atom == Empty.VALUE || spec.coll != null ? 0 : atom.hash(info));
+              hash = 31 * hash + (atom.isEmpty() || spec.coll != null ? 0 : atom.hash());
             }
             qc.set(spec.var, atom);
           }
@@ -147,7 +146,7 @@ public final class GroupBy extends Clause {
           Group grp = null;
           // no collations, so we can use hashing
           for(Group g = fst = map.get(hash); g != null; g = g.next) {
-            if(eq(key, g.key, colls)) {
+            if(eq(key, g.key, deeps)) {
               grp = g;
               break;
             }
@@ -179,33 +178,36 @@ public final class GroupBy extends Clause {
         }
 
         // we're finished, copy the array so the list can be garbage-collected
-        return grps.toArray(new Group[0]);
+        return grps.toArray(Group[]::new);
+      }
+
+      /**
+       * Checks two keys for equality.
+       * @param items1 first keys
+       * @param items2 second keys
+       * @param deeps deep equality comparisons
+       * @return {@code true} if the compare as equal, {@code false} otherwise
+       * @throws QueryException query exception
+       */
+      private boolean eq(final Item[] items1, final Item[] items2, final DeepEqual[] deeps)
+          throws QueryException {
+
+        final int il = items1.length;
+        for(int i = 0; i < il; i++) {
+          final Item item1 = items1[i], item2 = items2[i];
+          final boolean empty1 = item1.isEmpty(), empty2 = item2.isEmpty();
+          if(empty1 ^ empty2 || !empty1 && !deeps[i].equal(item1, item2)) return false;
+        }
+        return true;
       }
     };
   }
 
-  /**
-   * Checks two keys for equality.
-   * @param items1 first keys
-   * @param items2 second keys
-   * @param coll collations
-   * @return {@code true} if the compare as equal, {@code false} otherwise
-   * @throws QueryException query exception
-   */
-  private boolean eq(final Item[] items1, final Item[] items2, final Collation[] coll)
-      throws QueryException {
-
-    final int il = items1.length;
-    for(int i = 0; i < il; i++) {
-      final Item item1 = items1[i], item2 = items2[i];
-      if(item1 == Empty.VALUE ^ item2 == Empty.VALUE ||
-         item1 != Empty.VALUE && !item1.equiv(item2, coll[i], info)) return false;
-    }
-    return true;
-  }
-
   @Override
   public boolean has(final Flag... flags) {
+    for(final Expr expr : preExpr) {
+      if(expr.has(flags)) return true;
+    }
     for(final GroupSpec spec : specs) {
       if(spec.has(flags)) return true;
     }
@@ -225,11 +227,7 @@ public final class GroupBy extends Clause {
     for(int p = 0; p < pl; p++) {
       post[p].refineType(preExpr[p].seqType().union(Occ.ONE_OR_MORE), cc);
     }
-    SeqType st = null;
-    for(final GroupSpec spec : specs) {
-      st = st == null ? spec.seqType() : st.union(spec.seqType());
-    }
-    exprType.assign(st);
+    exprType.assign(SeqType.union(specs, true));
     return this;
   }
 
@@ -281,7 +279,6 @@ public final class GroupBy extends Clause {
 
   @Override
   boolean clean(final IntObjMap<Var> decl, final BitArray used) {
-    // [LW] does not fix {@link #vars}
     final int len = preExpr.length;
     for(int p = 0; p < post.length; p++) {
       if(!used.get(post[p].id)) {
@@ -298,13 +295,16 @@ public final class GroupBy extends Clause {
   }
 
   /**
-   * Returns a group specification that can be rewritten to a distinct-values argument.
+   * Returns a group specification that can be further rewritten and simplified.
    * @return group specification
    */
   GroupSpec group() {
     if(specs.length == 1 && post.length == 0) {
       final GroupSpec spec = specs[0];
-      if(spec.coll == null && spec.var.declType == null) return spec;
+      final SeqType st = spec.expr.seqType();
+      if(spec.coll == null && spec.var.declType == null && st.one() && !st.mayBeArray()) {
+        return spec;
+      }
     }
     return null;
   }
@@ -338,15 +338,15 @@ public final class GroupBy extends Clause {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), specs);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     final int pl = post.length;
     for(int p = 0; p < pl; p++) {
-      qs.token(LET).token("(: post-group :)").token(post[p]).token(ASSIGN).token(preExpr[p]);
+      qs.token(LET).token("(: post-group :)").token(post[p]).token(":=").token(preExpr[p]);
     }
     qs.token(GROUP).token(BY).tokens(specs, SEP);
   }

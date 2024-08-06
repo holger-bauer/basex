@@ -15,7 +15,7 @@ import org.basex.util.list.*;
 /**
  * Provides methods for editing a text that is visualized by the {@link TextPanel}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TextEditor {
@@ -98,10 +98,11 @@ public final class TextEditor {
         searchContext = sc;
         searchThread = null;
       } catch(final JobException ex) {
+        Util.debug(ex);
         // search was interrupted
       } catch(final Exception ex) {
         final String info = Util.message(ex).replaceAll(Text.NL + ".*", "");
-        gui.status.setError(Text.REGULAR_EXPR + Text.COLS + info);
+        gui.status.setText(Text.REGULAR_EXPR + Text.COLS + info, false);
       }
     });
     t.setDaemon(true);
@@ -190,13 +191,11 @@ public final class TextEditor {
     if(ch != '\n') {
       if(FTToken.lod(ch)) {
         while(FTToken.lod(ch)) ch = next();
-        while(ch != '\n' && FTToken.ws(ch)) ch = next();
       } else if(FTToken.ws(ch)) {
-        while(ch != '\n' && FTToken.ws(ch)) ch = next();
       } else {
         while(ch != '\n' && !FTToken.lod(ch) && !FTToken.ws(ch)) ch = next();
-        while(ch != '\n' && FTToken.ws(ch)) ch = next();
       }
+      while(ch != '\n' && FTToken.ws(ch)) ch = next();
       if(pos != size()) prev();
     }
     if(select) endSelection();
@@ -474,7 +473,7 @@ public final class TextEditor {
       end = s;
     }
 
-    // ignore whitespaces
+    // ignore whitespace
     while(start < end && ws(text[start])) ++start;
     while(end > start && ws(text[end - 1])) --end;
 
@@ -631,9 +630,7 @@ public final class TextEditor {
     // adopt current indentation
     final int ind = open();
     if(ind != 0) {
-      final StringBuilder spaces = new StringBuilder();
-      for(int i = 0; i < ind; i++) spaces.append(' ');
-      v = new TokenBuilder().addAll(v.split("\n"), "\n" + spaces).toString();
+      v = new TokenBuilder().addAll(v.split("\n"), "\n".concat(" ".repeat(ind))).toString();
     }
     // delete old string, add new one
     replace(p, pos, v);
@@ -712,15 +709,15 @@ public final class TextEditor {
     // stable sort: before custom sort, apply default sort
     if(!unicode || column > 0) tokens.sort(true, true);
 
-    // choose cheapest comparator
+    // choose the cheapest comparator
     final Comparator<byte[]> cc;
     if(!unicode) {
       final Collator coll = Collator.getInstance();
       cc = (t1, t2) -> coll.compare(string(sub(t1, column)), string(sub(t2, column)));
     } else if(gopts.get(GUIOptions.CASESORT)) {
-      cc = (t1, t2) -> diff(sub(t1, column), sub(t2, column));
+      cc = (t1, t2) -> compare(sub(t1, column), sub(t2, column));
     } else {
-      cc = (t1, t2) -> diff(lc(sub(t1, column)), lc(sub(t2, column)));
+      cc = (t1, t2) -> compare(lc(sub(t1, column)), lc(sub(t2, column)));
     }
     tokens.sort(cc, gopts.get(GUIOptions.ASCSORT));
 
@@ -787,7 +784,7 @@ public final class TextEditor {
     int indent = open(), move = 0;
     if(opening) {
       if(closing) {
-        for(int p = 0; p < indent + ind; p++) sb.append(' ');
+        sb.append(" ".repeat(Math.max(0, indent + ind)));
         move = indent + ind + 1;
         sb.append('\n');
       } else {
@@ -797,7 +794,7 @@ public final class TextEditor {
       // unindent before closing bracket
       indent -= ind;
     }
-    for(int p = 0; p < indent; p++) sb.append(' ');
+    sb.append(" ".repeat(Math.max(0, indent)));
     add(sb, false);
     return move;
   }
@@ -864,13 +861,13 @@ public final class TextEditor {
       } else if(ch == '-') {
         // closes XML comments
         if(prev == '-' && pprv == '!' && pos > 2 && text[pos - 3] == '<') {
-          sb.append("  -->\n");
+          sb.append("  -->");
           move = 2;
         }
       } else if(ch == '?') {
         // closes XML processing instructions
         if(prev == '<') {
-          sb.append(" ?>\n");
+          sb.append(" ?>");
           move = 1;
         }
       }
@@ -880,7 +877,7 @@ public final class TextEditor {
   }
 
   /**
-   * Closes a bracket and unindents leading whitespaces.
+   * Closes a bracket and unindents leading whitespace.
    */
   private void close() {
     int p = pos - 1;
@@ -1064,7 +1061,7 @@ public final class TextEditor {
     final TokenBuilder tb = new TokenBuilder();
     for(int p = s; p < e; p++) {
       if(p == 0 || text[p - 1] == '\n') {
-        // find leading whitespaces
+        // find leading whitespace
         int i = 0;
         do {
           final int cp = text[p];

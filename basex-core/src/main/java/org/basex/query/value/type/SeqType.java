@@ -2,24 +2,28 @@ package org.basex.query.value.type;
 
 import static org.basex.query.QueryError.*;
 import static org.basex.query.value.type.AtomType.*;
+import static org.basex.query.value.type.ListType.*;
 import static org.basex.query.value.type.NodeType.*;
 import static org.basex.query.value.type.Occ.*;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 import org.basex.query.*;
+import org.basex.query.expr.*;
 import org.basex.query.expr.path.*;
 import org.basex.query.iter.*;
-import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.map.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
 
 /**
  * Stores a sequence type definition.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SeqType {
@@ -42,10 +46,12 @@ public final class SeqType {
   /** Zero or more xs:anyAtomicType. */
   public static final SeqType ANY_ATOMIC_TYPE_ZM = ANY_ATOMIC_TYPE.seqType(ZERO_OR_MORE);
 
-  /** Zero or one xs:numeric. */
+  /** Numeric. */
   public static final SeqType NUMERIC_O = NUMERIC.seqType();
-  /** Zero or one xs:numeric. */
+  /** Zero or one numeric. */
   public static final SeqType NUMERIC_ZO = NUMERIC.seqType(ZERO_OR_ONE);
+  /** Zero or more numerics. */
+  public static final SeqType NUMERIC_ZM = NUMERIC.seqType(ZERO_OR_MORE);
   /** Double number. */
   public static final SeqType DOUBLE_O = DOUBLE.seqType();
   /** Zero or one double. */
@@ -54,6 +60,8 @@ public final class SeqType {
   public static final SeqType DOUBLE_ZM = DOUBLE.seqType(ZERO_OR_MORE);
   /** Float number. */
   public static final SeqType FLOAT_O = FLOAT.seqType();
+  /** Decimal number. */
+  public static final SeqType DECIMAL_O = DECIMAL.seqType();
   /** Zero or one decimal number. */
   public static final SeqType DECIMAL_ZO = DECIMAL.seqType(ZERO_OR_ONE);
   /** Single integer. */
@@ -75,6 +83,8 @@ public final class SeqType {
   public static final SeqType NCNAME_ZO = NCNAME.seqType(ZERO_OR_ONE);
   /** Single language. */
   public static final SeqType LANGUAGE_O = LANGUAGE.seqType();
+  /** Single string. */
+  public static final SeqType UNTYPED_ATOMIC_ZO = UNTYPED_ATOMIC.seqType(ZERO_OR_ONE);
 
   /** Single URI. */
   public static final SeqType ANY_URI_O = ANY_URI.seqType();
@@ -87,6 +97,8 @@ public final class SeqType {
   public static final SeqType QNAME_O = QNAME.seqType();
   /** Zero or one QNames. */
   public static final SeqType QNAME_ZO = QNAME.seqType(ZERO_OR_ONE);
+  /** Zero or more QNames. */
+  public static final SeqType QNAME_ZM = QNAME.seqType(ZERO_OR_MORE);
 
   /** Single xs:boolean. */
   public static final SeqType BOOLEAN_O = BOOLEAN.seqType();
@@ -116,8 +128,6 @@ public final class SeqType {
   public static final SeqType BINARY_O = BINARY.seqType();
   /** One xs:hexBinary. */
   public static final SeqType HEX_BINARY_O = HEX_BINARY.seqType();
-  /** Zero or one xs:hexBinary. */
-  public static final SeqType HEX_BINARY_ZO = HEX_BINARY.seqType(ZERO_OR_ONE);
   /** Single xs:base64Binary. */
   public static final SeqType BASE64_BINARY_O = BASE64_BINARY.seqType();
   /** Zero or one xs:base64Binary. */
@@ -147,6 +157,8 @@ public final class SeqType {
   public static final SeqType DOCUMENT_NODE_ZM = DOCUMENT_NODE.seqType(ZERO_OR_MORE);
   /** One element node. */
   public static final SeqType ELEMENT_O = ELEMENT.seqType();
+  /** Zero or one element node. */
+  public static final SeqType ELEMENT_ZO = ELEMENT.seqType(ZERO_OR_ONE);
   /** Zero or more element nodes. */
   public static final SeqType ELEMENT_ZM = ELEMENT.seqType(ZERO_OR_MORE);
   /** Namespace node. */
@@ -162,10 +174,14 @@ public final class SeqType {
 
   /** Any function type. */
   public static final FuncType FUNCTION = new FuncType(null, (SeqType[]) null);
+  /** Java function type. */
+  public static final FuncType JAVA = new FuncType(null);
+  /** The general record type. */
+  public static final RecordType RECORD = new RecordType(true, new TokenObjMap<>());
   /** The general map type. */
-  public static final MapType MAP = new MapType(ANY_ATOMIC_TYPE, ITEM_ZM);
+  public static final MapType MAP = ITEM_ZM.mapType(ANY_ATOMIC_TYPE);
   /** The general array type. */
-  public static final ArrayType ARRAY = new ArrayType(ITEM_ZM);
+  public static final ArrayType ARRAY = ITEM_ZM.arrayType();
 
   /** Single function. */
   public static final SeqType FUNCTION_O = FUNCTION.seqType();
@@ -173,6 +189,16 @@ public final class SeqType {
   public static final SeqType FUNCTION_ZO = FUNCTION.seqType(ZERO_OR_ONE);
   /** Zero of more functions. */
   public static final SeqType FUNCTION_ZM = FUNCTION.seqType(ZERO_OR_MORE);
+  /** Predicate function. */
+  public static final SeqType PREDICATE_O = FuncType.get(BOOLEAN_ZO, ITEM_O, INTEGER_O).seqType();
+  /** Predicate function. */
+  public static final SeqType PREDICATE_ZM = FuncType.get(BOOLEAN_ZO, ITEM_ZM, INTEGER_O).seqType();
+  /** Predicate function. */
+  public static final SeqType BIPREDICATE_O = FuncType.get(BOOLEAN_ZO, ITEM_O, ITEM_O).seqType();
+  /** Action function. */
+  public static final SeqType ACTION_O = FuncType.get(ITEM_ZM, ITEM_O, INTEGER_O).seqType();
+  /** Single record. */
+  public static final SeqType RECORD_O = RECORD.seqType();
   /** Single map. */
   public static final SeqType MAP_O = MAP.seqType();
   /** Zero or one map. */
@@ -183,13 +209,19 @@ public final class SeqType {
   public static final SeqType ARRAY_O = ARRAY.seqType();
   /** Zero or more arrays. */
   public static final SeqType ARRAY_ZM = ARRAY.seqType(ZERO_OR_MORE);
+  /** Single NMTOKENS. */
+  public static final SeqType NMTOKENS_O = NMTOKENS.seqType();
 
   /** Item type. */
   public final Type type;
   /** Occurrence indicator. */
   public final Occ occ;
-  /** Kind test (can be {@code null}). */
+  /** Node kind test (can be {@code null}). */
   private final Test test;
+  /** Array type (lazy instantiation). */
+  private ArrayType arrayType;
+  /** Map types (lazy instantiation). */
+  private Map<Type, MapType> mapTypes;
 
   /**
    * Constructor.
@@ -204,7 +236,7 @@ public final class SeqType {
    * Private constructor.
    * @param type type
    * @param occ occurrence indicator
-   * @param test kind test (can be {@code null})
+   * @param test node kind test (can be {@code null})
    */
   private SeqType(final Type type, final Occ occ, final Test test) {
     this.type = type;
@@ -226,12 +258,31 @@ public final class SeqType {
    * Returns a sequence type.
    * @param type type
    * @param occ occurrence indicator
-   * @param test kind test (can be {@code null}; ignored if this is no node type)
+   * @param test kind test (can be {@code null}; {@link KindTest} is redundant and ignored)
    * @return sequence type
    */
   public static SeqType get(final Type type, final Occ occ, final Test test) {
-    return occ == ZERO || test == null || !(type instanceof NodeType) ?
-      get(type, occ) : new SeqType(type, occ, test);
+    return occ == ZERO || test == null || test instanceof KindTest ? get(type, occ) :
+      new SeqType(type, occ, test);
+  }
+
+  /**
+   * Returns an array type for this sequence type.
+   * @return array type
+   */
+  public ArrayType arrayType() {
+    if(arrayType == null) arrayType = new ArrayType(this);
+    return arrayType;
+  }
+
+  /**
+   * Returns an array type for this sequence type and the specified key type.
+   * @param keyType key type
+   * @return map type
+   */
+  public MapType mapType(final Type keyType) {
+    if(mapTypes == null) mapTypes = new ConcurrentHashMap<>();
+    return mapTypes.computeIfAbsent(keyType, k -> new MapType(k, this));
   }
 
   /**
@@ -258,13 +309,19 @@ public final class SeqType {
    * @return result of check
    */
   public boolean instance(final Value value) {
-    // try shortcut (but value type may be too general)
-    if(value.seqType().instanceOf(this)) return true;
-
     // check cardinality
-    if(!occ.check(value.size())) return false;
+    final long size = value.size();
+    if(!occ.check(size)) return false;
 
-    // value type may be too general: check type of each item
+    // single item, empty sequence
+    if(size == 1) return instance((Item) value);
+    if(size == 0) return true;
+
+    // sequence: try shortcut, based on value type
+    final SeqType st = value.seqType();
+    if(st.type.instanceOf(type) && st.kindInstanceOf(this)) return true;
+
+    // if type is too general, check type of each item
     for(final Item item : value) {
       if(!instance(item)) return false;
     }
@@ -277,6 +334,12 @@ public final class SeqType {
    * @return result of check
    */
   public boolean instance(final Item item) {
+    if(type instanceof ChoiceItemType) {
+      for(final SeqType tp : ((ChoiceItemType) type).types) {
+        if(tp.instance(item)) return true;
+      }
+      return false;
+    }
     return item.instanceOf(type) && (test == null || test.matches(item));
   }
 
@@ -285,144 +348,178 @@ public final class SeqType {
    * @param value value to cast
    * @param error raise error (return {@code null} otherwise)
    * @param qc query context
-   * @param sc static context
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return cast value
    * @throws QueryException query exception
    */
   public Value cast(final Value value, final boolean error, final QueryContext qc,
-      final StaticContext sc, final InputInfo ii) throws QueryException {
+      final InputInfo info) throws QueryException {
 
     // check cardinality
     final long size = value.size();
     if(!occ.check(size)) {
-      if(error) throw INVTYPE_X_X_X.get(ii, value.seqType(), this, value);
+      if(error) throw typeError(value, this, info);
       return null;
     }
     if(size == 0) return Empty.VALUE;
 
+    // cast single items
+    if(size == 1) return cast((Item) value, error, qc, info);
+    // cast sequences
+    final ValueBuilder vb = new ValueBuilder(qc);
+    for(final Item item : value) {
+      qc.checkStop();
+      vb.add(cast(item, error, qc, info));
+    }
+    return vb.value(type);
+  }
+
+  /**
+   * Casts an item to this type.
+   * @param item item to cast
+   * @param error raise error (return {@code null} otherwise)
+   * @param qc query context
+   * @param info input info (can be {@code null})
+   * @return cast value
+   * @throws QueryException query exception
+   */
+  private Value cast(final Item item, final boolean error, final QueryContext qc,
+      final InputInfo info) throws QueryException {
+
+    // enable light-weight error handling
+    if(!error && info != null) info.internal(true);
     try {
-      // enable light-weight error handling
-      if(!error && ii != null) ii.internal(true);
-      // cast single items
-      if(size == 1) {
-        final Item item = (Item) value;
-        return item.type.eq(type) ? item : type.cast(item, qc, sc, ii);
+      if(!item.type.eq(type)) {
+        return type.cast(item, qc, info);
       }
-      // cast sequences
-      final ValueBuilder vb = new ValueBuilder(qc);
-      for(final Item item : value) {
-        if(item.type.eq(type)) {
-          vb.add(item);
-        } else {
-          qc.checkStop();
-          vb.add(type.cast(item, qc, sc, ii));
-        }
-      }
-      return vb.value(type);
+      return item;
     } catch(final QueryException ex) {
       if(error) throw ex;
       return null;
     } finally {
-      if(!error && ii != null) ii.internal(false);
+      if(!error && info != null) info.internal(false);
     }
   }
 
   /**
-   * Treats the specified value as this sequence type.
-   * @param value value to check
-   * @param name name of variable (can be {@code null})
-   * @param qc query context
-   * @param ii input info
-   * @throws QueryException query exception
-   */
-  public void treat(final Value value, final QNm name, final QueryContext qc, final InputInfo ii)
-      throws QueryException {
-
-    // try shortcut (but value type may be too general)
-    if(value.seqType().instanceOf(this)) return;
-
-    // check cardinality
-    if(!occ.check(value.size())) throw typeError(value, this, name, ii, false);
-
-    for(final Item item : value) {
-      qc.checkStop();
-      if(!instance(item)) throw typeError(value, this, name, ii, false);
-    }
-  }
-
-  /**
-   * Promotes the specified value to this sequence type.
+   * Converts the specified value to this type.
    * @param value value to promote
-   * @param name variable name (can be {@code null})
+   * @param name variable name (used for error message, can be {@code null})
    * @param qc query context
-   * @param sc static context
-   * @param ii input info
-   * @param opt if the result should be optimized
+   * @param cc compilation context ({@code null} during runtime)
+   * @param info input info (can be {@code null})
    * @return converted value
    * @throws QueryException if the conversion was not possible
    */
-  public Value promote(final Value value, final QNm name, final QueryContext qc,
-      final StaticContext sc, final InputInfo ii, final boolean opt) throws QueryException {
+  public Value coerce(final Value value, final QNm name, final QueryContext qc,
+      final CompileContext cc, final InputInfo info) throws QueryException {
 
-    final long size = value.size();
-    ItemList items = null;
-    for(long i = 0; i < size; i++) {
-      qc.checkStop();
-      final Item item = value.itemAt(i);
-      if(instance(item)) {
-        if(items != null) items.add(item);
-      } else {
-        if(items == null) {
-          items = new ItemList(Seq.initialCapacity(size));
-          for(int j = 0; j < i; j++) items.add(value.itemAt(j));
+    // check if function arguments must be coerced
+    boolean coerce = false, toFunc = type instanceof FuncType;
+    final SeqType[] argTypes = toFunc ? ((FuncType) type).argTypes : null;
+    if(argTypes != null) {
+      for(final SeqType at : argTypes) {
+        if(!at.eq(ITEM_ZM)) {
+          coerce = true;
+          break;
         }
-        promote(item, name, items, qc, sc, ii, opt);
       }
     }
-    final long is = items != null ? items.size() : value.size();
-    if(!occ.check(is)) throw typeError(value, this, name, ii, true);
-    return items != null ? items.value(type) : value;
+
+    // check if value must be coerced
+    if(!coerce) {
+      if(instance(value) && (!toFunc || value instanceof FuncItem)) return value;
+
+      for(final Item item : value) {
+        qc.checkStop();
+        if(!instance(item) || toFunc && !(item instanceof FuncItem)) {
+          coerce = true;
+          break;
+        }
+      }
+    }
+
+    // coerce items if required
+    Value val = value;
+    if(coerce) {
+      final ValueBuilder vb = new ValueBuilder(qc);
+      for(final Item item : value) {
+        qc.checkStop();
+        coerce(item, name, vb, qc, cc, info);
+      }
+      val = vb.value(type);
+    }
+
+    if(!occ.check(val.size())) throw typeError(value, this, name, info);
+    return val;
   }
 
   /**
-   * Promotes the specified item to this item type.
+   * Converts the specified item to this type.
    * @param item item to promote
-   * @param name variable name (can be {@code null})
-   * @param items item cache
+   * @param name variable name (used for error message, can be {@code null})
+   * @param vb value builder
    * @param qc query context
-   * @param sc static context
-   * @param ii input info
-   * @param opt if the result should be optimized
+   * @param cc compilation context ({@code null} during runtime)
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
-  public void promote(final Item item, final QNm name, final ItemList items, final QueryContext qc,
-      final StaticContext sc, final InputInfo ii, final boolean opt) throws QueryException {
+  public void coerce(final Item item, final QNm name, final ValueBuilder vb, final QueryContext qc,
+      final CompileContext cc, final InputInfo info) throws QueryException {
 
-    if(type instanceof AtomType) {
-      final Iter iter = item.atomValue(qc, ii).iter();
-      for(Item item1; (item1 = qc.next(iter)) != null;) {
-        final Type tp = item1.type;
-        if(tp.instanceOf(type)) {
-          items.add(item1);
-        } else if(tp == UNTYPED_ATOMIC) {
-          if(type.nsSensitive()) throw NSSENS_X_X.get(ii, item.type, type);
-          final Iter iter2 = type.cast(item1, qc, sc, ii).iter();
-          for(Item item2; (item2 = qc.next(iter2)) != null;) items.add(item2);
-        } else if(type == DOUBLE && (tp == FLOAT || tp.instanceOf(DECIMAL))) {
-          items.add(Dbl.get(item1.dbl(ii)));
-        } else if(type == FLOAT && tp.instanceOf(DECIMAL)) {
-          items.add(Flt.get(item1.flt(ii)));
-        } else if(type == STRING && item1 instanceof Uri) {
-          items.add(Str.get(item1.string(ii)));
-        } else {
-          throw typeError(item, with(EXACTLY_ONE), name, ii, true);
+    final QuerySupplier<QueryException> error = () ->
+      typeError(item, with(EXACTLY_ONE), name, info);
+    if(type instanceof ChoiceItemType) {
+      for(final SeqType st : ((ChoiceItemType) type).types) {
+        try {
+          final ValueBuilder tmp = new ValueBuilder(qc);
+          st.coerce(item, name, tmp, qc, cc, info);
+          vb.add(tmp.value(type));
+          return;
+        } catch(final QueryException ex) {
+          Util.debug(ex);
         }
       }
+      throw error.get();
+    }
+    if(type instanceof AtomType || type instanceof EnumType) {
+      final Iter iter = item.atomValue(qc, info).iter();
+      for(Item it; (it = qc.next(iter)) != null;) {
+        Item relabel = null;
+        final Type itemType = it.type;
+        if(!itemType.instanceOf(type)) {
+          if(itemType == UNTYPED_ATOMIC) {
+            if(type.nsSensitive()) throw NSSENS_X_X.get(info, item.type, type);
+            // item will be cast
+          } else if(
+            type == DECIMAL && (itemType == DOUBLE || itemType == FLOAT) ||
+            type == DOUBLE && (itemType == FLOAT || itemType.instanceOf(DECIMAL)) ||
+            type == FLOAT && (itemType == DOUBLE || itemType.instanceOf(DECIMAL)) ||
+            type == STRING && itemType == ANY_URI ||
+            type == ANY_URI && itemType.instanceOf(STRING) ||
+            type == HEX_BINARY && itemType == BASE64_BINARY ||
+            type == BASE64_BINARY && itemType == HEX_BINARY
+          ) {
+            // item will be cast
+          } else if(!type.union(itemType).oneOf(ANY_ATOMIC_TYPE, NUMERIC)) {
+            // item will be relabeled: remember old type for future comparison
+            relabel = it;
+          } else {
+            throw error.get();
+          }
+          it = (Item) cast(it, true, qc, info);
+          if(relabel != null && !it.equal(relabel, null, info)) throw error.get();
+        }
+        vb.add(it);
+      }
+    } else if(item instanceof XQMap && type instanceof RecordType) {
+      final RecordType rt = (RecordType) type;
+      vb.add(((XQMap) item).coerceTo(rt, qc, cc, info));
     } else if(item instanceof FItem && type instanceof FuncType) {
-      items.add(((FItem) item).coerceTo((FuncType) type, qc, ii, opt));
+      final FuncType ft = type == FUNCTION ? item.funcType() : (FuncType) type;
+      vb.add(((FItem) item).coerceTo(ft, qc, cc, info));
     } else {
-      throw typeError(item, with(EXACTLY_ONE), name, ii, true);
+      throw error.get();
     }
   }
 
@@ -435,13 +532,13 @@ public final class SeqType {
     if(intersect(st) != null) return true;
     if(occ.intersect(st.occ) == null) return false;
     final Type tp = st.type;
-    if(tp instanceof AtomType) {
+    if(tp instanceof AtomType || tp instanceof ChoiceItemType) {
       if(type.isUntyped()) return !tp.nsSensitive();
       return tp == DOUBLE && (type.intersect(FLOAT) != null || type.intersect(DECIMAL) != null) ||
              tp == FLOAT && type.intersect(DECIMAL) != null ||
              tp == STRING && type.intersect(ANY_URI) != null;
     }
-    return st.type instanceof FuncType && type instanceof FuncType;
+    return st.type instanceof FType && type instanceof FType;
   }
 
   /**
@@ -450,20 +547,37 @@ public final class SeqType {
    * @return resulting type
    */
   public SeqType union(final SeqType st) {
+    if(this == st) return this;
     // ignore general type of empty sequence
     final Type tp = st.zero() ? type : zero() ? st.type : type.union(st.type);
     final Occ oc = occ.union(st.occ);
-    final Test ts = st.zero() ? test : zero() ? st.test : Test.get(test, st.test);
+    final Test ts = st.zero() ? test : zero() ? st.test : Test.get(Arrays.asList(test, st.test));
     return get(tp, oc, ts);
   }
 
   /**
+   * Computes the union of the sequence type of all expressions.
+   * @param exprs expressions
+   * @param zero include expressions that return empty sequence
+   * @return sequence type, or {@code null} if unknown
+   */
+  public static SeqType union(final Expr[] exprs, final boolean zero) {
+    SeqType st = null;
+    for(final Expr expr : exprs) {
+      final SeqType st2 = expr.seqType();
+      if(zero || !st2.zero()) st = st == null ? st2 : st.union(st2);
+    }
+    return st;
+  }
+
+  /**
    * Computes the intersection of two sequence types, i.e. the most general type that is
-   * sub-type of both types. If no such type exists, {@code null} is returned.
+   * subtype of both types. If no such type exists, {@code null} is returned.
    * @param st second type
    * @return resulting type or {@code null}
    */
   public SeqType intersect(final SeqType st) {
+    if(this == st) return this;
     final Type tp = type.intersect(st.type);
     if(tp == null) return null;
     final Occ oc = occ.intersect(st.occ);
@@ -507,20 +621,27 @@ public final class SeqType {
   }
 
   /**
-   * Tests if expressions of this type may be numeric. User for predicate rewritings.
+   * Tests if expressions of this type may yield numbers.
    * @return result of check
    */
   public boolean mayBeNumber() {
-    // check if type is number, or any other super type
     return !zero() && (type.isNumber() || ANY_ATOMIC_TYPE.instanceOf(type));
   }
 
   /**
-   * Tests if expressions of this type may be an array.
+   * Tests if expressions of this type may yield arrays.
    * @return result of check
    */
   public boolean mayBeArray() {
-    return !(zero() || type.atomic() != null || type instanceof MapType);
+    return !zero() && (type instanceof ArrayType || ARRAY.instanceOf(type));
+  }
+
+  /**
+   * Tests if expressions of this type may yield functions.
+   * @return result of check
+   */
+  public boolean mayBeFunction() {
+    return !zero() && (type instanceof FType || ANY_ATOMIC_TYPE.instanceOf(type));
   }
 
   /**
@@ -530,9 +651,8 @@ public final class SeqType {
    */
   public boolean instanceOf(final SeqType st) {
     // empty sequence: only check cardinality
-    return zero() ? !st.oneOrMore() :
-      (st.type == ITEM || type.instanceOf(st.type)) &&
-      occ.instanceOf(st.occ) && kindInstanceOf(st);
+    return this == st || (zero() ? !st.oneOrMore() :
+      type.instanceOf(st.type) && occ.instanceOf(st.occ) && kindInstanceOf(st));
   }
 
   /**
@@ -543,6 +663,14 @@ public final class SeqType {
    */
   public boolean kindInstanceOf(final SeqType st) {
     return st.test == null || test != null && test.instanceOf(st.test);
+  }
+
+  /**
+   * Returns the kind test.
+   * @return kind test
+   */
+  public Test test() {
+    return test;
   }
 
   /**
@@ -560,18 +688,35 @@ public final class SeqType {
   }
 
   /**
+   * This implementation of {@link #hashCode} is used on the alternatives of a
+   * {@link ChoiceItemType}, while {@link #mapTypes} is being maintained as a {@link HashMap}.
+   * Since {@link MapType#keyType} is guaranteed to be an atomic type, we expect it to be called
+   * only on {@link #SeqType} instances based on some {@link AtomType}, where suitable hash codes
+   * are available for {@link #type}, and {@link #occ}.
+   */
+  @Override
+  public int hashCode() {
+    if(test != null) throw Util.notExpected();
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    result = prime * result + ((occ == null) ? 0 : occ.hashCode());
+    return result;
+  }
+
+  /**
    * Returns a string representation of the type.
    * @return string
    */
   public String typeString() {
-    return zero() ? QueryText.EMPTY_SEQUENCE + "()" :
-      test != null ? test.toString() : type.toString();
+    return zero() ? QueryText.EMPTY_SEQUENCE + "()" : test != null ? test.toString() :
+      type.toString();
   }
 
   @Override
   public String toString() {
     final TokenBuilder tb = new TokenBuilder();
-    if(!one() && type instanceof FuncType) {
+    if(!one() && type instanceof FType) {
       tb.add('(').add(typeString()).add(')');
     } else {
       tb.add(typeString());

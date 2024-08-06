@@ -5,11 +5,12 @@ import java.util.*;
 import org.basex.query.expr.*;
 import org.basex.query.expr.ft.*;
 import org.basex.query.expr.path.*;
+import org.basex.util.*;
 
 /**
  * Local thread caches.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QueryThreads {
@@ -35,10 +36,11 @@ public final class QueryThreads {
   /**
    * Returns local thread for the given expression.
    * @param expr expression
+   * @param info input info (can be {@code null})
    * @return cache
    */
-  public ThreadLocal<CmpCache> get(final CmpHashG expr) {
-    return cmpCache.computeIfAbsent(expr, p -> ThreadLocal.withInitial(CmpCache::new));
+  public ThreadLocal<CmpCache> get(final CmpHashG expr, final InputInfo info) {
+    return cmpCache.computeIfAbsent(expr, p -> ThreadLocal.withInitial(() -> new CmpCache(info)));
   }
 
   /**

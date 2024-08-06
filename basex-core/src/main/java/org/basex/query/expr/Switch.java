@@ -5,7 +5,6 @@ import static org.basex.query.QueryText.*;
 import java.util.*;
 import java.util.function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.CmpG.*;
@@ -14,7 +13,6 @@ import org.basex.query.util.*;
 import org.basex.query.util.list.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -23,7 +21,7 @@ import org.basex.util.hash.*;
 /**
  * Switch expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Switch extends ParseExpr {
@@ -34,7 +32,7 @@ public final class Switch extends ParseExpr {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param cond condition
    * @param groups case groups (last one is default case)
    */
@@ -70,10 +68,7 @@ public final class Switch extends ParseExpr {
     if(expr != this) return cc.replaceWith(this, expr);
 
     // combine types of return expressions
-    final int gl = groups.length;
-    SeqType st = groups[0].seqType();
-    for(int g = 1; g < gl; g++) st = st.union(groups[g].seqType());
-    exprType.assign(st);
+    exprType.assign(SeqType.union(groups, true)).data(groups);
 
     return this;
   }
@@ -82,7 +77,7 @@ public final class Switch extends ParseExpr {
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
     boolean changed = false;
     for(final SwitchGroup group : groups) {
-      changed |= group.simplify(mode, cc);
+      changed |= group.simplifyFor(mode, cc) == null;
     }
     return changed ? optimize(cc) : super.simplifyFor(mode, cc);
   }
@@ -99,30 +94,27 @@ public final class Switch extends ParseExpr {
     final ArrayList<SwitchGroup> tmpGroups = new ArrayList<>();
     for(final SwitchGroup group : groups) {
       final int el = group.exprs.length;
-      final Expr rtrn = group.rtrn();
-      final ExprList list = new ExprList(el).add(rtrn);
+      final ExprList list = new ExprList(el).add(group.rtrn());
       for(int e = 1; e < el; e++) {
         final Expr expr = group.exprs[e];
-        if(cases.contains(expr)) {
-          // case has already been checked before
-          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-          continue;
-        }
-        if(cnd != null) {
-          // compare condition and value; return result or remove case
+        // check if same case expression exists more than once
+        boolean remove = cases.contains(expr);
+        if(!remove && cnd != null) {
+          // pre-evaluate values; skip remaining checks if match is found
           if(expr instanceof Value) {
-            final Item cs = expr.atomItem(cc.qc, info);
-            if(cnd == cs || cs != Empty.VALUE && cnd != Empty.VALUE && cnd.equiv(cs, null, info)) {
-              return rtrn;
-            }
-            cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-            continue;
+            if(group.match(cnd, e, cc.qc)) return group.rtrn();
+            remove = true;
+          } else {
+            // value unknown at compile: perform no further compile-time checks
+            cnd = null;
           }
-          // value unknown at compile: perform no further compile-time checks
-          cnd = null;
         }
-        cases.add(expr);
-        list.add(expr);
+        if(remove) {
+          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+        } else {
+          cases.add(expr);
+          list.add(expr);
+        }
       }
       // build list of branches (add those with case left, or the default branch)
       if(list.size() > 1 || el == 1) {
@@ -148,7 +140,7 @@ public final class Switch extends ParseExpr {
 
     // update branches
     if(tmpGroups.size() != groups.length) {
-      groups = tmpGroups.toArray(new SwitchGroup[0]);
+      groups = tmpGroups.toArray(SwitchGroup[]::new);
       cc.info(OPTSIMPLE_X_X, (Supplier<?>) this::description, this);
     }
 
@@ -185,15 +177,15 @@ public final class Switch extends ParseExpr {
 
     final Expr[] exprs = groups[0].exprs;
     for(int e = exprs.length - 1; e >= 1; e--) {
-      final SeqType mt = exprs[e].seqType();
-      if(!mt.one() || !(
-        string && mt.type.isStringOrUntyped() ||
-        dec && mt.type.instanceOf(AtomType.DECIMAL)
+      final SeqType est = exprs[e].seqType();
+      if(!est.oneOrMore() || !(
+        string && est.type.isStringOrUntyped() ||
+        dec && est.type.instanceOf(AtomType.DECIMAL)
       )) return this;
     }
 
     final Expr list = List.get(cc, groups[0].info, Arrays.copyOfRange(exprs, 1, exprs.length));
-    final CmpG cmp = new CmpG(cond, list, OpG.EQ, null, null, groups[0].info);
+    final CmpG cmp = new CmpG(groups[0].info, cond, list, OpG.EQ);
     return new If(info, cmp.optimize(cc), groups[0].rtrn(), groups[1].rtrn()).optimize(cc);
   }
 
@@ -293,13 +285,6 @@ public final class Switch extends ParseExpr {
   }
 
   @Override
-  public Data data() {
-    final ExprList list = new ExprList(groups.length);
-    for(final SwitchGroup group : groups) list.add(group.rtrn());
-    return data(list.finish());
-  }
-
-  @Override
   public boolean accept(final ASTVisitor visitor) {
     return cond.accept(visitor) && visitAll(visitor, groups);
   }
@@ -320,12 +305,12 @@ public final class Switch extends ParseExpr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this), cond, groups);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(SWITCH).paren(cond).tokens(groups);
   }
 }

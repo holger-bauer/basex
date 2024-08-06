@@ -4,15 +4,19 @@ import static org.basex.query.QueryError.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.function.*;
 
 import org.basex.data.*;
 import org.basex.io.out.*;
+import org.basex.io.out.DataOutput;
 import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.expr.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
+import org.basex.query.value.seq.tree.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
@@ -22,10 +26,10 @@ import org.basex.util.hash.*;
  * Abstract value.
  *
  * This class also implements the {@link Iterable} interface, which is why all of its
- * values can also be retrieved via enhanced for(for-each) loops. The default
+ * values can also be retrieved via enhanced for (for-each) loops. The default
  * {@link #iter()} method will provide better performance.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Value extends Expr implements Iterable<Item> {
@@ -38,6 +42,17 @@ public abstract class Value extends Expr implements Iterable<Item> {
    */
   protected Value(final Type type) {
     this.type = type;
+  }
+
+  /**
+   * Writes the data structure to disk.
+   * @param out data output
+   * @throws IOException I/O exception
+   * @throws QueryException query exception
+   */
+  @SuppressWarnings("unused")
+  public void write(final DataOutput out) throws IOException, QueryException {
+    throw Util.notExpected();
   }
 
   @Override
@@ -71,39 +86,41 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   /**
-   * Returns a materialized, context-independent version of this value.
-   * @param qc query context (if {@code null}, process cannot be interrupted)
-   * @param error query error
-   * @param info input info
-   * @return item copy, or {@code null}) if the value cannot be materialized
+   * Returns a materialized version of this value without dependencies to persistent data.
+   * Raises an error if the value contains function items.
+   * @param test test to check if a node can be adopted unchanged
+   * @param ii input info (can be {@code null})
+   * @param qc query context
+   * @return materialized value
    * @throws QueryException query exception
    */
-  public Value materialize(final QueryContext qc, final QueryError error, final InputInfo info)
-      throws QueryException {
+  public abstract Value materialize(Predicate<Data> test, InputInfo ii, QueryContext qc)
+      throws QueryException;
 
-    final ValueBuilder vb = new ValueBuilder(qc);
-    for(final Item item : this) {
-      final Item it = item.materialize(qc, item.persistent());
-      if(it == null) throw error.get(info, item);
-      vb.add(it);
-    }
-    return vb.value();
-  }
+  /**
+   * Checks if this value is materialized, i.e., contains no persistent database nodes or
+   * function items.
+   * @param test test to check if a node can be adopted unchanged
+   * @param ii input info (can be {@code null})
+   * @return result of check
+   * @throws QueryException query exception
+   */
+  public abstract boolean materialized(Predicate<Data> test, InputInfo ii) throws QueryException;
 
   /**
    * Tests if this is an empty sequence.
    * @return result of check
    */
-  public final boolean isEmpty() {
-    return size() == 0;
+  public boolean isEmpty() {
+    return false;
   }
 
   /**
    * Tests if this is an item.
    * @return result of check
    */
-  public final boolean isItem() {
-    return size() == 1;
+  public boolean isItem() {
+    return false;
   }
 
   /**
@@ -124,16 +141,10 @@ public abstract class Value extends Expr implements Iterable<Item> {
   /**
    * Caches lazy values.
    * @param lazy lazy caching
-   * @param ii input info
+   * @param ii input info (can be {@code null})
    * @throws QueryException query exception
    */
   public abstract void cache(boolean lazy, InputInfo ii) throws QueryException;
-
-  /**
-   * Computes the number of atomized items.
-   * @return atomized item
-   */
-  public abstract long atomSize();
 
   /**
    * Returns a Java representation of the value.
@@ -168,14 +179,6 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   /**
-   * Returns a hash code for this value.
-   * @param ii input info
-   * @return hash code
-   * @throws QueryException if atomization can't be applied (e.g. function item)
-   */
-  public abstract int hash(InputInfo ii) throws QueryException;
-
-  /**
    * Serializes the value, using the standard XML serializer,
    * and returns the cached result.
    * @return serialized value
@@ -187,7 +190,7 @@ public abstract class Value extends Expr implements Iterable<Item> {
 
   /**
    * Serializes the value with the specified serialization parameters and returns the cached result.
-   * @param options serialization parameters (may be {@code null})
+   * @param options serialization parameters (can be {@code null})
    * @return serialized value
    * @throws QueryIOException query I/O exception
    */
@@ -198,7 +201,7 @@ public abstract class Value extends Expr implements Iterable<Item> {
     } catch(final QueryIOException ex) {
       throw ex;
     } catch(final IOException ex) {
-      throw SER_X.getIO(ex);
+      throw SERPARAM_X.getIO(ex);
     } catch(final ArrayIndexOutOfBoundsException ex) {
       // might occur if serialized result is too large
       Util.debug(ex);
@@ -220,6 +223,12 @@ public abstract class Value extends Expr implements Iterable<Item> {
   }
 
   /**
+   * Checks if all items of the sequence are of the same type.
+   * @return result of check
+   */
+  public abstract boolean sameType();
+
+  /**
    * Returns the item at the given position in the value.
    * The specified value must be lie within the valid bounds.
    * @param pos position
@@ -234,10 +243,74 @@ public abstract class Value extends Expr implements Iterable<Item> {
    */
   public abstract Value reverse(QueryContext qc);
 
+  /**
+   * Computes a more precise sequence type of this value.
+   */
+  public void refineType() {
+    refineType(this);
+  }
+
+  /**
+   * Returns a compactified version of this value.
+   * @return compactified value or self reference
+   * @throws QueryException query exception
+   */
+  public Value compactify() throws QueryException {
+    refineType();
+    final Value compact = get(size(), type, this);
+    return compact != null ? compact : this;
+  }
+
+  /**
+   * Tries to create a compactified version of the specified values.
+   * @param size size of resulting sequence
+   * @param type type
+   * @param values values
+   * @return value, or {@code null} if sequence could not be created
+   * @throws QueryException query exception
+   */
+  public static Value get(final long size, final Type type, final Value... values)
+      throws QueryException {
+    if((values.length != 1 || values[0] instanceof TreeSeq || values[0] instanceof ItemSeq) &&
+        type instanceof AtomType) {
+      switch((AtomType) type) {
+        case BOOLEAN: return BlnSeq.get(size, values);
+        case STRING: return StrSeq.get(size, values);
+        case BYTE: return BytSeq.get(size, values);
+        case SHORT: return ShrSeq.get(size, values);
+        case FLOAT: return FltSeq.get(size, values);
+        case DOUBLE: return DblSeq.get(size, values);
+        case DECIMAL: return DecSeq.get(size, values);
+        case UNSIGNED_LONG: return null;
+        default: if(type.instanceOf(AtomType.INTEGER)) return IntSeq.get(type, size, values);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Refines the type of a value.
+   * @param value value
+   */
+  protected static void refineType(final Value value) {
+    // check selectively if type cannot be refined any further
+    final Type vt = value.type;
+    if(vt instanceof NodeType && vt != NodeType.NODE ||
+       vt instanceof AtomType && ((Checks<AtomType>) t ->
+       !t.instanceOf(vt) || t.eq(vt)).all(AtomType.values())) return;
+
+    Type tp = null;
+    for(final Item it : value) {
+      final Type tp2 = it.type;
+      tp = tp == null ? tp2 : tp.union(tp2);
+    }
+    value.type = tp;
+  }
+
   @Override
   public boolean accept(final ASTVisitor visitor) {
     final Data data = data();
-    return data == null || visitor.lock(data.meta.name, false);
+    return data == null || visitor.lock(data.meta.name);
   }
 
   @Override

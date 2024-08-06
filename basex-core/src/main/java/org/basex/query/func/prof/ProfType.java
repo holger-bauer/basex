@@ -12,20 +12,24 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ProfType extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
+    // implementation for dynamic function lookup
     type(qc);
-    return exprs[0].value(qc);
+    return arg(0).value(qc);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    type(cc.qc);
-    return exprs[0];
+    if(cc.dynamic) {
+      type(cc.qc);
+      return arg(0);
+    }
+    return this;
   }
 
   /**
@@ -33,8 +37,8 @@ public final class ProfType extends StandardFunc {
    * @param qc query context
    */
   private void type(final QueryContext qc) {
-    final Expr expr = exprs[0];
-    FnTrace.trace(Util.inf("{ type: %, size: %, exprSize: % }", expr.seqType(), expr.size(),
-        expr.exprSize()), token(expr.toString()), qc);
+    final Expr value = arg(0);
+    FnTrace.trace(Util.inf("%, size: %, exprSize: %", value.seqType(), value.size(),
+        value.exprSize()), token(value + ": "), qc);
   }
 }

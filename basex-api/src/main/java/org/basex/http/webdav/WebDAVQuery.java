@@ -10,7 +10,7 @@ import org.basex.core.cmd.*;
 /**
  * WebDAV query.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class WebDAVQuery {
@@ -45,7 +45,7 @@ final class WebDAVQuery {
    * @param value value of variable
    * @return self reference
    */
-  WebDAVQuery bind(final String name, final String value) {
+  WebDAVQuery variable(final String name, final String value) {
     bindings.put(name, value);
     return this;
   }

@@ -10,13 +10,13 @@ import org.basex.util.*;
 /**
  * Logical expression, extended by {@link And} and {@link Or}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Logical extends Arr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   Logical(final InputInfo info, final Expr[] exprs) {
@@ -27,13 +27,7 @@ public abstract class Logical extends Arr {
   public final Expr compile(final CompileContext cc) throws QueryException {
     final int el = exprs.length;
     for(int e = 0; e < el; e++) {
-      try {
-        exprs[e] = exprs[e].compile(cc);
-      } catch(final QueryException qe) {
-        // first expression is evaluated eagerly
-        if(e == 0) throw qe;
-        exprs[e] = cc.error(qe, exprs[e]);
-      }
+      exprs[e] = cc.compileOrError(exprs[e], e == 0);
     }
     return optimize(cc);
   }
@@ -46,7 +40,7 @@ public abstract class Logical extends Arr {
    * @throws QueryException query exception
    */
   final Expr optimize(final CompileContext cc, final boolean or) throws QueryException {
-    simplifyAll(Simplify.EBV, cc);
+    exprs = simplifyAll(Simplify.EBV, cc);
     if(optimizeEbv(or, false, cc)) return cc.replaceWith(this, Bln.get(or));
 
     final int el = exprs.length;
@@ -57,7 +51,7 @@ public abstract class Logical extends Arr {
 
   @Override
   public final void markTailCalls(final CompileContext cc) {
-    // if the last expression surely returns a boolean, we can jump to it
+    // if the last expression returns a boolean for sure, we can jump to it
     final Expr last = exprs[exprs.length - 1];
     if(last.seqType().eq(SeqType.BOOLEAN_O)) last.markTailCalls(cc);
   }
@@ -87,10 +81,5 @@ public abstract class Logical extends Arr {
       }
     }
     return changed ? optimize(ic.cc) : null;
-  }
-
-  @Override
-  public void plan(final QueryPlan plan) {
-    plan.add(plan.create(this), exprs);
   }
 }

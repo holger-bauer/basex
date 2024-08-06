@@ -15,55 +15,53 @@ import org.basex.io.out.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
-import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
 
 /**
  * Abstract class for database queries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class AQuery extends Command {
   /** External variable bindings. */
-  protected final HashMap<String, Object> vars = new HashMap<>();
-  /** External properties. */
-  protected final HashMap<String, Object> props = new HashMap<>();
+  protected final HashMap<String, Entry<Object, String>> bindings = new HashMap<>();
 
+  /** Query string. */
+  private final String query;
   /** Query processor. */
   private QueryProcessor qp;
   /** Query info. */
   private QueryInfo info;
-  /** Query result. */
-  private Value result;
   /** Query plan was serialized. */
   private boolean plan;
+  /** Maximum number of results (ignored if negative). */
+  private int maxResults = -1;
 
   /**
    * Protected constructor.
    * @param openDB requires opened database
-   * @param args arguments
+   * @param arg argument
+   * @param query query string (can be identical to argument)
    */
-  AQuery(final boolean openDB, final String... args) {
-    super(Perm.NONE, openDB, args);
+  AQuery(final boolean openDB, final String arg, final String query) {
+    super(Perm.NONE, openDB, arg);
+    this.query = query;
   }
 
-  /**
-   * Evaluates the specified query.
-   * @param query query
-   * @return success flag
-   */
-  final boolean query(final String query) {
-    String error;
+  @Override
+  protected boolean run() {
+    final boolean queryinfo = options.get(MainOptions.QUERYINFO);
+    String error = null;
+    long hits = 0;
     if(exception != null) {
       error = Util.message(exception);
     } else {
       try {
-        long hits = 0;
-        final boolean run = options.get(MainOptions.RUNQUERY);
-        final boolean serial = options.get(MainOptions.SERIALIZE);
-        final boolean compplan = options.get(MainOptions.COMPPLAN);
+        final boolean runquery = options.get(MainOptions.RUNQUERY);
+        final boolean serialize = options.get(MainOptions.SERIALIZE);
+        final boolean optplan = options.get(MainOptions.OPTPLAN);
         final int runs = Math.max(1, options.get(MainOptions.RUNS));
         for(int r = 0; r < runs; ++r) {
           // reuse existing processor instance
@@ -71,41 +69,24 @@ public abstract class AQuery extends Command {
             qp = null;
             popJob();
           }
-          init(query, context);
-          if(!compplan) queryPlan();
+          init(context);
 
-          final Performance perf = new Performance();
-          for(final Entry<String, Object> entry : vars.entrySet()) {
-            final String name = entry.getKey();
-            final Object value = entry.getValue();
-            if(value instanceof Value) {
-              final Value val = (Value) value;
-              if(name == null) qp.context(val);
-              else qp.bind(name, val);
-            } else {
-              // will always be a string array
-              final String[] strings = (String[]) value;
-              if(name == null) qp.context(strings[0], strings[1]);
-              else qp.bind(name, strings[0], strings[1]);
-            }
-          }
+          queryPlan(!optplan);
+          qp.optimize();
+          queryPlan(optplan);
+          if(!runquery) continue;
 
-          qp.compile();
-          info.compiling += perf.ns();
-          if(compplan) queryPlan();
-          if(!run) continue;
-
-          final PrintOutput po = r == 0 && serial ? out : new NullOutput();
-          try(Serializer ser = qp.getSerializer(po)) {
+          final PrintOutput po = r == 0 && serialize ? out : new NullOutput();
+          try(Serializer ser = qp.serializer(po)) {
             if(maxResults >= 0) {
-              result = qp.cache(maxResults);
-              info.evaluating += perf.ns();
-              result.serialize(ser);
+              qp.cache(this, maxResults);
               hits = result.size();
+              result.serialize(ser);
+              if(exception instanceof QueryException) throw (QueryException) exception;
+              if(exception instanceof JobException) throw (JobException) exception;
             } else {
               hits = 0;
               final Iter iter = qp.iter();
-              info.evaluating += perf.ns();
               for(Item item; (item = iter.next()) != null;) {
                 ser.serialize(item);
                 ++hits;
@@ -114,63 +95,38 @@ public abstract class AQuery extends Command {
             }
           }
           qp.close();
-          info.serializing += perf.ns();
         }
-        return info(info.toString(qp, out.size(), hits, jc().locks));
-
-      } catch(final QueryException | IOException ex) {
+      } catch(final QueryException | JobException | IOException ex) {
         exception = ex;
         error = Util.message(ex);
-      } catch(final JobException ex) {
-        error = ex.getMessage();
       } catch(final StackOverflowError ex) {
         Util.debug(ex);
         error = BASEX_OVERFLOW.message;
       } catch(final RuntimeException ex) {
-        extError("");
-        throw ex;
+        exception = ex;
       } finally {
         // close processor after exceptions
         if(qp != null) qp.close();
       }
     }
-    queryPlan();
-    return extError(error);
+    // add query plan, if not done yet, and info string
+    queryPlan(true);
+    info(info.toString(qp, out.size(), hits, jc().locks, error == null));
+
+    // error
+    if(error != null) return error(queryinfo ? info() + ERROR + COL + NL + error : error);
+    // critical error
+    if(exception instanceof RuntimeException) throw (RuntimeException) exception;
+    // success
+    return true;
   }
 
   /**
-   * Checks if the query is updating.
-   * @param ctx database context
-   * @param query query string
-   * @return result of check
+   * Enforces a maximum number of query results. This method is only required by the GUI.
+   * @param max maximum number of results (ignored if negative)
    */
-  final boolean updates(final Context ctx, final String query) {
-    try {
-      init(query, ctx);
-      return qp.updating;
-    } catch(final QueryException ex) {
-      Util.debug(ex);
-      exception = ex;
-      qp.close();
-      return false;
-    }
-  }
-
-  /**
-   * Initializes the query processor, .
-   * @param query query string
-   * @param ctx database context
-   * @throws QueryException query exception
-   */
-  private void init(final String query, final Context ctx) throws QueryException {
-    final Performance perf = new Performance();
-    if(qp == null) qp = pushJob(new QueryProcessor(query, uri, ctx));
-    if(info == null) info = qp.qc.info;
-
-    for(final Map.Entry<String, Object> entry : props.entrySet())
-      qp.qc.putProperty(entry.getKey(), entry.getValue());
-    qp.parse();
-    qp.qc.info.parsing += perf.ns();
+  public final void maxResults(final int max) {
+    maxResults = max;
   }
 
   /**
@@ -180,92 +136,84 @@ public abstract class AQuery extends Command {
    */
   public final String parameters(final Context ctx) {
     try {
-      init(args[0], ctx);
-      return qp.qc.serParams().toString();
+      init(ctx);
+      return qp.qc.parameters().toString();
     } catch(final QueryException ex) {
       error(Util.message(ex));
-    } finally {
-      qp = null;
-      popJob();
     }
     return SerializerMode.DEFAULT.get().toString();
   }
 
-  /**
-   * Caches an external property.
-   * @param key key
-   * @param value value
-   */
-  public void putExternal(final String key, final Object value) {
-    props.put(key, value);
-  }
-
-  /**
-   * Returns an extended error message.
-   * @param message error message
-   * @return result of check
-   */
-  private boolean extError(final String message) {
-    // will only be evaluated when an error has occurred
-    final StringBuilder sb = new StringBuilder();
-    if(options.get(MainOptions.QUERYINFO)) {
-      sb.append(info()).append(qp.info()).append(NL).append(ERROR).append(COL).append(NL);
-    }
-    sb.append(message);
-    return error(sb.toString());
-  }
-
-  /**
-   * Generates a query plan.
-   */
-  private void queryPlan() {
-    if(!plan && qp != null) {
-      try {
-        // show XML plan
-        if(options.get(MainOptions.XMLPLAN)) {
-          info(NL + QUERY_PLAN + COL);
-          info(qp.plan().serialize().toString());
-        }
-        plan = true;
-      } catch(final Exception ex) {
-        Util.stack(ex);
-      }
-    }
-  }
-
   @Override
-  public boolean updating(final Context ctx) {
-    return updates(ctx, args[0]);
+  public final boolean updating(final Context ctx) {
+    try {
+      init(ctx);
+      return qp.updating;
+    } catch(final QueryException | JobException ex) {
+      qp.close();
+      exception = ex;
+      return false;
+    } catch(final RuntimeException ex) {
+      qp.close();
+      exception = ex;
+      throw ex;
+    }
   }
 
   @Override
   public final boolean updated(final Context ctx) {
-    return qp != null && qp.updates() != 0;
+    return qp.updates() != 0;
   }
 
   @Override
-  public void addLocks() {
-    if(qp == null) {
-      jc().locks.writes.addGlobal();
-    } else {
-      qp.addLocks();
-    }
+  public final void addLocks() {
+    qp.addLocks();
   }
 
   @Override
-  public void build(final CmdBuilder cb) {
+  public final void build(final CmdBuilder cb) {
     cb.init().add(0);
   }
 
   @Override
-  public boolean stoppable() {
+  public final boolean stoppable() {
     return true;
   }
 
-  @Override
-  public final Value result() {
-    final Value r = result;
-    result = null;
-    return r;
+  /**
+   * Initializes the query processor.
+   * @param ctx database context
+   * @throws QueryException query exception
+   */
+  private void init(final Context ctx) throws QueryException {
+    if(qp != null) return;
+
+    if(info == null) info = new QueryInfo(ctx);
+    else info.reset();
+
+    qp = pushJob(new QueryProcessor(query, uri, ctx, info));
+
+    for(final Entry<String, Entry<Object, String>> entry : bindings.entrySet()) {
+      final Entry<Object, String> value = entry.getValue();
+      qp.variable(entry.getKey(), value.getKey(), value.getValue());
+    }
+    qp.parse();
+    qp.compile();
+  }
+
+  /**
+   * Generates a query plan.
+   * @param create create plan
+   */
+  private void queryPlan(final boolean create) {
+    if(create && !plan && options.get(MainOptions.XMLPLAN)) {
+      try {
+        info(NL + QUERY_PLAN + COL);
+        info(qp.toXml().serialize(SerializerMode.INDENT.get()).toString());
+        plan = true;
+      } catch(final QueryIOException ex) {
+        Util.stack(ex);
+      }
+    }
   }
 }

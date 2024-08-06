@@ -1,13 +1,12 @@
 package org.basex.http;
 
-import static javax.servlet.http.HttpServletResponse.*;
-import static org.basex.http.HTTPText.*;
+import static jakarta.servlet.http.HttpServletResponse.*;
 
 import java.io.*;
 import java.util.*;
 
-import javax.servlet.*;
-import javax.servlet.http.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 import org.basex.core.*;
 import org.basex.core.StaticOptions.*;
@@ -17,11 +16,12 @@ import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.server.*;
 import org.basex.util.*;
+import org.basex.util.http.*;
 
 /**
  * Base class for various servlets.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class BaseXServlet extends HttpServlet {
@@ -33,8 +33,10 @@ public abstract class BaseXServlet extends HttpServlet {
   @Override
   public void init(final ServletConfig config) throws ServletException {
     super.init(config);
+
+    final HTTPContext hc = HTTPContext.get();
     try {
-      HTTPContext.get().init(config.getServletContext());
+      hc.init(config.getServletContext());
     } catch(final IOException ex) {
       throw new ServletException(ex);
     }
@@ -53,6 +55,8 @@ public abstract class BaseXServlet extends HttpServlet {
         }
       }
     }
+    final Context ctx = hc.context();
+    if(ctx.soptions.get(StaticOptions.LOGTRACE)) ctx.setExternal(ctx.log);
   }
 
   @Override
@@ -68,19 +72,24 @@ public abstract class BaseXServlet extends HttpServlet {
     } catch(final LoginException ex) {
       conn.error(SC_UNAUTHORIZED, Util.message(ex));
     } catch(final QueryException ex) {
-      final Value value = ex.value();
-      final int code = value instanceof ANum ? (int) ((ANum) value).itr() : SC_BAD_REQUEST;
-      final boolean rest = Token.eq(ex.qname().uri(), QueryText.REST_URI);
-      final String info = rest ? ex.getLocalizedMessage() : Util.message(ex);
-      conn.error(code, info);
+      int code = SC_INTERNAL_SERVER_ERROR;
+      boolean full = conn.context.soptions.get(StaticOptions.RESTXQERRORS);
+      final QNm qname = ex.qname();
+      if(Token.eq(qname.uri(), QueryText.REST_URI)) {
+        final Value value = ex.value();
+        if(value instanceof ANum) code = (int) ((ANum) value).itr();
+        full = false;
+      }
+      conn.error(code, full ? Util.message(ex) : ex.getLocalizedMessage());
     } catch(final IOException ex) {
-      conn.error(SC_BAD_REQUEST, Util.message(ex));
+      final boolean full = conn.context.soptions.get(StaticOptions.RESTXQERRORS);
+      conn.error(SC_INTERNAL_SERVER_ERROR, full ? Util.message(ex) : ex.getLocalizedMessage());
     } catch(final JobException ex) {
       conn.stop(ex);
     } catch(final Exception ex) {
-      final String msg = Util.bug(ex);
-      Util.errln(msg);
-      conn.error(SC_INTERNAL_SERVER_ERROR, Util.info(UNEXPECTED_X, msg));
+      final String message = Util.bug(ex);
+      Util.errln(message);
+      conn.error(SC_INTERNAL_SERVER_ERROR, Util.info(HTTPText.UNEXPECTED_X, message));
     } finally {
       if(Prop.debug) {
         Util.errln("Request: " + request.getMethod() + ' ' + request.getRequestURL());

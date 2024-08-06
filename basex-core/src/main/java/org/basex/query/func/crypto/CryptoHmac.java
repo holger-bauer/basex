@@ -8,16 +8,17 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class CryptoHmac extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] data = toBytes(exprs[0], qc);
-    final byte[] key = toBytes(exprs[1], qc);
-    final String algorithm = Token.string(toToken(exprs[2], qc));
-    final String encoding = exprs.length == 4 ? Token.string(toToken(exprs[3], qc)) : null;
-    return new Encryption(info).hmac(data, key, algorithm, encoding);
+    final byte[] value = toBytes(arg(0), qc);
+    final byte[] key = toBytes(arg(1), qc);
+    final String algorithm = toString(arg(2), qc);
+    final String encoding = toStringOrNull(arg(3), qc);
+
+    return new Encryption(info).hmac(value, key, algorithm, encoding);
   }
 }

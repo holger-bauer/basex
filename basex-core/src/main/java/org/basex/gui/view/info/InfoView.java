@@ -20,13 +20,13 @@ import org.basex.util.list.*;
 /**
  * This view displays query information.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class InfoView extends View implements LinkListener, QueryTracer {
-  /** Categories. */
-  private static final String[] CATEGORIES = { ALL, COMMAND, Text.ERROR, EVALUATING, COMPILING,
-      OPTIMIZED_QUERY, QUERY, RESULT, TIMING, QUERY_PLAN
+  /** Sections. */
+  private static final String[] SECTIONS = { ALL, COMMAND, Text.ERROR, EVALUATING, COMPILING,
+      OPTIMIZING, OPTIMIZED_QUERY, QUERY, RESULT, TIMING, QUERY_PLAN
   };
 
   /** Searchable editor. */
@@ -34,8 +34,8 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
 
   /** Header label. */
   private final BaseXHeader header;
-  /** Categories. */
-  private final BaseXCombo cats;
+  /** Sections a user can display. */
+  private final BaseXCombo sections;
   /** Info label for total time. */
   private final BaseXLabel label;
   /** Text Area. */
@@ -43,12 +43,12 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
 
   /** Painting flag. */
   private boolean paint;
-  /** Category chosen by user. */
-  private String cat = ALL;
-  /** Query statistics. */
-  private IntList stat = new IntList(4);
-  /** Query statistics strings. */
-  private StringList strings = new StringList(4);
+  /** Currently selected section. */
+  private String section = ALL;
+  /** Time measurements. */
+  private IntList times = new IntList(4);
+  /** Time strings. */
+  private StringList timeStrings = new StringList(4);
   /** Full text. */
   private byte[] all = Token.EMPTY;
   /** New text. */
@@ -77,17 +77,17 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
     header = new BaseXHeader(INFO);
 
     // first assign values, then assign maximal width
-    cats = new BaseXCombo(gui, ALL);
-    String maxString = "";
-    for(final String c : CATEGORIES) {
-      if(c.length() > maxString.length()) maxString = c;
+    sections = new BaseXCombo(gui, ALL);
+    String maxSection = "";
+    for(final String sctn : SECTIONS) {
+      if(sctn.length() > maxSection.length()) maxSection = sctn;
     }
-    cats.setPrototypeDisplayValue(maxString);
-    cats.addActionListener(ev -> {
+    sections.setPrototypeDisplayValue(maxSection);
+    sections.addActionListener(ev -> {
       while(paint) Thread.yield();
 
-      cat = cats.getSelectedItem();
-      final byte[] start = new TokenBuilder().bold().add(cat).add(COL).norm().nline().finish();
+      section = sections.getSelectedItem();
+      final byte[] start = new TokenBuilder().bold().add(section).add(COL).norm().nline().finish();
       final byte[] end = new TokenBuilder().bold().finish();
       final int s = Token.indexOf(all, start);
       if(s != -1) {
@@ -99,24 +99,22 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
       repaint();
     });
 
-    label = new BaseXLabel(" ").resize(1.2f);
+    label = new BaseXLabel(" ").resize(1.25f);
 
     text = new TextPanel(gui, false);
     text.setLinkListener(this);
     editor = new SearchEditor(gui, text);
 
-    final BaseXBack buttons = new BaseXBack(false);
-    buttons.layout(new ColumnLayout());
-    buttons.add(editor.button(FIND));
+    final BaseXToolBar buttons = new BaseXToolBar();
+    buttons.add(editor.button());
 
-    final BaseXBack top = new BaseXBack(false);
-    top.layout(new ColumnLayout(10));
-    top.add(buttons);
-    top.add(cats);
-    top.add(label);
+    final BaseXBack center = new BaseXBack(false).layout(new ColumnLayout(10));
+    center.add(sections);
+    center.add(label);
 
-    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout());
-    north.add(top, BorderLayout.WEST);
+    final BaseXBack north = new BaseXBack(false).layout(new BorderLayout(10, 10));
+    north.add(buttons, BorderLayout.WEST);
+    north.add(center, BorderLayout.CENTER);
     north.add(header, BorderLayout.EAST);
     add(north, BorderLayout.NORTH);
 
@@ -163,7 +161,7 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
   /**
    * Displays the specified info string.
    * @param info string to be displayed
-   * @param cmd command that created the output (may be {@code null})
+   * @param cmd command that created the output (can be {@code null})
    * @param ok indicates if evaluation was successful
    * @param reset clear text area when method is called next time
    */
@@ -174,7 +172,7 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
   /**
    * Displays the specified info string.
    * @param info string to be displayed
-   * @param cmd command that created the output (may be {@code null})
+   * @param cmd command that created the output (can be {@code null})
    * @param time time required for running the command
    * @param ok indicates if evaluation was successful
    * @param reset clear text area when method is called next time
@@ -186,6 +184,7 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
     final TokenBuilder tb = new TokenBuilder().add(all);
     final StringList eval = new StringList(1);
     final StringList comp = new StringList(1);
+    final StringList opt = new StringList(1);
     final StringList plan = new StringList(1);
     final StringList result = new StringList(1);
     final StringList error = new StringList(1);
@@ -193,8 +192,8 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
     final StringList optqu = new StringList(1);
     final StringList command = new StringList(1);
 
-    final StringList timings = new StringList(5);
-    final IntList times = new IntList(5);
+    final StringList strings = new StringList(5);
+    final IntList tms = new IntList(5);
 
     final int runs = Math.max(1, gui.context.options.get(MainOptions.RUNS));
     final String[] split = info.split(NL);
@@ -202,39 +201,42 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
     for(int s = 0; s < sl; s++) {
       final String line = split[s];
       if(line.startsWith(PARSING_CC) || line.startsWith(COMPILING_CC) ||
-          line.startsWith(EVALUATING_CC) || line.startsWith(PRINTING_CC) ||
-          line.startsWith(TOTAL_TIME_CC)) {
+          line.startsWith(OPTIMIZING_CC) || line.startsWith(EVALUATING_CC) ||
+          line.startsWith(PRINTING_CC) || line.startsWith(TOTAL_TIME_CC)) {
         final int t = line.indexOf(" ms");
         final int d = line.indexOf(':');
         final int tm = (int) (Double.parseDouble(line.substring(d + 1, t)) * 100);
-        times.add(tm);
+        tms.add(tm);
         final String key = line.substring(0, d).trim();
         final String val = Performance.getTime(tm * 10000L * runs, runs);
-        timings.add(LI + key + COLS + val);
-      } else if(line.startsWith(HITS_X_CC) || line.startsWith(UPDATED_CC) ||
+        strings.add(LI + key + COLS + val);
+      } else if(line.startsWith(NUMBER_CC) || line.startsWith(UPDATED_CC) ||
           line.startsWith(PRINTED_CC) || line.startsWith(READ_LOCKING_CC) ||
           line.startsWith(WRITE_LOCKING_CC)) {
         result.add(LI + line);
       } else if(line.equals(COMPILING + COL)) {
         while(++s < sl && !split[s].isEmpty()) comp.add(split[s]);
+      } else if(line.equals(OPTIMIZING + COL)) {
+        while(++s < sl && !split[s].isEmpty()) opt.add(split[s]);
       } else if(line.equals(QUERY + COL)) {
         while(++s < sl && !split[s].isEmpty()) origqu.add(split[s]);
       } else if(line.equals(OPTIMIZED_QUERY + COL)) {
         while(++s < sl && !split[s].isEmpty()) optqu.add(split[s]);
       } else if(line.startsWith(EVALUATING)) {
         while(++s < sl && split[s].startsWith(LI)) {
-          eval.add(split[s].substring(2).replaceAll("\\|", "\n"));
+          eval.add(split[s].substring(2).replace('|', '\n'));
         }
       } else if(line.equals(QUERY_PLAN + COL)) {
         while(++s < sl && !split[s].isEmpty()) plan.add(split[s]);
       } else if(line.equals(Text.ERROR + COL)) {
+        boolean stopped = false;
         while(++s < sl && !split[s].isEmpty()) {
-          final Pattern pattern = Pattern.compile(STOPPED_AT + "(.*)" + COL);
-          final Matcher matcher = pattern.matcher(split[s]);
-          if(matcher.find()) {
+          final Matcher matcher = Pattern.compile(STOPPED_AT + "(.*)" + COL).matcher(split[s]);
+          if(!stopped && matcher.find()) {
             final TokenBuilder tmp = new TokenBuilder();
             tmp.add(STOPPED_AT).uline().add(matcher.group(1)).uline().add(COL);
             split[s] = tmp.toString();
+            stopped = true;
           }
           error.add(split[s]);
         }
@@ -256,15 +258,15 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
       }
     }
 
-    stat = times;
-    strings = timings;
+    times = tms;
+    timeStrings = strings;
 
     final boolean test = cmd instanceof Test, query = cmd instanceof AQuery;
     /* reset old text if:
      * a) deletion was requested by the last function call
      * b) the result contains execution times
      * c) result is not ok and no XQUnit tests are run */
-    if(clear || !times.isEmpty() || !(ok || test)) {
+    if(clear || !tms.isEmpty() || !(ok || test)) {
       tb.reset();
     } else if(test) {
       // XQUnit tests: adopt trace output
@@ -281,31 +283,32 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
       }
     }
 
-    final StringList list = new StringList().add(ALL);
-    add(COMMAND, command, tb, list);
-    add(Text.ERROR, error, tb, list);
-    add(EVALUATING, eval, tb, list);
-    add(COMPILING, comp, tb, list);
-    add(OPTIMIZED_QUERY, optqu, tb, list);
-    add(QUERY, origqu, tb, list);
-    add(RESULT, result, tb, list);
-    add(TIMING, timings, tb, list);
-    add(QUERY_PLAN, plan, tb, list);
+    final StringList sctns = new StringList().add(ALL);
+    add(COMMAND, command, tb, sctns);
+    add(Text.ERROR, error, tb, sctns);
+    add(EVALUATING, eval, tb, sctns);
+    add(RESULT, result, tb, sctns);
+    add(OPTIMIZED_QUERY, optqu, tb, sctns);
+    add(OPTIMIZING, opt, tb, sctns);
+    add(COMPILING, comp, tb, sctns);
+    add(QUERY, origqu, tb, sctns);
+    add(QUERY_PLAN, plan, tb, sctns);
+    add(TIMING, strings, tb, sctns);
     if(inf != null) tb.add(inf).nline();
     clear = reset;
 
     // show total time required for running a command
     String total = time;
-    if(!times.isEmpty()) {
-      total = Performance.getTime(times.get(times.size() - 1) * 10000L * runs, runs);
+    if(!tms.isEmpty()) {
+      total = Performance.getTime(tms.get(tms.size() - 1) * 10000L * runs, runs);
     }
-    if(total != null) label.setText(TOTAL_TIME_CC + total);
+    if(total != null) setTime(TOTAL_TIME_CC + total);
     all = tb.finish();
     newText = all;
 
     // refresh combo box, reassign old value
-    cats.setItems(list.toArray());
-    cats.setSelectedItem(cat);
+    sections.setItems(sctns.toArray());
+    sections.setSelectedItem(section);
 
     repaint();
     return total;
@@ -316,15 +319,15 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
    * @param head string header
    * @param list list reference
    * @param tb token builder
-   * @param cats categories to choose from
+   * @param sections sections a user can display
    */
   private static void add(final String head, final StringList list, final TokenBuilder tb,
-      final StringList cats) {
+      final StringList sections) {
     if(list.isEmpty()) return;
     tb.bold().add(head).add(COL).norm().nline();
-    for(final String s : list) tb.add(s).nline();
+    for(final String line : list) tb.add(line).nline();
     tb.hline();
-    cats.add(head);
+    sections.add(head);
   }
 
   @Override
@@ -334,20 +337,21 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
 
   @Override
   public void mouseMoved(final MouseEvent e) {
-    final int l = stat.size();
+    final int l = times.size();
     if(l == 0) return;
 
-    focus = -1;
+    int f = -1;
     if(e.getY() < h) {
       for(int i = 0; i < l; ++i) {
         final int bx = w - bw + bs * i;
-        if(e.getX() >= bx && e.getX() < bx + bs) focus = i;
+        if(e.getX() >= bx && e.getX() < bx + bs) f = i;
       }
     }
-
-    final int f = focus == -1 ? l - 1 : focus;
-    label.setText(strings.get(f).replace(LI, ""));
-    repaint();
+    if(f != focus) {
+      setTime(timeStrings.get(f == -1 ? l - 1 : f).replace(LI, ""));
+      repaint();
+      focus = f;
+    }
   }
 
   @Override
@@ -359,22 +363,19 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
     }
 
     super.paintComponent(g);
-    final int l = stat.size();
+    final int l = times.size();
     if(l != 0) {
-      final int fs = GUIConstants.fontSize;
-      h = header.getHeight() - 4;
-      w = (int) (getWidth() * 0.98 - fs / 2.0d - header.getWidth());
-      bw = (fs << 1) + w / 10;
+      h = header.getHeight();
+      w = getWidth() - header.getWidth() - 16;
+      bw = 100;
       bs = bw / (l - 1);
 
       // find maximum value
       int m = 1;
-      for(int i = 0; i < l - 1; ++i) m = Math.max(m, stat.get(i));
+      for(int i = 0; i < l - 1; ++i) m = Math.max(m, times.get(i));
 
       // draw focused bar
-      final int by = 8;
-      final int bh = h - by;
-
+      final int by = 8, bh = h - by;
       for(int i = 0; i < l - 1; ++i) {
         if(i != focus) continue;
         final int bx = w - bw + bs * i;
@@ -384,11 +385,11 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
 
       // draw all bars
       for(int i = 0; i < l - 1; ++i) {
-        final int bx = w - bw + bs * i;
-        g.setColor(GUIConstants.color((i == focus ? 3 : 2) + (i << 1)));
-        final int p = Math.max(1, stat.get(i) * bh / m);
+        final int bx = w - bw + bs * i, c = (i == focus ? 4 : 2) + i;
+        g.setColor(GUIConstants.color(c));
+        final int p = Math.max(1, times.get(i) * bh / m);
         g.fillRect(bx, by + bh - p, bs, p);
-        g.setColor(GUIConstants.color(8));
+        g.setColor(GUIConstants.color(c + 2));
         g.drawRect(bx, by + bh - p, bs, p - 1);
       }
     }
@@ -399,5 +400,21 @@ public final class InfoView extends View implements LinkListener, QueryTracer {
   public boolean print(final String info) {
     if(clear || all.length < 50000) setInfo(info, null, true, false);
     return true;
+  }
+
+  /**
+   * Displays the specified runtime.
+   * @param info info string with measured time
+   */
+  private void setTime(final String info) {
+    final StringBuilder sb = new StringBuilder().append(info);
+    final long ms = Long.parseLong(info.replaceAll("^.+: |\\..+", ""));
+    if(ms >= 60000) {
+      // append hh:mm:ss format if time exceeds 1 minute
+      final long seconds = ms / 1000, minutes = seconds % 3600 / 60, hours = seconds / 3600;
+      final String time = String.format("%02d:%02d:%02d", hours, minutes, seconds % 60);
+      sb.append(" (").append(time).append(')');
+    }
+    label.setText(sb.toString());
   }
 }

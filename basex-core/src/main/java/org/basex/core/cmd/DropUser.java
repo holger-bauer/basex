@@ -11,7 +11,7 @@ import org.basex.server.*;
 /**
  * Evaluates the 'drop user' command and drops a user.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DropUser extends AUser {
@@ -26,7 +26,7 @@ public final class DropUser extends AUser {
   /**
    * Constructor for dropping local database users.
    * @param name name of user
-   * @param pattern database pattern (may be {@code null})
+   * @param pattern database pattern (can be {@code null})
    */
   public DropUser(final String name, final String pattern) {
     super(name, pattern == null ? "" : pattern);

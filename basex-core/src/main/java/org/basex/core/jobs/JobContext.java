@@ -1,5 +1,7 @@
 package org.basex.core.jobs;
 
+import java.util.concurrent.atomic.*;
+
 import org.basex.core.*;
 import org.basex.core.locks.*;
 import org.basex.query.*;
@@ -8,17 +10,20 @@ import org.basex.util.*;
 /**
  * Job context.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JobContext {
-  /** Prints trace output to the standard error. */
-  private static final QueryTracer ERRLN = info -> { Util.errln(info); return false; };
+  /** Prints trace output to standard error. */
+  private static final QueryTracer TRACER = info -> {
+    Util.errln(info);
+    return false;
+  };
 
   /** Job prefix. */
-  public static final String PREFIX = "job";
+  static final String PREFIX = "job";
   /** Query id. */
-  private static long jobId = -1;
+  private static final AtomicLong JOBID = new AtomicLong(-1);
 
   /** Registered locks. */
   public final Locks locks = new Locks();
@@ -27,13 +32,11 @@ public final class JobContext {
 
   /** Performance measurements. */
   public Performance performance;
-  /** Query tracer. */
-  public QueryTracer tracer = ERRLN;
   /** Database context. */
   public Context context;
+
   /** Root job. */
   private final Job job;
-
   /** Job id. Will be set while job is registered. */
   private String id;
   /** Job name (optional). */
@@ -62,10 +65,7 @@ public final class JobContext {
    * @return id
    */
   public String id() {
-    if(id == null) {
-      jobId = Math.max(0, jobId + 1);
-      id = PREFIX + jobId;
-    }
+    if(id == null) id = PREFIX + JOBID.updateAndGet(i -> Math.max(0, i + 1));
     return id;
   }
 
@@ -91,6 +91,18 @@ public final class JobContext {
    */
   public String type() {
     return tp != null ? tp : Util.className(job);
+  }
+
+  /**
+   * Returns the query tracer.
+   * @return name
+   */
+  public QueryTracer tracer() {
+    if(context != null) {
+      final QueryTracer qt = (QueryTracer) context.getExternal(QueryTracer.class);
+      if(qt != null) return qt;
+    }
+    return TRACER;
   }
 
   @Override

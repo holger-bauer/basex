@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 import static org.basex.gui.GUIConstants.*;
 
 import java.awt.*;
+import java.io.*;
 import java.util.concurrent.atomic.*;
 import java.util.regex.*;
 
@@ -12,6 +13,7 @@ import javax.swing.border.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
+import org.basex.core.jobs.*;
 import org.basex.core.parse.*;
 import org.basex.data.*;
 import org.basex.gui.dialog.*;
@@ -28,16 +30,18 @@ import org.basex.gui.view.text.*;
 import org.basex.gui.view.tree.*;
 import org.basex.io.*;
 import org.basex.io.out.*;
+import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.*;
 import org.basex.query.value.seq.*;
 import org.basex.util.*;
 import org.basex.util.options.*;
+import org.basex.util.options.Options.*;
 
 /**
  * This class is the main window of the GUI. It is the central instance for user interactions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class GUI extends JFrame implements BaseXWindow {
@@ -53,10 +57,10 @@ public final class GUI extends JFrame implements BaseXWindow {
   public final GUIStatus status;
   /** Input field. */
   public final GUIInput input;
-  /** Filter button. */
-  public final AbstractButton filter;
   /** Search view. */
   public final EditorView editor;
+  /** Text view. */
+  public final TextView text;
   /** Info view. */
   public final InfoView info;
 
@@ -81,8 +85,6 @@ public final class GUI extends JFrame implements BaseXWindow {
   /** Current input Mode. */
   private final BaseXCombo mode;
 
-  /** Text view. */
-  private final TextView text;
   /** Top panel. */
   private final BaseXBack top;
   /** Control panel. */
@@ -116,8 +118,8 @@ public final class GUI extends JFrame implements BaseXWindow {
     this.context = context;
     this.gopts = gopts;
 
-    if(Prop.MAC) GUIMacOS.init(this);
-    setIconImage(BaseXImages.get("logo_64"));
+    if(Prop.MAC) BaseXLayout.initMac(this);
+    setIconImage(BaseXImages.get("logo_small"));
     setTitle();
 
     // set window size
@@ -146,7 +148,7 @@ public final class GUI extends JFrame implements BaseXWindow {
     toolbar = new GUIToolBar(TOOLBAR, this);
     buttons.add(toolbar, BorderLayout.WEST);
 
-    results = new BaseXLabel(" ").border(0, 0, 0, 4).resize(1.7f);
+    results = new BaseXLabel(" ").border(-2, 0, 0, 4).resize(1.7f);
     results.setHorizontalAlignment(SwingConstants.RIGHT);
 
     BaseXBack b = new BaseXBack();
@@ -155,7 +157,7 @@ public final class GUI extends JFrame implements BaseXWindow {
     buttons.add(b, BorderLayout.EAST);
     if(this.gopts.get(GUIOptions.SHOWBUTTONS)) control.add(buttons, BorderLayout.CENTER);
 
-    mode = new BaseXCombo(this, FIND, XQUERY, COMMAND);
+    mode = new BaseXCombo(this, FIND, "XQuery", COMMAND);
     mode.setSelectedIndex(2);
 
     input = new GUIInput(this);
@@ -176,6 +178,9 @@ public final class GUI extends JFrame implements BaseXWindow {
     nav.add(mode, BorderLayout.WEST);
     nav.add(b, BorderLayout.CENTER);
 
+    final AbstractButton go = BaseXButton.get("c_go", RUN_QUERY, false, this);
+    go.addActionListener(e -> execute());
+
     stop = BaseXButton.get("c_stop", STOP, false, this);
     stop.setEnabled(false);
     stop.addActionListener(e -> {
@@ -185,16 +190,10 @@ public final class GUI extends JFrame implements BaseXWindow {
       }
     });
 
-    final AbstractButton go = BaseXButton.get("c_go", RUN_QUERY, false, this);
-    go.addActionListener(e -> execute());
-
-    filter = BaseXButton.command(GUIMenuCmd.C_FILTER, this);
-
-    b = new BaseXBack(new ColumnLayout(1));
-    b.add(stop);
-    b.add(go);
-    b.add(filter);
-    nav.add(b, BorderLayout.EAST);
+    final BaseXToolBar tb = new BaseXToolBar();
+    tb.add(go);
+    tb.add(stop);
+    nav.add(tb, BorderLayout.EAST);
 
     if(this.gopts.get(GUIOptions.SHOWINPUT)) control.add(nav, BorderLayout.SOUTH);
     top.add(control, BorderLayout.NORTH);
@@ -204,6 +203,8 @@ public final class GUI extends JFrame implements BaseXWindow {
     text = new TextView(notify);
     editor = new EditorView(notify);
     info = new InfoView(notify);
+    // register the info view for trace output
+    context.setExternal(info);
 
     // create panels for closed and opened database mode
     views = new ViewContainer(this, text, editor, info, new FolderView(notify),
@@ -224,18 +225,33 @@ public final class GUI extends JFrame implements BaseXWindow {
     views.updateViews();
     refreshControls(true);
 
-    // check version
-    checkVersion();
+    // apply GUI-specific indentation globally
+    final SerializerOptions sopts = context.options.get(MainOptions.SERIALIZER);
+    sopts.put(SerializerOptions.INDENT, gopts.get(GUIOptions.INDENTRESULT) ? YesNo.YES : YesNo.NO);
+
+    // update check (skip if beta/snapshot version is running)
+    if(gopts.get(GUIOptions.CHECKUPDATES) && !Strings.contains(Prop.VERSION, ' ')) {
+      SwingUtilities.invokeLater(() -> checkVersion(false));
+    }
   }
 
   @Override
   public void dispose() {
-    saveOptions();
-    // check if all modified texts are saved or closed
+    quit();
+  }
+
+  /**
+   * Closes the GUI.
+   * @return success flag
+   */
+  public boolean quit() {
     if(editor.confirm(null)) {
+      saveOptions();
       context.close();
       super.dispose();
+      return true;
     }
+    return false;
   }
 
   /**
@@ -282,7 +298,7 @@ public final class GUI extends JFrame implements BaseXWindow {
   }
 
   /**
-   * Sets a cursor, enforcing a new look if necessary.
+   * Sets a cursor.
    * @param cursor cursor to be set
    * @param enforce enforce new cursor
    */
@@ -310,13 +326,13 @@ public final class GUI extends JFrame implements BaseXWindow {
         cp.pwReader(pwReader);
         execute(cp.parse());
       } catch(final QueryException ex) {
-        if(!info.visible()) GUIMenuCmd.C_SHOWINFO.execute(this);
+        if(!info.visible()) GUIMenuCmd.C_SHOW_INFO.execute(this);
         info.setInfo(Util.message(ex), null, false, true);
       }
     } else if(gopts.get(GUIOptions.SEARCHMODE) == 1 || Strings.startsWith(in, '/')) {
       simpleQuery(in);
     } else {
-      execute(new Find(in, gopts.get(GUIOptions.FILTERRT)));
+      execute(new Find(in));
     }
   }
 
@@ -346,17 +362,17 @@ public final class GUI extends JFrame implements BaseXWindow {
   /**
    * Launches the specified commands in a separate thread.
    * Commands are ignored if an update operation takes place.
-   * @param edit call from editor view
+   * @param editing call from editor view
    * @param cmds commands to be executed
    */
-  public void execute(final boolean edit, final Command... cmds) {
+  public void execute(final boolean editing, final Command... cmds) {
     // ignore command if updates take place
     if(updating) return;
 
     new Thread(() -> {
       if(cmds.length == 0) info.setInfo("", null, true, true);
       for(final Command cmd : cmds) {
-        if(!exec(cmd, edit)) break;
+        if(!execute(cmd, editing)) break;
       }
     }).start();
   }
@@ -364,10 +380,10 @@ public final class GUI extends JFrame implements BaseXWindow {
   /**
    * Executes the specified command.
    * @param cmd command to be executed
-   * @param edit called from editor view
+   * @param editing called from editor view
    * @return success flag
    */
-  private boolean exec(final Command cmd, final boolean edit) {
+  private boolean execute(final Command cmd, final boolean editing) {
     // wait when command is still running
     final int id = commandID.incrementAndGet();
     while(true) {
@@ -382,10 +398,10 @@ public final class GUI extends JFrame implements BaseXWindow {
     cursor(CURSORWAIT);
     input.setCursor(CURSORWAIT);
     stop.setEnabled(true);
-    if(edit) editor.pleaseWait(id);
+    if(editing) editor.pleaseWait(id);
 
     final Data data = context.data();
-    // reset current context if realtime filter is activated
+    // reset current context if real-time filter is activated
     if(gopts.get(GUIOptions.FILTERRT) && data != null && !context.root()) context.invalidate();
 
     // remember current command and context nodes
@@ -396,9 +412,7 @@ public final class GUI extends JFrame implements BaseXWindow {
     final ArrayOutput output = new ArrayOutput();
     output.setLimit(gopts.get(GUIOptions.MAXTEXT));
     // sets the maximum number of hits
-    cmd.maxResults(gopts.get(GUIOptions.MAXRESULTS));
-    // attaches the info listener to the command
-    cmd.jc().tracer = info;
+    if(cmd instanceof AQuery) ((AQuery) cmd).maxResults(gopts.get(GUIOptions.MAXRESULTS));
 
     final Performance perf = new Performance();
     boolean ok = true;
@@ -425,29 +439,24 @@ public final class GUI extends JFrame implements BaseXWindow {
         running = false;
       }
 
-      // show query info, send feedback to query editor
-      final String time = info.setInfo(inf, cmd, perf.getTime(), ok, true);
-      final boolean stopped = inf.substring(inf.lastIndexOf('\n') + 1).equals(INTERRUPTED);
-      if(edit) editor.info(cause, stopped, true);
-
       // get query result and node references to currently opened database
-      final Value result = cmd.result();
-      DBNodes nodes = result instanceof DBNodes ? (DBNodes) result : null;
+      final Value value = cmd.result;
+      DBNodes nodes = value instanceof DBNodes ? (DBNodes) value : null;
+      final boolean updated = cmd.updated(context);
 
-      // show text view if a non-empty result does not reference the currently opened database
-      if(!text.visible() && output.size() != 0 && nodes == null) {
-        GUIMenuCmd.C_SHOWRESULT.execute(this);
+      if(!text.visible()) {
+        // show text view if the result does not comprise nodes of the opened database
+        if(nodes == null && output.size() != 0) GUIMenuCmd.C_SHOW_RESULT.execute(this);
+        // open info view if error occurs
+        if(!ok && !editing && !info.visible()) GUIMenuCmd.C_SHOW_INFO.execute(this);
       }
 
-      // check if query feedback was evaluated in the query view
-      if(!ok && !stopped) {
-        // display error in info view
-        text.setText(output, 0);
-        if(!info.visible() && (!edit || inf.startsWith(S_BUGINFO))) {
-          GUIMenuCmd.C_SHOWINFO.execute(this);
-        }
-      } else {
-        final boolean updated = cmd.updated(context);
+      // show query info, send feedback to query editor
+      final boolean stopped = cause instanceof JobException;
+      if(editing) editor.info(cause, stopped, true);
+
+      // update context and send notifications if command was successful
+      if(ok) {
         if(context.data() != data) {
           // database reference has changed - notify views
           notify.init();
@@ -455,46 +464,49 @@ public final class GUI extends JFrame implements BaseXWindow {
           // update visualizations
           notify.update();
           // adopt updated nodes as result set
-          if(nodes == null && result == Empty.VALUE) nodes = context.current();
-        } else if(result != null) {
+          if(nodes == null && (value == null || value.isEmpty())) nodes = context.current();
+        } else if(value != null) {
           // check if result has changed
-          final boolean flt = gopts.get(GUIOptions.FILTERRT);
+          final boolean filterrt = gopts.get(GUIOptions.FILTERRT);
           final DBNodes curr = context.current();
-          if(flt || curr != null && !curr.equals(current)) {
+          if(filterrt || curr != null && !curr.equals(current)) {
             // refresh context if at least one node was found
-            if(nodes != null) notify.context(nodes, flt, null);
+            if(nodes != null) notify.context(nodes, filterrt, null);
           } else if(context.marked != null) {
             // refresh highlight
-            DBNodes m = context.marked;
+            DBNodes marked = context.marked;
             if(nodes != null) {
               // use query result
-              m = nodes;
-            } else if(!m.isEmpty()) {
+              marked = nodes;
+            } else if(!marked.isEmpty()) {
               // remove old highlighting
-              m = new DBNodes(data);
+              marked = new DBNodes(data);
             }
             // refresh views
-            if(context.marked != m) notify.mark(m, null);
+            if(context.marked != marked) notify.mark(marked, null);
           }
         }
-
-        if(id == commandID.get() && !stopped) {
-          // refresh editor info
-          editor.refreshContextLabel();
-          // show status info
-          status.setText(TIME_REQUIRED + COLS + time);
-          // show number of hits
-          if(result != null) results.setText(gopts.results(result.size(), 0));
-          // assign textual output if no node result was created
-          if(nodes == null) text.setText(output, result != null ? result.size() : 0);
-          // only cache output if data has not been updated (in which case notifyUpdate was called)
-          if(!updated) text.cache(output, cmd, result);
-        }
       }
+
+      if(id == commandID.get()) {
+        // refresh editor info
+        editor.refreshContextLabel();
+        // refresh info view and status bar
+        final String total = info.setInfo(inf, cmd, perf.getTime(), ok, true);
+        if(ok) status.setText(TIME_REQUIRED + COLS + total, true);
+        // show number of hits
+        results.setText(BaseXLayout.results(value != null ? value.size() : -1, -1, this));
+        // assign textual output if no node result was created
+        if(nodes == null) text.setText(output, value != null ? value.size() : -1, cause);
+        // only cache output if data has not been updated (in which case notifyUpdate was called)
+        if(!updated) text.cache(output, cmd, value);
+      }
+
     } catch(final Exception ex) {
       // unexpected error
-      BaseXDialog.error(this, Util.info(EXEC_ERROR_X_X, cmd, Util.bug(ex)));
       updating = false;
+      running = false;
+      BaseXDialog.error(this, Util.info(EXEC_ERROR_X_X, cmd, Util.bug(ex)));
     }
     stop();
     return ok;
@@ -575,9 +587,10 @@ public final class GUI extends JFrame implements BaseXWindow {
       final int s = show ? menuHeight : 0;
       comp.setPreferredSize(new Dimension(comp.getPreferredSize().width, s));
       menu.setSize(menu.getWidth(), s);
-    } else { // buttons, input
-      if(show) control.add(comp, layout);
-      else control.remove(comp);
+    } else if(show) {
+      control.add(comp, layout);
+    } else {
+      control.remove(comp);
     }
     setContentBorder();
     final Component frame = fullscr == null ? getRootPane() : fullscr;
@@ -598,12 +611,10 @@ public final class GUI extends JFrame implements BaseXWindow {
    * @param result update number of results
    */
   public void refreshControls(final boolean result) {
-    final DBNodes marked = context.marked;
+    final DBNodes marked = context.marked, current = context.current();
     if(result && marked != null) {
-      results.setText(gopts.results((marked.isEmpty() ? context.current() : marked).size(), 0));
+      results.setText(BaseXLayout.results((marked.isEmpty() ? current : marked).size(), -1, this));
     }
-
-    filter.setEnabled(marked != null && !marked.isEmpty());
 
     final boolean inf = gopts.get(GUIOptions.SHOWINFO);
     context.options.set(MainOptions.QUERYINFO, inf);
@@ -672,52 +683,6 @@ public final class GUI extends JFrame implements BaseXWindow {
     setVisible(!full);
   }
 
-  /**
-   * Starts a new thread that checks for new versions.
-   */
-  private void checkVersion() {
-    // ignore snapshots and beta versions
-    if(Strings.contains(Prop.VERSION, ' ')) return;
-
-    new GUIWorker<Version>() {
-      @Override
-      protected Version doInBackground() throws Exception {
-        final Version disk = new Version(gopts.get(GUIOptions.UPDATEVERSION));
-        final Version used = new Version(Prop.VERSION);
-
-        if(disk.compareTo(used) < 0) {
-          // update version option to latest used version
-          writeVersion(used);
-        } else {
-          final String page = Token.string(new IOUrl(VERSION_URL).read());
-          final Matcher m = Pattern.compile("^(Version )?([\\w\\d.]*?)( .*|$)",
-              Pattern.DOTALL).matcher(page);
-          if(m.matches()) {
-            final Version latest = new Version(m.group(2));
-            if(disk.compareTo(latest) < 0) return latest;
-          }
-        }
-        return null;
-      }
-
-      @Override
-      protected void done(final Version latest) {
-        if(BaseXDialog.confirm(GUI.this, Util.info(H_NEW_VERSION, Prop.NAME, latest))) {
-          // jump to browser
-          BaseXDialog.browse(GUI.this, UPDATE_URL);
-        } else {
-          // don't show update dialog anymore if it has been rejected once
-          writeVersion(latest);
-        }
-      }
-
-      private void writeVersion(final Version version) {
-        gopts.set(GUIOptions.UPDATEVERSION, version.toString());
-        saveOptions();
-      }
-    }.execute();
-  }
-
   @Override
   public GUI gui() {
     return this;
@@ -731,5 +696,50 @@ public final class GUI extends JFrame implements BaseXWindow {
   @Override
   public GUI component() {
     return this;
+  }
+
+  /** Pattern for version check. */
+  private static final Pattern VERSION_CHECK = Pattern.compile("^(Version )?([\\w\\d.]*?)( .*|$)",
+      Pattern.DOTALL);
+
+  /**
+   * Checks for new versions.
+   * @param ask ask for automatic update checks
+   */
+  void checkVersion(final boolean ask) {
+    // retrieve latest version
+    final Version version = new Version(gopts.get(GUIOptions.UPDATEVERSION));
+    Version latest = version;
+    try {
+      final Matcher matcher = VERSION_CHECK.matcher(new IOUrl(VERSION_URL).string());
+      if(matcher.matches()) {
+        latest = new Version(matcher.group(2));
+        gopts.set(GUIOptions.UPDATEVERSION, latest.toString());
+      }
+    } catch(final IOException ex) {
+      Util.debug(ex);
+    }
+
+    final boolean check = gopts.get(GUIOptions.CHECKUPDATES);
+    boolean chk = check;
+    if(version.compareTo(latest) < 0) {
+      if(BaseXDialog.confirm(this, Util.info(H_VERSION_NEW_X_X, Prop.NAME, latest))) {
+        // new version found: open browser page
+        BaseXDialog.browse(this, UPDATE_URL);
+      } else if(ask) {
+        // if page is not opened, ask for automatic check
+        chk = BaseXDialog.confirm(this, H_VERSION_CHECK);
+        gopts.set(GUIOptions.CHECKUPDATES, chk);
+      }
+      saveOptions();
+    } else if(ask) {
+      // version is up-to-date: ask for automatic check
+      chk = BaseXDialog.confirm(this, Util.info(H_VERSION_LATEST_X, Prop.NAME) + '\n' +
+          H_VERSION_CHECK);
+      gopts.set(GUIOptions.CHECKUPDATES, chk);
+    }
+
+    // save changed options
+    if(!version.equals(latest) || check != chk) saveOptions();
   }
 }

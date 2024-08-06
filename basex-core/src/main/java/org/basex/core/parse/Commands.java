@@ -5,7 +5,7 @@ import static org.basex.core.Text.*;
 /**
  * This class defines the available command-line commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 @SuppressWarnings("all")
@@ -23,6 +23,10 @@ public interface Commands {
   String ALTER_PASSWORD = "alter-password";
   /** Command string: "alter-user". */
   String ALTER_USER = "alter-user";
+  /** Command string: "binary-get". */
+  String BINARY_GET = "binary-get";
+  /** Command string: "binary-put". */
+  String BINARY_PUT = "binary-put";
   /** Command string: "check". */
   String CHECK = "check";
   /** Command string: "close". */
@@ -39,6 +43,8 @@ public interface Commands {
   String CREATE_USER = "create-user";
   /** Command string: "delete". */
   String DELETE = "delete";
+  /** Command string: "dir". */
+  String DIR = "dir";
   /** Command string: "drop-backup". */
   String DROP_BACKUP = "drop-backup";
   /** Command string: "drop-db". */
@@ -71,12 +77,8 @@ public interface Commands {
   String INFO_INDEX = "info-index";
   /** Command string: "info-storage". */
   String INFO_STORAGE = "info-storage";
-  /** Command string: "jobs-list". */
-  String JOBS_LIST = "jobs-list";
-  /** Command string: "jobs-stop". */
-  String JOBS_STOP = "jobs-stop";
-  /** Command string: "jobs-result". */
-  String JOBS_RESULT = "jobs-result";
+  /** Command string: "inspect". */
+  String INSPECT = "inspect";
   /** Command string: "kill". */
   String KILL = "kill";
   /** Command string: "list". */
@@ -89,12 +91,12 @@ public interface Commands {
   String OPTIMIZE_ALL = "optimize-all";
   /** Command string: "password". */
   String PASSWORD = "password";
+  /** Command string: "put". */
+  String PUT = "put";
   /** Command string: "quit". */
   String QUIT = "quit";
   /** Command string: "rename". */
   String RENAME = "rename";
-  /** Command string: "replace". */
-  String REPLACE = "replace";
   /** Command string: "repo-delete". */
   String REPO_DELETE = "repo-delete";
   /** Command string: "repo-install". */
@@ -103,22 +105,18 @@ public interface Commands {
   String REPO_LIST = "repo-list";
   /** Command string: "restore". */
   String RESTORE = "restore";
-  /** Command string: "retrieve". */
-  String RETRIEVE = "retrieve";
   /** Command string: "run". */
   String RUN = "run";
-  /** Command string: "inspect". */
-  String INSPECT = "inspect";
   /** Command string: "set". */
   String SET = "set";
   /** Command string: "show-backups". */
   String SHOW_BACKUPS = "show-backups";
+  /** Command string: "show-options". */
+  String SHOW_OPTIONS = "show-options";
   /** Command string: "show-sessions". */
   String SHOW_SESSIONS = "show-sessions";
   /** Command string: "show-users". */
   String SHOW_USERS = "show-users";
-  /** Command string: "store". */
-  String STORE = "store";
   /** Command string: "test". */
   String TEST = "test";
   /** Command string: "xquery". */
@@ -138,8 +136,6 @@ public interface Commands {
   String QUERY = "query";
   /** Command attribute: "type". */
   String TYPE = "type";
-  /** Command attribute: "id". */
-  String ID = "id";
   /** Command attribute: "start". */
   String START = "start";
   /** Command attribute: "end". */
@@ -160,6 +156,8 @@ public interface Commands {
   String VALUE = "value";
   /** Command attribute: "command". */
   String COMMAND = "command";
+  /** Command attribute: "comment". */
+  String COMMENT = "comment";
 
   /** Create commands. */
   enum CmdCreate { DATABASE, DB, INDEX, USER, BACKUP }
@@ -170,9 +168,9 @@ public interface Commands {
   /** Optimize commands. */
   enum CmdOptimize { NULL, ALL }
   /** Show commands. */
-  enum CmdShow { SESSIONS, USERS, BACKUPS }
-  /** Jobs commands. */
-  enum CmdJobs { LIST, STOP, RESULT }
+  enum CmdShow { SESSIONS, USERS, BACKUPS, OPTIONS }
+  /** Binary commands. */
+  enum CmdBinary { GET, PUT }
   /** Permission commands. */
   enum CmdPerm { NONE, READ, WRITE, CREATE, ADMIN }
   /** Index types. */
@@ -186,14 +184,14 @@ public interface Commands {
 
   /** Command definitions. */
   enum Cmd {
-    ADD(HELPADD), ALTER(HELPALTER), CHECK(HELPCHECK), CLOSE(HELPCLOSE), COPY(HELPCOPY),
-    CREATE(HELPCREATE), DELETE(HELPDELETE), DROP(HELPDROP), EXIT(HELPEXIT), EXPORT(HELPEXPORT),
-    FIND(HELPFIND), FLUSH(HELPFLUSH), GET(HELPGET), GRANT(HELPGRANT), HELP(HELPHELP),
-    INFO(HELPINFO), INSPECT(HELPINSPECT), JOBS(HELPJOBS), KILL(HELPKILL), LIST(HELPLIST),
-    OPEN(HELPOPEN), OPTIMIZE(HELPOPTIMIZE), PASSWORD(HELPPASSWORD), QUIT(HELPEXIT),
-    RENAME(HELPRENAME), REPLACE(HELPREPLACE), REPO(HELPREPO), RESTORE(HELPRESTORE),
-    RETRIEVE(HELPRETRIEVE), RUN(HELPRUN), EXECUTE(HELPEXECUTE), SET(HELPSET), SHOW(HELPSHOW),
-    STORE(HELPSTORE), TEST(HELPTEST), XQUERY(HELPXQUERY);
+    ADD(HELPADD), ALTER(HELPALTER), BINARY(HELPBINARY), CHECK(HELPCHECK), CLOSE(HELPCLOSE),
+    COPY(HELPCOPY), CREATE(HELPCREATE), DELETE(HELPDELETE), DIR(HELPDIR), DROP(HELPDROP),
+    EXECUTE(HELPEXECUTE), EXIT(HELPEXIT), EXPORT(HELPEXPORT), FIND(HELPFIND), FLUSH(HELPFLUSH),
+    GET(HELPGET), GRANT(HELPGRANT), HELP(HELPHELP), INFO(HELPINFO), INSPECT(HELPINSPECT),
+    KILL(HELPKILL), LIST(HELPLIST), OPEN(HELPOPEN), OPTIMIZE(HELPOPTIMIZE),
+    PASSWORD(HELPPASSWORD), PUT(HELPPUT), QUIT(HELPEXIT), RENAME(HELPRENAME), REPO(HELPREPO),
+    RESTORE(HELPRESTORE), RUN(HELPRUN), SET(HELPSET), SHOW(HELPSHOW), TEST(HELPTEST),
+    XQUERY(HELPXQUERY);
 
     /** Help texts. */
     private final String[] help;

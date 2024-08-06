@@ -10,9 +10,9 @@ import org.basex.query.*;
 import org.basex.util.*;
 
 /**
- * This collations is based on a standard Java collator.
+ * This collation is based on a standard Java collator.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class BaseXCollation extends Collation {
@@ -34,9 +34,9 @@ final class BaseXCollation extends Collation {
 
   @Override
   protected int indexOf(final String string, final String contains, final Mode mode,
-      final InputInfo ii) throws QueryException {
+      final InputInfo info) throws QueryException {
 
-    if(!(collator instanceof RuleBasedCollator)) throw CHARCOLL.get(ii);
+    if(!(collator instanceof RuleBasedCollator)) throw CHARCOLL.get(info);
     final RuleBasedCollator rbc = (RuleBasedCollator) collator;
     final CollationElementIterator iterS = rbc.getCollationElementIterator(string);
     final CollationElementIterator iterC = rbc.getCollationElementIterator(contains);
@@ -44,7 +44,7 @@ final class BaseXCollation extends Collation {
     final int elemC = next(iterC);
     if(elemC == -1) return 0;
     final int offC = iterC.getOffset();
-    do {
+    while(true) {
       // find first equal character
       for(int elemS; (elemS = next(iterS)) != elemC;) {
         if(elemS == -1 || mode == Mode.STARTS_WITH) return -1;
@@ -62,7 +62,13 @@ final class BaseXCollation extends Collation {
       }
       iterS.setOffset(offS);
       iterC.setOffset(offC);
-    } while(true);
+    }
+  }
+
+  @Override
+  public byte[] key(final byte[] string, final InputInfo info) throws QueryException {
+    if(!(collator instanceof RuleBasedCollator)) throw CHARCOLL.get(info);
+    return ((RuleBasedCollator) collator).getCollationKey(Token.string(string)).toByteArray();
   }
 
   /**
@@ -86,10 +92,10 @@ final class BaseXCollation extends Collation {
    * @return next element, or {@code -1}
    */
   private static int next(final CollationElementIterator it) {
-    do {
+    while(true) {
       final int c = it.next();
       if(c != 0) return c;
-    } while(true);
+    }
   }
 
   @Override

@@ -10,19 +10,19 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BinPart extends BinFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final B64 b64 = toB64(exprs[0], qc, true);
-    final Long off = toLong(exprs[1], qc);
-    final Long len = exprs.length > 2 ? toLong(exprs[2], qc) : null;
-    if(b64 == null) return Empty.VALUE;
+    final Bin binary = toBinOrNull(arg(0), qc);
+    final Item offset = arg(1).atomItem(qc, info);
+    final Item size = arg(2).atomItem(qc, info);
+    if(binary == null) return Empty.VALUE;
 
-    final byte[] bytes = b64.binary(info);
-    final int[] bounds = bounds(off, len, bytes.length);
+    final byte[] bytes = binary.binary(info);
+    final int[] bounds = bounds(offset, size, bytes.length);
 
     final int o = bounds[0], tl = bounds[1];
     return B64.get(Arrays.copyOfRange(bytes, o, o + tl));

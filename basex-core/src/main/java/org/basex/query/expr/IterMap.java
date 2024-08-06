@@ -12,7 +12,7 @@ import org.basex.util.hash.*;
 /**
  * Simple map expression: iterative evaluation, no positional access.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IterMap extends SimpleMap {
@@ -21,7 +21,7 @@ public final class IterMap extends SimpleMap {
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   IterMap(final InputInfo info, final Expr... exprs) {
@@ -44,7 +44,10 @@ public final class IterMap extends SimpleMap {
 
       @Override
       public Item next() throws QueryException {
+        qc.checkStop();
+
         final QueryFocus qf = qc.focus;
+        Item item = null;
         try {
           do {
             qf.value = values[pos];
@@ -54,15 +57,15 @@ public final class IterMap extends SimpleMap {
               if(iter == Empty.ITER) {
                 iters[pos--] = null;
               } else {
-                final Item item = exprs[pos].item(qc, info);
-                if(item == Empty.VALUE) {
+                item = exprs[pos].item(qc, info);
+                if(item.isEmpty()) {
+                  item = null;
                   pos--;
                 } else {
                   iters[pos] = Empty.ITER;
                   if(pos < el) {
                     values[++pos] = item;
-                  } else {
-                    return item;
+                    item = null;
                   }
                 }
               }
@@ -72,17 +75,16 @@ public final class IterMap extends SimpleMap {
                 iter = exprs[pos].iter(qc);
                 iters[pos] = iter;
               }
-              final Item item = qc.next(iter);
+              item = iter.next();
               if(item == null) {
                 iters[pos--] = null;
               } else if(pos < el) {
                 values[++pos] = item;
-              } else {
-                return item;
+                item = null;
               }
             }
-          } while(pos != -1);
-          return null;
+          } while(item == null && pos != -1);
+          return item;
         } finally {
           qf.value = values[0];
         }

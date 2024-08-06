@@ -2,17 +2,16 @@ package org.basex.query;
 
 import static org.basex.core.Text.*;
 import static org.basex.query.QueryError.*;
+import static org.basex.query.func.Function.*;
 import static org.basex.util.Token.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
 import org.basex.*;
-import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.data.*;
 import org.basex.io.*;
-import org.basex.io.serial.*;
 import org.basex.query.util.*;
 import org.basex.query.value.node.*;
 import org.junit.jupiter.api.*;
@@ -21,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests namespaces.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class NamespaceTest extends SandboxTest {
@@ -52,13 +51,88 @@ public final class NamespaceTest extends SandboxTest {
     { "d21", "<n><a xmlns:p1='u1'><b xmlns:p2='u2'/></a><c/></n>"}
   };
 
+  /** Simple tests. */
+  @Test public void simple() {
+    query("string(namespace-uri-for-prefix('xml', <X/>))", "http://www.w3.org/XML/1998/namespace");
+    query("string(namespace-uri-for-prefix('xs', <X/>))", "");
+    query("string(namespace-uri-for-prefix('xs', <xs:X/>))", "http://www.w3.org/2001/XMLSchema");
+    query("count(string(namespace-uri-for-prefix((), <X/>)))", 1);
+    query("count(string(namespace-uri-for-prefix('', <X/>)))", 1);
+    query("count(namespace-uri-for-prefix('', <a/>))", 0);
+    query("count(namespace-uri-for-prefix((), <a/>))", 0);
+    query("count(namespace-uri-for-prefix('', <a xmlns=''/>))", 0);
+    query("count(namespace-uri-for-prefix((), <a xmlns=''/>))", 0);
+    query("string(<x xmlns:n='U' a='{ namespace-uri-for-prefix('n', <n:x/>) }'/>/@a)", "U");
+    query("string(<x a='{ namespace-uri-for-prefix('n', <n:x/>) }' xmlns:n='U'/>/@a)", "U");
+
+    query("string(<e xmlns:p='u'>{ namespace-uri(<p:e/>) }</e>)", "u");
+    query("string(<e xmlns='u'>{ namespace-uri(<a/>) }</e>)", "u");
+    query("string(<e>{ namespace-uri(<a/>) }</e>)", "");
+    query("declare default element namespace 'u'; string(<e>{ namespace-uri(<a/>) }</e>)", "u");
+    query("string(<e xmlns='u'>{namespace-uri-from-QName(xs:QName('a'))}</e>)", "u");
+
+    query("string(element { QName('U', 'p:e') } { in-scope-prefixes(<e/>) })", "xml");
+    query("number(<e xmlns:p='u'>{count(in-scope-prefixes(<e p:x='a'/>))}</e>)", 2);
+    query("declare default element namespace 'x'; count(in-scope-prefixes(<a/>))", 2);
+    query("declare default element namespace 'x'; count(in-scope-prefixes(<a/>))", 2);
+    query("declare default element namespace 'x'; count(in-scope-prefixes(<a xmlns=''/>))", 1);
+    query("declare default element namespace 'x'; count(in-scope-prefixes(<a xmlns=''/>))", 1);
+
+    query("exists(<e xmlns:p='u'>{ <a/>/p:x }</e>)", true);
+    query("count(namespace p { 'u' })", 1);
+
+    query("string(<e a='{ <e>X</e>/self::e }' xmlns='A'/>/@*)", "X");
+
+    query("<_ xmlns='a'>{ namespace { '' } { 'a' } }</_> ! name()", "_");
+    query("<_ xmlns='a'>{ element E { namespace { '' } { 'a' } } }</_> ! name()", "_");
+    query("<_:_ xmlns:_='_'>{ namespace { '' } { 'b' } }</_:_> ! name()", "_:_");
+
+    query("declare namespace p = 'A'; <p:l>{ namespace p { 'B' } }</p:l> => in-scope-prefixes()",
+        "p_1\np\nxml");
+  }
+
+  /** Simple tests. */
+  @Test public void invalidNamespaces() {
+    error("namespace p { '' }", CNINVNS_X);
+    error("namespace p { 'http://www.w3.org/2000/xmlns/' }", CNINVNS_X);
+
+    error("namespace xml {'' }", CNXML);
+    error("namespace xml { 'http://www.w3.org//XML/1998/namespace' }", CNXML);
+
+    error("namespace xmlns { 'u' }", CNINV_X);
+
+    error("declare copy-namespaces no-preserve no-inherit; 1", WRONGCHAR_X_X);
+  }
+
+  /** Duplicate namespaces. */
+  @Test public void duplicateNamespaces() {
+    error("<e xmlns='x'>{ namespace { '' } { 'B' } }</e>",
+        DUPLNSCONS_X);
+    error("<_ xmlns='a'>{ namespace { '' } { 'B' } }</_>",
+        DUPLNSCONS_X);
+    error("<_ xmlns='A'>{ element E { namespace { '' } { 'B' } } }</_>",
+        DUPLNSCONS_X);
+
+    error("element e { namespace {''} {'u'} }",
+        EMPTYNSCONS);
+    error("<e xmlns=''>{ namespace { '' } { 'B' } }</e>",
+        EMPTYNSCONS);
+    error("let $e := element E { namespace { '' } { 'B' } } return <_ xmlns='A'>{ $e }</_>",
+        EMPTYNSCONS);
+
+    query("element Q{x}a { attribute a {}," +
+        "element Q{x}b { namespace { '' } { 'x' } } } ! local-name(.)", "a");
+    query("element Q{x}a { attribute a {} update {}," +
+        "element Q{x}b { namespace { '' } { 'x' } } } ! local-name(.)", "a");
+  }
+
   /**
    * Checks if namespace hierarchy structure is updated correctly on the
    * descendant axis after a NSNode has been inserted.
    */
   @Test public void insertIntoShiftPreValues() {
     create(12);
-    query("insert node <b xmlns:ns='A'/> into db:open('d12')/*:a/*:b");
+    query("insert node <b xmlns:ns='A'/> into" + _DB_GET.args("d12") + "/*:a/*:b");
     assertEquals(NL +
         "  Pre[3] xmlns:ns=\"A\"" + NL +
         "  Pre[4] xmlns=\"B\"",
@@ -71,7 +145,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void insertIntoShiftPreValues2() {
     create(13);
-    query("insert node <c/> as first into db:open('d13')/a");
+    query("insert node <c/> as first into" + _DB_GET.args("d13") + "/a");
     assertEquals(NL +
         "  Pre[3] xmlns=\"A\"",
         context.data().nspaces.toString());
@@ -83,7 +157,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void insertIntoShiftPreValues3() {
     create(14);
-    query("insert node <n xmlns='D'/> into db:open('d14')/*:a/*:b");
+    query("insert node <n xmlns='D'/> into" + _DB_GET.args("d14") + "/*:a/*:b");
     assertEquals(NL +
         "  Pre[1] xmlns=\"A\"" + NL +
         "    Pre[2] xmlns=\"B\"" + NL +
@@ -98,7 +172,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void deleteShiftPreValues() {
     create(12);
-    query("delete node db:open('d12')/a/b");
+    query("delete node" + _DB_GET.args("d12") + "/a/b");
     assertEquals(NL +
         "  Pre[2] xmlns=\"B\"",
         context.data().nspaces.toString());
@@ -110,7 +184,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void deleteShiftPreValues2() {
     create(14);
-    query("delete node db:open('d14')/*:a/*:b");
+    query("delete node" + _DB_GET.args("d14") + "/*:a/*:b");
     assertEquals(NL +
         "  Pre[1] xmlns=\"A\"" + NL +
         "    Pre[2] xmlns=\"C\"",
@@ -123,7 +197,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void deleteShiftPreValues3() {
     create(15);
-    query("delete node db:open('d15')/*:a/*:c");
+    query("delete node" + _DB_GET.args("d15") + "/*:a/*:c");
     assertEquals(NL +
         "  Pre[1] xmlns=\"A\"" + NL +
         "    Pre[2] xmlns=\"B\"" + NL +
@@ -137,7 +211,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void deleteShiftPreValues4() {
     create(16);
-    query("delete node db:open('d16')/a/b");
+    query("delete node" + _DB_GET.args("d16") + "/a/b");
     assertTrue(context.data().nspaces.toString().isEmpty());
   }
 
@@ -146,7 +220,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void insertAttributeWithNs() {
     create(1);
-    query("insert node attribute { QName('ns', 'pref:local') } { } into /*");
+    query("insert node attribute { QName('ns', 'prefix:local') } { } into /*");
     final Data data = context.data();
     assertFalse(data.nsFlag(0));
     assertTrue(data.nsFlag(1));
@@ -163,8 +237,8 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void delete1() {
     create(11);
-    query("delete node db:open('d11')/*:a/*:b",
-        "db:open('d11')/*:a",
+    query("delete node" + _DB_GET.args("d11") + "/*:a/*:b",
+        _DB_GET.args("d11") + "/*:a",
         "<a xmlns='A'><c xmlns:ns1='AA'><d/></c></a>");
   }
 
@@ -193,7 +267,7 @@ public final class NamespaceTest extends SandboxTest {
     create(4);
     query(
         "declare namespace a='aa';" +
-        "copy $c:=db:open('d4') modify () return $c//a:y",
+        "copy $c := " + _DB_GET.args("d4") + " modify () return $c//a:y",
         "<a:y xmlns:a='aa' xmlns:b='bb'/>");
   }
 
@@ -204,7 +278,7 @@ public final class NamespaceTest extends SandboxTest {
     create(4);
     query(
         "declare namespace a='aa';" +
-        "copy $c:=db:open('d4')//a:y modify () return $c",
+        "copy $c := " + _DB_GET.args("d4") + "//a:y modify () return $c",
         "<a:y xmlns:a='aa' xmlns:b='bb'/>");
   }
 
@@ -223,8 +297,8 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void bogusDetector() {
     create(1);
     query(
-        "insert node <a xmlns='test'><b><c/></b><d/></a> into db:open('d1')/x",
-        "declare namespace na = 'test';db:open('d1')/x/na:a",
+        "insert node <a xmlns='test'><b><c/></b><d/></a> into" + _DB_GET.args("d1") + "/x",
+        "declare namespace na = 'test'; " + _DB_GET.args("d1") + "/x/na:a",
         "<a xmlns='test'><b><c/></b><d/></a>");
   }
 
@@ -249,7 +323,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void nsHierarchy() {
     create(9);
-    query("insert node <f xmlns='F'/> into db:open('d9')//*:e");
+    query("insert node <f xmlns='F'/> into" + _DB_GET.args("d9") + "//*:e");
     assertEquals(NL +
         "  Pre[1] xmlns=\"A\"" + NL +
         "    Pre[4] xmlns=\"D\"" + NL +
@@ -262,7 +336,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void nsHierarchy2() {
     create(10);
-    query("insert node <f xmlns='F'/> into db:open('d10')//*:e");
+    query("insert node <f xmlns='F'/> into" + _DB_GET.args("d10") + "//*:e");
     assertEquals(NL +
         "  Pre[1] xmlns=\"A\"" + NL +
         "    Pre[4] xmlns=\"D\"" + NL +
@@ -282,7 +356,7 @@ public final class NamespaceTest extends SandboxTest {
 
     // in-depth test
     create(2);
-    query("insert node <a xmlns='y'/> into db:open('d2')//*:x");
+    query("insert node <a xmlns='y'/> into" + _DB_GET.args("d2") + "//*:x");
     assertEquals(NL +
         "  Pre[1] xmlns=\"xx\"" + NL +
         "    Pre[2] xmlns=\"y\"",
@@ -312,8 +386,8 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD2intoD1() {
     create(1, 2);
     query(
-        "insert node db:open('d2') into db:open('d1')/x",
-        "db:open('d1')",
+        "insert node" + _DB_GET.args("d2") + " into" + _DB_GET.args("d1") + "/x",
+        _DB_GET.args("d1"),
         "<x><x xmlns='xx'/></x>");
   }
 
@@ -323,8 +397,8 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD3intoD1() {
     create(1, 3);
     query(
-        "insert node db:open('d3') into db:open('d1')/x",
-        "db:open('d1')/x/*",
+        "insert node" + _DB_GET.args("d3") + " into" + _DB_GET.args("d1") + "/x",
+        _DB_GET.args("d1") + "/x/*",
         "<a:x xmlns:a='aa'><b:y xmlns:b='bb'/></a:x>");
   }
 
@@ -334,8 +408,8 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD3intoD1b() {
     create(1, 3);
     query(
-        "insert node db:open('d3') into db:open('d1')/x",
-        "db:open('d1')/x/*/*",
+        "insert node" + _DB_GET.args("d3") + " into" + _DB_GET.args("d1") + "/x",
+        _DB_GET.args("d1") + "/x/*/*",
         "<b:y xmlns:b='bb' xmlns:a='aa'/>");
   }
 
@@ -345,23 +419,22 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD4intoD1() {
     create(1, 4);
     query(
-        "declare namespace a='aa'; insert node db:open('d4')/a:x/a:y " +
-        "into db:open('d1')/x",
-        "db:open('d1')/x",
+        "declare namespace a='aa'; insert node" + _DB_GET.args("d4") + "/a:x/a:y " +
+        "into" + _DB_GET.args("d1") + "/x",
+        _DB_GET.args("d1") + "/x",
         "<x><a:y xmlns:a='aa' xmlns:b='bb'/></x>");
   }
 
   /**
    * Detects duplicate prefix declaration at pre=0 in MemData instance after insert.
-   * Though result correct, prefix
-   * a is declared twice. -> Solution?
+   * Though result correct, prefix a is declared twice. -> Solution?
    */
   @Test public void insertD4intoD5() {
     create(4, 5);
     query(
-        "declare namespace a='aa';insert node db:open('d4')//a:y " +
-        "into db:open('d5')/a:x",
-        "declare namespace a='aa';db:open('d5')//a:y",
+        "declare namespace a='aa';insert node" + _DB_GET.args("d4") + "//a:y " +
+        "into" + _DB_GET.args("d5") + "/a:x",
+        "declare namespace a = 'aa'; " + _DB_GET.args("d5") + "//a:y",
         "<a:y xmlns:a='aa' xmlns:b='bb'/>");
   }
 
@@ -371,8 +444,9 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD7intoD1() {
     create(1, 7);
     query(
-        "declare namespace x='xx';insert node db:open('d7')/x:x into db:open('d1')/x",
-        "db:open('d1')/x",
+        "declare namespace x='xx';insert node" + _DB_GET.args("d7") + "/x:x into" +
+            _DB_GET.args("d1") + "/x",
+        _DB_GET.args("d1") + "/x",
         "<x><x xmlns='xx'><y/></x></x>");
   }
 
@@ -382,8 +456,9 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void insertD6intoD4() {
     create(4, 6);
     query(
-        "declare namespace a='aa';insert node db:open('d6') into db:open('d4')/a:x",
-        "declare namespace a='aa';db:open('d4')/a:x/a:y",
+        "declare namespace a = 'aa'; insert node" + _DB_GET.args("d6") + " into" +
+            _DB_GET.args("d4") + "/a:x",
+        "declare namespace a = 'aa'; " + _DB_GET.args("d4") + "/a:x/a:y",
         "<a:y xmlns:a='aa' xmlns:b='bb'/>");
   }
 
@@ -424,7 +499,7 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void uriStack() {
     create(8);
     query(
-        "db:open('d8')",
+        _DB_GET.args("d8"),
         "<a><b xmlns='B'/><c/></a>");
   }
 
@@ -449,7 +524,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void queryPathOpt() {
     create(17);
-    query("db:open('d17')/descendant::*:b", "<b xmlns:ns='NS'/>");
+    query(_DB_GET.args("d17") + "/descendant::*:b", "<b xmlns:ns='NS'/>");
   }
 
   /**
@@ -457,7 +532,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void queryPathOpt2() {
     create(17);
-    query("db:open('d17')/*:a/*:b", "<b xmlns:ns='NS'/>");
+    query(_DB_GET.args("d17") + "/*:a/*:b", "<b xmlns:ns='NS'/>");
   }
 
   /**
@@ -582,21 +657,21 @@ public final class NamespaceTest extends SandboxTest {
   @Test public void duplicatePrefixes2() {
     query(
       "<e xmlns:p='u1'>{ <a xmlns:p='u2' p:a='v'/>/@* }</e>",
-      "<e xmlns:p_1='u2' xmlns:p='u1' p_1:a='v'/>");
+      "<e xmlns:p='u1' xmlns:p_1='u2' p_1:a='v'/>");
   }
 
   /** Handles duplicate prefixes. */
   @Test public void duplicatePrefixes3() {
     query(
       "<e xmlns:p='u' xmlns:p1='u1'>{ <a xmlns:p='u1' p:a='v'/>/@* }</e>",
-      "<e xmlns:p1='u1' xmlns:p='u' p1:a='v'/>");
+      "<e xmlns:p='u' xmlns:p1='u1' p1:a='v'/>");
   }
 
   /** Handles duplicate prefixes. */
   @Test public void duplicatePrefixes4() {
     query(
       "<e xmlns:p='u' xmlns:p1='u1'>{ <a xmlns:p='u2' p:a='v'/>/@* }</e>",
-      "<e xmlns:p_1='u2' xmlns:p1='u1' xmlns:p='u' p_1:a='v'/>");
+      "<e xmlns:p='u' xmlns:p1='u1' xmlns:p_1='u2' p_1:a='v'/>");
   }
 
   /**
@@ -604,7 +679,7 @@ public final class NamespaceTest extends SandboxTest {
    * Detects malformed namespace hierarchy.
    */
   @Test public void nsInAtt() {
-    query("data(<a a='{namespace-uri-for-prefix('x', <x:a/>)}' xmlns:x='X'/>/@a)",
+    query("data(<a a='{ namespace-uri-for-prefix('x', <x:a/>) }' xmlns:x='X'/>/@a)",
         "X");
   }
 
@@ -644,7 +719,7 @@ public final class NamespaceTest extends SandboxTest {
         "<c>{attribute {QName('ns1', 'att1')} {}," +
         "attribute {QName('ns2', 'att2')} {}}</c></b></a>",
         "<a xmlns:ns1='ns1'><b xmlns='ns1'>" +
-        "<c xmlns:ns0_1='ns2' xmlns:ns0='ns1' ns0:att1='' ns0_1:att2=''/>" +
+        "<c xmlns:ns0='ns1' xmlns:ns0_1='ns2' ns0:att1='' ns0_1:att2=''/>" +
         "</b></a>");
   }
 
@@ -656,7 +731,7 @@ public final class NamespaceTest extends SandboxTest {
     final IO io = IO.get("<a xmlns:a='a'><b><c/><c/><c/></b></a>");
     try(QueryProcessor qp = new QueryProcessor("/*:a/*:b", context).context(new DBNode(io))) {
       final ANode sub = (ANode) qp.iter().next();
-      query(DataBuilder.stripNS(sub, token("a"), context).serialize().toString(),
+      query(DataBuilder.stripNamespace(sub, token("a"), context).serialize().toString(),
           "<b><c/><c/><c/></b>");
     }
   }
@@ -690,18 +765,17 @@ public final class NamespaceTest extends SandboxTest {
    * The resulting fragment is inserted into a database. The
    * namespaces in scope with prefix 'ns' are finally checked for the
    * inserted <new/> tag. If the result is non-empty we may have a problem -
-   * being not able propagate the no-inherit flag to our table.
+   * being not able to propagate the no-inherit flag to our table.
    */
   @Test @Disabled
   public void copyPreserveNoInheritPersistent() {
-    query("declare copy-namespaces preserve,no-inherit;" +
+    query("declare copy-namespaces preserve, no-inherit;" +
         "declare namespace my = 'ns';" +
-        "let $v :=" +
-        "(copy $c := <my:n><my:a/></my:n>" +
+        "let $v := (copy $c := <my:n><my:a/></my:n>" +
         "modify insert node <new/> into $c " +
         "return $c)" +
-        "return insert node $v into db:open('d2')/n",
-        "namespace-uri-for-prefix('my', db:open('d2')//*:new)",
+        "return insert node $v into" + _DB_GET.args("d2") + "/n",
+        "namespace-uri-for-prefix('my'," + _DB_GET.args("d2") + "//*:new)",
         "");
   }
 
@@ -710,7 +784,7 @@ public final class NamespaceTest extends SandboxTest {
    */
   @Test public void defaultNS() {
     create(1);
-    query("<h xmlns='U'>{ db:open('d1')/x }</h>/*", "");
+    query("<h xmlns='U'>{" + _DB_GET.args("d1") + "/x }</h>/*", "");
   }
 
   /**
@@ -739,18 +813,18 @@ public final class NamespaceTest extends SandboxTest {
   /**
    * Test query.
    */
-  @Test public void duplicateNamespaces() {
+  @Test public void duplicateNamespaceUpdates() {
     query("copy $c := <a xmlns='X'/> modify (" +
-          "  rename node $c as QName('X','b')," +
-          "  insert node attribute c{'a'} into $c" +
+          "  rename node $c as QName('X', 'b')," +
+          "  insert node attribute c { 'a' } into $c" +
           ") return $c", "<b xmlns=\"X\" c=\"a\"/>");
     error("copy $c := <a xmlns='X'/> modify (" +
-        "  rename node $c as QName('Y','b')," +
-        "  insert node attribute c{'a'} into $c" +
+        "  rename node $c as QName('Y', 'b')," +
+        "  insert node attribute c { 'a' } into $c" +
         ") return $c", UPNSCONFL_X_X);
     query("copy $c := <a/> modify (" +
-        "  rename node $c as QName('X','b')," +
-        "  insert node attribute c{'a'} into $c" +
+        "  rename node $c as QName('X', 'b')," +
+        "  insert node attribute c { 'a' } into $c" +
         ") return $c", "<b xmlns=\"X\" c=\"a\"/>");
   }
 
@@ -764,12 +838,14 @@ public final class NamespaceTest extends SandboxTest {
         "<w:g xmlns:w='X' xmlns:a='a' a:y=''/>) into <w:h xmlns:w='X' xmlns:a='a' a:z=''/>");
   }
 
-  /**
-   * Creates the database context.
-   */
-  @BeforeAll public static void start() {
-    // turn off pretty printing
-    set(MainOptions.SERIALIZER, SerializerMode.NOINDENT.get());
+  /** Documents with irregular namespaces, wildcard name tests. */
+  @Test public void gh2184() {
+    execute(new CreateDB("db"));
+    execute(new Add("a", "<A xmlns='a'/>"));
+    execute(new Add("b", "<b:B xmlns:b='b'/>"));
+    query("/*:B", "<b:B xmlns:b=\"b\"/>");
+    execute(new Close());
+    query("db:get('db')/*:B", "<b:B xmlns:b=\"b\"/>");
   }
 
   /**
@@ -795,17 +871,14 @@ public final class NamespaceTest extends SandboxTest {
   /**
    * Runs an updating query and matches the result of the second query
    * against the expected output.
-   * @param first first query
+   * @param first first query (can be {@code null})
    * @param second second query
    * @param expected expected output
    */
   private static void query(final String first, final String second, final String expected) {
-    if(first != null) Sandbox.query(first);
-    final String result = Sandbox.query(second).trim();
-
-    // quotes are replaced by apostrophes to simplify comparison
-    final String res = result.replaceAll("\"", "'");
-    final String exp = expected.replaceAll("\"", "'");
-    if(!exp.equals(res)) fail("\n[E] " + exp + "\n[F] " + res);
+    if(first != null) query(first);
+    final String res = query(second).trim().replace('"', '\'');
+    final String exp = expected.replace('"', '\'');
+    compare(second, res, exp, null);
   }
 }

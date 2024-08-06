@@ -11,13 +11,13 @@ import org.basex.util.hash.*;
 /**
  * Filter expression, caching all results.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class CachedFilter extends Filter {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param root root expression
    * @param preds predicate expressions
    */
@@ -38,17 +38,12 @@ public class CachedFilter extends Filter {
       long vs = value.size();
       qf.size = vs;
 
-      final boolean scoring = qc.scoring;
       for(int v = 0; v < vs; v++) {
         qc.checkStop();
         final Item item = value.itemAt(v);
         qf.value = item;
         qf.pos = v + 1;
-        final Item test = expr.test(qc, info);
-        if(test != null) {
-          if(scoring) item.score(test.score());
-          items.add(item);
-        }
+        if(expr.test(qc, info, v + 1)) items.add(item);
       }
       // save memory
       value = null;
@@ -60,16 +55,12 @@ public class CachedFilter extends Filter {
         qf.size = vs;
         expr = exprs[e];
         int c = 0;
-        for(int i = 0; i < vs; ++i) {
+        for(int v = 0; v < vs; ++v) {
           qc.checkStop();
-          final Item item = items.get(i);
+          final Item item = items.get(v);
           qf.value = item;
-          qf.pos = i + 1;
-          final Item test = expr.test(qc, info);
-          if(test != null) {
-            if(scoring) item.score(test.score());
-            items.set(c++, item);
-          }
+          qf.pos = v + 1;
+          if(expr.test(qc, info, v + 1)) items.set(c++, item);
         }
         items.size(c);
       }

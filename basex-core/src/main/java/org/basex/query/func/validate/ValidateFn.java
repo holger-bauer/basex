@@ -5,17 +5,21 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 import javax.xml.parsers.*;
+import javax.xml.validation.*;
 
 import org.basex.io.*;
 import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.func.*;
+import org.basex.query.func.validate.ErrorInfo.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
+import org.basex.query.value.type.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 import org.xml.sax.*;
@@ -23,29 +27,33 @@ import org.xml.sax.*;
 /**
  * Functions for validating documents.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Michael Seiferle
  * @author Marco Lettere (greedy/verbose validation)
  */
 abstract class ValidateFn extends StandardFunc {
-  /** Report element. */
-  private static final String REPORT = "report";
-  /** Error element. */
-  private static final String MESSAGE = "message";
-  /** Status. */
-  private static final String STATUS = "status";
-  /** Valid. */
+  /** Schema cache. */
+  static final ConcurrentHashMap<String, Schema> MAP = new ConcurrentHashMap<>();
+
+  /** QName. */
+  private static final QNm Q_REPORT = new QNm("report");
+  /** QName. */
+  private static final QNm Q_MESSAGE = new QNm("message");
+  /** QName. */
+  private static final QNm Q_STATUS = new QNm("status");
+  /** QName. */
+  private static final QNm Q_LINE = new QNm("line");
+  /** QName. */
+  private static final QNm Q_COLUMN = new QNm("column");
+  /** QName. */
+  private static final QNm Q_LEVEL = new QNm("level");
+  /** QName. */
+  private static final QNm Q_URL = new QNm("url");
+
+  /** String: valid. */
   private static final String VALID = "valid";
-  /** Invalid. */
+  /** String: invalid. */
   private static final String INVALID = "invalid";
-  /** Line. */
-  private static final String LINE = "line";
-  /** Column. */
-  private static final String COLUMN = "column";
-  /** Type. */
-  private static final String LEVEL = "level";
-  /** File. */
-  private static final String URL = "url";
 
   /**
    * Runs the validation process and returns an empty sequence or an error.
@@ -78,20 +86,19 @@ abstract class ValidateFn extends StandardFunc {
    * @return XML
    * @throws QueryException query exception
    */
-  protected final FElem report(final QueryContext qc) throws QueryException {
+  protected final FNode report(final QueryContext qc) throws QueryException {
     final ArrayList<ErrorInfo> errors = errors(qc);
-    final FElem report = new FElem(REPORT);
-    report.add(new FElem(STATUS).add(errors.isEmpty() ? VALID : INVALID));
+    final Checks<ErrorInfo> warnings = ei -> ei.level == Level.WARNING;
+
+    final FBuilder report = FElem.build(Q_REPORT);
+    report.add(FElem.build(Q_STATUS).add(warnings.all(errors) ? VALID : INVALID));
     for(final ErrorInfo ei : errors) {
-      final FElem error = new FElem(MESSAGE);
-      error.add(LEVEL, ei.level);
-      if(ei.line != Integer.MIN_VALUE) error.add(LINE, token(ei.line));
-      if(ei.column != Integer.MIN_VALUE) error.add(COLUMN, token(ei.column));
-      if(ei.url != null) error.add(URL, ei.url);
-      error.add(ei.message);
-      report.add(error);
+      final FBuilder error = FElem.build(Q_MESSAGE).add(Q_LEVEL, ei.level);
+      if(ei.line != Integer.MIN_VALUE) error.add(Q_LINE, ei.line);
+      if(ei.column != Integer.MIN_VALUE) error.add(Q_COLUMN, ei.column);
+      report.add(error.add(Q_URL, ei.url).add(ei.message));
     }
-    return report;
+    return report.finish();
   }
 
   /**
@@ -108,20 +115,19 @@ abstract class ValidateFn extends StandardFunc {
    * @return errors
    * @throws QueryException query exception
    */
-  protected final ArrayList<ErrorInfo> process(final Validation v) throws QueryException {
-    final ValidationHandler handler = new ValidationHandler();
+  protected final ArrayList<ErrorInfo> validate(final Validation v) throws QueryException {
     try {
-      v.process(handler);
+      v.validate();
     } catch(final SAXException ex) {
       // fatal exception: send exceptions to debug output, ignore root exception
       Util.rootException(ex);
-      handler.add(ex, ValidationHandler.FATAL);
+      v.add(ex, Level.FATAL);
     } catch(final IOException | ParserConfigurationException | Error ex) {
       throw VALIDATE_START_X.get(info, ex);
     } finally {
       v.finish();
     }
-    return handler.getErrors();
+    return v.getErrors();
   }
 
   /**
@@ -142,8 +148,9 @@ abstract class ValidateFn extends StandardFunc {
       return io;
     }
 
-    if(item.type.isStringOrUntyped()) {
-      IO io = checkPath(toToken(item));
+    final Type type = item.type;
+    if(type.isStringOrUntyped()) {
+      IO io = toIO(toString(item));
       if(sopts != null) {
         // add doctype declaration if specified
         io = new IOContent(new DBNode(io).serialize(sopts).finish());
@@ -152,6 +159,6 @@ abstract class ValidateFn extends StandardFunc {
       return io;
     }
 
-    throw STRNOD_X_X.get(info, item.type, item);
+    throw STRNOD_X_X.get(info, type, item);
   }
 }

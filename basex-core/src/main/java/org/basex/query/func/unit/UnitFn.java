@@ -9,13 +9,13 @@ import org.basex.query.value.item.*;
 /**
  * Unit function.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class UnitFn extends StandardFunc {
   /**
    * Returns an error with the specified item as value.
-   * @param item item (may be {@code null})
+   * @param item item (can be {@code null})
    * @return error
    * @throws QueryException query exception
    */

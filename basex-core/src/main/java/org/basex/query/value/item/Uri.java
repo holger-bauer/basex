@@ -16,21 +16,21 @@ import org.basex.util.*;
 /**
  * URI item ({@code xs:anyURI}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Uri extends AStr {
   /** Empty URI. */
   public static final Uri EMPTY = new Uri(Token.EMPTY);
   /** Parsed URI (lazy instantiation). */
-  private ParsedUri pUri;
+  private ParsedUri parsed;
 
   /**
    * Constructor.
    * @param value value
    */
   private Uri(final byte[] value) {
-    super(AtomType.ANY_URI, value);
+    super(value, AtomType.ANY_URI);
   }
 
   /**
@@ -38,8 +38,8 @@ public final class Uri extends AStr {
    * @param value value
    * @return uri instance
    */
-  public static Uri uri(final byte[] value) {
-    return uri(value, true);
+  public static Uri get(final byte[] value) {
+    return get(value, true);
   }
 
   /**
@@ -47,19 +47,19 @@ public final class Uri extends AStr {
    * @param value string value
    * @return uri instance
    */
-  public static Uri uri(final String value) {
-    return uri(Token.token(value), true);
+  public static Uri get(final String value) {
+    return get(Token.token(value), true);
   }
 
   /**
    * Creates a new uri instance.
    * @param value value
-   * @param normalize chop leading and trailing whitespaces
+   * @param normalize remove leading and trailing whitespace
    * @return uri instance
    */
-  public static Uri uri(final byte[] value, final boolean normalize) {
-    final byte[] u = normalize ? Token.normalize(value) : value;
-    return u.length == 0 ? EMPTY : new Uri(u);
+  public static Uri get(final byte[] value, final boolean normalize) {
+    final byte[] uri = normalize ? Token.normalize(value) : value;
+    return uri.length == 0 ? EMPTY : new Uri(uri);
   }
 
   /**
@@ -68,40 +68,45 @@ public final class Uri extends AStr {
    * @return result of check
    */
   public boolean eq(final Uri uri) {
-    return Token.eq(string(), uri.string());
+    return Token.eq(value, uri.value);
   }
 
   /**
    * Appends the specified address. If one of the URIs is invalid,
    * the original uri is returned.
    * @param add address to be appended
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return new uri
    * @throws QueryException query exception
    */
-  public Uri resolve(final Uri add, final InputInfo ii) throws QueryException {
+  public Uri resolve(final Uri add, final InputInfo info) throws QueryException {
     if(add.value.length == 0) return this;
     try {
-      final URI base = new URI(Token.string(value)), res = new URI(Token.string(add.value));
+      final URI res = new URI(Token.string(add.value));
+      URI base = new URI(Token.string(value));
+      if("".equals(base.getPath()) && !"".equals(base.getHost())) {
+        // work around JDK-8272702, https://bugs.java.com/bugdatabase/view_bug?bug_id=8272702
+        base = new URI(Token.string(value) + "/");
+      }
       String uri = base.resolve(res).toString();
       if(uri.startsWith(IO.FILEPREF))
         uri = uri.replaceAll('^' + IO.FILEPREF + "([^/])", IO.FILEPREF + "//$1");
-      return uri(Token.token(uri), false);
+      return get(Token.token(uri), false);
     } catch(final URISyntaxException ex) {
-      throw URIARG_X.get(ii, ex.getMessage());
+      throw URIARG_X.get(info, ex.getMessage());
     }
   }
 
   /**
-   * Tests if this is an absolute URI.
+   * Tests if the URI is absolute.
    * @return result of check
    */
   public boolean isAbsolute() {
-    return isValid() && parsed().scheme() != null;
+    return parsed().absolute();
   }
 
   /**
-   * Checks the validity of this URI.
+   * Tests if the URI is valid.
    * @return result of check
    */
   public boolean isValid() {
@@ -122,18 +127,24 @@ public final class Uri extends AStr {
   }
 
   @Override
-  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
-    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
-      cc.simplify(this, Bln.get(value.length != 0)) : this;
+  public int hash() {
+    return Token.hash(value);
+  }
+
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    // E[xs:anyURI('x')]  ->  E[true()]
+    return cc.simplify(this, mode.oneOf(Simplify.EBV, Simplify.PREDICATE) ?
+      Bln.get(value.length != 0) : this, mode);
   }
 
   /**
    * Caches and returns a parsed URI representation.
-   * @return parsed uri
+   * @return parsed URI
    */
   private ParsedUri parsed() {
-    if(pUri == null) pUri = UriParser.parse(Token.string(Token.encodeUri(value, true)));
-    return pUri;
+    if(parsed == null) parsed = UriParser.parse(Token.string(Token.encodeUri(value, true, false)));
+    return parsed;
   }
 
   @Override

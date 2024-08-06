@@ -16,7 +16,7 @@ import org.basex.query.value.seq.*;
 /**
  * This view allows the input of database queries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ExploreView extends View {
@@ -33,10 +33,9 @@ public final class ExploreView extends View {
     super(EXPLOREVIEW, notifier);
     border(5).layout(new BorderLayout(0, 4));
 
-    filter = BaseXButton.command(GUIMenuCmd.C_FILTER, gui);
+    filter = BaseXButton.command(GUIMenuCmd.C_FILTER_NODES, gui);
 
-    final BaseXBack buttons = new BaseXBack(false);
-    buttons.layout(new ColumnLayout(1)).border(0, 0, 4, 0);
+    final BaseXToolBar buttons = new BaseXToolBar();
     buttons.add(filter);
 
     final BaseXBack b = new BaseXBack(false).layout(new BorderLayout());

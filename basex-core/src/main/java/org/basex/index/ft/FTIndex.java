@@ -6,6 +6,7 @@ import static org.basex.util.Token.*;
 import static org.basex.util.ft.FTFlag.*;
 
 import java.io.*;
+import java.util.*;
 
 import org.basex.core.*;
 import org.basex.data.*;
@@ -47,7 +48,7 @@ import org.basex.util.similarity.*;
  *   {@code pre1/pos1, pre2/pos2, pre3/pos3, ...} [{@link Num}]</li>
  * </ul>
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTIndex extends ValueIndex {
@@ -120,7 +121,7 @@ public final class FTIndex extends ValueIndex {
 
     // fuzzy search
     if(opt.is(FZ)) {
-      return fuzzy(token, lexer.lserror(token));
+      return fuzzy(token, lexer.errors(token));
     }
 
     // return cached or new result
@@ -135,21 +136,22 @@ public final class FTIndex extends ValueIndex {
 
   /**
    * Returns a cached index entry.
-   * @param token token to be found or cached
+   * @param value token to be found or cached
    * @return cache entry
    */
-  private IndexEntry entry(final byte[] token) {
-    final IndexEntry entry = cache.get(token);
+  private IndexEntry entry(final byte[] value) {
+    final IndexEntry entry = cache.get(value);
     if(entry != null) return entry;
 
-    final long pt = token(token);
-    return pt == -1 ? new IndexEntry(token, 0, 0) :
-      cache.add(token, size(pt, token.length), pointer(pt, token.length));
+    final long pt = token(value);
+    return pt == -1 ? new IndexEntry(value, 0, 0) :
+      cache.add(value, size(pt, value.length), pointer(pt, value.length));
   }
 
   @Override
   public EntryIterator entries(final IndexEntries entries) {
     final byte[] token = entries.token();
+
     return new EntryIterator() {
       int p = token.length - 1, start, end, nr;
       boolean inner;
@@ -186,6 +188,7 @@ public final class FTIndex extends ValueIndex {
           return null;
         }
       }
+
       @Override
       public int count() {
         return nr;
@@ -205,7 +208,7 @@ public final class FTIndex extends ValueIndex {
     final int tl = ti + ENTRY;
     int s = 0, e = (end - start) / tl;
     while(s <= e) {
-      final int m = s + e >>> 1, pos = start + m * tl, d = diff(cache(pos, ti), token);
+      final int m = s + e >>> 1, pos = start + m * tl, d = compare(cache(pos, ti), token);
       if(d == 0) return start + m * tl;
       if(d < 0) s = m + 1;
       else e = m - 1;
@@ -285,7 +288,7 @@ public final class FTIndex extends ValueIndex {
     // binary search
     final int o = tl + ENTRY;
     while(s < e) {
-      final int m = s + (e - s >> 1) / o * o, d = diff(dataY.readBytes(m, tl), token);
+      final int m = s + (e - s >> 1) / o * o, d = compare(dataY.readBytes(m, tl), token);
       if(d == 0) return m;
       if(d < 0) s = m + o;
       else e = m - o;
@@ -344,9 +347,9 @@ public final class FTIndex extends ValueIndex {
    * @return iterator
    */
   private IndexIterator fuzzy(final byte[] token, final int k) {
-    FTIndexIterator iter = FTIndexIterator.FTEMPTY;
     final int tokl = token.length, pl = positions.length, e = Math.min(pl - 1, tokl + k);
     int s = Math.max(1, tokl - k) - 1;
+    final ArrayList<FTIndexIterator> iters = new ArrayList<>();
     while(++s <= e) {
       int p = positions[s];
       if(p == -1) continue;
@@ -354,12 +357,13 @@ public final class FTIndex extends ValueIndex {
       while(t < pl && r == -1) r = positions[t++];
       while(p < r) {
         if(ls.similar(dataY.readBytes(p, s), token, k)) {
-          iter = FTIndexIterator.union(iter(pointer(p, s), size(p, s), dataZ, token), iter);
+          iters.add(iter(pointer(p, s), size(p, s), dataZ, token));
         }
         p += s + ENTRY;
       }
     }
-    return iter;
+    return iters.isEmpty() ? FTIndexIterator.FTEMPTY :
+      FTIndexIterator.union(iters.toArray(FTIndexIterator[]::new));
   }
 
   /**
@@ -433,10 +437,13 @@ public final class FTIndex extends ValueIndex {
       public boolean more() {
         if(c == size) return false;
         all.reset(pos);
-        pre = ftc.pre.get(ftc.order[c]);
-        all.or(ftc.pos.get(ftc.order[c++]));
-        while(c < size && pre == ftc.pre.get(ftc.order[c])) {
-          all.or(ftc.pos.get(ftc.order[c++]));
+        int o = ftc.order[c];
+        pre = ftc.pre.get(o);
+        all.or(ftc.pos.get(o));
+        while(++c < size) {
+          o = ftc.order[c];
+          if(pre != ftc.pre.get(o)) break;
+          all.or(ftc.pos.get(o));
         }
         return true;
       }

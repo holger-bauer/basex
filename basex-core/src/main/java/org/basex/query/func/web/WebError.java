@@ -13,13 +13,10 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebError extends StandardFunc {
-  /** RESTXQ error. */
-  private static final QNm ERROR = new QNm("error", REST_URI);
-
   @Override
   public Iter iter(final QueryContext qc) {
     return new Iter() {
@@ -32,11 +29,12 @@ public final class WebError extends StandardFunc {
 
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final long code = toLong(exprs[0], qc);
-    final String message = Token.string(toToken(exprs[1], qc));
+    final long code = toLong(arg(0), qc);
+    final String message = toString(arg(1), qc);
     if(code <= 0 || code > 999) throw WEB_STATUS_X.get(info, code);
 
-    throw new QueryException(info, ERROR, message).value(Int.get(code));
+    final QNm qname = new QNm(Token.concat(STATUS, code), REST_URI);
+    throw new QueryException(info, qname, message).value(Int.get(code));
   }
 
   @Override

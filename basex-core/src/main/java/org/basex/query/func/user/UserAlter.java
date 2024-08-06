@@ -12,15 +12,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserAlter extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    checkAdmin(qc);
-    final User user = toInactiveUser(0, qc);
-    final String name = user.name(), newname = toSafeName(1, qc);
+    final User user = toInactiveUser(arg(0), qc);
+    final String name = user.name(), newname = toInactiveName(arg(1), qc);
     if(Strings.eq(UserText.ADMIN, name, newname)) throw USER_ADMIN.get(info);
     if(Strings.eq(name, newname)) throw USER_EQUAL_X.get(info, name);
 
@@ -38,7 +37,7 @@ public final class UserAlter extends UserFn {
      * @param user user
      * @param newname new name
      * @param qc query context
-     * @param info input info
+     * @param info input info (can be {@code null})
      */
     private Alter(final User user, final String newname, final QueryContext qc,
         final InputInfo info) {
@@ -54,6 +53,8 @@ public final class UserAlter extends UserFn {
     }
 
     @Override
-    public String operation() { return "altered"; }
+    public String operation() {
+      return "altered";
+    }
   }
 }

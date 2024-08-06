@@ -6,12 +6,12 @@ import org.basex.io.*;
 import org.basex.util.*;
 
 /**
- * This class provides a convenient access to text input. System dependent
+ * This class provides convenient access to text input. System dependent
  * line breaks ({@code \r\n}, {@code \n}, {@code \r}) will be normalized to
  * newline characters {@code \n}, and the input encoding will be guessed by
  * analyzing the first bytes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class NewlineInput extends TextInput {

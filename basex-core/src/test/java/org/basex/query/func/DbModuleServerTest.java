@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests the functions of the Database Module in a client/server environment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbModuleServerTest extends SandboxTest {
@@ -65,10 +65,9 @@ public final class DbModuleServerTest extends SandboxTest {
 
   /**
    * Tests client/server functionality of database functions.
-   * @throws IOException I/O exception
-   * @throws InterruptedException interrupted exception
+   * @throws Exception exception
    */
-  @Test public void concurrentClients() throws IOException, InterruptedException {
+  @Test public void concurrentClients() throws Exception {
     final ClientSession check = createClient();
 
     // same DB name, which is 2 x NUM times
@@ -100,13 +99,13 @@ public final class DbModuleServerTest extends SandboxTest {
   private static void runClients(final Command cmd) throws IOException, InterruptedException {
     final CountDownLatch start = new CountDownLatch(1);
     final CountDownLatch stop = new CountDownLatch(NUM);
-    final Client[] clients = new Client[NUM];
+    final SandboxClient[] clients = new SandboxClient[NUM];
     for(int i = 0; i < NUM; i++) {
-      clients[i] = new Client(cmd, start, stop);
+      clients[i] = new SandboxClient(cmd, start, stop);
     }
     start.countDown();
     stop.await();
-    for(final Client c : clients) {
+    for(final SandboxClient c : clients) {
       if(c.error != null) fail(c.error);
     }
   }

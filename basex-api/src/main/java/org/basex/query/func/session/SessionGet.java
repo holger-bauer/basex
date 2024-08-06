@@ -8,20 +8,19 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SessionGet extends SessionFn {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
     final ASession session = session(qc, false);
-    final byte[] name = toToken(exprs[0], qc);
-    final Value dflt = exprs.length == 1 ? Empty.VALUE : exprs[1].value(qc);
+    final String name = toString(arg(0), qc);
 
     if(session != null) {
       final Object object = session.get(name);
-      if(object != null) return JavaCall.toValue(object, qc, sc);
+      if(object != null) return JavaCall.toValue(object, qc, info);
     }
-    return dflt;
+    return defined(1) ? arg(1).value(qc) : Empty.VALUE;
   }
 }

@@ -10,6 +10,7 @@ import org.basex.build.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.index.*;
+import org.basex.index.resource.*;
 import org.basex.io.*;
 import org.basex.io.in.DataInput;
 import org.basex.io.out.DataOutput;
@@ -20,13 +21,10 @@ import org.basex.util.list.*;
 /**
  * This class provides meta information on a database.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MetaData {
-  /** Database directory. Set to {@code null} if database is in main memory. */
-  public final IOFile dir;
-
   /** Database name. */
   public String name;
 
@@ -101,12 +99,14 @@ public final class MetaData {
   /** Last (highest) id assigned to a node. Can be {@code -1} if database is empty. */
   public int lastid = -1;
 
+  /** Database directory. Set to {@code null} if database is in main memory. */
+  private final IOFile dir;
   /** Flag for out-of-date indexes. */
   private boolean oldindex;
 
   /**
    * Constructor for a main-memory database instance.
-   * @param options database options
+   * @param options main options
    */
   public MetaData(final MainOptions options) {
     this("", null, options);
@@ -115,7 +115,7 @@ public final class MetaData {
   /**
    * Constructor.
    * @param name name of the database
-   * @param options database options
+   * @param options main options
    * @param sopts static options
    */
   public MetaData(final String name, final MainOptions options, final StaticOptions sopts) {
@@ -126,7 +126,7 @@ public final class MetaData {
    * Constructor.
    * @param name name of the database
    * @param dir database directory ({@code null} if database is in main memory)
-   * @param options database options
+   * @param options main options
    */
   private MetaData(final String name, final IOFile dir, final MainOptions options) {
     this.name = name;
@@ -185,19 +185,21 @@ public final class MetaData {
   }
 
   /**
-   * Adds a path segment.
+   * Adds a segment to the path if it is valid.
    * @param sb string builder
    * @param list list of segments
    * @return result flag
    */
   private static boolean addToPath(final StringBuilder sb, final StringList list) {
     if(sb.length() != 0) {
-      final String seg = sb.toString();
-      if(seg.equals("..")) {
+      final String segment = sb.toString();
+      if(Strings.endsWith(segment, '.')) {
+        if(!segment.equals(".")) return false;
+      } else if(segment.equals("..")) {
         if(list.isEmpty()) return false;
         list.remove(list.size() - 1);
-      } else if(!seg.equals(".")) {
-        list.add(seg);
+      } else {
+        list.add(segment);
       }
       sb.setLength(0);
     }
@@ -256,7 +258,7 @@ public final class MetaData {
   }
 
   /**
-   * Returns a file instance for the specified database file.
+   * Returns a database file for the specified filename.
    * Should only be called if database is disk-based.
    * @param filename filename
    * @return database filename
@@ -266,11 +268,26 @@ public final class MetaData {
   }
 
   /**
-   * Returns the binary directory.
-   * @return binary directory, or {@code null} if this is a main-memory database
+   * Returns a directory with file resources.
+   * @param type resource type
+   * @return directory, or {@code null} for XML type or if this is a main-memory database
    */
-  public IOFile binaryDir() {
-    return dir == null ? null : new IOFile(dir, IO.RAW);
+  public IOFile dir(final ResourceType type) {
+    return dir == null ? null : type.dir(dir);
+  }
+
+  /**
+   * Returns the resource with the specified path.
+   * @param path internal file path
+   * @param type resource type
+   * @return path, or {@code null} if this is a main-memory database
+   */
+  public IOFile file(final String path, final ResourceType type) {
+    if(dir != null) {
+      final IOFile bin = dir(type), file = new IOFile(bin, path);
+      return file.isDir() ? file : type.filePath(bin, path);
+    }
+    return null;
   }
 
   /**
@@ -279,19 +296,6 @@ public final class MetaData {
    */
   public IOFile updateFile() {
     return dbFile(DATAUPD);
-  }
-
-  /**
-   * Returns a reference to the specified binary file.
-   * @param path internal file path
-   * @return path, or {@code null} if this is a main-memory database of
-   *   if the resource path cannot be resolved (e.g. because it points to a parent directory).
-   */
-  public IOFile binary(final String path) {
-    if(dir == null) return null;
-    final IOFile bin = binaryDir();
-    final IOFile file = new IOFile(bin, path);
-    return file.path().startsWith(bin.path()) ? file : null;
   }
 
   /**
@@ -377,7 +381,7 @@ public final class MetaData {
   // CLASS METHODS ================================================================================
 
   /**
-   * Reads in meta data from the specified stream.
+   * Reads in metadata from the specified stream.
    * @param in input stream
    * @throws IOException I/O exception
    */
@@ -432,7 +436,7 @@ public final class MetaData {
   }
 
   /**
-   * Writes the meta data to the specified output stream.
+   * Writes the metadata to the specified output stream.
    * @param out output stream
    * @throws IOException I/O Exception
    */
@@ -492,7 +496,7 @@ public final class MetaData {
    * @param parser parser
    */
   public void assign(final Parser parser) {
-    final IO source = parser.source;
+    final IO source = parser.source();
     original = source != null ? source.path() : "";
     inputsize = source != null ? source.length() : 0;
     time = source != null ? source.timeStamp() : System.currentTimeMillis();

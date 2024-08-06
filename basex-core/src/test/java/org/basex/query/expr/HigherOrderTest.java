@@ -9,10 +9,16 @@ import org.junit.jupiter.api.*;
 /**
  * Higher-order function tests.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class HigherOrderTest extends SandboxTest {
+  /** Resets optimizations. */
+  @AfterEach public void init() {
+    inline(false);
+    unroll(false);
+  }
+
   /**
    * Test for name shadowing.
    */
@@ -56,9 +62,24 @@ public final class HigherOrderTest extends SandboxTest {
       "  fold-right($input, ()," +
       "    function($x, $xs) { if($pred($x)) then () else ($x, $xs) })" +
       "};" +
-      "local:before-first((<h1/>, <p/>, <h1/>, <h2/>, <h3/>)," +
-      "  function($it) { name($it) = 'h2' })",
+      "local:before-first((<h1/>, <p/>, <h1/>, <h2/>, <h3/>), fn { name() = 'h2' })",
       "<h1/>\n<p/>\n<h1/>");
+  }
+
+  /**
+   * Test for name heavy currying.
+   */
+  @Test public void foldRightTestUnrolled() {
+    unroll(true);
+    query("declare function local:before-first(" +
+        "  $input as item()*," +
+        "  $pred as function(item()) as item()*" +
+        ") as item()* {" +
+        "  fold-right($input, ()," +
+        "    function($x, $xs) { if($pred($x)) then () else ($x, $xs) })" +
+        "};" +
+        "local:before-first((<h1/>, <p/>, <h1/>, <h2/>, <h3/>), fn { name() = 'h2' })",
+        "<h1/>\n<p/>\n<h1/>");
   }
 
   /**
@@ -86,11 +107,11 @@ public final class HigherOrderTest extends SandboxTest {
 
   /**  Test for invalid function expressions. */
   @Test public void invalidFunTest() {
-    error("()()", NOPAREN_X_X);
-    error("1()", NOPAREN_X_X);
-    error("1.0()", NOPAREN_X_X);
-    error("1e0()", NOPAREN_X_X);
-    error("'x'()", NOPAREN_X_X);
+    error("()()", INVFUNCITEM_X_X);
+    error("1()", INVFUNCITEM_X_X);
+    error("1.0()", INVFUNCITEM_X_X);
+    error("1e0()", INVFUNCITEM_X_X);
+    error("'x'()", INVFUNCITEM_X_X);
   }
 
   /**  Tests the creation of a cast function as function item. */
@@ -100,7 +121,23 @@ public final class HigherOrderTest extends SandboxTest {
 
   /**  Tests the creation of a cast function as function item. */
   @Test public void wrongArityTest() {
-    error("count(concat#2('1','2','3'))", INVARITY_X_X_X);
+    error("count(concat#2('1'))", INVARITY_X_X_X);
+  }
+
+  /** Tests the coercion of a map to a function. */
+  @Test public void mapCoercion() {
+    query("function($a as function(item()*         ) as item()*) {$a(1)} (map {1: true()})", true);
+    error("function($a as function() as item()*) {$a()} (map {1: true()})", INVARITY_X_X_X);
+    error("function($a as function(item()*, item()*) as item()*) {$a(1)} (map {1: true()})",
+        INVARITY_X_X_X);
+  }
+
+  /** Tests the coercion of a map to a function. */
+  @Test public void arrayCoercion() {
+    query("function($a as function(item()*         ) as item()*) {$a(1)} ([true()])", true);
+    error("function($a as function() as item()*) {$a()} ([true()])", INVARITY_X_X_X);
+    error("function($a as function(item()*, item()*) as item()*) {$a(1)} ([true()])",
+        INVARITY_X_X_X);
   }
 
   /** Tests using a partial function application as the context value. */
@@ -114,42 +151,41 @@ public final class HigherOrderTest extends SandboxTest {
           "declare function local:b($b) { $b }; local:a(1)", 1);
   }
 
-  /** Do not pre-evaluate function items with non-deterministic expressions. */
+  /** Do not pre-evaluate function items with nondeterministic expressions. */
   @Test public void gh1191() {
     final IOFile sandbox = sandbox();
     query(
-      "let $files := ('a','b') ! (\"" + sandbox + "/\" || . || '.txt')" +
+      "let $files := ('a', 'b') ! (\"" + sandbox + "/\" || . || '.txt')" +
       "return (\n" +
-      "  for $file in $files return (file:write-text($file, ?))(''),\n" +
-      "  $files ! file:exists(.),\n" +
-      "  $files ! file:delete(?)(.),\n" +
-      "  $files ! file:exists(.)\n" +
+      "  for $file in $files return (file:write-text($file, ?))('')," +
+      "  $files ! file:exists(.)," +
+      "  $files ! file:delete(?)(.)," +
+      "  $files ! file:exists(.)" +
         ')',
       "true\ntrue\nfalse\nfalse"
     );
   }
 
-  /** Tests the %non-deterministic annotation. */
+  /** Tests the %nondeterministic annotation. */
   @Test public void gh1212() {
     // FLWOR will be optimized away (empty result)
-    query("for $f in (prof:void#1(?), error#0) let $ignore := $f() return ()", "");
-    // FLWOR expression will be evaluated (due to non-deterministic keyword)
+    query("for $f in (void#1(?), error#0) let $ignore := $f() return ()", "");
+    // FLWOR expression will be evaluated (due to nondeterministic keyword)
     query("try {"
-        + "  let $f := error#0 let $err := non-deterministic $f() return ()"
+        + "  let $f := error#0 let $err := nondeterministic $f() return ()"
         + "} catch * { 'ERR' }", "ERR");
     query("try {"
-        + "  for $f in (prof:void#1(?), error#0)"
-        + "  let $err := non-deterministic $f() return ()"
+        + "  for $f in (void#1(?), error#0)"
+        + "  let $err := nondeterministic $f() return ()"
         + "} catch * { 'ERR' }", "ERR");
-    // FLWOR expression will be evaluated (due to internal optimizations)
     query("try {"
         + "  let $f := error#0 let $err := $f() return ()"
-        + "} catch * { 'ERR' }", "ERR");
+        + "} catch * { 'ERR' }", "");
     query("try {"
         + "  let $f := function() { fn:error(()) }"
         + "  let $e := $f()"
         + "  return ()"
-        + "} catch * { 'ERR' }", "ERR");
+        + "} catch * { 'ERR' }", "");
   }
 
   /** Ensures that updating flag is not assigned before function body is known. */

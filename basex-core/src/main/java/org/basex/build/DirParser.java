@@ -18,7 +18,7 @@ import org.basex.util.list.*;
  * This class recursively scans files and directories and parses all
  * relevant files.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DirParser extends Parser {
@@ -37,12 +37,12 @@ public final class DirParser extends Parser {
   private final boolean archives;
   /** Skip corrupt files in directories. */
   private final boolean skipCorrupt;
-  /** Add ignored files as raw files. */
-  private final boolean addRaw;
+  /** Add ignored files as binary files. */
+  private final boolean addBinary;
   /** DTD parsing. */
   private final boolean dtd;
-  /** Raw parsing. */
-  private final boolean rawParser;
+  /** Binary parsing. */
+  private final boolean binaryParser;
   /** Archive name. */
   private final boolean archiveName;
 
@@ -55,13 +55,13 @@ public final class DirParser extends Parser {
 
   /**
    * Constructor.
-   * @param source source path
+   * @param source input source
    * @param options main options
    */
   public DirParser(final IO source, final MainOptions options) {
     super(source, options);
 
-    final boolean isDir = source.isDir();
+    final boolean isDir = source instanceof IOFile && source.isDir();
     if(isDir) {
       dir = source.path().replaceAll("/$", "") + '/';
       original = dir;
@@ -72,9 +72,9 @@ public final class DirParser extends Parser {
     skipCorrupt = options.get(MainOptions.SKIPCORRUPT);
     archives = options.get(MainOptions.ADDARCHIVES);
     archiveName = options.get(MainOptions.ARCHIVENAME);
-    addRaw = options.get(MainOptions.ADDRAW);
+    addBinary = options.get(MainOptions.ADDRAW);
     dtd = options.get(MainOptions.DTD);
-    rawParser = options.get(MainOptions.PARSER) == MainParser.RAW;
+    binaryParser = options.get(MainOptions.PARSER) == MainParser.RAW;
     filter = !isDir && !source.isArchive() ? null :
       Pattern.compile(IOFile.regex(options.get(MainOptions.CREATEFILTER)));
   }
@@ -113,7 +113,7 @@ public final class DirParser extends Parser {
       } else if(name.endsWith(IO.GZSUFFIX)) {
         // process GZIP archive
         try(GZIPInputStream is = new GZIPInputStream(in)) {
-          // generate filename (the optional filename cannot be retrieve from the input stream):
+          // generate filename (the optional filename cannot be retrieved from the input stream):
           // drop archive suffix, add .xml if no suffix remains
           name = input.name().replaceAll("\\.[^.]+$", "");
           if(!Strings.contains(name, '.')) name += IO.XMLSUFFIX;
@@ -149,7 +149,7 @@ public final class DirParser extends Parser {
    * @return stream
    */
   private IOStream newStream(final InputStream is, final String path, final IO input) {
-    return new IOStream(is, archiveName ? (input.path() + '/' + path) : path);
+    return new IOStream(is, archiveName ? input.path() + '/' + path : path);
   }
 
   /**
@@ -176,8 +176,8 @@ public final class DirParser extends Parser {
     final boolean include = filter == null ||
         filter.matcher(Prop.CASE ? name : name.toLowerCase(Locale.ENGLISH)).matches();
 
-    if(include ? rawParser : addRaw) {
-      // store input in raw format if raw parser was chosen, or if file was included otherwise
+    if(include ? binaryParser : addBinary) {
+      // store input in binary format if binary parser was chosen, or if file was included otherwise
       builder.binary(targ + name, source);
     } else if(include) {
       // store input as XML
@@ -186,7 +186,7 @@ public final class DirParser extends Parser {
       if(skipCorrupt) {
         // parse file twice to ensure that it is well-formed
         try {
-          // cache file contents to allow or speed up a second run
+          // cache file contents to facilitate or speed up a second run
           if(!(source instanceof IOContent || dtd)) {
             in = new IOContent(source.read());
             in.name(name);

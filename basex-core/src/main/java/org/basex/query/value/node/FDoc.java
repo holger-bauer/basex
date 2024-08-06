@@ -2,6 +2,10 @@ package org.basex.query.value.node;
 
 import static org.basex.query.QueryText.*;
 
+import java.util.Arrays;
+import java.util.function.*;
+
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.list.*;
@@ -15,77 +19,61 @@ import org.w3c.dom.*;
 /**
  * Document node fragment.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FDoc extends FNode {
-  /** Child nodes. */
-  private final ANodeList children;
   /** Base URI. */
   private final byte[] uri;
+  /** Children. */
+  private ANode[] children;
 
   /**
    * Constructor.
+   * @param uri base URI
    */
-  public FDoc() {
-    this(Token.EMPTY);
-  }
-
-  /**
-   * Constructor.
-   * @param uri base uri
-   */
-  public FDoc(final String uri) {
-    this(Token.token(uri));
-  }
-
-  /**
-   * Constructor.
-   * @param uri base uri
-   */
-  public FDoc(final byte[] uri) {
-    this(new ANodeList(), uri);
-  }
-
-  /**
-   * Constructor.
-   * @param children children
-   * @param uri base uri
-   */
-  public FDoc(final ANodeList children, final byte[] uri) {
+  private FDoc(final byte[] uri) {
     super(NodeType.DOCUMENT_NODE);
-    this.children = children;
     this.uri = uri;
-    optimize();
   }
 
   /**
-   * Constructor for DOM nodes.
-   * Originally provided by Erdal Karaca.
-   * @param doc DOM node
-   * @param bu base uri
+   * Creates a document builder.
+   * @param uri base URI
+   * @return document builder
    */
-  public FDoc(final DocumentFragment doc, final byte[] bu) {
-    this(bu);
-    final Node elem = doc.getFirstChild();
-    if(elem instanceof Element) children.add(new FElem((Element) elem, this, new TokenMap()));
-  }
-
-  @Override
-  public FDoc optimize() {
-    // update parent references
-    for(final ANode node : children) node.parent(this);
-    return this;
+  public static FBuilder build(final byte[] uri) {
+    return new FBuilder(new FDoc(uri));
   }
 
   /**
-   * Adds a node and updates its parent reference.
-   * @param node node to be added
+   * Creates a document builder.
+   * @return document builder
+   */
+  public static FBuilder build() {
+    return build(Token.EMPTY);
+  }
+
+  /**
+   * Creates a document builder for DOM nodes.
+   * Originally provided by Erdal Karaca.
+   * @param uri base uri
+   * @param doc DOM node
+   * @return document builder
+   */
+  public static FBuilder build(final String uri, final DocumentFragment doc) {
+    final FBuilder builder = build(Token.token(uri));
+    children(doc, builder, new TokenMap());
+    return builder;
+  }
+
+  /**
+   * Finalizes the node.
+   * @param ch children
    * @return self reference
    */
-  public FDoc add(final ANode node) {
-    children.add(node);
-    node.parent(this);
+  FDoc finish(final ANode[] ch) {
+    children = ch;
     return this;
   }
 
@@ -96,12 +84,12 @@ public final class FDoc extends FNode {
 
   @Override
   public BasicNodeIter childIter() {
-    return children.iter();
+    return ANodeList.iter(children);
   }
 
   @Override
   public boolean hasChildren() {
-    return !children.isEmpty();
+    return children.length != 0;
   }
 
   @Override
@@ -110,8 +98,14 @@ public final class FDoc extends FNode {
   }
 
   @Override
-  public FDoc materialize(final QueryContext qc, final boolean copy) {
-    return copy ? new FDoc(children, uri).optimize() : this;
+  public FNode materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+
+    if(materialized(test, ii)) return this;
+
+    final FBuilder doc = build(uri);
+    for(final ANode child : children) doc.add(child.materialize(test, ii, qc));
+    return doc.finish();
   }
 
   @Override
@@ -122,7 +116,7 @@ public final class FDoc extends FNode {
   @Override
   public ID typeId() {
     // check if a document has a single element as child
-    return (children.size() == 1 && children.get(0).type == NodeType.ELEMENT ?
+    return (children.length == 1 && children[0].type == NodeType.ELEMENT ?
       NodeType.DOCUMENT_NODE_ELEMENT : type).id();
   }
 
@@ -131,16 +125,16 @@ public final class FDoc extends FNode {
     if(this == obj) return true;
     if(!(obj instanceof FDoc)) return false;
     final FDoc f = (FDoc) obj;
-    return children.equals(f.children) && Token.eq(uri, f.uri) && super.equals(obj);
+    return Arrays.equals(children, f.children) && Token.eq(uri, f.uri) && super.equals(obj);
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, BASE, uri));
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(DOCUMENT).brace(uri.length == 0 ? DOTS : QueryString.toQuoted(uri));
   }
 }

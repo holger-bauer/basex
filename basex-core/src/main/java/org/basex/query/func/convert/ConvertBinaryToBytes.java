@@ -8,12 +8,12 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ConvertBinaryToBytes extends StandardFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return BytSeq.get(toBin(exprs[0], qc).binary(info));
+    return BytSeq.get(toBin(arg(0), qc).binary(info));
   }
 }

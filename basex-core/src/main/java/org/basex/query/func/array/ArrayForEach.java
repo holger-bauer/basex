@@ -11,31 +11,43 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayForEach extends ArrayFn {
   @Override
-  public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final XQArray array = toArray(exprs[0], qc);
-    final FItem func = checkArity(exprs[1], 1, qc);
+  public XQArray item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final XQArray array = toArray(arg(0), qc);
+    final FItem action = toFunction(arg(1), 2, qc);
 
-    final ArrayBuilder builder = new ArrayBuilder();
-    for(final Value value : array.members()) builder.append(func.invoke(qc, info, value));
-    return builder.freeze();
+    int p = 0;
+    final ArrayBuilder ab = new ArrayBuilder();
+    for(final Value value : array.members()) {
+      ab.append(action.invoke(qc, info, value, Int.get(++p)));
+    }
+    return ab.array(this);
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Type type1 = exprs[0].seqType().type;
-    if(type1 instanceof ArrayType) {
-      exprs[1] = coerceFunc(exprs[1], cc, SeqType.ITEM_ZM, ((ArrayType) type1).declType);
+    final Expr array = arg(0);
+    if(array == XQArray.empty()) return array;
+
+    final Type type = array.seqType().type;
+    if(type instanceof ArrayType) {
+      arg(1, arg -> refineFunc(arg, cc, SeqType.ITEM_ZM, ((ArrayType) type).memberType,
+          SeqType.INTEGER_O));
     }
 
     // assign type after coercion (expression might have changed)
-    final FuncType ft = exprs[1].funcType();
+    final FuncType ft = arg(1).funcType();
     if(ft != null) exprType.assign(ArrayType.get(ft.declType));
 
     return this;
+  }
+
+  @Override
+  public int hofIndex() {
+    return 1;
   }
 }

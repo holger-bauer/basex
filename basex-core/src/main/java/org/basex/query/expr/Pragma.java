@@ -10,7 +10,7 @@ import org.basex.util.*;
 /**
  * Abstract pragma expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public abstract class Pragma extends ExprInfo {
@@ -32,7 +32,7 @@ public abstract class Pragma extends ExprInfo {
   /**
    * Initializes the pragma expression.
    * @param qc query context
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @return state before pragmas was set
    * @throws QueryException query exception
    */
@@ -67,6 +67,12 @@ public abstract class Pragma extends ExprInfo {
   public abstract Pragma copy();
 
   /**
+   * Indicates if the pragma can be simplified.
+   * @return result of check
+   */
+  public abstract boolean simplify();
+
+  /**
    * {@inheritDoc}
    * Must be overwritten by implementing class.
    */
@@ -78,12 +84,12 @@ public abstract class Pragma extends ExprInfo {
   }
 
   @Override
-  public final void plan(final QueryPlan plan) {
+  public final void toXml(final QueryPlan plan) {
     plan.add(plan.create(this, VALUEE, value), name);
   }
 
   @Override
-  public final void plan(final QueryString qs) {
-    qs.token(PRAGMA).token(name).token(value).token(PRAGMA2);
+  public final void toString(final QueryString qs) {
+    qs.token("(#").token(name).token(value).token("#)");
   }
 }

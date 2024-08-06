@@ -8,6 +8,7 @@ import java.util.*;
 import org.basex.data.*;
 import org.basex.query.expr.*;
 import org.basex.query.scope.*;
+import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.type.*;
 import org.basex.query.var.*;
@@ -16,14 +17,21 @@ import org.basex.util.*;
 /**
  * Query plan builder.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class QueryPlan {
+  /** QName. */
+  private static final QNm Q_QUERY_PLAN = new QNm("QueryPlan");
+  /** QName. */
+  private static final QNm Q_COMPILED = new QNm("compiled");
+  /** QName. */
+  private static final QNm Q_UPDATING = new QNm("updating");
+
   /** Root node. */
-  private final FElem root;
+  private final FBuilder root;
   /** Node stack. */
-  private final Stack<FElem> nodes = new Stack<>();
+  private final Stack<FBuilder> nodes = new Stack<>();
   /** Include comprehensive information. */
   private final boolean full;
 
@@ -34,9 +42,7 @@ public final class QueryPlan {
    * @param full include comprehensive information
    */
   public QueryPlan(final boolean compiled, final boolean updating, final boolean full) {
-    root = new FElem(QUERY_PLAN);
-    root.add(COMPILED, token(compiled));
-    root.add(UPDATING, token(updating));
+    root = FElem.build(Q_QUERY_PLAN).add(Q_COMPILED, compiled).add(Q_UPDATING, updating);
     nodes.add(root);
     this.full = full;
   }
@@ -45,8 +51,8 @@ public final class QueryPlan {
    * Returns the root node.
    * @return root node
    */
-  public FElem root() {
-    return root;
+  public FNode root() {
+    return root.finish();
   }
 
   /**
@@ -54,25 +60,25 @@ public final class QueryPlan {
    * @param elem new element
    * @param children expressions to be added ({@code null} references will be ignored)
    */
-  public void add(final FElem elem, final Object... children) {
-    final FElem plan = nodes.peek();
-    plan.add(elem);
+  public void add(final FBuilder elem, final Object... children) {
+    final FBuilder plan = nodes.peek();
     nodes.add(elem);
 
     for(final Object child : children) {
       if(child instanceof ExprInfo) {
-        ((ExprInfo) child).plan(this);
+        ((ExprInfo) child).toXml(this);
       } else if(child instanceof ExprInfo[]) {
         for(final ExprInfo ex : (ExprInfo[]) child) {
-          if(ex != null) ex.plan(this);
+          if(ex != null) ex.toXml(this);
         }
       } else if(child instanceof byte[]) {
         elem.add((byte[]) child);
-      } else if(child != null) {
-        elem.add(child.toString());
+      } else {
+        elem.add(child);
       }
     }
 
+    plan.add(elem);
     nodes.pop();
   }
 
@@ -81,7 +87,7 @@ public final class QueryPlan {
    * @param elem new element
    * @param children expressions ({@code null} references will be ignored)
    */
-  public void add(final FElem elem, final ExprInfo... children) {
+  public void add(final FBuilder elem, final ExprInfo... children) {
     add(elem, (Object[]) children);
   }
 
@@ -91,8 +97,8 @@ public final class QueryPlan {
    * @param atts attribute names and values
    * @return element
    */
-  public FElem create(final ExprInfo expr, final Object... atts) {
-    final FElem elem = new FElem(Util.className(expr));
+  public FBuilder create(final ExprInfo expr, final Object... atts) {
+    final FBuilder elem = FElem.build(new QNm(Util.className(expr)));
     final int al = atts.length;
     for(int a = 0; a < al - 1; a += 2) {
       addAttribute(elem, atts[a], atts[a + 1]);
@@ -103,9 +109,9 @@ public final class QueryPlan {
     } else if(expr instanceof StaticDecl) {
       attachType(elem, ((StaticDecl) expr).seqType(), -1, null);
     }
-    if(expr instanceof ParseExpr) {
-      attachInputInfo(elem, ((ParseExpr) expr).info);
-    }
+    final InputInfo info = expr.info();
+    if(info != null) attach(elem, info);
+
     return elem;
   }
 
@@ -115,9 +121,9 @@ public final class QueryPlan {
    * @param var variable to attach (can be {@code null})
    * @return element
    */
-  public FElem create(final String name, final Var var) {
-    final FElem elem = new FElem(Strings.capitalize(name));
-    if(var != null) attachInputInfo(attachVariable(elem, var, true), var.info);
+  public FBuilder create(final String name, final Var var) {
+    final FBuilder elem = FElem.build(new QNm(Strings.capitalize(name)));
+    if(var != null) attach(attachVariable(elem, var, true), var.info);
     return elem;
   }
 
@@ -127,17 +133,8 @@ public final class QueryPlan {
    * @param name name
    * @param value value or {@code null}
    */
-  public void addAttribute(final FElem elem, final Object name, final Object value) {
-    if(value != null) elem.add(Util.inf(name), Util.inf(value));
-  }
-
-  /**
-   * Adds a child element to the specified element.
-   * @param elem element to which the attribute will be added
-   * @param child child element
-   */
-  public void addElement(final FElem elem, final FElem child) {
-    elem.add(child);
+  public void addAttribute(final FBuilder elem, final Object name, final Object value) {
+    if(value != null) elem.add(new QNm(Util.inf(name)), Util.inf(value));
   }
 
   /**
@@ -147,12 +144,11 @@ public final class QueryPlan {
    * @param type include type information
    * @return specified element
    */
-  public FElem attachVariable(final FElem elem, final Var var, final boolean type) {
+  public FBuilder attachVariable(final FBuilder elem, final Var var, final boolean type) {
     if(var != null) {
       addAttribute(elem, NAME, var.toErrorString());
       addAttribute(elem, ID, var.id);
       if(var.declType != null) addAttribute(elem, AS, var.declType);
-      if(var.promote) addAttribute(elem, PROMOTE, true);
       if(type) attachType(elem, var.seqType(), var.size(), var.data());
     }
     return elem;
@@ -165,7 +161,7 @@ public final class QueryPlan {
    * @param size result size
    * @param data data reference (can be {@code null})
    */
-  private void attachType(final FElem elem, final SeqType seqType, final long size,
+  private void attachType(final FBuilder elem, final SeqType seqType, final long size,
       final Data data) {
 
     addAttribute(elem, TYPE, seqType);
@@ -176,13 +172,13 @@ public final class QueryPlan {
   /**
    * Attaches input information to the specified element.
    * @param elem element to which attributes will be added
-   * @param ii input info
+   * @param info input info (can be {@code null})
    */
-  private void attachInputInfo(final FElem elem, final InputInfo ii) {
+  private void attach(final FBuilder elem, final InputInfo info) {
     if(full) {
-      addAttribute(elem, LINE, ii.line());
-      addAttribute(elem, COLUMN, ii.column());
-      addAttribute(elem, PATH, ii.path());
+      addAttribute(elem, LINE, info.line());
+      addAttribute(elem, COLUMN, info.column());
+      addAttribute(elem, PATH, info.path());
     }
   }
 }

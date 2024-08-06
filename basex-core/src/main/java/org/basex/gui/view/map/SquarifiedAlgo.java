@@ -3,7 +3,7 @@ package org.basex.gui.view.map;
 /**
  * Squarified layout algorithm.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Joerg Hauser
  */
 final class SquarifiedAlgo extends MapAlgo {
@@ -59,7 +59,7 @@ final class SquarifiedAlgo extends MapAlgo {
           start = ni;
           sumweight -= weight - ml.weight[ni];
           weight = 0;
-          // sometimes there has to be one rectangles to fill the left space
+          // sometimes there has to be one rectangle to fill the left space
           if(ne == ni) {
             row.add(new MapRect((int) xx, (int) yy, (int) ww, (int) hh, ml.get(ni), r.level));
             break;
@@ -99,7 +99,7 @@ final class SquarifiedAlgo extends MapAlgo {
           start = ni;
           sumweight -= weight - ml.weight[ni];
           weight = 0;
-          // sometimes there has to be one rectangles to fill the left space
+          // sometimes there has to be one rectangle to fill the left space
           if(ne == ni) {
             row.add(new MapRect((int) xx, (int) yy, (int) ww, (int) hh, ml.get(ni), r.level));
             break;

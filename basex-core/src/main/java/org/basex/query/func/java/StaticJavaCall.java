@@ -1,15 +1,18 @@
 package org.basex.query.func.java;
 
-import static org.basex.query.QueryText.*;
+import static org.basex.query.QueryError.*;
 
 import java.lang.reflect.*;
 
+import org.basex.core.MainOptions.*;
 import org.basex.core.users.*;
 import org.basex.query.*;
 import org.basex.query.QueryModule.*;
 import org.basex.query.expr.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
+import org.basex.query.value.item.*;
+import org.basex.query.value.seq.*;
 import org.basex.query.var.*;
 import org.basex.util.*;
 import org.basex.util.Array;
@@ -18,7 +21,7 @@ import org.basex.util.hash.*;
 /**
  * Static invocation of a function in an imported Java class instance.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class StaticJavaCall extends JavaCall {
@@ -28,8 +31,6 @@ public final class StaticJavaCall extends JavaCall {
   private final Method method;
   /** Method parameter types. */
   private final Class<?>[] params;
-  /** Indicates if function parameters are of (sub)class {@link Value}. */
-  private final boolean[] values;
 
   /**
    * Constructor.
@@ -38,20 +39,19 @@ public final class StaticJavaCall extends JavaCall {
    * @param args arguments
    * @param perm required permission
    * @param updating updating flag
-   * @param sc static context
-   * @param info input info
+   * @param info input info (can be {@code null})
    */
   StaticJavaCall(final Object module, final Method method, final Expr[] args, final Perm perm,
-      final boolean updating, final StaticContext sc, final InputInfo info) {
+      final boolean updating, final InputInfo info) {
 
-    super(args, perm, updating, sc, info);
+    super(args, perm, updating, info);
     this.module = module;
     this.method = method;
     params = method.getParameterTypes();
 
     final int pl = params.length;
-    values = new boolean[pl];
-    for(int p = 0; p < pl; p++) values[p] = Value.class.isAssignableFrom(params[p]);
+    xquery = new boolean[pl];
+    for(int p = 0; p < pl; p++) xquery[p] = Value.class.isAssignableFrom(params[p]);
   }
 
   @Override
@@ -60,30 +60,33 @@ public final class StaticJavaCall extends JavaCall {
   }
 
   @Override
-  protected Object eval(final QueryContext qc) throws QueryException {
-    final JavaEval je = new JavaEval(this, qc);
-    if(je.match(params, true, values)) {
-      // assign query context if module is inheriting the {@link QueryModule} interface
-      if(module instanceof QueryModule) {
-        final QueryModule qm = (QueryModule) module;
-        qm.staticContext = sc;
-        qm.queryContext = qc;
-      }
-
-      // invoke found method
-      try {
-        return method.invoke(module, je.args);
-      } catch(final Throwable th) {
-        throw je.execError(th);
-      }
-    }
+  protected Value eval(final QueryContext qc, final WrapOptions wrap) throws QueryException {
     // arguments could not be matched: raise error
-    throw je.argsError(method, false);
+    final JavaCandidate jc = candidate(values(qc), params, true);
+    if(jc == null) throw JAVAARGS_X_X_X.get(info, name(),
+        JavaCall.paramTypes(method, true), argTypes(exprs));
+
+    // assign query context if module is inheriting the {@link QueryModule} interface
+    if(module instanceof QueryModule) {
+      final QueryModule qm = (QueryModule) module;
+      qm.staticContext = sc();
+      qm.queryContext = qc;
+    }
+
+    // invoke found method
+    try {
+      final Object result = method.invoke(module, jc.arguments);
+      if(wrap == WrapOptions.INSTANCE) return new XQJava(module);
+      if(wrap == WrapOptions.VOID) return Empty.VALUE;
+      return toValue(result, qc, info, wrap);
+    } catch(final Throwable th) {
+      throw executionError(th, jc.arguments);
+    }
   }
 
   @Override
   public StaticJavaCall copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new StaticJavaCall(module, method, copyAll(cc, vm, exprs), perm, updating, sc,
+    return copyType(new StaticJavaCall(module, method, copyAll(cc, vm, exprs), perm, updating,
         info));
   }
 
@@ -109,15 +112,15 @@ public final class StaticJavaCall extends JavaCall {
 
   @Override
   String name() {
-    return Util.className(module) + COL + method.getName();
+    return className(module.getClass()) + ':' + method.getName();
   }
 
   @Override
   public boolean equals(final Object obj) {
     if(this == obj) return true;
     if(!(obj instanceof StaticJavaCall)) return false;
-    final StaticJavaCall j = (StaticJavaCall) obj;
-    return module.equals(j.module) && method.equals(j.method) && Array.equals(params, j.params) &&
-        super.equals(obj);
+    final StaticJavaCall java = (StaticJavaCall) obj;
+    return module.equals(java.module) && method.equals(java.method) &&
+        Array.equals(params, java.params) && super.equals(obj);
   }
 }

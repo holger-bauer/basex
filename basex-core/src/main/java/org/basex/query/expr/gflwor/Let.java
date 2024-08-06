@@ -6,6 +6,7 @@ import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
+import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
 import org.basex.query.value.*;
@@ -19,7 +20,7 @@ import org.basex.util.hash.*;
 /**
  * FLWOR {@code let} clause, binding an expression to a variable.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
 public final class Let extends ForLet {
@@ -42,27 +43,6 @@ public final class Let extends ForLet {
     super(var.info, scoring ? SeqType.DOUBLE_O : SeqType.ITEM_ZM, var, expr, scoring, var);
   }
 
-  /**
-   * Creates a let expression from a for loop over a single item.
-   * @param fr for loop
-   * @return let binding
-   */
-  static Let fromFor(final For fr) {
-    final Let lt = new Let(fr.var, fr.expr);
-    lt.adoptType(fr.expr);
-    return lt;
-  }
-
-  /**
-   * Creates a let binding for the score variable of a for clause.
-   * @param fr for clause
-   * @return let binding for the score variable
-   */
-  static Let fromForScore(final For fr) {
-    final Expr varRef = new VarRef(fr.info, fr.var);
-    return new Let(fr.score, varRef, true);
-  }
-
   @Override
   LetEval eval(final Eval sub) {
     if(!(sub instanceof LetEval)) return new LetEval(this, sub);
@@ -72,32 +52,28 @@ public final class Let extends ForLet {
   }
 
   /**
-   * Calculates the score of the given iterator.
-   * @param iter iterator
-   * @param qc query context
-   * @return score
-   * @throws QueryException evaluation exception
+   * Converts the let binding to a for loop.
+   * @param cc compilation context
+   * @return for expression
+   * @throws QueryException query exception
    */
-  private static Dbl score(final Iter iter, final QueryContext qc) throws QueryException {
-    double score = 0;
-    int c = 0;
-    for(Item item; (item = qc.next(iter)) != null; score += item.score(), c++);
-    return Dbl.get(Scoring.avg(score, c));
+  For toFor(final CompileContext cc) throws QueryException {
+    return new For(var, scoring ? cc.function(Function._FT_SCORE, info(), expr) : expr);
   }
 
   @Override
   public Let optimize(final CompileContext cc) throws QueryException {
     // skip redundant type check
     if(!scoring && expr instanceof TypeCheck) {
-      final TypeCheck tc = (TypeCheck) expr;
-      if(tc.isRedundant(var) || var.adoptCheck(tc.seqType(), tc.promote)) {
+      if(var.declType != null && var.declType.instanceOf(expr.seqType()) ||
+          var.adoptCheck(expr.seqType())) {
         cc.info(OPTTYPE_X, this);
-        expr = tc.expr;
+        expr = ((TypeCheck) expr).expr;
       }
     }
-    // promote at compile time
+    // coerce at compile time
     if(expr instanceof Value) {
-      expr = var.checkType((Value) expr, cc.qc, true);
+      expr = var.checkType((Value) expr, cc.qc, cc);
     }
 
     // assign type to clause and variable
@@ -132,17 +108,17 @@ public final class Let extends ForLet {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    final FElem elem = plan.attachVariable(plan.create(this), var, false);
+  public void toXml(final QueryPlan plan) {
+    final FBuilder elem = plan.attachVariable(plan.create(this), var, false);
     if(scoring) plan.addAttribute(elem, SCORE, true);
     plan.add(elem, expr);
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(LET);
     if(scoring) qs.token(SCORE);
-    qs.token(var).token(ASSIGN).token(expr);
+    qs.token(var).token(":=").token(expr);
   }
 
   /** Evaluator for a block of {@code let} expressions. */
@@ -166,23 +142,33 @@ public final class Let extends ForLet {
     @Override
     boolean next(final QueryContext qc) throws QueryException {
       if(!sub.next(qc)) return false;
-
       for(final Let let : lets) {
-        final Value vl;
-        if(let.scoring) {
-          final boolean s = qc.scoring;
-          try {
-            qc.scoring = true;
-            vl = score(let.expr.iter(qc), qc);
-          } finally {
-            qc.scoring = s;
-          }
-        } else {
-          vl = let.expr.value(qc);
-        }
-        qc.set(let.var, vl);
+        qc.set(let.var, let.scoring ? score(let.expr, qc) : let.expr.value(qc));
       }
       return true;
+    }
+
+    /**
+     * Calculates the score for the given expression.
+     * @param expr expression
+     * @param qc query context
+     * @return score
+     * @throws QueryException evaluation exception
+     */
+    private static Value score(final Expr expr, final QueryContext qc) throws QueryException {
+      final boolean scoring = qc.scoring;
+      try {
+        qc.scoring = true;
+        double s = 0;
+        int c = 0;
+        final Iter iter = expr.iter(qc);
+        for(Item item; (item = qc.next(iter)) != null; c++) {
+          s += item.score();
+        }
+        return Dbl.get(Scoring.avg(s, c));
+      } finally {
+        qc.scoring = scoring;
+      }
     }
   }
 }

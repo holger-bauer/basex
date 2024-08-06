@@ -14,7 +14,7 @@ import org.basex.util.list.*;
  * access is needed, it is advisable to directly work on the {@link Data}
  * class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ViewData {
@@ -56,7 +56,7 @@ public final class ViewData {
     }
 
     final TokenBuilder tb = new TokenBuilder();
-    tb.add(Function._DB_OPEN.args(data.meta.name, Token.string(data.text(p, true))).trim());
+    tb.add(Function._DB_GET.args(data.meta.name, Token.string(data.text(p, true))).trim());
     for(int i = pres.size() - 1; i >= 0; i--) {
       p = pres.get(i);
       k = data.kind(p);
@@ -93,18 +93,21 @@ public final class ViewData {
   }
 
   /**
-   * Returns the name of the specified node or a standard text representation.
+   * Returns a label for the specified node.
    * @param opts gui options
    * @param data data reference
    * @param pre pre value
    * @return name
    */
-  public static byte[] namedText(final GUIOptions opts, final Data data, final int pre) {
-    if(opts.get(GUIOptions.SHOWNAME) && data.kind(pre) == Data.ELEM) {
-      final int id = nameID(data);
-      if(id != 0) {
-        final byte[] attr = data.attValue(id, pre);
-        if(attr != null) return attr;
+  public static byte[] label(final GUIOptions opts, final Data data, final int pre) {
+    if(data.kind(pre) == Data.ELEM) {
+      final String labels = opts.get(GUIOptions.LABELS);
+      if(!labels.isEmpty()) {
+        final int id = labelID(data, labels);
+        if(id != 0) {
+          final byte[] value = data.attValue(id, pre);
+          if(value != null) return value;
+        }
       }
     }
     return Token.chop(text(data, pre), 32);
@@ -113,16 +116,21 @@ public final class ViewData {
   /**
    * Returns the name id of the specified node.
    * @param data data reference
-   * @return name id
+   * @param labels labels
+   * @return name id, or {@code 0} if key does not exist
    */
-  public static int nameID(final Data data) {
-    return data.attrNames.id(T_NAME);
+  public static int labelID(final Data data, final String labels) {
+    for(final byte[] key : Token.split(Token.token(labels), ',')) {
+      final int id = data.attrNames.id(key);
+      if(id > 0) return id;
+    }
+    return 0;
   }
 
   /**
    * Returns the size id of the specified node.
    * @param data data reference
-   * @return name id
+   * @return size id, or {@code 0} if key does not exist
    */
   public static int sizeID(final Data data) {
     return data.attrNames.id(T_SIZE);

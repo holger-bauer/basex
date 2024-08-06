@@ -1,6 +1,7 @@
 package org.basex.query.func.fn;
 
 import static org.basex.query.QueryError.*;
+import static org.basex.query.value.type.AtomType.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
@@ -12,13 +13,12 @@ import org.basex.query.value.type.*;
 /**
  * Date/time functions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class DateTime extends StandardFunc {
   /**
-   * Checks if the specified item is a Duration item. If it is untyped,
-   * a duration is returned.
+   * Checks if the specified item is a Duration item. If it is untyped, a duration is returned.
    * @param item item to be checked
    * @return duration
    * @throws QueryException query exception
@@ -26,7 +26,7 @@ abstract class DateTime extends StandardFunc {
   protected final Dur checkDur(final Item item) throws QueryException {
     if(item instanceof Dur) return (Dur) item;
     if(item.type.isUntyped()) return new Dur(item.string(info), info);
-    throw typeError(item, AtomType.DURATION, info);
+    throw typeError(item, DURATION, info);
   }
 
   /**
@@ -39,27 +39,21 @@ abstract class DateTime extends StandardFunc {
   }
 
   /**
-   * Adjusts a Time item to the specified time zone.
-   * @param item item
+   * Adjusts a date/time item to the specified time zone.
    * @param type target type
    * @param qc query context
-   * @return duration
+   * @return adjusted item
    * @throws QueryException query exception
    */
-  final ADate adjust(final Item item, final AtomType type, final QueryContext qc)
-      throws QueryException {
+  final Item adjust(final AtomType type, final QueryContext qc) throws QueryException {
+    final Item value = arg(0).atomItem(qc, info);
+    final Item zone = arg(1).atomItem(qc, info);
+    if(value.isEmpty()) return Empty.VALUE;
 
-    // clone item
-    ADate ad = toDate(item, type, qc);
-    if(!item.type.isUntyped()) {
-      ad = type == AtomType.TIME ? new Tim(ad) : type == AtomType.DATE ? new Dat(ad) : new Dtm(ad);
-    }
-    final boolean spec = exprs.length == 2;
-    final Item zon = spec ? exprs[1].atomItem(qc, info) : Empty.VALUE;
-    final DTDur dur = zon == Empty.VALUE ? null :
-      (DTDur) checkType(zon, AtomType.DAY_TIME_DURATION);
-    ad.timeZone(dur, spec, info);
-    return ad;
+    final ADate date = toDate(value, type, qc);
+    final boolean empty = zone.isEmpty();
+    final DTDur dur = empty ? null : (DTDur) checkType(zone, DAY_TIME_DURATION);
+    return date.timeZone(dur, defined(1) && empty, info);
   }
 
   @Override

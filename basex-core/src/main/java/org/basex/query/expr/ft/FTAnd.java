@@ -16,14 +16,14 @@ import org.basex.util.hash.*;
 /**
  * FTAnd expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  * @author Sebastian Gath
  */
 public final class FTAnd extends FTExpr {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   public FTAnd(final InputInfo info, final FTExpr[] exprs) {
@@ -66,7 +66,7 @@ public final class FTAnd extends FTExpr {
     return new FTIter() {
       @Override
       public FTNode next() throws QueryException {
-        // find item with lowest pre value
+        // find item with the lowest pre value
         final int il = nodes.length;
         for(int i = 0; i < il; ++i) {
           if(nodes[i] == null) return null;
@@ -129,7 +129,7 @@ public final class FTAnd extends FTExpr {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.tokens(exprs, ' ' + FTAND + ' ', true);
   }
 }

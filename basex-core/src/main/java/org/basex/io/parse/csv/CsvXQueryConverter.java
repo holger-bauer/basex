@@ -6,14 +6,18 @@ import org.basex.query.util.list.*;
 import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.map.*;
+import org.basex.query.value.type.*;
 
 /**
  * This class converts CSV data to an XQuery representation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CsvXQueryConverter extends CsvConverter {
+  /** String array type. */
+  private static final ArrayType STRING_ARRAY = ArrayType.get(SeqType.STRING_O);
+
   /** Field names. */
   public static final Str NAMES = Str.get("names");
   /** Records. */
@@ -34,33 +38,33 @@ public final class CsvXQueryConverter extends CsvConverter {
 
   @Override
   protected void header(final byte[] string) {
-    headers.add(string);
+    headers.add(shared.token(string));
   }
 
   @Override
   protected void record() {
-    if(row != null) rows.add(row.freeze());
+    if(row != null) rows.add(row.array(STRING_ARRAY));
     row = new ArrayBuilder();
   }
 
   @Override
   protected void entry(final byte[] value) {
-    row.append(Str.get(value));
+    row.append(Str.get(shared.token(value)));
   }
 
   @Override
-  protected XQMap finish(final String uri) throws QueryIOException {
-    if(row != null) rows.add(row.freeze());
-    try {
-      XQMap map = XQMap.EMPTY;
-      if(!headers.isEmpty()) {
-        final ArrayBuilder names = new ArrayBuilder();
-        for(final byte[] header : headers) names.append(Str.get(header));
-        map = map.put(NAMES, names.freeze(), null);
-      }
-      return map.put(RECORDS, rows.value(), null);
-    } catch(final QueryException ex) {
-      throw new QueryIOException(ex);
+  protected void init(final String uri) {
+  }
+
+  @Override
+  protected XQMap finish() throws QueryException {
+    if(row != null) rows.add(row.array(STRING_ARRAY));
+    final MapBuilder mb = new MapBuilder();
+    if(!headers.isEmpty()) {
+      final ArrayBuilder names = new ArrayBuilder();
+      for(final byte[] header : headers) names.append(Str.get(header));
+      mb.put(NAMES, names.array(STRING_ARRAY));
     }
+    return mb.put(RECORDS, rows.value(STRING_ARRAY)).map();
   }
 }

@@ -6,7 +6,7 @@ import static org.basex.util.Token.*;
  * This class assembles methods and variables that are used by more than one
  * formatter class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 abstract class FormatUtil {
@@ -110,7 +110,7 @@ abstract class FormatUtil {
    * @param ch character
    * @return zero base
    */
-  static int zeroes(final int ch) {
+  int zeroes(final int ch) {
     for(final int zero : ZEROES) {
       if(ch >= zero && ch <= zero + 9) return zero;
     }

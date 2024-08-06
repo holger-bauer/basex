@@ -13,34 +13,34 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class DbNodeId extends StandardFunc {
   @Override
   public final Iter iter(final QueryContext qc) throws QueryException {
-    final Iter iter = exprs[0].iter(qc);
+    final Iter nodes = arg(0).iter(qc);
     return new Iter() {
       @Override
       public Int next() throws QueryException {
-        final Item item = qc.next(iter);
-        return item != null ? Int.get(id(toDBNode(item))) : null;
+        final Item item = qc.next(nodes);
+        return item != null ? Int.get(id(toDBNode(item, false))) : null;
       }
     };
   }
 
   @Override
   public final Value value(final QueryContext qc) throws QueryException {
-    final Iter iter = exprs[0].iter(qc);
-    final LongList list = new LongList(Seq.initialCapacity(iter.size()));
-    for(Item item; (item = qc.next(iter)) != null;) list.add(id(toDBNode(item)));
+    final Iter nodes = arg(0).iter(qc);
+    final LongList list = new LongList(Seq.initialCapacity(nodes.size()));
+    for(Item item; (item = qc.next(nodes)) != null;) list.add(id(toDBNode(item, false)));
     return IntSeq.get(list.finish());
   }
 
   @Override
   protected final Expr opt(final CompileContext cc) {
-    final Expr expr = exprs[0];
-    exprType.assign(seqType(), expr.seqType().occ, expr.size());
+    final Expr nodes = arg(0);
+    exprType.assign(seqType(), nodes.seqType().occ, nodes.size());
     return this;
   }
 

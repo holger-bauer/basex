@@ -64,7 +64,7 @@ import org.basex.util.list.*;
  * NOTE: the class is not thread-safe. It is imperative that all read/write accesses
  * are synchronized over a single context's read/write lock.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Data {
@@ -83,7 +83,7 @@ public abstract class Data {
 
   /** Static node counter. */
   private static final AtomicInteger ID = new AtomicInteger();
-  /** Unique id. ID can get negative, as subtraction of ids is used for all comparisons. */
+  /** Unique id. Negative ID values are ok (IDs are subtracted when being compared). */
   public final int dbid = ID.incrementAndGet();
 
   /** Resource index. */
@@ -303,8 +303,8 @@ public abstract class Data {
   }
 
   /**
-   * Returns the node kind, which may be {@link #DOC}, {@link #ELEM}, {@link #TEXT},
-   * {@link #ATTR}, {@link #COMM} or {@link #PI}.
+   * Returns the node kind ({@link #DOC}, {@link #ELEM}, {@link #TEXT}, {@link #ATTR},
+   * {@link #COMM}, {@link #PI}).
    * @param pre pre value
    * @return node kind
    */
@@ -339,7 +339,7 @@ public abstract class Data {
       case ATTR:
         int d = table.read1(pre, 0) >> 3 & IO.MAXATTS;
         // skip additional attributes if value is larger than maximum range
-        if(d >= IO.MAXATTS) while(d < pre && kind(pre - d) == ATTR) d++;
+        if(d == IO.MAXATTS) while(d < pre && kind(pre - d) == ATTR) d++;
         return d;
       default:
         return pre + 1;
@@ -365,7 +365,7 @@ public abstract class Data {
   public final int attSize(final int pre, final int kind) {
     int s = kind == ELEM ? table.read1(pre, 0) >> 3 & IO.MAXATTS : 1;
     // skip additional attributes if value is larger than maximum range
-    if(s >= IO.MAXATTS) while(s < meta.size - pre && kind(pre + s) == ATTR) s++;
+    if(s == IO.MAXATTS) while(s < meta.size - pre && kind(pre + s) == ATTR) s++;
     return s;
   }
 
@@ -412,7 +412,7 @@ public abstract class Data {
    * Returns the id of the namespace uri of the addressed element or attribute.
    * @param pre pre value
    * @param kind node kind
-   * @return id of the namespace uri
+   * @return id of the namespace uri, or {@code 0} if node has no namespace
    */
   public final int uriId(final int pre, final int kind) {
     return kind == ELEM || kind == ATTR ? table.read1(pre, kind == ELEM ? 3 : 11) & 0xFF : 0;
@@ -579,17 +579,16 @@ public abstract class Data {
    * Rapid Replace implementation. Replaces parts of the database with the specified data instance.
    * @param pre pre value of the node to be replaced
    * @param source clip with source data
+   * @return success flag
    */
-  public final void replace(final int pre, final DataClip source) {
+  public final boolean replace(final int pre, final DataClip source) {
+    final int sCount = source.size();
+    if(sCount == 0 || !bufferSize(sCount)) return false;
+
     meta.update();
 
-    final int sCount = source.size();
-    final int tKind = kind(pre);
-    final int tSize = size(pre, tKind);
-    final int tPar = parent(pre, tKind);
-    bufferSize(sCount);
-
     // update index structures
+    final int tKind = kind(pre), tSize = size(pre, tKind), tPar = parent(pre, tKind);
     indexDelete(pre, id(pre), tSize);
 
     final Data sData = source.data;
@@ -655,8 +654,8 @@ public abstract class Data {
       updateDist(pre + sCount, diff);
     }
 
-    // adjust attribute size of parent if attributes inserted. attribute size
-    // of parent cannot be decreased via a replace expression.
+    // adjust attribute size of parent if attributes are inserted
+    // attribute size of parent cannot be decreased via a replace expression.
     int sPre = source.start;
     if(sData.kind(sPre) == ATTR) {
       int d = 0;
@@ -666,6 +665,7 @@ public abstract class Data {
 
     // add entries to index structures
     indexAdd(pre, meta.lastid - sCount + 1, sCount, source);
+    return true;
   }
 
   /**
@@ -747,7 +747,7 @@ public abstract class Data {
     resources.docs();
 
     // resize buffer to cache more entries
-    final int bSize = Math.min(sCount, IO.BLOCKSIZE >> IO.NODEPOWER);
+    final int bSize = Math.min(sCount, IO.ENTRIES);
     bufferSize(bSize);
 
     // organize namespaces to avoid duplicate declarations
@@ -948,12 +948,15 @@ public abstract class Data {
   private int bufferPos;
 
   /**
-   * Sets the update buffer to a new size.
+   * Tries to resize the update buffer.
    * @param size number of table entries
+   * @return success flag
    */
-  private void bufferSize(final int size) {
+  private boolean bufferSize(final int size) {
     final int bs = size << IO.NODEPOWER;
-    if(buffer.length != bs) buffer = new byte[bs];
+    if(bs < 0) return false;
+    buffer = new byte[bs];
+    return true;
   }
 
   /**

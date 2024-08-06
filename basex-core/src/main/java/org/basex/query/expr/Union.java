@@ -4,7 +4,6 @@ import static org.basex.query.QueryText.*;
 
 import java.util.function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
@@ -21,13 +20,13 @@ import org.basex.util.hash.*;
 /**
  * Union expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Union extends Set {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
   public Union(final InputInfo info, final Expr... exprs) {
@@ -39,36 +38,29 @@ public final class Union extends Set {
     flatten(cc);
 
     // determine type
-    SeqType st = null;
-    for(final Expr expr : exprs) {
-      final SeqType st2 = expr.seqType();
-      if(!st2.zero()) st = st == null ? st2 : st.union(st2);
-    }
-    // check if all operands yield an empty sequence
+    SeqType st = SeqType.union(exprs, false);
     if(st == null) st = SeqType.NODE_ZM;
+    if(!(st.type instanceof NodeType)) return null;
 
-    // skip optimizations if operands do not have the correct type
-    if(st.type instanceof NodeType) {
-      exprType.assign(st.union(Occ.ONE_OR_MORE));
+    exprType.assign(st.union(Occ.ONE_OR_MORE)).data(exprs);
 
-      final ExprList list = new ExprList(exprs.length);
-      for(final Expr expr : exprs) {
-        if(expr == Empty.VALUE || list.contains(expr) && !expr.has(Flag.CNS, Flag.NDT)) {
-          // remove empty operands: * union ()  ->  *
-          // remove duplicates: * union *  ->  *
-          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-        } else {
-          list.add(expr);
-        }
+    final ExprList list = new ExprList(exprs.length);
+    for(final Expr expr : exprs) {
+      if(expr == Empty.VALUE || list.contains(expr) && !expr.has(Flag.CNS, Flag.NDT)) {
+        // remove empty operands: * union ()  ->  *
+        // remove duplicates: * union *  ->  *
+        cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+      } else {
+        list.add(expr);
       }
-      exprs = list.finish();
+    }
+    exprs = list.finish();
 
-      final Expr ex = rewrite(Intersect.class, (invert, ops) ->
-        invert ? new Intersect(info, ops) : new Union(info, ops), cc);
-      if(ex != null) {
-        cc.info(OPTREWRITE_X_X, (Supplier<?>) this::description, ex);
-        return ex;
-      }
+    final Expr ex = rewrite(Intersect.class, (invert, ops) ->
+      invert ? new Intersect(info, ops) : new Union(info, ops), cc);
+    if(ex != null) {
+      cc.info(OPTREWRITE_X_X, (Supplier<?>) this::description, ex);
+      return ex;
     }
     return null;
   }
@@ -83,7 +75,9 @@ public final class Union extends Set {
     final ANodeBuilder nodes = new ANodeBuilder();
     for(final Expr expr : exprs) {
       final Iter iter = expr.iter(qc);
-      for(Item item; (item = qc.next(iter)) != null;) nodes.add(toNode(item));
+      for(Item item; (item = qc.next(iter)) != null;) {
+        nodes.add(toNode(item));
+      }
     }
     return nodes.value(this);
   }
@@ -103,7 +97,7 @@ public final class Union extends Set {
         final int il = nodes.length;
         for(int i = 0; i < il; i++) {
           if(nodes[i] == null) continue;
-          final int d = m == -1 ? 1 : nodes[m].diff(nodes[i]);
+          final int d = m == -1 ? 1 : nodes[m].compare(nodes[i]);
           if(d == 0) {
             next(i--);
           } else if(d > 0) {
@@ -117,11 +111,6 @@ public final class Union extends Set {
         return node;
       }
     };
-  }
-
-  @Override
-  public Data data() {
-    return data(exprs);
   }
 
   @Override

@@ -16,7 +16,7 @@ import org.basex.util.*;
 /**
  * Functions for converting data to other formats.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ConvertFn extends StandardFunc {
@@ -27,14 +27,14 @@ public abstract class ConvertFn extends StandardFunc {
    * @throws QueryException query exception
    */
   final byte[] stringToBinary(final QueryContext qc) throws QueryException {
-    final byte[] token = toToken(exprs[0], qc);
-    final String encoding = toEncodingOrNull(1, CONVERT_ENCODING_X, qc);
-    if(encoding == null || encoding == Strings.UTF8) return token;
+    final byte[] value = toToken(arg(0), qc);
+    final String encoding = toEncodingOrNull(arg(1), CONVERT_ENCODING_X, qc);
+    if(encoding == null || encoding == Strings.UTF8) return value;
     try {
-      return toBinary(token, encoding);
+      return toBinary(value, encoding);
     } catch(final CharacterCodingException ex) {
       Util.debug(ex);
-      throw CONVERT_BINARY_X_X.get(info, normalize(token, info), encoding);
+      throw CONVERT_BINARY_X_X.get(info, value, encoding);
     }
   }
 
@@ -56,7 +56,7 @@ public abstract class ConvertFn extends StandardFunc {
   /**
    * Converts the specified input to a string in the specified encoding.
    * @param is input stream
-   * @param encoding encoding
+   * @param encoding encoding (can be {@code null})
    * @param validate validate string
    * @return resulting value
    * @throws IOException I/O exception

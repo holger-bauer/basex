@@ -4,7 +4,6 @@ import java.util.*;
 
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.func.fn.*;
 import org.basex.query.value.*;
 import org.basex.query.value.array.*;
 import org.basex.query.value.item.*;
@@ -12,24 +11,27 @@ import org.basex.query.value.item.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public final class ArrayFoldRight extends ArrayFn {
+public final class ArrayFoldRight extends ArrayFoldLeft {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final XQArray array = toArray(exprs[0], qc);
-    Value result = exprs[1].value(qc);
-    final FItem func = checkArity(exprs[2], 2, qc);
+    final XQArray array = toArray(arg(0), qc);
+    final FItem action = action(qc);
 
-    final ListIterator<Value> iter = array.iterator(array.arraySize());
-    while(iter.hasPrevious()) result = func.invoke(qc, info, iter.previous(), result);
+    Value result = arg(1).value(qc);
+    long p = array.arraySize();
+    for(final ListIterator<Value> iter = array.iterator(p); iter.hasPrevious();) {
+      final Value value = iter.previous();
+      result = action.invoke(qc, info, value, result, Int.get(p--));
+      if(skip(qc, value, result)) break;
+    }
     return result;
   }
 
   @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    FnFoldLeft.opt(this, cc, true, false);
-    return this;
+    return optType(cc, true, false);
   }
 }

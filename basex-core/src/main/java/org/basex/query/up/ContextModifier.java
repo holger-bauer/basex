@@ -17,7 +17,7 @@ import org.basex.util.list.*;
  * Base class for the different context modifiers. A context modifier aggregates
  * all updates for a specific context.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 abstract class ContextModifier {
@@ -25,7 +25,7 @@ abstract class ContextModifier {
   private final Map<Data, DataUpdates> dbUpdates = new HashMap<>();
   /** Update primitives, aggregated separately for each database name. */
   private final Map<String, NameUpdates> nameUpdates = new HashMap<>();
-  /** Update primitives, aggregated separately for each user name. */
+  /** Update primitives, aggregated separately for each username. */
   private final Map<String, UserUpdates> userUpdates = new HashMap<>();
   /** Temporary data reference, containing all XML fragments to be inserted. */
   private MemData memData;
@@ -129,9 +129,7 @@ abstract class ContextModifier {
     }
 
     // apply remaining updates based on database names
-    for(final NameUpdates up : nameUpdates.values()) {
-      up.apply(false);
-    }
+    for(final NameUpdates up : nameUpdates.values()) up.apply(false);
   }
 
   /**

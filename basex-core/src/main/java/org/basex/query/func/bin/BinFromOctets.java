@@ -13,15 +13,15 @@ import org.basex.util.list.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BinFromOctets extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final Iter iter = exprs[0].atomIter(qc, info);
-    final ByteList bl = new ByteList(Seq.initialCapacity(iter.size()));
-    for(Item item; (item = qc.next(iter)) != null;) {
+    final Iter integers = arg(0).atomIter(qc, info);
+    final ByteList bl = new ByteList(Seq.initialCapacity(integers.size()));
+    for(Item item; (item = qc.next(integers)) != null;) {
       final long l = toLong(item);
       if(l < 0 || l > 255) throw BIN_OOR_X.get(info, l);
       bl.add((int) l);

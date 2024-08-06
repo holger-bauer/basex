@@ -1,7 +1,5 @@
 package org.basex.util.hash;
 
-import static org.basex.util.Token.*;
-
 import java.io.*;
 import java.util.*;
 
@@ -11,9 +9,8 @@ import org.basex.util.*;
 
 /**
  * This is an efficient and memory-saving hash set for storing tokens.
- * The first entry of the token set (offset 0) is always empty.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class TokenSet extends ASet implements Iterable<byte[]> {
@@ -24,17 +21,34 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * Default constructor.
    */
   public TokenSet() {
-    super(Array.INITIAL_CAPACITY);
+    this(Array.INITIAL_CAPACITY);
+  }
+
+  /**
+   * Constructor with initial capacity.
+   * @param capacity array capacity (will be resized to a power of two)
+   */
+  public TokenSet(final long capacity) {
+    super(capacity);
     keys = new byte[capacity()][];
   }
 
   /**
-   * Constructor, specifying initial keys.
-   * @param key initial keys
+   * Constructor with initial keys.
+   * @param keys keys to be added
    */
-  public TokenSet(final byte[]... key) {
-    this();
-    for(final byte[] i : key) add(i);
+  public TokenSet(final byte[]... keys) {
+    this(keys.length);
+    for(final byte[] key : keys) add(key);
+  }
+
+  /**
+   * Convenience constructor with initial strings as keys.
+   * @param keys keys to be added
+   */
+  public TokenSet(final String... keys) {
+    this(keys.length);
+    for(final String key : keys) add(key);
   }
 
   /**
@@ -85,7 +99,7 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
    * @return {@code true} if the key did not exist yet and was stored
    */
   public final boolean add(final String key) {
-    return add(token(key));
+    return add(Token.token(key));
   }
 
   /**
@@ -115,14 +129,14 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
   public final int id(final byte[] key) {
     final int b = Token.hash(key) & capacity() - 1;
     for(int id = buckets[b]; id != 0; id = next[id]) {
-      if(eq(key, keys[id])) return id;
+      if(Token.eq(key, keys[id])) return id;
     }
     return 0;
   }
 
   /**
    * Returns the key with the specified id.
-   * All ids starts with {@code 1} instead of {@code 0}.
+   * All ids start with {@code 1} instead of {@code 0}.
    * @param id id of the key to return
    * @return key
    */
@@ -140,7 +154,7 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
   public int remove(final byte[] key) {
     final int b = Token.hash(key) & capacity() - 1;
     for(int p = 0, id = buckets[b]; id != 0; p = id, id = next[id]) {
-      if(!eq(key, keys[id])) continue;
+      if(!Token.eq(key, keys[id])) continue;
       if(p == 0) buckets[b] = next[id];
       else next[p] = next[next[p]];
       keys[id] = null;
@@ -150,18 +164,19 @@ public class TokenSet extends ASet implements Iterable<byte[]> {
   }
 
   /**
-   * Stores the specified key and returns its id, or returns the negative id if the
-   * key has already been stored.
-   * @param key key to be found
+   * Stores the specified key and returns its id, or returns the negative id if the key has already
+   * been stored. The public method {@link #add} can be used to check if an added value exists.
+   * @param key key to be indexed
    * @return id, or negative id if key has already been stored
    */
   private int index(final byte[] key) {
-    checkSize();
-    final int b = Token.hash(key) & capacity() - 1;
+    final int h = Token.hash(key);
+    int b = h & capacity() - 1;
     for(int id = buckets[b]; id != 0; id = next[id]) {
-      if(eq(key, keys[id])) return -id;
+      if(Token.eq(key, keys[id])) return -id;
     }
     final int s = size++;
+    if(checkCapacity()) b = h & capacity() - 1;
     next[s] = buckets[b];
     keys[s] = key;
     buckets[b] = s;

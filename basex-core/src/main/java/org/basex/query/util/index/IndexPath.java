@@ -8,20 +8,20 @@ import org.basex.query.util.list.*;
 /**
  * Index predicate: path expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public class IndexPath extends IndexPred {
+class IndexPath extends IndexPred {
   /** Path expression. */
   private final AxisPath path;
 
   /**
    * Constructor.
    * @param path path expression
-   * @param ii index info
+   * @param info index info
    */
-  IndexPath(final AxisPath path, final IndexInfo ii) {
-    super(ii);
+  IndexPath(final AxisPath path, final IndexInfo info) {
+    super(info);
     this.path = path;
   }
 
@@ -61,33 +61,33 @@ public class IndexPath extends IndexPred {
   Step qname() {
     final int s = path.steps.length - 1;
     final Step st = step(s);
-    return ii.text && st.axis == Axis.CHILD && st.test == KindTest.TXT ? step(s - 1) : st;
+    return info.text && st.axis == Axis.CHILD && st.test == KindTest.TEXT ? step(s - 1) : st;
   }
 
   @Override
   Expr invert(final Expr root) throws QueryException {
-    final CompileContext cc = ii.cc;
+    final CompileContext cc = info.cc;
     final ExprList steps = new ExprList();
 
     // choose new root expression: add predicates of last step to root
     int s = path.steps.length - 1;
     final Step last = step(s);
-    final Expr rt = last.exprs.length == 0 ? root : Filter.get(cc, path.info, root, last.exprs);
+    final Expr rt = last.exprs.length > 0 ? Filter.get(cc, path.info(), root, last.exprs) : root;
 
     // attribute index request: start inverted path with attribute step
-    if(!ii.text && (last.test instanceof NameTest || last.test instanceof UnionTest)) {
-      steps.add(Step.get(cc, rt, last.info, last.test));
+    if(!info.text && (last.test instanceof NameTest || last.test instanceof UnionTest)) {
+      steps.add(Step.get(cc, rt, last.info(), last.test));
     }
     // add inverted steps in reverse order
     while(--s >= 0) {
       final Step st = step(s);
-      steps.add(Step.get(cc, rt, st.info, step(s + 1).axis.invert(), st.test, st.exprs));
+      steps.add(Step.get(cc, rt, st.info(), step(s + 1).axis.invert(), st.test, st.exprs));
     }
     // add root step without predicates
     final Step st = step(s);
-    steps.add(Step.get(cc, rt, st.info, step(s + 1).axis.invert(), st.test));
+    steps.add(Step.get(cc, rt, st.info(), step(s + 1).axis.invert(), st.test));
 
-    return Path.get(cc, path.info, rt, steps.finish());
+    return Path.get(cc, path.info(), rt, steps.finish());
   }
 
   /**
@@ -96,6 +96,6 @@ public class IndexPath extends IndexPred {
    * @return step
    */
   private Step step(final int index) {
-    return index < 0 ? ii.step : path.step(index);
+    return index < 0 ? info.step : path.step(index);
   }
 }

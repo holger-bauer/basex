@@ -2,7 +2,7 @@ package org.basex.gui.view.tree;
 
 /**
  * This is class is used to handle rectangles.
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Wolfgang Miller
  */
 final class TreeRect {
@@ -37,6 +37,6 @@ final class TreeRect {
    * @return result of check
    */
   boolean contains(final int xx, final int ww) {
-    return xx <= x && xx + ww >= x || xx <= x + w && xx + ww >= x;
+    return xx + ww >= x && xx <= x + w;
   }
 }

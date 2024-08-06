@@ -12,7 +12,7 @@ import org.basex.util.*;
 /**
  * This class converts CSV data to XML, using direct or attributes conversion.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class CsvBuilder extends CsvConverter {
@@ -20,8 +20,6 @@ final class CsvBuilder extends CsvConverter {
   private final Atts atts = new Atts();
   /** Namespaces. */
   private final Atts nsp = new Atts();
-  /** Record. */
-  private boolean record;
   /** Builder. */
   private final Builder builder;
   /** Current line. */
@@ -29,51 +27,57 @@ final class CsvBuilder extends CsvConverter {
 
   /**
    * Constructor.
-   * @param opts CSV options
+   * @param copts CSV options
    * @param builder builder
    * @throws IOException I/O exception
    */
-  CsvBuilder(final CsvParserOptions opts, final Builder builder) throws IOException {
-    super(opts);
+  CsvBuilder(final CsvParserOptions copts, final Builder builder) throws IOException {
+    super(copts);
     this.builder = builder;
-    builder.openElem(CsvConverter.CSV, atts, nsp);
+    builder.openElem(Q_CSV.string(), atts, nsp);
   }
 
   @Override
   public void record() throws IOException {
-    if(record) builder.closeElem();
-    builder.openElem(RECORD, atts, nsp);
-    record = true;
-    col = 0;
+    finishRecord();
+    builder.openElem(Q_RECORD.string(), atts, nsp);
+    column = -1;
     line++;
   }
 
   @Override
   public void header(final byte[] value) {
-    headers.add(ats ? value : XMLToken.encode(value, lax));
+    headers.add(attributes ? value : XMLToken.encode(value, lax));
   }
 
   @Override
-  public void entry(final byte[] entry) throws IOException {
-    final byte[] elem = ENTRY, name = headers.get(col++);
-    if(ats) {
+  public void entry(final byte[] value) throws IOException {
+    ++column;
+    if(skipEmpty && value.length == 0) return;
+
+    final byte[] elem = Q_ENTRY.string(), name = headers.get(column);
+    if(attributes) {
       if(name == null) {
         builder.openElem(elem, atts, nsp);
       } else {
-        atts.add(NAME, name);
+        atts.add(Q_NAME.string(), name);
         builder.openElem(elem, atts, nsp);
         atts.reset();
       }
     } else {
       builder.openElem(name != null ? name : elem, atts, nsp);
     }
-    builder.text(entry);
+    builder.text(value);
     builder.closeElem();
   }
 
   @Override
-  public Str finish(final String uri) throws IOException {
-    if(record) builder.closeElem();
+  protected void init(final String uri) {
+  }
+
+  @Override
+  protected Str finish() throws IOException {
+    finishRecord();
     builder.closeElem();
     return null;
   }
@@ -86,5 +90,13 @@ final class CsvBuilder extends CsvConverter {
   @Override
   public double progressInfo() {
     return (double) nli.size() / nli.length();
+  }
+
+  /**
+   * Finishes a record.
+   * @throws IOException I/O exception
+   */
+  private void finishRecord() throws IOException {
+    if(column >= 0) builder.closeElem();
   }
 }

@@ -6,7 +6,7 @@ import com.bradmcevoy.http.*;
 /**
  * WebDAV locks.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WebDAVLocks {
@@ -14,7 +14,7 @@ public final class WebDAVLocks {
   private static final WebDAVLocks INSTANCE = new WebDAVLocks();
   /** Registered locks. */
   private final HashMap<String, WebDAVLock> locks = new HashMap<>();
-  /** Id counter. */
+  /** ID counter. */
   private long lockId;
 
   /** Private constructor. */
@@ -24,7 +24,7 @@ public final class WebDAVLocks {
    * Returns singleton instance.
    * @return locks
    */
-  public static WebDAVLocks get() {
+  static WebDAVLocks get() {
     synchronized(INSTANCE) {
       // remove expired entries before returning the object
       INSTANCE.locks.entrySet().removeIf(entry -> entry.getValue().token.isExpired());

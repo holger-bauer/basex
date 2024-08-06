@@ -14,38 +14,42 @@ import org.basex.gui.layout.*;
 import org.basex.gui.text.*;
 import org.basex.io.*;
 import org.basex.io.parse.csv.*;
+import org.basex.query.*;
+import org.basex.query.value.item.*;
 import org.basex.util.*;
 import org.basex.util.list.*;
 
 /**
  * CSV parser panel.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogCsvParser extends DialogParser {
   /** CSV example string. */
-  private static final String EXAMPLE = "Name,Born?_\n\"John, Adam\\\",1984";
+  private static final String EXAMPLE = "Name,Born?,Comment\n\"John, Adam\\\",1984,";
 
   /** Options. */
   private final CsvParserOptions copts;
-  /** JSON example. */
+  /** Example. */
   private final TextPanel example;
-  /** CSV: encoding. */
+  /** Encoding. */
   private final BaseXCombo encoding;
-  /** CSV: Use header. */
+  /** Use header. */
   private final BaseXCheckBox header;
-  /** CSV: format. */
+  /** Format. */
   private final BaseXCombo format;
-  /** CSV: Separator. */
+  /** Separator. */
   private final BaseXCombo seps;
-  /** CSV: Separator (numeric). */
+  /** Separator (numeric). */
   private final BaseXTextField sepchar;
-  /** CSV: Lax name conversion. */
+  /** Lax name conversion. */
   private final BaseXCheckBox lax;
-  /** CSV: Parse quotes. */
+  /** Skip empty fields. */
+  private final BaseXCheckBox skipEmpty;
+  /** Parse quotes. */
   private final BaseXCheckBox quotes;
-  /** CSV: Backslashes. */
+  /** Backslashes. */
   private final BaseXCheckBox backslashes;
 
   /**
@@ -102,6 +106,8 @@ final class DialogCsvParser extends DialogParser {
     p.add(backslashes);
     lax = new BaseXCheckBox(dialog, LAX_NAME_CONVERSION, CsvOptions.LAX, copts);
     p.add(lax);
+    skipEmpty = new BaseXCheckBox(dialog, SKIP_EMPTY, CsvParserOptions.SKIP_EMPTY, copts);
+    p.add(skipEmpty);
 
     pp.add(p);
 
@@ -119,10 +125,11 @@ final class DialogCsvParser extends DialogParser {
       final boolean head = header.isSelected();
       format.setEnabled(head);
       lax.setEnabled(head && copts.get(CsvOptions.FORMAT) == CsvFormat.DIRECT);
+      skipEmpty.setEnabled(head);
 
-      example.setText(example(MainParser.CSV.name(), EXAMPLE,
-          CsvConverter.get(copts).convert(new IOContent(EXAMPLE)).serialize().toString()));
-    } catch(final IOException ex) {
+      final Item item = CsvConverter.get(copts).convert(new IOContent(EXAMPLE));
+      example.setText(example(MainParser.CSV.name(), EXAMPLE, item));
+    } catch(final QueryException | IOException ex) {
       example.setText(error(ex));
     }
 
@@ -141,6 +148,7 @@ final class DialogCsvParser extends DialogParser {
     copts.set(CsvOptions.LAX, lax.isSelected());
     copts.set(CsvOptions.QUOTES, quotes.isSelected());
     copts.set(CsvOptions.BACKSLASHES, backslashes.isSelected());
+    copts.set(CsvParserOptions.SKIP_EMPTY, skipEmpty.isSelected());
     String sep;
     if(seps.getSelectedIndex() < CsvSep.values().length) {
       sep = seps.getSelectedItem();

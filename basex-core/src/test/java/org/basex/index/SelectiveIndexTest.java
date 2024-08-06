@@ -7,49 +7,49 @@ import java.util.*;
 import org.basex.*;
 import org.basex.core.*;
 import org.basex.core.cmd.*;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.Test;
 
 /**
  * Storage tests for the selective index feature (#59).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SelectiveIndexTest extends SandboxTest {
   /** Test file. */
   private static final String FILE = "src/test/resources/selective.xml";
 
-  /**
-   * Tests the text index.
-   */
+  /** Prepares a test. */
+  @BeforeEach public void before() {
+    set(MainOptions.STRIPWS, true);
+  }
+
+  /** Tests the text index. */
   @Test public void textIndex() {
     map().forEach((key, value) -> {
       set(MainOptions.TEXTINCLUDE, key);
       execute(new CreateDB(NAME, FILE));
       final int size = context.data().textIndex.size();
-      assertEquals(value.intValue(), size, "TextIndex: \"" + key + "\": ");
+      assertEquals(value, size, "TextIndex: \"" + key + "\": ");
     });
   }
 
-  /**
-   * Tests the attribute index.
-   */
+  /** Tests the attribute index. */
   @Test public void attrIndex() {
     try {
       map().forEach((key, value) -> {
         set(MainOptions.ATTRINCLUDE, key);
         execute(new CreateDB(NAME, FILE));
         final int size = context.data().attrIndex.size();
-        assertEquals(value.intValue(), size, "AttrIndex: \"" + key + "\": ");
+        assertEquals(value, size, "AttrIndex: \"" + key + "\": ");
       });
     } finally {
       set(MainOptions.ATTRINCLUDE, "");
     }
   }
 
-  /**
-   * Tests the token index.
-   */
+  /** Tests the token index. */
   @Test public void tokenIndex() {
     set(MainOptions.TOKENINDEX, true);
     try {
@@ -57,7 +57,7 @@ public final class SelectiveIndexTest extends SandboxTest {
         set(MainOptions.TOKENINCLUDE, key);
         execute(new CreateDB(NAME, FILE));
         final int size = context.data().tokenIndex.size();
-        assertEquals(value.intValue(), size, "TokenIndex: \"" + key + "\": ");
+        assertEquals(value, size, "TokenIndex: \"" + key + "\": ");
       });
     } finally {
       set(MainOptions.TOKENINCLUDE, "");
@@ -65,9 +65,7 @@ public final class SelectiveIndexTest extends SandboxTest {
     }
   }
 
-  /**
-   * Tests the full-text index.
-   */
+  /** Tests the full-text index. */
   @Test public void ftIndex() {
     set(MainOptions.FTINDEX, true);
     try {
@@ -82,9 +80,7 @@ public final class SelectiveIndexTest extends SandboxTest {
     }
   }
 
-  /**
-   * Tests the id functions.
-   */
+  /** Tests the id functions. */
   @Test public void id() {
     set(MainOptions.TOKENINDEX, true);
     try {

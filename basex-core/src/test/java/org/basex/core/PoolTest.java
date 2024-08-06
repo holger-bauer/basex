@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /**
  * This class tests transaction and locking cases.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Andreas Weiler
  */
 public final class PoolTest extends SandboxTest {
@@ -114,7 +114,8 @@ public final class PoolTest extends SandboxTest {
     try {
       session.execute(cmd);
       fail("Command was supposed to fail.");
-    } catch(final IOException ignored) {
+    } catch(final IOException ex) {
+      Util.debug(ex);
     }
   }
 }

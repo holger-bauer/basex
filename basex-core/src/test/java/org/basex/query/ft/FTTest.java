@@ -8,30 +8,20 @@ import org.junit.jupiter.api.Test;
 /**
  * Full-text test queries.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FTTest extends FTData {
-  /** Test all flag. */
-  private static final boolean ALL = true;
-
-  static { create(DOC); }
-  static { queries = QUERIES; }
+  static {
+    create(DOC);
+    queries = QUERIES;
+  }
 
   @Test @Override
   public void test() {
-    if(ALL) {
-      // test with and without index
-      for(int a = 0; a < 2; ++a) {
-        set(MainOptions.FTINDEX, a == 0);
-        super.test();
-      }
-    } else {
-      // single test
-      set(MainOptions.FTINDEX, true);
-      set(MainOptions.STEMMING, true);
-      set(MainOptions.DIACRITICS, true);
-      set(MainOptions.CASESENS, true);
+    // test with and without index
+    for(int a = 0; a < 2; ++a) {
+      set(MainOptions.FTINDEX, a == 0);
       super.test();
     }
   }

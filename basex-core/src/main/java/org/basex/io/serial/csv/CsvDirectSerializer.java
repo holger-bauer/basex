@@ -17,7 +17,7 @@ import org.basex.util.list.*;
 /**
  * This class serializes items as CSV.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class CsvDirectSerializer extends CsvSerializer {
@@ -36,13 +36,13 @@ public final class CsvDirectSerializer extends CsvSerializer {
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  public CsvDirectSerializer(final OutputStream os, final SerializerOptions opts)
+  public CsvDirectSerializer(final OutputStream os, final SerializerOptions sopts)
       throws IOException {
 
-    super(os, opts);
+    super(os, sopts);
     headers = header ? new TokenList() : null;
     atts = copts.get(CsvOptions.FORMAT) == CsvFormat.ATTRIBUTES;
     lax = copts.get(CsvOptions.LAX) || atts;
@@ -102,7 +102,7 @@ public final class CsvDirectSerializer extends CsvSerializer {
     if(headers != null) {
       final byte[] key = atts && attv != null ? attv : elem.string();
       final byte[] name = XMLToken.decode(key, lax);
-      if(name == null) throw CSV_SERIALIZE_X.getIO(Util.inf("Invalid element name <%>", key));
+      if(name == null) throw CSV_SERIALIZE_X_X.getIO("Invalid element name", key);
       if(!headers.contains(name)) headers.add(name);
       final byte[] old = data.get(name);
       data.put(name, old == null || old.length == 0 ? value :

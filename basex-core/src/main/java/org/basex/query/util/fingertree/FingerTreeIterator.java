@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * List iterator over the elements of a finger tree.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  *
  * @param <E> element type
@@ -67,7 +67,7 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
    * @param start start position
    */
   @SuppressWarnings("unchecked")
-  FingerTreeIterator(final DeepTree<?, E> tree, final long start) {
+  private FingerTreeIterator(final DeepTree<?, E> tree, final long start) {
     n = tree.size();
     index = start;
 
@@ -247,7 +247,6 @@ final class FingerTreeIterator<E> implements ListIterator<E> {
         } else {
           // backtrack one level
           trees[tTop] = null;
-          deepPos = 0;
           tTop--;
           start = trees[tTop].right[0];
           deepPos = 1;

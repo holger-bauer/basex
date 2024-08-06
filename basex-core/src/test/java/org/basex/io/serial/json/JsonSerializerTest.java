@@ -11,13 +11,12 @@ import org.basex.io.serial.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.*;
-import org.basex.util.options.Options.YesNo;
 import org.junit.jupiter.api.*;
 
 /**
  * Tests for the {@link JsonSerializer} classes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class JsonSerializerTest extends SandboxTest {
@@ -123,7 +122,7 @@ public final class JsonSerializerTest extends SandboxTest {
     error("map { 'A': 0 div 0.0e0 }", format, SERNUMBER_X);
 
     error("map { true(): true#0 }", format, SERJSONFUNC_X);
-    error("map { 'A': ('B','C') }", format, SERJSONSEQ);
+    error("map { 'A': ('B', 'C') }", format, SERJSONSEQ);
 
     // arrays
     serialize("[()]", "[null]", format);
@@ -131,10 +130,10 @@ public final class JsonSerializerTest extends SandboxTest {
     serialize("[2, 3]", "[2,3]", format);
     serialize("[2, (), 4]", "[2,null,4]", format);
 
-    error("[ (1,2) ]", format, SERJSONSEQ);
+    error("[ (1, 2) ]", format, SERJSONSEQ);
 
     // mixed
-    serialize("map { 'A': map {} }", "{'A':{}}", format);
+    serialize("map { 'A': map { } }", "{'A':{}}", format);
     serialize("map { 'A': map { 'B': 'C' } }", "{'A':{'B':'C'}}", format);
     serialize("map { 'A': array { 'B' } }", "{'A':['B']}", format);
     serialize("map { '0': () }", "{'0':null}", format);
@@ -196,7 +195,6 @@ public final class JsonSerializerTest extends SandboxTest {
 
       final SerializerOptions sopts = new SerializerOptions();
       sopts.set(SerializerOptions.METHOD, SerialMethod.JSON);
-      sopts.set(SerializerOptions.INDENT, YesNo.NO);
       sopts.set(SerializerOptions.JSON, jopts);
 
       try(Serializer ser = Serializer.get(ao, sopts)) {

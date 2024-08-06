@@ -12,13 +12,12 @@ import org.basex.io.out.*;
 import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.seq.*;
-import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileWriteText extends FileFn {
@@ -38,19 +37,22 @@ public class FileWriteText extends FileFn {
   final synchronized void write(final boolean append, final QueryContext qc)
       throws QueryException, IOException {
 
-    final Path path = checkParentDir(toPath(0, qc));
-    final AStr text = (AStr) checkType(exprs[1], qc, AtomType.STRING);
-    final String encoding = toEncodingOrNull(2, FILE_UNKNOWN_ENCODING_X, qc);
+    final Path path = toParent(toPath(arg(0), qc));
+    Item value = toAtomItem(arg(1), qc);
+    final String encoding = toEncodingOrNull(arg(2), FILE_UNKNOWN_ENCODING_X, qc);
     final Charset cs = encoding == null || encoding == Strings.UTF8 ? null :
       Charset.forName(encoding);
 
+    // workaround to preserve streamable string items
+    if(!(value instanceof AStr)) value = Str.get(toToken(value));
+
     try(PrintOutput out = PrintOutput.get(new FileOutputStream(path.toFile(), append))) {
       if(cs == null) {
-        try(BufferInput in = text.input(info)) {
-          for(int b; (b = in.read()) != -1;) out.write(b);
+        try(TextInput in = value.stringInput(info)) {
+          for(int cp; (cp = in.read()) != -1;) out.print(cp);
         }
       } else {
-        out.write(string(text.string(info)).getBytes(cs));
+        out.write(string(value.string(info)).getBytes(cs));
       }
     }
   }

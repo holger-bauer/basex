@@ -5,7 +5,7 @@ import org.basex.util.*;
 /**
  * An inner node containing nested sub-nodes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  *
  * @param <N> node type
@@ -412,14 +412,12 @@ final class InnerNode<N, E> implements Node<Node<N, E>, E> {
    * @param indent indentation depth
    */
   public void toString(final StringBuilder sb, final int indent) {
-    for(int i = 0; i < indent; i++) sb.append("  ");
-    sb.append("Node(").append(size()).append(")[\n");
+    sb.append("  ".repeat(indent)).append("Node(").append(size()).append(")[\n");
     for(final Node<N, E> sub : children) {
       FingerTree.toString(sub, sb, indent + 1);
       sb.append('\n');
     }
-    for(int i = 0; i < indent; i++) sb.append("  ");
-    sb.append(']');
+    sb.append("  ".repeat(indent)).append(']');
   }
 
   @Override

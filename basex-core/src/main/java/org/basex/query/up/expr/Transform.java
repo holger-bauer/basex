@@ -21,49 +21,37 @@ import org.basex.util.hash.*;
 /**
  * Transform expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
-public final class Transform extends Arr {
+public final class Transform extends Copy {
   /** Variable bindings created by copy clause. */
   private final Let[] copies;
 
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param copies copy expressions
-   * @param mod modify expression
+   * @param modify modify expression
    * @param rtrn return expression
    */
-  public Transform(final InputInfo info, final Let[] copies, final Expr mod, final Expr rtrn) {
-    super(info, SeqType.ITEM_ZM, mod, rtrn);
+  public Transform(final InputInfo info, final Let[] copies, final Expr modify, final Expr rtrn) {
+    super(info, SeqType.ITEM_ZM, modify, rtrn);
     this.copies = copies;
+  }
+
+  @Override
+  public Expr compile(final CompileContext cc) throws QueryException {
+    // type of let variable must not match expression type (name of node may change)
+    for(final Let copy : copies) copy.exprType.assign(copy.expr);
+    return super.compile(cc);
   }
 
   @Override
   public void checkUp() throws QueryException {
     for(final Let copy : copies) copy.checkUp();
-    final Expr modify = exprs[0];
-    modify.checkUp();
-    if(!modify.vacuous() && !modify.has(Flag.UPD)) throw UPMODIFY.get(info);
-    exprs[1].checkUp();
-  }
-
-  @Override
-  public Expr compile(final CompileContext cc) throws QueryException {
-    for(final Let copy : copies) copy.expr = copy.expr.compile(cc);
-    return super.compile(cc);
-  }
-
-  @Override
-  public Expr optimize(final CompileContext cc) {
-    for(final Let copy : copies) {
-      copy.exprType.assign(copy.expr);
-    }
-    // name of node may change
-    final SeqType st = exprs[1].seqType();
-    exprType.assign(st.type, st.occ);
-    return this;
+    super.checkUp();
+    arg(target()).checkUp();
   }
 
   @Override
@@ -75,11 +63,16 @@ public final class Transform extends Arr {
       for(final Let copy : copies) {
         final Iter iter = copy.expr.iter(qc);
         Item item = iter.next();
-        if(!(item instanceof ANode)) throw UPSINGLE_X_X.get(
-            copy.info, copy.var.name, item == null ? Empty.VALUE : item);
-        final Item i2 = iter.next();
-        if(i2 != null)
-          throw UPSINGLE_X_X.get(copy.info, copy.var.name, ValueBuilder.concat(item, i2, qc));
+        Value error = null;
+        if(item == null) {
+          error = Empty.VALUE;
+        } else if(!(item instanceof ANode)) {
+          error = item;
+        } else {
+          final Item item2 = iter.next();
+          if(item2 != null) error = ValueBuilder.concat(item, item2);
+        }
+        if(error != null) throw UPSINGLE_X_X.get(copy.info(), copy.var.name, error);
 
         // create main memory copy of node
         item = ((ANode) item).copy(qc);
@@ -87,14 +80,14 @@ public final class Transform extends Arr {
         qc.set(copy.var, item);
         updates.addData(item.data());
       }
-      if(!exprs[0].value(qc).isEmpty()) throw UPMODIFY.get(info);
 
+      if(!arg(update()).value(qc).isEmpty()) throw UPMODIFY.get(info);
       updates.prepare(qc);
       updates.apply(qc);
     } finally {
       qc.updates = tmp;
     }
-    return exprs[1].value(qc);
+    return arg(target()).value(qc);
   }
 
   @Override
@@ -102,9 +95,9 @@ public final class Transform extends Arr {
     for(final Let copy : copies) {
       if(copy.has(flags)) return true;
     }
-    if(Flag.CNS.in(flags) || Flag.UPD.in(flags) && exprs[1].has(Flag.UPD)) return true;
-    final Flag[] flgs = Flag.UPD.remove(flags);
-    return flgs.length != 0 && super.has(flgs);
+    return Flag.CNS.in(flags) ||
+        Flag.UPD.in(flags) && arg(target()).has(Flag.UPD) ||
+        super.has(Flag.UPD.remove(flags));
   }
 
   @Override
@@ -122,14 +115,14 @@ public final class Transform extends Arr {
 
   @Override
   public Expr inline(final InlineContext ic) throws QueryException {
-    final boolean a = ic.inline(copies), b = ic.inline(exprs);
+    final boolean a = ic.inline(copies), b = ic.inline(args());
     return a || b ? optimize(ic.cc) : null;
   }
 
   @Override
   public Expr copy(final CompileContext cc, final IntObjMap<Var> vm) {
-    return copyType(new Transform(info, copyAll(cc, vm, copies), exprs[0].copy(cc, vm),
-        exprs[1].copy(cc, vm)));
+    return copyType(new Transform(info, copyAll(cc, vm, copies), arg(update()).copy(cc, vm),
+        arg(target()).copy(cc, vm)));
   }
 
   @Override
@@ -141,8 +134,7 @@ public final class Transform extends Arr {
   public int exprSize() {
     int size = 1;
     for(final Let copy : copies) size += copy.exprSize();
-    for(final Expr expr : exprs) size += expr.exprSize();
-    return size;
+    return size + super.exprSize();
   }
 
   @Override
@@ -152,19 +144,19 @@ public final class Transform extends Arr {
   }
 
   @Override
-  public void plan(final QueryPlan plan) {
-    plan.add(plan.create(this), copies, exprs);
+  public void toXml(final QueryPlan plan) {
+    plan.add(plan.create(this), copies, args());
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public void toString(final QueryString qs) {
     qs.token(COPY);
     boolean more = false;
     for(final Let copy : copies) {
       if(more) qs.token(SEP);
       else more = true;
-      qs.token(copy.var.id()).token(ASSIGN).token(copy.expr);
+      qs.token(copy.var.id()).token(":=").token(copy.expr);
     }
-    qs.token(MODIFY).token(exprs[0]).token(RETURN).token(exprs[1]);
+    qs.token(MODIFY).token(update()).token(RETURN).token(target());
   }
 }

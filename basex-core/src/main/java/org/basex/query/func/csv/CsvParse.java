@@ -17,14 +17,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class CsvParse extends StandardFunc {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] token = toTokenOrNull(exprs[0], qc);
-    return token != null ? parse(new IOContent(token), qc) : Empty.VALUE;
+    final byte[] value = toTokenOrNull(arg(0), qc);
+    return value != null ? parse(new IOContent(value), qc) : Empty.VALUE;
   }
 
   @Override
@@ -40,9 +40,9 @@ public class CsvParse extends StandardFunc {
    * @throws QueryException query exception
    */
   protected final Item parse(final IO io, final QueryContext qc) throws QueryException {
-    final CsvParserOptions opts = toOptions(1, new CsvParserOptions(), qc);
+    final CsvParserOptions options = toOptions(arg(1), new CsvParserOptions(), qc);
     try {
-      return CsvConverter.get(opts).convert(io);
+      return CsvConverter.get(options).convert(io);
     } catch(final IOException ex) {
       throw CSV_PARSE_X.get(info, ex);
     }

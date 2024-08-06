@@ -6,6 +6,7 @@ import static org.basex.query.QueryError.*;
 import java.io.*;
 import java.math.*;
 import java.util.*;
+import java.util.regex.*;
 
 import org.basex.io.*;
 import org.basex.query.*;
@@ -20,20 +21,20 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class AdminLogs extends AdminFn {
   @Override
   public Iter iter(final QueryContext qc) throws QueryException {
-    checkAdmin(qc);
-    return exprs.length == 0 ? list(qc).iter() : logs(qc);
+    final String date = toStringOrNull(arg(0), qc);
+    return date == null ? list(qc).iter() : logs(date, qc);
   }
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    checkAdmin(qc);
-    return exprs.length == 0 ? list(qc) : logs(qc).value(qc, this);
+    final String date = toStringOrNull(arg(0), qc);
+    return date == null ? list(qc) : logs(date, qc).value(qc, this);
   }
 
   /**
@@ -45,23 +46,25 @@ public final class AdminLogs extends AdminFn {
     final ValueBuilder vb = new ValueBuilder(qc);
     for(final IOFile file : qc.context.log.files()) {
       final String date = file.name().replace(IO.LOGSUFFIX, "");
-      vb.add(new FElem(FILE).add(date).add(SIZE, Token.token(file.length())));
+      vb.add(FElem.build(Q_FILE).add(Q_SIZE, file.length()).add(date).finish());
     }
     return vb.value(this);
   }
 
   /**
-   * Returns the logs from the specified log file.
+   * Returns the log entries from the specified log file.
+   * @param date date of the log file
    * @param qc query context
-   * @return list
+   * @return iterator with log entries
    * @throws QueryException query exception
    */
-  private Iter logs(final QueryContext qc) throws QueryException {
-    // return content of single log file
-    final String name = Token.string(toToken(exprs[0], qc));
-    final boolean merge = exprs.length > 1 && toBoolean(exprs[1], qc);
+  private Iter logs(final String date, final QueryContext qc) throws QueryException {
+    final boolean merge = toBooleanOrFalse(arg(1), qc);
 
-    final LinkedList<LogEntry> list = logs(name, qc);
+    final LogFile file = qc.context.log.file(date);
+    if(file == null) throw WHICHRES_X.get(info, date);
+
+    final LinkedList<LogEntry> list = logs(file, qc);
     final HashMap<String, LinkedList<LogEntry>> map = new HashMap<>();
     if(merge) {
       // group entries by address
@@ -69,6 +72,7 @@ public final class AdminLogs extends AdminFn {
         map.computeIfAbsent(entry.address, address -> new LinkedList<>()).add(entry);
       }
     }
+    final Pattern digits = Pattern.compile("\\d+");
     return new Iter() {
       @Override
       public Item next() {
@@ -81,15 +85,16 @@ public final class AdminLogs extends AdminFn {
             if(entries.peekFirst() != entry) continue;
             entries.removeFirst();
 
-            if(entry.type.equals(LogType.REQUEST.name())) {
+            if(entry.type != null && entry.type.equals(LogType.REQUEST.name())) {
               final Iterator<LogEntry> iter = entries.iterator();
               while(iter.hasNext()) {
                 final LogEntry next = iter.next();
-                final String t = next.type;
+                final String type = next.type;
                 // REQUEST entry with identical address: no concluding entry exists
-                if(t.equals(LogType.REQUEST.name())) break;
-                if(t.matches("^\\d+$") || Strings.eq(t, LogType.OK.name(), LogType.ERROR.name())) {
-                  entry.type = t;
+                if(type.equals(LogType.REQUEST.name())) break;
+                if(digits.matcher(type).matches() ||
+                    Strings.eq(type, LogType.OK.name(), LogType.ERROR.name())) {
+                  entry.type = type;
                   entry.user = next.user;
                   entry.ms = entry.ms.add(next.ms);
                   final String msg1 = entry.message, msg2 = next.message;
@@ -101,14 +106,13 @@ public final class AdminLogs extends AdminFn {
             }
           }
           // add new element
-          final FElem elem = new FElem(ENTRY);
-          if(entry.message != null) elem.add(entry.message);
+          final FBuilder elem = FElem.build(Q_ENTRY).add(entry.message);
           if(entry.address != null) {
-            elem.add(TIME, entry.time).add(ADDRESS, entry.address).add(USER, entry.user);
-            if(entry.type != null) elem.add(TYPE, entry.type);
-            if(entry.ms != BigDecimal.ZERO) elem.add(MS, entry.ms.toString());
+            elem.add(Q_TIME, entry.time).add(Q_ADDRESS, entry.address);
+            elem.add(Q_USER, entry.user).add(Q_TYPE, entry.type);
+            if(entry.ms != BigDecimal.ZERO) elem.add(Q_MS, entry.ms);
           }
-          return elem;
+          return elem.finish();
         }
 
         return null;
@@ -118,17 +122,13 @@ public final class AdminLogs extends AdminFn {
 
   /**
    * Returns all log entries.
-   * @param name name of log file
+   * @param file log file
    * @param qc query context
    * @return list
    * @throws QueryException query exception
    */
-  private LinkedList<LogEntry> logs(final String name, final QueryContext qc)
+  private LinkedList<LogEntry> logs(final LogFile file, final QueryContext qc)
       throws QueryException {
-
-    final Log log = qc.context.log;
-    final LogFile file = log.file(name);
-    if(file == null) throw WHICHRES_X.get(info, name);
 
     try {
       final LinkedList<LogEntry> logs = new LinkedList<>();
@@ -142,7 +142,12 @@ public final class AdminLogs extends AdminFn {
           entry.user = cols[2];
           entry.type = cols.length > 3 ? cols[3] : "";
           entry.message = cols.length > 4 ? cols[4] : "";
-          entry.ms = cols.length > 5 ? new BigDecimal(cols[5].replace(" ms", "")) : BigDecimal.ZERO;
+          entry.ms = BigDecimal.ZERO;
+          if(cols.length > 5) {
+            // skip errors caused by erroneous input
+            final int i = cols[5].indexOf(" ms");
+            if(i > -1) entry.ms = new BigDecimal(cols[5].substring(0, i));
+          }
         } else {
           // legacy format
           entry.message = line;

@@ -20,29 +20,34 @@ import org.basex.util.options.Options.YesNo;
 /**
  * Abstract JSON serializer class.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class JsonSerializer extends StandardSerializer {
+  /** QName: xml:base. */
+  private static final QNm FN_NULL = new QNm(JsonConstants.NULL, QueryText.FN_URI);
+
   /** JSON options. */
   final JsonSerialOptions jopts;
-
   /** Escape special characters. */
-  private final boolean escape;
+  final boolean escape;
+  /** Escape special solidus. */
+  final boolean escapeSolidus;
   /** Allow duplicate names. */
-  private final boolean nodups;
+  final boolean nodups;
 
   /**
    * Constructor.
    * @param os output stream
-   * @param opts serialization parameters
+   * @param sopts serialization parameters
    * @throws IOException I/O exception
    */
-  JsonSerializer(final OutputStream os, final SerializerOptions opts) throws IOException {
-    super(os, opts);
-    jopts = opts.get(SerializerOptions.JSON);
+  JsonSerializer(final OutputStream os, final SerializerOptions sopts) throws IOException {
+    super(os, sopts);
+    jopts = sopts.get(SerializerOptions.JSON);
     escape = jopts.get(JsonSerialOptions.ESCAPE);
-    nodups = opts.get(SerializerOptions.ALLOW_DUPLICATE_NAMES) == YesNo.NO;
+    escapeSolidus = escape && sopts.get(SerializerOptions.ESCAPE_SOLIDUS) == YesNo.YES;
+    nodups = sopts.get(SerializerOptions.ALLOW_DUPLICATE_NAMES) == YesNo.NO;
     final Boolean ji = jopts.get(JsonSerialOptions.INDENT);
     if(ji != null) indent = ji;
   }
@@ -50,7 +55,7 @@ public abstract class JsonSerializer extends StandardSerializer {
   @Override
   public void serialize(final Item item) throws IOException {
     if(sep) throw SERJSON.getIO();
-    if(item == null) {
+    if(item == null || item instanceof QNm && ((QNm) item).eq(FN_NULL)) {
       out.print(JsonConstants.NULL);
     } else {
       super.serialize(item);
@@ -90,7 +95,7 @@ public abstract class JsonSerializer extends StandardSerializer {
           string(name);
           out.print(':');
           if(indent) out.print(' ');
-          serialize(m.get(key, null));
+          serialize(m.get(key));
           s = true;
         }
 
@@ -126,11 +131,12 @@ public abstract class JsonSerializer extends StandardSerializer {
   @Override
   protected void atomic(final Item item) throws IOException {
     try {
-      if(item.type.isNumber()) {
+      final Type type = item.type;
+      if(type.isNumber()) {
         final byte[] str = item.string(null);
         if(eq(str, NAN, INF, NEGATVE_INF)) throw SERNUMBER_X.getIO(str);
         out.print(str);
-      } else if(item.type == AtomType.BOOLEAN) {
+      } else if(type == AtomType.BOOLEAN) {
         out.print(item.string(null));
       } else {
         string(item.string(null));
@@ -147,7 +153,7 @@ public abstract class JsonSerializer extends StandardSerializer {
    */
   protected final void string(final byte[] string) throws IOException {
     out.print('"');
-    final byte[] str = norm(string);
+    final byte[] str = normalize(string, form);
     final int sl = str.length;
     for(int s = 0; s < sl; s += cl(str, s)) printChar(cp(str, s));
     out.print('"');
@@ -155,20 +161,64 @@ public abstract class JsonSerializer extends StandardSerializer {
 
   @Override
   protected final void print(final int cp) throws IOException {
-    if(escape) {
-      switch(cp) {
-        case '\b': out.print("\\b");  break;
-        case '\f': out.print("\\f");  break;
-        case '\n': out.print("\\n");  break;
-        case '\r': out.print("\\r");  break;
-        case '\t': out.print("\\t");  break;
-        case '"' : out.print("\\\""); break;
-        case '/' : out.print("\\/");  break;
-        case '\\': out.print("\\\\"); break;
-        default  : out.print(cp);     break;
+    try {
+      if(escape) {
+        switch(cp) {
+          case '\b':
+            out.print('\\');
+            out.print('b');
+            break;
+          case '\f':
+            out.print('\\');
+            out.print('f');
+            break;
+          case '\n':
+            out.print('\\');
+            out.print('n');
+            break;
+          case '\r':
+            out.print('\\');
+            out.print('r');
+            break;
+          case '\t':
+            out.print('\\');
+            out.print('t');
+            break;
+          case '"' :
+            out.print('\\');
+            out.print('"');
+            break;
+          case '/' :
+            if(escapeSolidus) out.print('\\');
+            out.print('/');
+            break;
+          case '\\':
+            out.print('\\');
+            out.print('\\');
+            break;
+          default:
+            out.print(cp);
+            break;
+        }
+      } else {
+        out.print(cp);
       }
-    } else {
-      super.print(cp);
+    } catch(final QueryIOException ex) {
+      if(ex.getCause().error() == SERENC_X_X) {
+        if(Character.isBmpCodePoint(cp)) {
+          out.print('\\');
+          out.print('u');
+          out.print(hex(cp, 4));
+        } else {
+          out.print('\\');
+          out.print('u');
+          out.print(hex(Character.highSurrogate(cp), 4));
+          out.print('\\');
+          out.print('u');
+          out.print(hex(Character.lowSurrogate(cp), 4));
+        }
+      }
+      else throw ex;
     }
   }
 

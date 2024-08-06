@@ -11,14 +11,18 @@ import org.junit.jupiter.api.*;
 /**
  * This class tests the XML syntax of the database commands.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class XMLCommandTest extends SandboxTest {
   /** Check syntax of all commands. */
   @Test public void commands() {
-    // surrounded by <commands/> element (required to process more than one command)
+    ok("<commands/>");
+    ok("<commands> </commands>");
+    ok("<commands> \n </commands>");
+    ok("<commands> <!-- xyz --> </commands>");
     ok("<commands><add>x</add></commands>");
+    ok("<commands><info/><info/></commands>");
 
     ok("<add>x</add>");
     ok("<add path='X'>X</add>");
@@ -29,6 +33,12 @@ public final class XMLCommandTest extends SandboxTest {
 
     ok("<alter-user name='X' newname='Y'/>");
 
+    ok("<binary-get path='X'/>");
+
+    ok("<binary-put>X</binary-put>");
+    ok("<binary-put path='X'>X</binary-put>");
+    ok("<binary-put path='X'><X/></binary-put>");
+
     ok("<check input='X'/>");
 
     ok("<close/>");
@@ -36,6 +46,7 @@ public final class XMLCommandTest extends SandboxTest {
     ok("<copy name='X' newname='X'/>");
 
     ok("<create-backup name='X'/>");
+    ok("<create-backup name='X' comment='bla'/>");
 
     ok("<create-db name='X'/>");
     ok("<create-db name='X'>X</create-db>");
@@ -67,9 +78,6 @@ public final class XMLCommandTest extends SandboxTest {
     ok("<find>X</find>");
 
     ok("<flush/>");
-
-    ok("<get/>");
-    ok("<get option='X'/>");
 
     ok("<grant name='X' permission='X' pattern='X'/>");
     ok("<grant name='X' permission='X'/>");
@@ -103,10 +111,10 @@ public final class XMLCommandTest extends SandboxTest {
     ok("<password/>");
     ok("<password>X</password>");
 
-    ok("<rename path='X' newpath='X'/>");
+    ok("<put path='X'>X</put>");
+    ok("<put path='X'><X/></put>");
 
-    ok("<replace path='X'>X</replace>");
-    ok("<replace path='X'><X/></replace>");
+    ok("<rename path='X' newpath='X'/>");
 
     ok("<repo-delete name='X'/>");
 
@@ -116,8 +124,6 @@ public final class XMLCommandTest extends SandboxTest {
 
     ok("<restore name='X'/>");
 
-    ok("<retrieve path='X'/>");
-
     ok("<run file='X'/>");
 
     ok("<set option='X'/>");
@@ -125,20 +131,20 @@ public final class XMLCommandTest extends SandboxTest {
 
     ok("<show-backups/>");
 
+    ok("<show-options/>");
+    ok("<show-options name='X'/>");
+
     ok("<show-sessions/>");
 
     ok("<show-users/>");
     ok("<show-users database='X'/>");
-
-    ok("<store>X</store>");
-    ok("<store path='X'>X</store>");
-    ok("<store path='X'><X/></store>");
 
     ok("<xquery>X</xquery>");
   }
 
   /** Evaluates some commands with invalid syntax. */
   @Test public void failing() {
+    no("<commands>X</commands>");
     no("<add/>");
     no("<add x='X'>X</add>");
     no("<add path='X' x='X'>X</add>");
@@ -151,11 +157,11 @@ public final class XMLCommandTest extends SandboxTest {
 
   /**
    * Assumes that this command is successful.
-   * @param xml command
+   * @param string XML command string
    */
-  private static void ok(final String xml) {
+  private static void ok(final String string) {
     try {
-      CommandParser.get(xml, context).parse();
+      CommandParser.get(string, context).parse();
     } catch(final QueryException ex) {
       fail(Util.message(ex));
     }
@@ -163,13 +169,14 @@ public final class XMLCommandTest extends SandboxTest {
 
   /**
    * Assumes that this command fails.
-   * @param xml command
+   * @param string XML command string
    */
-  private static void no(final String xml) {
+  private static void no(final String string) {
     try {
-      CommandParser.get(xml, context).parse();
-      fail('"' + xml + "\" was supposed to fail.");
+      CommandParser.get(string, context).parse();
+      fail('"' + string + "\" was supposed to fail.");
     } catch(final QueryException ex) {
+      Util.debug(ex);
       /* expected */
     }
   }

@@ -27,7 +27,7 @@ import org.basex.util.list.*;
  * parallel by the same thread (it is fine to call arbitrary locking methods by different threads at
  * the same time).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Jens Erat
  */
 public final class Locking {
@@ -42,8 +42,6 @@ public final class Locking {
   public static final String COLLECTION = INTERNAL_PREFIX + "collection";
   /** Special lock identifier for user commands. */
   public static final String USER = INTERNAL_PREFIX + "user";
-  /** Special lock identifier for backup commands. */
-  public static final String BACKUP = INTERNAL_PREFIX + "backup";
   /** Special lock identifier for repository commands. */
   public static final String REPO = INTERNAL_PREFIX + "repo";
 
@@ -86,12 +84,9 @@ public final class Locking {
   public void acquire(final Job job, final Context ctx) {
     // collect lock strings
     job.addLocks();
-
     // prepare lock strings and acquire locks
-    final Locks locks = job.jc().locks;
-    locks.finish(ctx);
     try {
-      acquire(locks);
+      acquire(job.jc().locks.finish(ctx));
     } catch(final InterruptedException ex) {
       throw Util.notExpected("Thread was interrupted: %", ex);
     }

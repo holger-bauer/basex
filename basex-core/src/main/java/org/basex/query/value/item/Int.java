@@ -1,8 +1,11 @@
 package org.basex.query.value.item;
 
+import java.io.*;
 import java.math.*;
 
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
+import org.basex.query.func.fn.FnRound.*;
 import org.basex.query.util.collation.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
@@ -10,7 +13,7 @@ import org.basex.util.*;
 /**
  * Integer item ({@code xs:int}, {@code xs:integer}, {@code xs:short}, etc.).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Int extends ANum {
@@ -74,6 +77,11 @@ public final class Int extends ANum {
   }
 
   @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeLong(value);
+  }
+
+  @Override
   public byte[] string() {
     return value == 0 ? Token.ZERO : Token.token(value);
   }
@@ -99,8 +107,8 @@ public final class Int extends ANum {
   }
 
   @Override
-  public Item test(final QueryContext qc, final InputInfo ii) {
-    return value == qc.focus.pos ? this : null;
+  public boolean test(final QueryContext qc, final InputInfo ii, final long pos) {
+    return pos > 0 ? value == pos : bool(ii);
   }
 
   @Override
@@ -124,58 +132,42 @@ public final class Int extends ANum {
   }
 
   @Override
-  public ANum round(final int scale, final boolean even) {
-    final long v = rnd(scale, even);
+  public Int round(final int prec, final RoundMode mode) {
+    if(value == 0 || prec >= 0) return this;
+    final long v = Dec.round(BigDecimal.valueOf(value), prec, mode).longValue();
     return v == value ? this : get(v);
   }
 
-  /**
-   * Returns a rounded value.
-   * @param s scale
-   * @param e half-to-even flag
-   * @return result
-   */
-  private long rnd(final int s, final boolean e) {
-    long v = value;
-    if(s >= 0 || v == 0) return v;
-    if(s < -15) return Dec.get(new BigDecimal(v)).round(s, e).itr();
-
-    long f = 1;
-    final int c = -s;
-    for(long i = 0; i < c; i++) f = (f << 3) + (f << 1);
-    final boolean n = v < 0;
-    final long a = n ? -v : v, m = a % f, d = m << 1;
-    v = a - m;
-    if(e ? d > f || d == f && v % (f << 1) != 0 : n ? d > f : d >= f) v += f;
-    return n ? -v : v;
-  }
-
   @Override
-  public boolean eq(final Item item, final Collation coll, final StaticContext sc,
-      final InputInfo ii) throws QueryException {
+  public boolean equal(final Item item, final Collation coll, final InputInfo ii)
+      throws QueryException {
     return item instanceof Int ? value == ((Int) item).value :
-           item.type != AtomType.DECIMAL ? value == item.dbl(ii) :
-           item.eq(this, coll, sc, ii);
+           item instanceof Dec ? item.equal(this, coll, ii) :
+           value == item.dbl(ii);
   }
 
   @Override
-  public int diff(final Item item, final Collation coll, final InputInfo ii) throws QueryException {
-    if(item instanceof Int) return Long.compare(value, ((Int) item).value);
-    final double n = item.dbl(ii);
-    return Double.isNaN(n) ? UNDEF : value < n ? -1 : value > n ? 1 : 0;
+  public int compare(final Item item, final Collation coll, final boolean transitive,
+      final InputInfo ii) throws QueryException {
+    return item instanceof Int ? Long.compare(value, ((Int) item).value) :
+           item instanceof Dec ? -item.compare(this, coll, transitive, ii) :
+           Dbl.compare(dbl(ii), item.dbl(ii), transitive);
   }
 
   @Override
   public Object toJava() {
     switch((AtomType) type) {
-      case BYTE: return (byte) value;
+      case BYTE:
+        return (byte) value;
       case SHORT:
-      case UNSIGNED_BYTE: return (short) value;
+      case UNSIGNED_BYTE:
+        return (short) value;
+      case UNSIGNED_SHORT:
+        return (char) value;
       case INT:
-      case UNSIGNED_SHORT: return (int) value;
-      case LONG:
-      case UNSIGNED_INT: return value;
-      default:  return new BigInteger(toString());
+        return (int) value;
+      default:
+        return value;
     }
   }
 
@@ -190,16 +182,15 @@ public final class Int extends ANum {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Converts the given item to a long primitive.
-   * @param item item to be converted
-   * @param ii input info
+   * Converts the given token to a long value.
+   * @param value value to be converted
+   * @param info input info (can be {@code null})
    * @return long value
    * @throws QueryException query exception
    */
-  public static long parse(final Item item, final InputInfo ii) throws QueryException {
-    final byte[] value = item.string(ii);
+  public static long parse(final byte[] value, final InputInfo info) throws QueryException {
     final long l = Token.toLong(value);
     if(l != Long.MIN_VALUE || Token.eq(Token.trim(value), Token.MIN_LONG)) return l;
-    throw AtomType.INTEGER.castError(item, ii);
+    throw AtomType.INTEGER.castError(value, info);
   }
 }

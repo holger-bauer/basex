@@ -1,11 +1,7 @@
 package org.basex.query.expr.path;
 
-import static org.basex.query.value.type.AtomType.*;
-import static org.basex.query.value.type.NodeType.*;
-
 import java.util.*;
 import java.util.List;
-import java.util.function.*;
 
 import org.basex.data.*;
 import org.basex.query.*;
@@ -18,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract node test.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class Test extends ExprInfo {
@@ -36,72 +32,48 @@ public abstract class Test extends ExprInfo {
   /**
    * Returns a node test, a name test or {@code null}.
    * @param type node type (element, attribute, processing instruction)
-   * @param name node name
-   * @return test or {@code null}
-   */
-  public static Test get(final NodeType type, final QNm name) {
-    return get(type, name, null, null);
-  }
-
-  /**
-   * Returns a node test, a name test or {@code null}.
-   * @param type node type (element, attribute, processing instruction)
    * @param name node name (can be {@code null})
-   * @param ann type annotation (can be {@code null})
-   * @param ns default element namespace (can be {@code null})
-   * @return test or {@code null}
+   * @param defaultNs default element namespace (used for optimizations, can be {@code null})
+   * @return test
    */
-  public static Test get(final NodeType type, final QNm name, final Type ann, final byte[] ns) {
-    if(ann == null || ann.oneOf(ANY_TYPE, UNTYPED) ||
-        type == ATTRIBUTE && ann.oneOf(ANY_SIMPLE_TYPE, ANY_ATOMIC_TYPE, UNTYPED_ATOMIC)) {
-      return name == null ? KindTest.get(type) : new NameTest(name,
-        type == PROCESSING_INSTRUCTION ? NamePart.LOCAL : NamePart.FULL, type, ns);
-    }
-    return null;
+  public static Test get(final NodeType type, final QNm name, final byte[] defaultNs) {
+    final NamePart part = type == NodeType.PROCESSING_INSTRUCTION ? NamePart.LOCAL : NamePart.FULL;
+    return new NameTest(name, part, type, defaultNs);
   }
 
   /**
-   * Creates a single test with the same node type.
+   * Creates a single test.
    * @param tests tests to be merged (can contain {@code null} references)
    * @return single test, union test, or {@code null} if test cannot be created.
    */
-  public static Test get(final Test... tests) {
-    final int tl = tests.length;
+  public static Test get(final List<Test> tests) {
+    final int tl = tests.size();
     if(tl == 0) return null;
-    if(tl == 1) return tests[0];
+    if(tl == 1) return tests.get(0);
 
-    // check if tests can be merged or discarded
+    // merge name tests
     final List<Test> list = new ArrayList<>(tl);
-    final Consumer<Test> add = tst -> {
-      if(tst instanceof KindTest) {
-        list.removeIf(t -> t instanceof NameTest);
-      } else if(tst instanceof NameTest) {
-        if(((Checks<Test>) t -> t instanceof KindTest).any(list)) return;
-      }
-      if(!list.contains(tst)) list.add(tst);
-    };
-
-    NodeType type = null;
     for(final Test test : tests) {
-      if(test == null || type != null && type != test.type) return null;
-      type = test.type;
+      if(test == null) return null;
       if(test instanceof UnionTest) {
-        for(final Test t : ((UnionTest) test).tests) add.accept(t);
-      } else {
-        add.accept(test);
+        for(final Test t : ((UnionTest) test).tests) {
+          if(!list.contains(t)) list.add(t);
+        }
+      } else if(!list.contains(test)) {
+        list.add(test);
       }
     }
-    return list.size() == 1 ? list.get(0) : new UnionTest(type, list.toArray(new Test[0]));
+    return list.size() == 1 ? list.get(0) : new UnionTest(list.toArray(Test[]::new));
   }
 
   /**
-   * Checks if evaluation can be dropped.
+   * Optimizes the test.
    * @param data data reference (can be {@code null})
-   * @return result of check
+   * @return resulting test, or {@code null} if the test yields no results
    */
   @SuppressWarnings("unused")
-  public boolean noMatches(final Data data) {
-    return false;
+  public Test optimize(final Data data) {
+    return this;
   }
 
   /**
@@ -118,6 +90,15 @@ public abstract class Test extends ExprInfo {
    */
   public final boolean matches(final Item item) {
     return item instanceof ANode && matches((ANode) item);
+  }
+
+  /**
+   * Checks if the current test will match items of the specified type.
+   * @param seqType type to be checked
+   * @return result of check (matches never, always, or {@code null} if unknown)
+   */
+  public Boolean matches(@SuppressWarnings("unused") final SeqType seqType) {
+    return null;
   }
 
   /**
@@ -151,12 +132,12 @@ public abstract class Test extends ExprInfo {
   public abstract String toString(boolean full);
 
   @Override
-  public void plan(final QueryPlan plan) {
+  public void toXml(final QueryPlan plan) {
     throw Util.notExpected();
   }
 
   @Override
-  public final void plan(final QueryString qs) {
+  public final void toString(final QueryString qs) {
     qs.token(toString(true));
   }
 }

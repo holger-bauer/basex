@@ -4,15 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
 
-import org.basex.core.*;
-import org.basex.io.serial.*;
 import org.junit.jupiter.api.*;
 
 /**
  * This class tests the functions of the EXPath Cryptographic module. The tests in basex-test
  * package are only executable after a java keystore has been created.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class FNCryptoTest extends SandboxTest {
@@ -82,9 +80,6 @@ public final class FNCryptoTest extends SandboxTest {
     final Process proc = Runtime.getRuntime().exec(GENKEY_CMD);
     Thread.sleep(2000); // give the keytool some time to finish
     if(proc.exitValue() != 0) throw new RuntimeException("Cannot initialize keystore.");
-
-    // turn off pretty printing
-    set(MainOptions.SERIALIZER, SerializerMode.NOINDENT.get());
   }
 
   /**
@@ -114,6 +109,6 @@ public final class FNCryptoTest extends SandboxTest {
     if(first != null) query(first);
     final String result = query(second);
     // quotes are replaced by apostrophes to simplify comparison
-    assertEquals(expected.replaceAll("\"", "'"), result.replaceAll("\"", "'"));
+    assertEquals(expected.replace('"', '\''), result.replace('"', '\''));
   }
 }

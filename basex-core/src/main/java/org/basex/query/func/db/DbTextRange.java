@@ -12,18 +12,19 @@ import org.basex.query.value.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class DbTextRange extends DbAccess {
   @Override
-  public final Iter iter(final QueryContext qc) throws QueryException {
-    return rangeAccess(qc).iter(qc);
+  public Iter iter(final QueryContext qc) throws QueryException {
+    final Data data = toData(qc);
+    return rangeAccess(data, qc).iter(qc);
   }
 
   @Override
-  public final Value value(final QueryContext qc) throws QueryException {
-    return rangeAccess(qc).value(qc);
+  public Value value(final QueryContext qc) throws QueryException {
+    return iter(qc).value(qc, this);
   }
 
   @Override
@@ -41,13 +42,14 @@ public class DbTextRange extends DbAccess {
 
   /**
    * Returns a range index accessor.
+   * @param data data reference
    * @param qc query context
    * @return iterator
    * @throws QueryException query exception
    */
-  final StringRangeAccess rangeAccess(final QueryContext qc) throws QueryException {
-    final Data data = checkData(qc);
-    final byte[] min = toToken(exprs[1], qc), max = toToken(exprs[2], qc);
+  final StringRangeAccess rangeAccess(final Data data, final QueryContext qc)
+      throws QueryException {
+    final byte[] min = toToken(arg(1), qc), max = toToken(arg(2), qc);
     final StringRange sr = new StringRange(type(), min, true, max, true);
     return new StringRangeAccess(info, sr, new IndexStaticDb(data, info));
   }

@@ -6,15 +6,15 @@ import java.util.*;
 import java.util.jar.*;
 
 import org.basex.io.*;
-import org.basex.io.in.*;
 import org.basex.util.*;
+import org.basex.util.hash.*;
 import org.basex.util.list.*;
 
 /**
  * This class loads language specific texts when the {@link #lang}
  * method is called for the first time.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Lang {
@@ -38,31 +38,14 @@ public final class Lang {
   private static synchronized void read(final String lang) {
     TEXTS.clear();
     CHECK.clear();
-    final String path = '/' + SUFFIX + '/' + lang + '.' + SUFFIX;
-    final InputStream is = Lang.class.getResourceAsStream(path);
-    if(is == null) {
-      Util.errln(path + " not found.");
-    } else {
-      try(NewlineInput nli = new NewlineInput(is)) {
-        for(String line; (line = nli.readLine()) != null;) {
-          final int i = line.indexOf('=');
-          if(i == -1 || Strings.startsWith(line, '#')) continue;
-          final String key = line.substring(0, i).trim();
-          String val = line.substring(i + 1).trim();
-          if("langright".equals(key)) {
-            Prop.langright = "true".equals(val);
-          } else {
-            if(val.contains("\\n")) val = val.replaceAll("\\\\n", Prop.NL);
-            if(Prop.langkeys) val = '[' + key + ": " + val + ']';
-            if(TEXTS.put(key, val) != null) {
-              Util.errln("%." + SUFFIX + ": '%' is declared twice", lang, key);
-            }
-            CHECK.put(key, true);
-          }
-        }
-      } catch(final IOException ex) {
-        Util.errln(ex);
+    final String path = SUFFIX + '/' + lang + '.' + SUFFIX;
+    final TokenMap map = Util.properties(path);
+    for(final byte[] key : map) {
+      final String name = Token.string(key), val = Token.string(map.get(key));
+      if(TEXTS.put(name, val.replace("\n", Prop.NL)) != null) {
+        Util.errln("%." + SUFFIX + ": '%' is declared twice", lang, name);
       }
+      CHECK.put(name, true);
     }
   }
 
@@ -119,14 +102,13 @@ public final class Lang {
           final JarEntry entry = je.nextElement();
           final String name = entry.getName();
           if(!name.startsWith(pre) || !name.endsWith(SUFFIX)) continue;
-          final byte[] cont = new IOStream(jar.getInputStream(entry)).read();
           langs.add(name.replaceAll(".*/|." + SUFFIX, ""));
-          creds.add(credits(cont));
+          creds.add(credits(new IOStream(jar.getInputStream(entry)).read()));
         }
       } else {
-        for(final IO f : ((IOFile) IO.get(url.toString())).children()) {
-          langs.add(f.name().replace('.' + SUFFIX, ""));
-          creds.add(credits(f.read()));
+        for(final IO file : ((IOFile) IO.get(url.toString())).children()) {
+          langs.add(file.name().replace('.' + SUFFIX, ""));
+          creds.add(credits(file.read()));
         }
       }
     } catch(final IOException ex) {
@@ -137,13 +119,13 @@ public final class Lang {
 
   /**
    * Returns the credits from the specified file.
-   * @param cont content
+   * @param content file content
    * @return credits
    */
-  private static synchronized String credits(final byte[] cont) {
-    final StringTokenizer st = new StringTokenizer(Token.string(cont), "\n");
+  private static synchronized String credits(final byte[] content) {
+    final StringTokenizer st = new StringTokenizer(Token.string(content), "\n");
     st.nextToken();
-    return st.nextToken().replaceAll("# ", "");
+    return st.nextToken().replace("# ", "");
   }
 
   /**
@@ -160,7 +142,7 @@ public final class Lang {
       if(lang.equals(Prop.language)) continue;
 
       read(lang);
-      for(final String text : set.toArray(new String[0])) {
+      for(final String text : set.toArray(String[]::new)) {
         if(TEXTS.remove(text) == null) sb.append("- ").append(text).append('\n');
       }
       if(sb.length() != 0) {

@@ -9,21 +9,21 @@ import org.basex.query.value.type.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class ArrayHead extends ArrayFn {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final XQArray array = toArray(exprs[0], qc);
-    if(array.isEmptyArray()) throw QueryError.ARRAYEMPTY.get(info);
+    final XQArray array = toArray(arg(0), qc);
+    if(array == XQArray.empty()) throw QueryError.ARRAYEMPTY.get(info);
     return array.head();
   }
 
   @Override
   protected Expr opt(final CompileContext cc) {
-    final Type type = exprs[0].seqType().type;
-    if(type instanceof ArrayType) exprType.assign(((ArrayType) type).declType);
+    final Type type = arg(0).seqType().type;
+    if(type instanceof ArrayType) exprType.assign(((ArrayType) type).memberType);
     return this;
   }
 }

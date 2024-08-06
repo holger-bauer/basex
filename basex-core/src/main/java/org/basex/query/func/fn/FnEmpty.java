@@ -3,18 +3,19 @@ package org.basex.query.func.fn;
 import static org.basex.query.func.Function.*;
 
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
+import org.basex.query.expr.CmpG.*;
 import org.basex.query.func.*;
 import org.basex.query.util.*;
 import org.basex.query.value.item.*;
-import org.basex.query.value.seq.*;
 import org.basex.query.value.type.*;
 import org.basex.util.*;
 
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnEmpty extends StandardFunc {
@@ -24,8 +25,75 @@ public class FnEmpty extends StandardFunc {
   }
 
   @Override
-  protected Expr opt(final CompileContext cc) throws QueryException {
-    return opt(true, cc);
+  protected final void simplifyArgs(final CompileContext cc) throws QueryException {
+    arg(0, arg -> arg.simplifyFor(Simplify.COUNT, cc));
+  }
+
+  @Override
+  protected final Expr opt(final CompileContext cc) throws QueryException {
+    final boolean exists = this instanceof FnExists;
+    Expr input = arg(0);
+    final SeqType st = input.seqType();
+
+    // ignore nondeterministic expressions (e.g.: empty(error()))
+    if(!input.has(Flag.NDT)) {
+      if(st.zero()) return Bln.get(!exists);
+      if(st.oneOrMore()) return Bln.get(exists);
+    }
+
+    // static integer will always be greater than 1
+    if(REPLICATE.is(input) && input.arg(1) instanceof Int) {
+      input = input.arg(0);
+    }
+    // rewrite list to union expression:  exists((nodes1, nodes2))  ->  exists(nodes1 | nodes2)
+    if(input instanceof List && input.seqType().type instanceof NodeType) {
+      input = new Union(info, input.args()).optimize(cc);
+    }
+    if(input != arg(0)) return cc.function(exists ? EXISTS : EMPTY, info, input);
+
+    // replace optimized expression by boolean function
+    if(input instanceof Filter) {
+      // rewrite filter:  exists($a[text() = string])  ->  $a/text() = string
+      final Filter filter = (Filter) input;
+      input = filter.flattenEbv(filter.root, false, cc);
+    } else if(INDEX_OF.is(input)) {
+      // rewrite index-of:  exists(index-of($texts, string))  ->  $texts = string
+      final Expr[] args = input.args();
+      if(args.length == 2 && args[1].seqType().one() &&
+          CmpG.compatible(args[0].seqType(), args[1].seqType(), true)) {
+        input = new CmpG(info, args[0], args[1], OpG.EQ).optimize(cc);
+      }
+    } else if(STRING_TO_CODEPOINTS.is(input) || CHARACTERS.is(input)) {
+      // exists(string-to-codepoints(E))  ->  boolean(string(E))
+      input = cc.function(STRING, info, input.args());
+    }
+    if(input != arg(0)) return cc.function(exists ? BOOLEAN : NOT, info, input);
+
+    // exists(map:keys(E))  ->  map:size(E) > 0
+    // empty(util:array-members(E))  ->  array:size(E) = 0
+    final boolean map = _MAP_KEYS.is(input), array = _ARRAY_MEMBERS.is(input);
+    if(map || array) {
+      input = cc.function(map ? _MAP_SIZE : _ARRAY_SIZE, info, input.args());
+      return new CmpG(info, input, Int.ZERO, exists ? OpG.NE : OpG.EQ).optimize(cc);
+    }
+
+    return embed(cc, true);
+  }
+
+  @Override
+  public final Expr mergeEbv(final Expr expr, final boolean or, final CompileContext cc)
+      throws QueryException {
+
+    // exists(A) or exists(B)  ->  exists((A, B))
+    // empty(A) and empty(B)  ->  empty((A, B))
+    final Function func = this instanceof FnExists ? EXISTS : EMPTY;
+    if(func == (or ? EXISTS : EMPTY) && func.is(expr)) {
+      return cc.function(func, info, List.get(cc, info, arg(0), expr.arg(0)));
+    }
+    if(_UTIL_COUNT_WITHIN.is(expr)) {
+      return expr.mergeEbv(this, or, cc);
+    }
+    return null;
   }
 
   /**
@@ -35,54 +103,9 @@ public class FnEmpty extends StandardFunc {
    * @throws QueryException query exception
    */
   final boolean empty(final QueryContext qc) throws QueryException {
-    final Expr expr = exprs[0];
-    return expr.seqType().zeroOrOne() ?
-      expr.item(qc, info) == Empty.VALUE :
-      expr.iter(qc).next() == null;
-  }
-
-  /**
-   * Optimizes an existence check.
-   * @param empty empty flag
-   * @param cc compilation context
-   * @return boolean result or original expression
-   * @throws QueryException query exception
-   */
-  final Expr opt(final boolean empty, final CompileContext cc) throws QueryException {
-    Expr expr = exprs[0];
-    final SeqType st = expr.seqType();
-
-    // ignore non-deterministic expressions (e.g.: empty(error()))
-    if(!expr.has(Flag.NDT)) {
-      if(st.zero()) return Bln.get(empty);
-      if(st.oneOrMore()) return Bln.get(!empty);
-    }
-    // rewrite list to union expression
-    if(expr instanceof List && expr.seqType().type instanceof NodeType) {
-      expr = new Union(info, expr.args()).optimize(cc);
-    }
-    // rewrite filter
-    if(expr instanceof Filter) {
-      final Filter filter = (Filter) expr;
-      expr = filter.flattenEbv(filter.root, false, cc);
-      if(expr != filter) return cc.function(empty ? NOT : BOOLEAN, info, expr);
-    }
-    // simplify replicate
-    if(_UTIL_REPLICATE.is(expr)) expr = expr.arg(0);
-    // simplify argument
-    expr = FnCount.simplify(expr, cc);
-
-    return expr != exprs[0] ? cc.function(empty ? EMPTY : EXISTS, info, expr) : this;
-  }
-
-  @Override
-  public Expr mergeEbv(final Expr expr, final boolean or, final CompileContext cc)
-      throws QueryException {
-
-    if(!or && Function.EMPTY.is(expr)) {
-      final Expr args = List.get(cc, info, exprs[0], expr.arg(0));
-      return cc.function(Function.EMPTY, info, args);
-    }
-    return null;
+    final Expr input = arg(0);
+    return input.seqType().zeroOrOne() ?
+      input.item(qc, info).isEmpty() :
+      input.iter(qc).next() == null;
   }
 }

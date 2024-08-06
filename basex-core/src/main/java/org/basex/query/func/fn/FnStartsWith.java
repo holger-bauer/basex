@@ -9,14 +9,17 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnStartsWith extends StandardFunc {
   @Override
   public Bln item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] ss = toZeroToken(exprs[0], qc), sb = toZeroToken(exprs[1], qc);
-    final Collation coll = toCollation(2, qc);
-    return Bln.get(coll == null ? Token.startsWith(ss, sb) : coll.startsWith(ss, sb, info));
+    final byte[] value = toZeroToken(arg(0), qc);
+    final byte[] substring = toZeroToken(arg(1), qc);
+    final Collation collation = toCollation(arg(2), qc);
+
+    return Bln.get(collation == null ? Token.startsWith(value, substring) :
+      collation.startsWith(value, substring, info));
   }
 }

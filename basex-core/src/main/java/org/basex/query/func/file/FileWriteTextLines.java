@@ -18,7 +18,7 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FileWriteTextLines extends FileFn {
@@ -41,14 +41,14 @@ public class FileWriteTextLines extends FileFn {
   final synchronized void write(final boolean append, final QueryContext qc)
       throws QueryException, IOException {
 
-    final Path path = checkParentDir(toPath(0, qc));
-    final String encoding = toEncodingOrNull(2, FILE_UNKNOWN_ENCODING_X, qc);
+    final Path path = toParent(toPath(arg(0), qc));
+    final String encoding = toEncodingOrNull(arg(2), FILE_UNKNOWN_ENCODING_X, qc);
     final Charset cs = encoding == null || encoding == Strings.UTF8 ? null :
       Charset.forName(encoding);
 
     try(PrintOutput out = PrintOutput.get(new FileOutputStream(path.toFile(), append))) {
-      final Iter iter = exprs[1].iter(qc);
-      for(Item item; (item = iter.next()) != null;) {
+      final Iter values = arg(1).iter(qc);
+      for(Item item; (item = qc.next(values)) != null;) {
         if(!item.type.isStringOrUntyped()) throw typeError(item, AtomType.STRING, info);
 
         final byte[] s = item.string(info);

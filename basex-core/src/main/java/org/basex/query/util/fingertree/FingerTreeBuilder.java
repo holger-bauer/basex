@@ -7,7 +7,7 @@ import org.basex.util.*;
 /**
  * A builder for {@link FingerTree}s from leaf nodes.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  *
  * @param <E> element type
@@ -261,7 +261,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
      * @return node at that position
      */
     Node<N, E> get(final int pos) {
-      return nodes[(((midPos + pos) % CAP) + CAP) % CAP];
+      return nodes[((midPos + pos) % CAP + CAP) % CAP];
     }
 
     /**
@@ -296,7 +296,7 @@ public final class FingerTreeBuilder<E> implements Iterable<E> {
      * @param len length of the range
      */
     private void copyInto(final int start, final Node<N, E>[] arr, final int pos, final int len) {
-      final int p = ((start % CAP) + CAP) % CAP, k = CAP - p;
+      final int p = (start % CAP + CAP) % CAP, k = CAP - p;
       if(len <= k) {
         Array.copy(nodes, p, len, arr, pos);
       } else {

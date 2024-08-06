@@ -11,14 +11,14 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class UserCheck extends UserFn {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final User user = toUser(0, qc);
-    if(user.matches(Token.string(toToken(exprs[1], qc)))) return Empty.VALUE;
+    final User user = toUser(arg(0), qc);
+    if(user.matches(toString(arg(1), qc))) return Empty.VALUE;
     throw USER_PASSWORD_X.get(info, user.name());
   }
 }

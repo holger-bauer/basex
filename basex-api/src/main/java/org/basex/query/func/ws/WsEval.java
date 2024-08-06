@@ -14,21 +14,21 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class WsEval extends WsFn {
   @Override
   public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final IOContent query = toQuery(0, qc);
-    final HashMap<String, Value> bindings = toBindings(1, qc);
-    final WsOptions wo = toOptions(2, new WsOptions(), qc);
+    final IOContent query = toContent(arg(0), qc);
+    final HashMap<String, Value> bindings = toBindings(arg(1), qc);
+    final WsOptions options = toOptions(arg(2), new WsOptions(), qc);
 
-    final JobsOptions opts = new JobsOptions();
-    opts.set(JobsOptions.BASE_URI, toBaseUri(query.url(), wo));
-    opts.set(JobsOptions.ID, wo.get(WsOptions.ID));
+    final JobOptions jopts = new JobOptions();
+    jopts.set(JobOptions.BASE_URI, toBaseUri(query.url(), options, WsOptions.BASE_URI));
+    jopts.set(JobOptions.ID, options.get(WsOptions.ID));
 
-    final QueryJobSpec spec = new QueryJobSpec(opts, bindings, query);
+    final QueryJobSpec spec = new QueryJobSpec(jopts, bindings, query);
     final WebSocket ws = ws(qc);
     final Consumer<QueryJobResult> notify = result -> {
       try {

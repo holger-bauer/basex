@@ -2,7 +2,10 @@ package org.basex.query.value.item;
 
 import static org.basex.query.QueryError.*;
 
+import java.util.function.*;
+
 import org.basex.core.*;
+import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
@@ -12,14 +15,24 @@ import org.basex.util.*;
 /**
  * String item ({@code xs:string}, {@code xs:normalizedString}, {@code xs:language}, etc.).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Str extends AStr {
-  /** Wildcard string. */
-  public static final Str WILDCARD = new Str(new byte[] { '*' });
   /** Zero-length string. */
   public static final Str EMPTY = new Str(Token.EMPTY);
+  /** Single-spaced string. */
+  public static final Str SPACE = Str.get(" ");
+  /** Key string. */
+  public static final Str KEY = Str.get("key");
+  /** Value string. */
+  public static final Str VALUE = Str.get("value");
+  /** Tab string. */
+  public static final Str TAB = Str.get("\t");
+  /** Newline string. */
+  public static final Str NL = Str.get("\n");
+  /** Carriage return string. */
+  public static final Str CR = Str.get("\r");
 
   /**
    * Constructor.
@@ -34,8 +47,8 @@ public final class Str extends AStr {
    * @param value value
    * @param type item type
    */
-  public Str(final byte[] value, final AtomType type) {
-    super(type, value);
+  private Str(final byte[] value, final Type type) {
+    super(value, type);
   }
 
   /**
@@ -49,6 +62,16 @@ public final class Str extends AStr {
 
   /**
    * Returns an instance of this class.
+   * @param value value
+   * @param type type
+   * @return instance
+   */
+  public static Str get(final byte[] value, final Type type) {
+    return type == AtomType.STRING ? get(value) : new Str(value, type);
+  }
+
+  /**
+   * Returns an instance of this class.
    * @param value string
    * @return instance
    */
@@ -57,8 +80,8 @@ public final class Str extends AStr {
   }
 
   /**
-   * Returns a string representation of the specified value.
-   * @param value object (will be converted to token)
+   * Returns a valid string representation of the specified value.
+   * @param value object (can be {@code null}, will be converted to token otherwise)
    * @param qc query context
    * @param inf input info
    * @return instance
@@ -67,23 +90,29 @@ public final class Str extends AStr {
   public static Str get(final Object value, final QueryContext qc, final InputInfo inf)
       throws QueryException {
 
+    if(value == null) return Str.EMPTY;
+
     final boolean validate = qc.context.options.get(MainOptions.CHECKSTRINGS);
-    final byte[] bytes = Token.token(value.toString());
-    final int bl = bytes.length;
-    TokenBuilder tb = null;
-    for(int c = 0; c < bl; c += Token.cl(bytes, c)) {
-      int cp = Token.cp(bytes, c);
-      if(!XMLToken.valid(cp)) {
-        if(validate) throw INVCODE_X.get(inf, Integer.toHexString(cp));
-        cp = Token.REPLACEMENT;
-        if(tb == null) {
-          tb = new TokenBuilder(bl);
-          for(int b = 0; b < c; b++) tb.addByte(bytes[b]);
-        }
-      }
-      if(tb != null) tb.add(cp);
+    final byte[] bytes = Token.token(value);
+
+    // check if string is valid
+    boolean valid = true;
+    final TokenParser pt = new TokenParser(bytes);
+    while(valid && pt.more()) {
+      final int cp = pt.next();
+      valid = XMLToken.valid(cp);
+      if(!valid && validate) throw INVCODE_X.get(inf, Integer.toHexString(cp));
     }
-    return get(tb == null ? bytes : tb.finish());
+    if(valid) return get(bytes);
+
+    // if not, replace invalid characters with replacement character
+    final TokenBuilder tb = new TokenBuilder(bytes.length);
+    pt.reset();
+    while(pt.more()) {
+      final int cp = pt.next();
+      tb.add(XMLToken.valid(cp) ? cp : Token.REPLACEMENT);
+    }
+    return get(tb.finish());
   }
 
   @Override
@@ -100,13 +129,32 @@ public final class Str extends AStr {
   }
 
   @Override
-  public Expr simplifyFor(final Simplify mode, final CompileContext cc) {
-    return (mode == Simplify.EBV || mode == Simplify.PREDICATE) ?
-      cc.simplify(this, Bln.get(this != EMPTY)) : this;
+  public int hash() {
+    return Token.hash(value);
+  }
+
+  @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    // E['x']  ->  E[true()]
+    return cc.simplify(this, mode.oneOf(Simplify.EBV, Simplify.PREDICATE) ?
+      Bln.get(this != EMPTY) : this, mode);
+  }
+
+  @Override
+  public Item materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+    return type instanceof EnumType ? get(string()) : this;
+  }
+
+  @Override
+  public boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    return !(type instanceof EnumType);
   }
 
   @Override
   public String toJava() {
     return Token.string(value);
   }
+
 }

@@ -11,7 +11,7 @@ import org.basex.util.*;
 /**
  * Insert attribute primitive.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 public final class InsertAttribute extends NodeCopy {
@@ -19,12 +19,12 @@ public final class InsertAttribute extends NodeCopy {
    * Constructor.
    * @param pre pre
    * @param data data
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param nodes node copy insertion sequence
    */
-  public InsertAttribute(final int pre, final Data data, final InputInfo ii,
+  public InsertAttribute(final int pre, final Data data, final InputInfo info,
       final ANodeList nodes) {
-    super(UpdateType.INSERTATTR, pre, data, ii, nodes);
+    super(UpdateType.INSERTATTR, pre, data, info, nodes);
   }
 
   @Override

@@ -20,7 +20,7 @@ import org.basex.util.hash.*;
 /**
  * This class scans an XML document and creates atomic tokens.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class XMLScanner extends Job {
@@ -301,24 +301,22 @@ final class XMLScanner extends Job {
           return;
         }
         cDATA();
+      } else if(c == '&') {
+        // scan entity
+        final byte[] r = ref(true);
+        if(r.length == 1) token.add(r);
+        else if(!input.add(r, false)) throw error(RECENT);
       } else {
-        if(c == '&') {
-          // scan entity
-          final byte[] r = ref(true);
-          if(r.length == 1) token.add(r);
-          else if(!input.add(r, false)) throw error(RECENT);
-        } else {
-          if(c == ']') {
-            // ']]>' not allowed in content
-            if(consume() == ']') {
-              if(consume() == '>') throw error(CONTCDATA);
-              prev(1);
-            }
+        if(c == ']') {
+          // ']]>' not allowed in content
+          if(consume() == ']') {
+            if(consume() == '>') throw error(CONTCDATA);
             prev(1);
           }
-          // add character to cached content
-          token.add(c);
+          prev(1);
         }
+        // add character to cached content
+        token.add(c);
       }
       c = consume();
       f = false;
@@ -366,14 +364,14 @@ final class XMLScanner extends Job {
    * @throws IOException I/O exception
    */
   private void comment() throws IOException {
-    do {
+    while(true) {
       final int ch = nextChar();
       if(ch == '-' && consume('-')) {
         check('>');
         return;
       }
       token.add(ch);
-    } while(true);
+    }
   }
 
   /**
@@ -387,19 +385,19 @@ final class XMLScanner extends Job {
 
     int ch = nextChar();
     if(ch != '?' && !ws(ch)) throw error(PITEXT);
-    do {
+    while(true) {
       while(ch != '?') {
         token.add(ch);
         ch = nextChar();
       }
       if((ch = consume()) == '>') return;
       token.add('?');
-    } while(true);
+    }
   }
 
   /**
-   * Scans whitespaces.
-   * @return true for whitespaces
+   * Scans whitespace.
+   * @return true for whitespace
    * @throws IOException I/O exception
    */
   private boolean s() throws IOException {
@@ -410,7 +408,7 @@ final class XMLScanner extends Job {
   }
 
   /**
-   * Checks input for whitespaces; if none are found, throws an exception.
+   * Checks input for whitespace; if none are found, throws an exception.
    * @throws IOException I/O exception
    */
   private void checkS() throws IOException {
@@ -437,9 +435,9 @@ final class XMLScanner extends Job {
   }
 
   /**
-   * Scans whitespaces.
+   * Scans whitespace.
    * @param ch current character
-   * @return true for whitespaces
+   * @return true for whitespace
    * @throws IOException I/O exception
    */
   private boolean s(final int ch) throws IOException {
@@ -666,7 +664,7 @@ final class XMLScanner extends Job {
    * @throws IOException I/O exception
    */
   private byte[] externalID(final boolean full, final boolean root) throws IOException {
-    byte[] cont = null;
+    byte[] content = null;
     final boolean pub = consume(PUBLIC);
     if(pub || consume(SYSTEM)) {
       checkS();
@@ -686,14 +684,14 @@ final class XMLScanner extends Job {
         final XMLInput tin = input;
         if(dtd) {
           try {
-            cont = input.io().merge(name).read();
+            content = input.io().merge(name).read();
           } catch(final IOException ex) {
             throw error(Util.message(ex));
           }
         } else {
-          cont = new byte[0];
+          content = new byte[0];
         }
-        input = new XMLInput(new IOContent(cont, name));
+        input = new XMLInput(new IOContent(content, name));
 
         if(consume(XDECL)) {
           check(XML); s();
@@ -705,7 +703,7 @@ final class XMLScanner extends Job {
           if(ch != '?') throw error(WRONGCHAR, '?', ch);
           ch = nextChar();
           if(ch != '>') throw error(WRONGCHAR, '>', ch);
-          cont = Arrays.copyOfRange(cont, input.pos(), cont.length);
+          content = Arrays.copyOfRange(content, input.pos(), content.length);
         }
 
         s();
@@ -719,11 +717,11 @@ final class XMLScanner extends Job {
         prev(1);
       }
     }
-    return cont;
+    return content;
   }
 
   /**
-   * Scans an public ID literal. [12]
+   * Scans a public ID literal. [12]
    * @throws IOException I/O exception
    */
   private void pubidLit() throws IOException {
@@ -840,14 +838,13 @@ final class XMLScanner extends Job {
             !consume(ENTS) && !consume(ENT1) && !consume(NMTS) &&
             !consume(NMT)) { // [56]
           if(consume(NOT)) { // [57,58]
-            checkS(); check('('); s(); name(true); s();
-            while(consume('|')) { s(); name(true); s(); }
-            check(')');
+            checkS(); check('(');
+            do { s(); name(true); s(); } while(consume('|'));
           } else { // [59]
-            check('('); s(); nmtoken(); s();
-            while(consume('|')) { s(); nmtoken(); s(); }
-            check(')');
+            check('(');
+            do { s(); nmtoken(); s(); } while(consume('|'));
           }
+          check(')');
         }
 
         // [54]

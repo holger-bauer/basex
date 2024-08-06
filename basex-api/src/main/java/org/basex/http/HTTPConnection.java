@@ -1,30 +1,33 @@
 package org.basex.http;
 
-import static javax.servlet.http.HttpServletResponse.*;
+import static jakarta.servlet.http.HttpServletResponse.*;
 import static org.basex.util.Token.*;
-import static org.basex.util.http.HttpText.*;
+import static org.basex.util.http.HTTPText.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.function.*;
 
-import javax.servlet.*;
-import javax.servlet.http.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 import org.basex.core.*;
 import org.basex.core.StaticOptions.*;
 import org.basex.core.jobs.*;
 import org.basex.core.users.*;
 import org.basex.io.serial.*;
+import org.basex.query.*;
 import org.basex.server.*;
 import org.basex.server.Log.*;
 import org.basex.util.*;
 import org.basex.util.Base64;
 import org.basex.util.http.*;
+import org.basex.util.list.*;
 
 /**
  * Single HTTP connection.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class HTTPConnection implements ClientInfo {
@@ -45,7 +48,7 @@ public final class HTTPConnection implements ClientInfo {
   /** Performance. */
   private final Performance perf = new Performance();
   /** Authentication method. */
-  private final AuthMethod auth;
+  private final AuthMethod authMethod;
   /** Path, starting with a slash. */
   private final String path;
 
@@ -58,10 +61,10 @@ public final class HTTPConnection implements ClientInfo {
    * Constructor.
    * @param request request
    * @param response response
-   * @param auth authentication method (can be {@code null})
+   * @param authMethod authentication method (can be {@code null})
    */
   HTTPConnection(final HttpServletRequest request, final HttpServletResponse response,
-      final AuthMethod auth) {
+      final AuthMethod authMethod) {
 
     this.request = request;
     this.response = response;
@@ -75,7 +78,8 @@ public final class HTTPConnection implements ClientInfo {
     path = normalize(request.getPathInfo());
 
     // authentication method (servlet-specific or global)
-    this.auth = auth != null ? auth : context.soptions.get(StaticOptions.AUTHMETHOD);
+    this.authMethod = authMethod != null ? authMethod :
+      context.soptions.get(StaticOptions.AUTHMETHOD);
   }
 
   /**
@@ -83,9 +87,9 @@ public final class HTTPConnection implements ClientInfo {
    * @param username name of default servlet user (can be {@code null})
    * @throws IOException I/O exception
    */
-  public void authenticate(final String username) throws IOException {
+  void authenticate(final String username) throws IOException {
     // choose admin user for OPTIONS requests, servlet-specific user, or global user (can be empty)
-    String name = method.equals(HttpMethod.OPTIONS.name()) ? UserText.ADMIN : username;
+    String name = method.equals(Method.OPTIONS.name()) ? UserText.ADMIN : username;
     if(name == null) name = context.soptions.get(StaticOptions.USER);
 
     // look for existing user. if it does not exist, try to authenticate
@@ -96,34 +100,34 @@ public final class HTTPConnection implements ClientInfo {
     context.user(user);
 
     // generate log entry
-    final StringBuilder uri = new StringBuilder(request.getRequestURI());
+    final StringBuilder uri = new StringBuilder(uri());
     final String qs = request.getQueryString();
     if(qs != null) uri.append('?').append(qs);
     context.log.write(LogType.REQUEST, '[' + method + "] " + uri, null, context);
   }
 
   /**
-   * Returns the content type of a request, or an empty string.
+   * Returns the content type of a request as media type.
    * @return content type
    */
-  public MediaType contentType() {
+  public MediaType mediaType() {
     return mediaType(request);
   }
 
   /**
-   * Initializes the output. Sets the expected encoding and content type.
+   * Initializes the output and assigns the content type.
    */
   public void initResponse() {
-    final SerializerOptions opts = sopts();
-    final String encoding = opts.get(SerializerOptions.ENCODING);
-    final MediaType mt = new MediaType(mediaType(opts) + "; " + CHARSET + '=' + encoding);
-    response.setCharacterEncoding(encoding);
-    response.setContentType(mt.toString());
+    final SerializerOptions sopts = sopts();
+    final MediaType mt = mediaType(sopts);
+    response.setContentType((mt.parameter(CHARSET) == null ?
+      new MediaType(mt + ";" + CHARSET + "=" + sopts.get(SerializerOptions.ENCODING)) :
+      mt).toString());
   }
 
   /**
    * Returns the URL path. The path always starts with a slash.
-   * @return path path
+   * @return path
    */
   public String path() {
     return path;
@@ -160,8 +164,8 @@ public final class HTTPConnection implements ClientInfo {
       for(final String accept : accepts.split("\\s*,\\s*")) {
         // check if quality factor was specified
         final MediaType type = new MediaType(accept);
-        final String qf = type.parameters().get("q");
-        final double d = qf != null ? toDouble(token(qf)) : 1;
+        final String q = type.parameter("q");
+        final double d = q != null ? toDouble(token(q)) : 1;
         // only accept media types with valid double values
         if(d > 0 && d <= 1) {
           final StringBuilder sb = new StringBuilder();
@@ -220,10 +224,20 @@ public final class HTTPConnection implements ClientInfo {
   public String resolve(final String location) {
     String loc = location;
     if(Strings.startsWith(location, '/')) {
-      final String uri = request.getRequestURI(), info = request.getPathInfo();
+      final String uri = uri(), info = request.getPathInfo();
       loc = (info == null ? uri : uri.substring(0, uri.length() - info.length())) + location;
     }
     return loc;
+  }
+
+  /**
+   * Returns the request URI.
+   * @return request URI
+   */
+  public String uri() {
+    // according to the documentation, the method should never return null. however.
+    final String uri = request.getRequestURI();
+    return uri != null ? uri : "";
   }
 
   /**
@@ -242,6 +256,7 @@ public final class HTTPConnection implements ClientInfo {
    * @throws ServletException servlet exception
    */
   public void forward(final String location) throws IOException, ServletException {
+    request.setAttribute(HTTPText.FORWARD, requestCtx);
     request.getRequestDispatcher(resolve(location)).forward(request, response);
   }
 
@@ -271,7 +286,7 @@ public final class HTTPConnection implements ClientInfo {
    * @param ex job exception
    * @throws IOException I/O exception
    */
-  public void stop(final JobException ex) throws IOException {
+  void stop(final JobException ex) throws IOException {
     final int code = 460;
     final String info = ex.getMessage();
     log(code, info);
@@ -302,12 +317,12 @@ public final class HTTPConnection implements ClientInfo {
     try {
       response.resetBuffer();
       if(code == SC_UNAUTHORIZED && !response.containsHeader(WWW_AUTHENTICATE)) {
-        final TokenBuilder header = new TokenBuilder();
-        header.add(auth).add(' ').add(Request.REALM).add("=\"").add(Prop.NAME).add('"');
-        if(auth == AuthMethod.DIGEST) {
+        final TokenBuilder header = new TokenBuilder().add(authMethod);
+        header.add(' ').add(RequestAttribute.REALM).add("=\"").add(Prop.NAME).add('"');
+        if(authMethod == AuthMethod.DIGEST) {
           final String nonce = Strings.md5(Long.toString(System.nanoTime()));
-          header.add(",").add(Request.QOP).add("=\"").add(AUTH).add(',').add(AUTH_INT);
-          header.add('"').add(',').add(Request.NONCE).add("=\"").add(nonce).add('"');
+          header.add(",").add(RequestAttribute.QOP).add("=\"").add(AUTH).add(',').add(AUTH_INT);
+          header.add('"').add(',').add(RequestAttribute.NONCE).add("=\"").add(nonce).add('"');
         }
         response.setHeader(WWW_AUTHENTICATE, header.toString());
       }
@@ -331,6 +346,22 @@ public final class HTTPConnection implements ClientInfo {
   }
 
   /**
+   * Sets profiling information.
+   * @param qi query info
+   */
+  public void timing(final QueryInfo qi) {
+    final StringList list = new StringList(4);
+    final BiConsumer<String, Long> add = (name, nano) ->
+      list.add(name + ";dur=" + Performance.getTime(nano, 1));
+    add.accept("parse", qi.parsing.get());
+    add.accept("compile", qi.compiling.get());
+    add.accept("optimize", qi.optimizing.get());
+    add.accept("evaluate", qi.evaluating.get());
+    add.accept("serialize", qi.serializing.get());
+    response.setHeader(SERVER_TIMING, String.join(",", list.finish()));
+  }
+
+  /**
    * Returns the media type defined in the specified serialization parameters.
    * @param sopts serialization parameters
    * @return media type
@@ -350,24 +381,33 @@ public final class HTTPConnection implements ClientInfo {
   }
 
   /**
-   * Returns the content type of a request, or an empty string.
+   * Returns the content type of a request as media type.
    * @param request servlet request
    * @return content type
    */
   public static MediaType mediaType(final HttpServletRequest request) {
     final String ct = request.getContentType();
-    return new MediaType(ct == null ? "" : ct);
+    return ct == null ? MediaType.ALL_ALL : new MediaType(ct);
   }
 
   /**
-   * Returns the content type of a request, or an empty string.
+   * Returns the address of the client that sent a request, or an empty string.
+   * Evaluates the HTTP headers to find the original IP address.
    * @param request servlet request
-   * @return content type
+   * @return remote address
    */
   public static String remoteAddress(final HttpServletRequest request) {
     for(final String header : FORWARDING_HEADERS) {
-      final String addr = request.getHeader(header);
-      if (addr != null && !addr.isEmpty() && !"unknown".equalsIgnoreCase(addr)) return addr;
+      final String value = request.getHeader(header);
+      // header found: test last (most reliable) part first
+      if(value != null && !value.isEmpty()) {
+        String ip = null;
+        final String[] entries = value.split("\\s*,\\s*");
+        for(int e = entries.length; --e >= 0 && entries[e].matches("^\\[?[:.\\d]+\\]?$");) {
+          ip = entries[e];
+        }
+        if(ip != null) return ip;
+      }
     }
     return request.getRemoteAddr();
   }
@@ -408,7 +448,7 @@ public final class HTTPConnection implements ClientInfo {
   private User login() throws IOException {
     try {
       final User user;
-      if(auth == AuthMethod.CUSTOM) {
+      if(authMethod == AuthMethod.CUSTOM) {
         // custom authentication
         user = user(UserText.ADMIN);
       } else {
@@ -416,36 +456,40 @@ public final class HTTPConnection implements ClientInfo {
         final String header = request.getHeader(AUTHORIZATION);
         final String[] am = header != null ? Strings.split(header, ' ', 2) : new String[] { "" };
         final AuthMethod meth = StaticOptions.AUTHMETHOD.get(am[0]);
-        if(auth != meth) throw new LoginException(HTTPText.WRONGAUTH_X, auth);
+        if(authMethod != meth) throw new LoginException(HTTPText.WRONGAUTH_X, authMethod);
 
-        if(auth == AuthMethod.BASIC) {
+        if(authMethod == AuthMethod.BASIC) {
           final String details = am.length > 1 ? am[1] : "";
           final String[] creds = Strings.split(Base64.decode(details), ':', 2);
           user = user(creds[0]);
           if(creds.length < 2 || !user.matches(creds[1])) throw new LoginException(user.name());
 
         } else {
-          final EnumMap<Request, String> map = HttpClient.authHeaders(header);
-          user = user(map.get(Request.USERNAME));
+          final EnumMap<RequestAttribute, String> auth = Client.authHeaders(header);
+          user = user(auth.get(RequestAttribute.USERNAME));
 
-          final String nonce = map.get(Request.NONCE), cnonce = map.get(Request.CNONCE);
+          final String nonce = auth.get(RequestAttribute.NONCE);
+          final String cnonce = auth.get(RequestAttribute.CNONCE);
           String ha1 = user.code(Algorithm.DIGEST, Code.HASH);
-          if(Strings.eq(map.get(Request.ALGORITHM), MD5_SESS))
+          if(Strings.eq(auth.get(RequestAttribute.ALGORITHM), MD5_SESS))
             ha1 = Strings.md5(ha1 + ':' + nonce + ':' + cnonce);
 
-          String h2 = method + ':' + map.get(Request.URI);
-          final String qop = map.get(Request.QOP);
-          if(Strings.eq(qop, AUTH_INT)) h2 += ':' + Strings.md5(requestCtx.payload().toString());
-          final String ha2 = Strings.md5(h2);
+          final StringBuilder h2 = new StringBuilder().append(method).append(':').
+              append(auth.get(RequestAttribute.URI));
+          final String qop = auth.get(RequestAttribute.QOP);
+          if(Strings.eq(qop, AUTH_INT)) {
+            h2.append(':').append(Strings.md5(requestCtx.body().toString()));
+          }
+          final String ha2 = Strings.md5(h2.toString());
 
           final StringBuilder sb = new StringBuilder(ha1).append(':').append(nonce);
           if(Strings.eq(qop, AUTH, AUTH_INT)) {
-            sb.append(':').append(map.get(Request.NC));
+            sb.append(':').append(auth.get(RequestAttribute.NC));
             sb.append(':').append(cnonce).append(':').append(qop);
           }
           sb.append(':').append(ha2);
 
-          if(!Strings.md5(sb.toString()).equals(map.get(Request.RESPONSE)))
+          if(!Strings.md5(sb.toString()).equals(auth.get(RequestAttribute.RESPONSE)))
             throw new LoginException(user.name());
         }
       }
@@ -463,13 +507,13 @@ public final class HTTPConnection implements ClientInfo {
 
   /**
    * Returns a user for the specified string, or an error.
-   * @param name user name (can be {@code null})
+   * @param name username (can be {@code null})
    * @return user reference
    * @throws LoginException login exception
    */
   private User user(final String name) throws LoginException {
     final User user = context.users.get(name);
-    if(user == null) throw new LoginException(name);
+    if(user == null || !user.enabled()) throw new LoginException(name);
     return user;
   }
 

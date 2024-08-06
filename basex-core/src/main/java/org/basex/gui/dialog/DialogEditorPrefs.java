@@ -8,7 +8,7 @@ import org.basex.gui.layout.*;
 /**
  * Editor preferences.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class DialogEditorPrefs extends BaseXBack {
@@ -46,7 +46,7 @@ final class DialogEditorPrefs extends BaseXBack {
   DialogEditorPrefs(final BaseXDialog dialog) {
     border(8).setLayout(new ColumnLayout(40));
 
-    final GUIOptions gopts = dialog.gui.gopts;
+    final GUIOptions gopts = dialog.gui().gopts;
     showmargin = new BaseXCheckBox(dialog, SHOW_LINE_MARGIN + COL, GUIOptions.SHOWMARGIN, gopts);
     margin = new BaseXTextField(dialog, GUIOptions.MARGIN, gopts);
     invisible = new BaseXCheckBox(dialog, SHOW_INVISIBLE, GUIOptions.SHOWINVISIBLE, gopts);
@@ -74,7 +74,7 @@ final class DialogEditorPrefs extends BaseXBack {
     p.add(shownl);
     p.add(numbers);
     p.add(markline);
-    p.add(new BaseXLabel(FILE_FILTER + COL, true, true).border(6,  0,  6,  0));
+    p.add(new BaseXLabel(FILE_FILTER + COL, true, true).border(6, 0, 6, 0));
     p.add(files);
     add(p);
 

@@ -4,6 +4,7 @@ import static org.basex.core.Text.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.Map.*;
 
 import org.basex.core.*;
 import org.basex.core.cmd.*;
@@ -16,31 +17,29 @@ import org.basex.util.*;
 /**
  * REST-based evaluation of XQuery files.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class RESTRun extends RESTQuery {
   /**
    * Constructor.
    * @param session REST session
-   * @param vars external variables
-   * @param val context value
+   * @param bindings external bindings
    */
-  private RESTRun(final RESTSession session, final Map<String, String[]> vars, final String val) {
-    super(session, vars, val);
+  private RESTRun(final RESTSession session, final Map<String, Entry<Object, String>> bindings) {
+    super(session, bindings);
   }
 
   /**
    * Creates a new instance of this command.
    * @param session REST session
    * @param path relative path to query input
-   * @param vars external variables
-   * @param val context value
+   * @param bindings external bindings
    * @return command
    * @throws IOException I/O exception
    */
-  static RESTQuery get(final RESTSession session, final String path,
-      final Map<String, String[]> vars, final String val) throws IOException {
+  static RESTRun get(final RESTSession session, final String path,
+      final Map<String, Map.Entry<Object, String>> bindings) throws IOException {
 
     // get root directory for files
     final Context context = session.conn.context;
@@ -49,9 +48,14 @@ final class RESTRun extends RESTQuery {
     final IOFile root = new IOFile(webpath).resolve(rpath);
 
     // check if file is not found, is a folder or points to parent folder
-    final IOFile file = new IOFile(root, path);
+    IOFile file = new IOFile(root, path);
+    if(!file.exists() && !file.hasSuffix(IO.BXSSUFFIX) && !file.hasSuffix(IO.XQSUFFIXES)) {
+      file = new IOFile(root, path + IO.XQSUFFIX);
+      if(!file.exists()) file = new IOFile(root, path + IO.BXSSUFFIX);
+    }
+
     if(!file.exists() || file.isDir() || !file.path().startsWith(root.path()))
-      throw HTTPCode.NOT_FOUND_X.get(Util.info(RES_NOT_FOUND_X, path));
+      throw HTTPStatus.NOT_FOUND_X.get(Util.info(RES_NOT_FOUND_X, path));
 
     // retrieve file contents
     final String input = file.string();
@@ -66,10 +70,10 @@ final class RESTRun extends RESTQuery {
       }
     } else {
       // otherwise, interpret input as xquery
-      session.add(new XQuery(input));
+      session.add(new XQuery(input).baseURI(file.path()));
     }
 
     // perform query
-    return new RESTRun(session, vars, val);
+    return new RESTRun(session, bindings);
   }
 }

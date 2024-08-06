@@ -8,14 +8,12 @@ import org.basex.query.value.seq.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SessionsIds extends SessionsFn {
   @Override
-  public Value value(final QueryContext qc) throws QueryException {
-    check(qc);
-
+  public Value value(final QueryContext qc) {
     return StrSeq.get(SessionListener.ids());
   }
 }

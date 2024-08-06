@@ -1,8 +1,14 @@
 package org.basex.query.value.seq;
 
+import java.io.*;
 import java.util.*;
 
+import org.basex.core.*;
+import org.basex.io.in.DataInput;
+import org.basex.io.out.DataOutput;
 import org.basex.query.*;
+import org.basex.query.CompileContext.*;
+import org.basex.query.expr.*;
 import org.basex.query.value.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.type.*;
@@ -11,10 +17,12 @@ import org.basex.util.list.*;
 /**
  * Sequence of items of type {@link Bln xs:boolean}, containing at least two of them.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BlnSeq extends NativeSeq {
+  /** Distinct boolean sequence. */
+  public static final BlnSeq DISTINCT = new BlnSeq(new boolean[] { false, true });
   /** Values. */
   private final boolean[] values;
 
@@ -25,6 +33,28 @@ public final class BlnSeq extends NativeSeq {
   private BlnSeq(final boolean[] values) {
     super(values.length, AtomType.BOOLEAN);
     this.values = values;
+  }
+
+  /**
+   * Creates a value from the input stream. Called from {@link Store#read(DataInput, QueryContext)}.
+   * @param in data input
+   * @param type type
+   * @param qc query context
+   * @return value
+   * @throws IOException I/O exception
+   */
+  public static Value read(final DataInput in, final Type type, final QueryContext qc)
+      throws IOException {
+    final int size = in.readNum();
+    final boolean[] values = new boolean[size];
+    for(int s = 0; s < size; s++) values[s] = in.readBool();
+    return get(values);
+  }
+
+  @Override
+  public void write(final DataOutput out) throws IOException {
+    out.writeNum((int) size);
+    for(final boolean v : values) out.writeBool(v);
   }
 
   @Override
@@ -41,6 +71,22 @@ public final class BlnSeq extends NativeSeq {
   }
 
   @Override
+  public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    Expr expr = this;
+    if(mode == Simplify.DISTINCT && this != DISTINCT) {
+      // replace with new sequence
+      boolean f = false, t = false;
+      for(final boolean b : values) {
+        if(b) t = true;
+        else f = true;
+        if(f && t) break;
+      }
+      expr = f ^ t ? Bln.get(t) : DISTINCT;
+    }
+    return cc.simplify(this, expr, mode);
+  }
+
+  @Override
   public boolean[] toJava() {
     return values;
   }
@@ -54,7 +100,7 @@ public final class BlnSeq extends NativeSeq {
   // STATIC METHODS ===============================================================================
 
   /**
-   * Creates a sequence with the specified items.
+   * Creates a sequence with the specified values.
    * @param values values
    * @return value
    */
@@ -70,7 +116,7 @@ public final class BlnSeq extends NativeSeq {
    * @return value
    * @throws QueryException query exception
    */
-  static Value get(final int size, final Value... values) throws QueryException {
+  public static Value get(final long size, final Value... values) throws QueryException {
     final BoolList tmp = new BoolList(size);
     for(final Value value : values) {
       // speed up construction, depending on input

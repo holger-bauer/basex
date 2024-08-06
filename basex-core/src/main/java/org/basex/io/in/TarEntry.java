@@ -6,7 +6,7 @@ import org.basex.util.list.*;
 /**
  * Representation of a single TAR entry.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class TarEntry {
@@ -72,7 +72,7 @@ public final class TarEntry {
   }
 
   /**
-   * Checks if the the current entry is a directory.
+   * Checks if the current entry is a directory.
    * @return result of check
    */
   public boolean isDirectory() {
@@ -94,7 +94,7 @@ public final class TarEntry {
    */
   static String name(final ByteList result) {
     try {
-      return new String(result.toArray());
+      return new String(result.toArray(), Prop.CHARSET);
     } catch(final Exception ex) {
       // fallback: UTF8
       Util.debug(ex);

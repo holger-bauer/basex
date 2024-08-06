@@ -13,13 +13,13 @@ import org.basex.util.hash.*;
 /**
  * Iterative expression for paths that return nodes in distinct document order.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IterPath extends AxisPath {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param root root expression
    * @param steps axis steps
    */
@@ -42,9 +42,9 @@ public final class IterPath extends AxisPath {
         if(iter[0] == null) iter[0] = exprs[0].iter(qc);
 
         final QueryFocus qf = qc.focus;
-        final Value value = qf.value;
+        final Value qv = qf.value;
         try {
-          do {
+          while(true) {
             final Item item = qc.next(iter[pos]);
             if(item == null) {
               if(--pos == -1) return null;
@@ -55,9 +55,9 @@ public final class IterPath extends AxisPath {
             } else {
               return item;
             }
-          } while(true);
+          }
         } finally {
-          qf.value = value;
+          qf.value = qv;
         }
       }
     };

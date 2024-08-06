@@ -27,7 +27,7 @@ import org.xmldb.api.modules.*;
 /**
  * Implementation of the XMLResource Interface for the XMLDB:API.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BXXMLResource implements XMLResource {
@@ -99,7 +99,7 @@ public final class BXXMLResource implements XMLResource {
       try {
         // serialize and cache content
         final ArrayOutput ao = new ArrayOutput();
-        try(Serializer ser = Serializer.get(ao, SerializerMode.NOINDENT.get())) {
+        try(Serializer ser = Serializer.get(ao)) {
           if(data != null) {
             ser.serialize(new DBNode(data, pre));
           } else if(item != null) {
@@ -179,10 +179,9 @@ public final class BXXMLResource implements XMLResource {
 
   @Override
   public ContentHandler setContentAsSAX() {
-    // ..might be replaced by a custom SAX content handler in future
-    final MemBuilder mb = new MemBuilder("", Parser.emptyParser(coll.ctx.options));
-    mb.init();
-    return new BXSAXContentHandler(this, mb);
+    // might be replaced by a custom SAX content handler in future
+    final MemBuilder builder = new MemBuilder(Parser.emptyParser(coll.ctx.options)).init();
+    return new BXSAXContentHandler(this, builder);
   }
 
   /** SAX parser. */
@@ -196,17 +195,16 @@ public final class BXXMLResource implements XMLResource {
      * @param resource resource
      */
     BXSAXContentHandler(final BXXMLResource resource, final MemBuilder builder) {
-      super(builder, false, false);
+      super(builder);
       this.resource = resource;
     }
 
     @Override
     public void endDocument() throws SAXException {
       try {
-        resource.content = new DBNode(((MemBuilder) builder).data()).serialize(
-            SerializerMode.NOINDENT.get()).finish();
+        resource.content = new DBNode(((MemBuilder) builder).data()).serialize().finish();
       } catch(final QueryIOException ex) {
-        error(new BaseXException(ex));
+        throw error(new BaseXException(ex));
       }
     }
   }

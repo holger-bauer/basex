@@ -14,24 +14,27 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnNormalizeUnicode extends StandardFunc {
   @Override
-  public Str item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    final byte[] str = toZeroToken(exprs[0], qc);
+  public AStr item(final QueryContext qc, final InputInfo ii) throws QueryException {
+    final AStr value = toZeroStr(arg(0), qc);
+    final byte[] form = toTokenOrNull(arg(1), qc);
 
-    Form form = Form.NFC;
-    if(exprs.length == 2) {
-      final byte[] n = uc(trim(toToken(exprs[1], qc)));
-      if(n.length == 0) return Str.get(str);
+    Form frm = Form.NFC;
+    if(form != null) {
+      final byte[] norm = uc(trim(form));
+      if(norm.length == 0) return value;
       try {
-        form = Form.valueOf(string(n));
+        frm = Form.valueOf(string(norm));
       } catch(final IllegalArgumentException ex) {
-        throw NORMUNI_X.get(info, n);
+        Util.debug(ex);
+        throw NORMUNI_X.get(info, form);
       }
     }
-    return ascii(str) ? Str.get(str) : Str.get(Normalizer.normalize(string(str), form));
+    return value.ascii(info) ? value :
+      Str.get(Normalizer.normalize(string(value.string(info)), frm));
   }
 }

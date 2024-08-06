@@ -5,7 +5,6 @@ import java.io.*;
 import org.basex.build.csv.*;
 import org.basex.build.html.*;
 import org.basex.build.json.*;
-import org.basex.build.text.*;
 import org.basex.build.xml.*;
 import org.basex.core.*;
 import org.basex.core.MainOptions.MainParser;
@@ -16,12 +15,10 @@ import org.basex.util.*;
 /**
  * This class defines a parser, which is used to create new databases instances.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
-public abstract class Parser extends Job {
-  /** Source document or {@code null}. */
-  public IO source;
+public class Parser extends Job {
   /** Attributes of currently parsed element. */
   protected final Atts atts = new Atts();
   /** Namespaces of currently parsed element. */
@@ -29,25 +26,35 @@ public abstract class Parser extends Job {
   /** Main options. */
   protected final MainOptions options;
   /** Target path (empty, or suffixed with a single slash). */
-  String target = "";
+  protected String target = "";
+  /** Parses source or {@code null}. */
+  protected IO source;
 
   /**
-   * Constructor.
-   * @param source document source or {@code null}
+   * Constructor without input source.
    * @param options main options
    */
-  protected Parser(final String source, final MainOptions options) {
-    this(source == null ? null : IO.get(source), options);
+  private Parser(final MainOptions options) {
+    this.options = options;
   }
 
   /**
    * Constructor.
-   * @param source document source or {@code null}
+   * @param source input source
+   * @param options main options
+   */
+  protected Parser(final String source, final MainOptions options) {
+    this(IO.get(source), options);
+  }
+
+  /**
+   * Constructor.
+   * @param source input source
    * @param options main options
    */
   protected Parser(final IO source, final MainOptions options) {
+    this(options);
     this.source = source;
-    this.options = options;
   }
 
   /**
@@ -55,7 +62,9 @@ public abstract class Parser extends Job {
    * @param build database builder
    * @throws IOException I/O exception
    */
-  public abstract void parse(Builder build) throws IOException;
+  public void parse(@SuppressWarnings("unused") final Builder build) throws IOException {
+    if(source != null) throw new BaseXException("No parser available for supplied source.");
+  }
 
   /**
    * Closes the parser.
@@ -82,18 +91,23 @@ public abstract class Parser extends Job {
     return this;
   }
 
+  /**
+   * Returns the parsed source.
+   * @return source or {@code null}
+   */
+  public IO source() {
+    return source;
+  }
+
   // STATIC METHODS ===============================================================================
 
   /**
-   * Returns a parser instance for creating empty databases.
-   * @param options database options
+   * Returns a parser instance for creating an empty databases.
+   * @param options main options
    * @return parser
    */
   public static Parser emptyParser(final MainOptions options) {
-    return new Parser((IO) null, options) {
-      @Override
-      public void parse(final Builder build) { /* empty */ }
-    };
+    return new Parser(options);
   }
 
   /**
@@ -102,13 +116,13 @@ public abstract class Parser extends Job {
    * @return xml parser
    */
   public static SAXWrapper xmlParser(final IO source) {
-    return new SAXWrapper(source, MainOptions.get());
+    return new SAXWrapper(source, new MainOptions());
   }
 
   /**
    * Returns a parser instance, based on the current options.
    * @param source input source
-   * @param options database options
+   * @param options main options
    * @param target relative path reference
    * @return parser
    * @throws IOException I/O exception
@@ -120,10 +134,9 @@ public abstract class Parser extends Job {
     final SingleParser p;
     final MainParser mp = options.get(MainOptions.PARSER);
     switch(mp) {
-      case HTML: p = new HtmlParser(source, options); break;
-      case TEXT: p = new TextParser(source, options); break;
-      case JSON: p = new JsonParser(source, options); break;
-      case CSV:  p = new CsvParser(source, options); break;
+      case HTML: p = new HtmlParser(source, options, options.get(MainOptions.HTMLPARSER)); break;
+      case JSON: p = new JsonParser(source, options, options.get(MainOptions.JSONPARSER)); break;
+      case CSV:  p = new CsvParser(source, options, options.get(MainOptions.CSVPARSER)); break;
       default:   p = options.get(MainOptions.INTPARSE) ? new XMLParser(source, options) :
         new SAXWrapper(source, options); break;
     }

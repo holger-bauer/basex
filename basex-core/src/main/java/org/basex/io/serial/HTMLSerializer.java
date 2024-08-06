@@ -6,28 +6,75 @@ import static org.basex.util.Token.*;
 
 import java.io.*;
 
+import org.basex.query.*;
 import org.basex.query.value.item.*;
 import org.basex.util.hash.*;
-import org.basex.util.list.*;
 
 /**
  * This class serializes items as HTML.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class HTMLSerializer extends MarkupSerializer {
   /** (X)HTML: elements with an empty content model. */
-  static final TokenList EMPTIES = new TokenList();
+  static final TokenSet EMPTIES;
   /** HTML5: elements with an empty content model. */
-  static final TokenList EMPTIES5 = new TokenList();
+  static final TokenSet EMPTIES5;
+  /** (X)HTML: formatted elements. */
+  static final TokenSet FORMATTEDS;
+  /** (X)HTML: inline elements. */
+  static final TokenSet INLINES;
   /** (X)HTML: URI attributes. */
-  static final TokenSet URIS = new TokenSet();
+  static final TokenSet URIS;
 
   /** HTML: script elements. */
-  private static final TokenList SCRIPTS = new TokenList();
+  private static final TokenSet SCRIPTS;
   /** HTML: boolean attributes. */
-  private static final TokenSet BOOLEAN = new TokenSet();
+  private static final TokenSet BOOLEAN;
+
+  // HTML Serializer: cache elements
+  static {
+    // script elements
+    SCRIPTS = new TokenSet("script", "style");
+    // boolean attributes
+    BOOLEAN = new TokenSet("area@nohref", "audio@autoplay", "audio@controls",
+        "audio@loop", "audio@muted", "button@disabled", "button@autofocus", "button@formnovalidate",
+        "details@open", "dialog@open", "dir@compact", "dl@compact", "fieldset@disabled",
+        "form@novalidate", "frame@noresize", "hr@noshade", "img@ismap", "input@checked",
+        "input@disabled", "input@multiple", "input@readonly", "input@required", "input@autofocus",
+        "input@formnovalidate", "iframe@seamless", "keygen@autofocus", "keygen@disabled",
+        "menu@compact", "object@declare", "object@typemustmatch", "ol@compact", "ol@reversed",
+        "optgroup@disabled", "option@selected", "option@disabled", "script@defer", "script@async",
+        "select@multiple", "select@disabled", "select@autofocus", "select@required", "style@scoped",
+        "td@nowrap", "textarea@disabled", "textarea@readonly", "textarea@autofocus",
+        "textarea@required", "th@nowrap", "track@default", "ul@compact", "video@autoplay",
+        "video@controls", "video@loop", "video@muted");
+    // elements with an empty content model
+    EMPTIES = new TokenSet("area", "base", "basefont", "br", "col", "embed", "frame",
+        "hr", "img", "input", "isindex", "link", "meta", "param");
+    // elements with an empty content model
+    EMPTIES5 = new TokenSet("area", "base", "br", "col", "command", "embed", "hr",
+        "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr");
+    // formatted elements
+    FORMATTEDS = new TokenSet("pre", "script", "style", "textarea", "title");
+    // inline elements
+    INLINES = new TokenSet("a", "abbr", "acronym", "applet", "area", "audio", "b", "basefont",
+        "bdi", "bdo", "big", "br", "button", "canvas", "cite", "code", "data", "datalist", "del",
+        "dfn", "em", "embed", "font", "i", "iframe", "img", "input", "ins", "kbd", "label", "link",
+        "map", "mark", "math", "meta", "meter", "noscript", "object", "output", "picture",
+        "progress", "q", "ruby", "s", "samp", "script", "select", "slot", "small", "span", "strike",
+        "strong", "sub", "sup", "svg", "template", "textarea", "time", "tt", "u", "var", "video",
+        "wbr");
+    // URI attributes
+    URIS = new TokenSet("a@href", "a@name", "applet@codebase", "area@href",
+        "base@href", "blockquote@cite", "body@background", "button@datasrc", "del@cite",
+        "div@datasrc", "form@action", "frame@longdesc", "frame@src", "head@profile",
+        "iframe@longdesc", "iframe@src", "img@longdesc", "img@src", "img@usemap", "input@datasrc",
+        "input@src", "input@usemap", "ins@cite", "link@href", "object@archive", "object@classid",
+        "object@codebase", "object@data", "object@datasrc", "object@usemap", "q@cite", "script@for",
+        "script@src", "select@datasrc", "span@datasrc", "table@datasrc", "textarea@datasrc");
+  }
 
   /**
    * Constructor, specifying serialization options.
@@ -43,7 +90,7 @@ final class HTMLSerializer extends MarkupSerializer {
   protected void attribute(final byte[] name, final byte[] value, final boolean standalone)
       throws IOException {
 
-    if(!standalone) out.print(' ');
+    if(!standalone) delimitAttribute();
     out.print(name);
 
     // don't append value for boolean attributes
@@ -101,10 +148,11 @@ final class HTMLSerializer extends MarkupSerializer {
 
   @Override
   protected void startOpen(final QNm name) throws IOException {
-    if(elems.isEmpty()) checkRoot(HTML);
+    if(opened.isEmpty()) checkRoot(HTML);
     if(sep) indent();
     out.print(ELEM_O);
     out.print(name.string());
+    indAttrLength = out.lineLength();
     sep = indent;
     script = SCRIPTS.contains(lc(name.local()));
     if(content && eq(lc(elem.local()), HEAD)) skip++;
@@ -123,11 +171,9 @@ final class HTMLSerializer extends MarkupSerializer {
     final byte[] lc = lc(elem.local());
     if(html5) {
       if(EMPTIES5.contains(lc)) return;
-    } else {
-      if(EMPTIES.contains(lc)) {
-        final byte[] uri = nsUri(EMPTY);
-        if(uri == null || uri.length == 0) return;
-      }
+    } else if(EMPTIES.contains(lc)) {
+      final byte[] uri = nsUri(EMPTY);
+      if(uri == null || uri.length == 0) return;
     }
     sep = false;
     finishClose();
@@ -149,135 +195,15 @@ final class HTMLSerializer extends MarkupSerializer {
     }
   }
 
-  // HTML Serializer: cache elements
-  static {
-    // script elements
-    SCRIPTS.add("script");
-    SCRIPTS.add("style");
-    // boolean attributes
-    BOOLEAN.add("area@nohref");
-    BOOLEAN.add("audio@autoplay");
-    BOOLEAN.add("audio@controls");
-    BOOLEAN.add("audio@loop");
-    BOOLEAN.add("audio@muted");
-    BOOLEAN.add("button@disabled");
-    BOOLEAN.add("button@autofocus");
-    BOOLEAN.add("button@formnovalidate");
-    BOOLEAN.add("details@open");
-    BOOLEAN.add("dialog@open");
-    BOOLEAN.add("dir@compact");
-    BOOLEAN.add("dl@compact");
-    BOOLEAN.add("fieldset@disabled");
-    BOOLEAN.add("form@novalidate");
-    BOOLEAN.add("frame@noresize");
-    BOOLEAN.add("hr@noshade");
-    BOOLEAN.add("img@ismap");
-    BOOLEAN.add("input@checked");
-    BOOLEAN.add("input@disabled");
-    BOOLEAN.add("input@multiple");
-    BOOLEAN.add("input@readonly");
-    BOOLEAN.add("input@required");
-    BOOLEAN.add("input@autofocus");
-    BOOLEAN.add("input@formnovalidate");
-    BOOLEAN.add("iframe@seamless");
-    BOOLEAN.add("keygen@autofocus");
-    BOOLEAN.add("keygen@disabled");
-    BOOLEAN.add("menu@compact");
-    BOOLEAN.add("object@declare");
-    BOOLEAN.add("object@typemustmatch");
-    BOOLEAN.add("ol@compact");
-    BOOLEAN.add("ol@reversed");
-    BOOLEAN.add("optgroup@disabled");
-    BOOLEAN.add("option@selected");
-    BOOLEAN.add("option@disabled");
-    BOOLEAN.add("script@defer");
-    BOOLEAN.add("script@async");
-    BOOLEAN.add("select@multiple");
-    BOOLEAN.add("select@disabled");
-    BOOLEAN.add("select@autofocus");
-    BOOLEAN.add("select@required");
-    BOOLEAN.add("style@scoped");
-    BOOLEAN.add("td@nowrap");
-    BOOLEAN.add("textarea@disabled");
-    BOOLEAN.add("textarea@readonly");
-    BOOLEAN.add("textarea@autofocus");
-    BOOLEAN.add("textarea@required");
-    BOOLEAN.add("th@nowrap");
-    BOOLEAN.add("track@default");
-    BOOLEAN.add("ul@compact");
-    BOOLEAN.add("video@autoplay");
-    BOOLEAN.add("video@controls");
-    BOOLEAN.add("video@loop");
-    BOOLEAN.add("video@muted");
-    // elements with an empty content model
-    EMPTIES.add("area");
-    EMPTIES.add("base");
-    EMPTIES.add("basefont");
-    EMPTIES.add("br");
-    EMPTIES.add("col");
-    EMPTIES.add("embed");
-    EMPTIES.add("frame");
-    EMPTIES.add("hr");
-    EMPTIES.add("img");
-    EMPTIES.add("input");
-    EMPTIES.add("isindex");
-    EMPTIES.add("link");
-    EMPTIES.add("meta");
-    EMPTIES.add("param");
-    // elements with an empty content model
-    EMPTIES5.add("area");
-    EMPTIES5.add("base");
-    EMPTIES5.add("br");
-    EMPTIES5.add("col");
-    EMPTIES5.add("command");
-    EMPTIES5.add("embed");
-    EMPTIES5.add("hr");
-    EMPTIES5.add("img");
-    EMPTIES5.add("input");
-    EMPTIES5.add("keygen");
-    EMPTIES5.add("link");
-    EMPTIES5.add("meta");
-    EMPTIES5.add("param");
-    EMPTIES5.add("source");
-    EMPTIES5.add("track");
-    EMPTIES5.add("wbr");
-    // URI attributes
-    URIS.add("a@href");
-    URIS.add("a@name");
-    URIS.add("applet@codebase");
-    URIS.add("area@href");
-    URIS.add("base@href");
-    URIS.add("blockquote@cite");
-    URIS.add("body@background");
-    URIS.add("button@datasrc");
-    URIS.add("del@cite");
-    URIS.add("div@datasrc");
-    URIS.add("form@action");
-    URIS.add("frame@longdesc");
-    URIS.add("frame@src");
-    URIS.add("head@profile");
-    URIS.add("iframe@longdesc");
-    URIS.add("iframe@src");
-    URIS.add("img@longdesc");
-    URIS.add("img@src");
-    URIS.add("img@usemap");
-    URIS.add("input@datasrc");
-    URIS.add("input@src");
-    URIS.add("input@usemap");
-    URIS.add("ins@cite");
-    URIS.add("link@href");
-    URIS.add("object@archive");
-    URIS.add("object@classid");
-    URIS.add("object@codebase");
-    URIS.add("object@data");
-    URIS.add("object@datasrc");
-    URIS.add("object@usemap");
-    URIS.add("q@cite");
-    URIS.add("script@for");
-    URIS.add("script@src");
-    URIS.add("select@datasrc");
-    URIS.add("span@datasrc");
-    URIS.add("table@datasrc");
-    URIS.add("textarea@datasrc");
+  @Override
+  boolean inline() {
+    return INLINES.contains(lc(closed.local())) ||
+        opening && INLINES.contains(lc(elem.local())) ||
+        super.inline();
+  }
+
+  @Override
+  boolean suppressIndentation(final QNm qname) throws QueryIOException {
+    return FORMATTEDS.contains(lc(qname.local())) || super.suppressIndentation(qname);
   }
 }

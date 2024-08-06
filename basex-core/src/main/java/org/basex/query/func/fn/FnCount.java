@@ -5,7 +5,6 @@ import static org.basex.query.func.Function.*;
 import org.basex.query.*;
 import org.basex.query.CompileContext.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.gflwor.*;
 import org.basex.query.func.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
@@ -16,74 +15,56 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class FnCount extends StandardFunc {
   @Override
   public Int item(final QueryContext qc, final InputInfo ii) throws QueryException {
     // iterative access: if the iterator size is unknown, iterate through all results
-    final Iter iter = exprs[0].iter(qc);
-    long size = iter.size();
+    final Iter input = arg(0).iter(qc);
+    long size = input.size();
     if(size == -1) {
-      do ++size; while(qc.next(iter) != null);
+      do ++size; while(qc.next(input) != null);
     }
     return Int.get(size);
   }
 
   @Override
+  protected void simplifyArgs(final CompileContext cc) throws QueryException {
+    arg(0, arg -> arg.simplifyFor(Simplify.COUNT, cc));
+  }
+
+  @Override
   protected Expr opt(final CompileContext cc) throws QueryException {
-    final Expr expr = exprs[0];
-
     // return static result size
-    final long size = expr.size();
-    if(size >= 0 && !expr.has(Flag.NDT)) return Int.get(size);
+    final Expr input = arg(0);
+    final long size = input.size();
+    if(size >= 0 && !input.has(Flag.NDT)) return Int.get(size);
 
-    // rewrite count(map:keys(...)) to map:size(...)
-    if(_MAP_KEYS.is(expr))
-      return cc.function(_MAP_SIZE, info, expr.args());
-    // rewrite count(string-to-codepoints(...)) to string-length(...)
-    if(STRING_TO_CODEPOINTS.is(expr) || _UTIL_CHARS.is(expr))
-      return cc.function(STRING_LENGTH, info, expr.args());
+    // count(map:keys(E))  ->  map:size(E)
+    if(_MAP_KEYS.is(input))
+      return cc.function(_MAP_SIZE, info, input.args());
+    // count(util:array-members(E))  ->  array:size(E)
+    if(_ARRAY_MEMBERS.is(input))
+      return cc.function(_ARRAY_SIZE, info, input.args());
+    // count(string-to-codepoints(E))  ->  string-length(E)
+    // count(characters(E))  ->  string-length(E)
+    if(STRING_TO_CODEPOINTS.is(input) || CHARACTERS.is(input))
+      return cc.function(STRING_LENGTH, info, input.args());
 
-    // simplify argument
-    final Expr arg = simplify(expr, cc);
-    return arg != expr ? cc.function(COUNT, info, arg) : this;
+    return embed(cc, true);
   }
 
   @Override
   public Expr simplifyFor(final Simplify mode, final CompileContext cc) throws QueryException {
+    Expr expr = this;
     if(mode == Simplify.EBV) {
       // if(count(nodes))  ->  if(nodes)
       // if(count(items))  ->  if(exists(items))
-      final Expr expr = exprs[0];
-      return cc.simplify(this, expr.seqType().type instanceof NodeType ? expr :
-        cc.function(EXISTS, info, exprs));
+      expr = arg(0).seqType().type instanceof NodeType ? arg(0) :
+        cc.function(EXISTS, info, exprs);
     }
-    return this;
-  }
-
-  /**
-   * Simplify count arguments.
-   * @param expr expression to simplify
-   * @param cc compilation context
-   * @return simplified or supplied expression
-   * @throws QueryException query exception
-   */
-  public static Expr simplify(final Expr expr, final CompileContext cc) throws QueryException {
-    // simplify filter expression
-    if(expr instanceof Filter) {
-      return ((Filter) expr).simplifyCount(cc);
-    }
-    // rewrite count(reverse(...)) to count(...)
-    if(REVERSE.is(expr) || SORT.is(expr)) {
-      return expr.arg(0);
-    }
-    // remove order by clauses from FLWOR expression
-    if(expr instanceof GFLWOR) {
-      final Expr flwor = ((GFLWOR) expr).removeOrderBy(cc);
-      if(flwor != null) return flwor;
-    }
-    return expr;
+    return cc.simplify(this, expr, mode);
   }
 }

@@ -4,13 +4,14 @@ import java.awt.*;
 
 import javax.swing.*;
 
+import org.basex.core.*;
 import org.basex.gui.*;
 import org.basex.gui.layout.*;
 
 /**
  * This class displays editor components with an integrated search bar.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class SearchEditor extends BaseXBack {
@@ -30,7 +31,7 @@ public final class SearchEditor extends BaseXBack {
    * Constructor.
    * @param gui gui reference
    * @param center centered component
-   * @param editor editor (may be {@code null})
+   * @param editor editor (can be {@code null})
    */
   public SearchEditor(final GUI gui, final JComponent center, final TextPanel editor) {
     super(false);
@@ -51,10 +52,9 @@ public final class SearchEditor extends BaseXBack {
 
   /**
    * Returns a search button.
-   * @param help help text
    * @return button
    */
-  public AbstractButton button(final String help) {
-    return search.button(help);
+  public AbstractButton button() {
+    return search.button(Text.FIND);
   }
 }

@@ -4,13 +4,13 @@ import static org.basex.http.webdav.WebDAVUtils.*;
 
 import java.util.*;
 
+import org.basex.index.resource.*;
 import org.basex.util.*;
-import org.basex.util.http.*;
 
 /**
  * Resource meta data.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Dimitar Popov
  */
 final class WebDAVMetaData {
@@ -20,10 +20,10 @@ final class WebDAVMetaData {
   final String path;
   /** Last modification date of resource. */
   final Date mdate;
-  /** Raw binary file flag. */
-  final boolean raw;
+  /** Resource type. */
+  final String type;
   /** Resource content type. */
-  final MediaType type;
+  final String contentType;
   /** Resource size in bytes. */
   final Long size;
 
@@ -48,25 +48,25 @@ final class WebDAVMetaData {
    * @param ms resource last modification date (can be {@code null})
    */
   WebDAVMetaData(final String db, final String path, final String ms) {
-    this(db, path, ms, false, null, null);
+    this(db, path, ResourceType.XML.toString(), null, ms, null);
   }
 
   /**
    * Constructor.
    * @param db database owning the resource (can be {@code null})
    * @param path resource path
+   * @param type resource type
+   * @param contentType resource media type (can be {@code null})
    * @param ms resource last modification date (can be {@code null})
-   * @param raw raw binary file flag
-   * @param type resource media type (can be {@code null})
    * @param size resource size in bytes (can be {@code null} or empty)
    */
-  WebDAVMetaData(final String db, final String path, final String ms, final boolean raw,
-      final MediaType type, final String size) {
+  WebDAVMetaData(final String db, final String path, final String type,
+      final String contentType, final String ms, final String size) {
 
     this.db = db;
     this.path = stripLeadingSlash(path);
-    this.raw = raw;
     this.type = type;
+    this.contentType = contentType;
     this.size = size == null || size.isEmpty() ? null : Long.valueOf(size);
     mdate = ms == null ? null : new Date(DateTime.parse(ms).getTime());
   }

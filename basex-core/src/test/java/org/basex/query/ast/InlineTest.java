@@ -1,5 +1,6 @@
 package org.basex.query.ast;
 
+import org.basex.*;
 import org.basex.query.ann.*;
 import org.basex.query.expr.*;
 import org.basex.query.expr.gflwor.*;
@@ -13,10 +14,16 @@ import org.junit.jupiter.api.*;
 /**
  * Tests for inlining.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Leo Woerteler
  */
-public final class InlineTest extends QueryPlanTest {
+public final class InlineTest extends SandboxTest {
+  /** Resets optimizations. */
+  @BeforeEach public void init() {
+    inline(false);
+    unroll(false);
+  }
+
   /** Tests if inlining works in {@link Arith} expressions. */
   @Test public void plusTest() {
     check("let $x := 21 return $x + 21", 42, empty(GFLWOR.class));
@@ -86,11 +93,12 @@ public final class InlineTest extends QueryPlanTest {
 
   /** Checks that the simple map operator prohibits inlining a context item into its RHS. */
   @Test public void gh1055() {
+    inline(true);
     check("(let $d := for-each(1 to 100, function($a) { $a }) "
         + "return (1 to 2) ! $d)[. = 0]",
         "",
         exists(SingletonSeq.class));
-    check("(let $d := for-each(1 to 11, hof:id#1) "
+    check("(let $d := for-each(1 to 11, identity#1) "
         + "return (1 to 2) ! $d[1])[. = 0]",
         "",
         exists(SingletonSeq.class));
@@ -108,6 +116,8 @@ public final class InlineTest extends QueryPlanTest {
 
   /** Tests the annotation {@link Annotation#_BASEX_INLINE}. */
   @Test public void annotation() {
+    inline(true);
+
     // deactivate inlining globally, activate locally
     check("declare option db:inlinelimit '0';"
         + "declare %basex:inline function local:x($x) { $x }; local:x(123)",
@@ -126,6 +136,11 @@ public final class InlineTest extends QueryPlanTest {
         + "declare %basex:inline(0) function local:x($x) { $x }; local:x(123)",
         123,
         exists(StaticFunc.class));
+
+    // locking flag: disable inlining
+    check("declare %basex:lock('x') function local:x($x) { $x }; local:x(123)",
+        123,
+        exists(StaticFunc.class));
   }
 
   /** Tests if all let clauses are removed. */
@@ -133,10 +148,12 @@ public final class InlineTest extends QueryPlanTest {
     check("let $a := 'foo' return 'bar' ! . ! $a", "foo", empty(Let.class));
   }
 
-  /** Ensures that non-deterministic clauses are not reordered. */
+  /** Ensures that nondeterministic clauses are not reordered. */
   @Test public void ndtFuncTest() {
+    inline(true);
     check("let $a := function($d) { trace($d) }"
-        + "let $b := $a('1st') let $c := $a('2nd') return $b", "1st",
+        + "let $b := nondeterministic $a('1st') let $c := nondeterministic $a('2nd') "
+        + "return $b", "1st",
         root(ItemMap.class),
         "//FnTrace[. = '1st'] << //FnTrace[. = '2nd']");
   }
@@ -153,6 +170,7 @@ public final class InlineTest extends QueryPlanTest {
 
   /** Checks that inlining a nested closure works properly. */
   @Test public void gh1424() {
+    inline(true);
     check("declare function local:f() {"
         + "  let $func := function($key) { map { $key: 'ok' }($key) }"
         + "  let $input := <ok/>"

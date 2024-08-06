@@ -9,7 +9,7 @@ import org.basex.util.options.*;
 /**
  * Project specific check box implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class BaseXCheckBox extends JCheckBox {
@@ -66,7 +66,7 @@ public final class BaseXCheckBox extends JCheckBox {
    */
   public BaseXCheckBox large() {
     BaseXLayout.boldFont(this);
-    BaseXLayout.resizeFont(this, 1.4f);
+    BaseXLayout.resizeFont(this, 1.3f);
     return this;
   }
 

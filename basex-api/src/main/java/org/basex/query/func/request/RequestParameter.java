@@ -14,20 +14,20 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class RequestParameter extends ApiFunc {
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    final String name = Token.string(toToken(exprs[0], qc));
+    final String name = toString(arg(0), qc);
 
     final RequestContext requestCtx = requestContext(qc);
     try {
       final Value query = requestCtx.queryValues().get(name);
       final Value form = requestCtx.formValues(qc.context.options).get(name);
       if(query == null && form == null) {
-        return exprs.length == 1 ? Empty.VALUE : exprs[1].value(qc);
+        return defined(1) ? arg(1).value(qc) : Empty.VALUE;
       }
 
       final ValueBuilder vb = new ValueBuilder(qc);
@@ -35,6 +35,7 @@ public final class RequestParameter extends ApiFunc {
       if(form != null) vb.add(form);
       return vb.value(this);
     } catch(final IOException ex) {
+      Util.debug(ex);
       throw REQUEST_PARAMETER.get(info, requestCtx.queryString());
     }
   }

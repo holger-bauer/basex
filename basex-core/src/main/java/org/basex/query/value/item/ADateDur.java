@@ -11,13 +11,10 @@ import org.basex.util.*;
 /**
  * Abstract super class for dates and durations.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public abstract class ADateDur extends Item {
-  /** Seconds and milliseconds. {@code null}: undefined. */
-  public BigDecimal sec;
-
   /**
    * Constructor.
    * @param type item type
@@ -66,11 +63,11 @@ public abstract class ADateDur extends Item {
    * Throws a date format exception.
    * @param input input
    * @param ex example format
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return date format exception
    */
-  final QueryException dateError(final byte[] input, final String ex, final InputInfo ii) {
-    return DATEFORMAT_X_X_X.get(ii, type, input, ex);
+  final QueryException dateError(final byte[] input, final String ex, final InputInfo info) {
+    return DATEFORMAT_X_X_X.get(info, type, input, ex);
   }
 
   /**
@@ -78,17 +75,17 @@ public abstract class ADateDur extends Item {
    * Returns an exception if the value is invalid.
    * @param string string to be converted
    * @param dur duration
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return long value
    * @throws QueryException query exception
    */
-  final long toLong(final String string, final boolean dur, final InputInfo ii)
+  final long toLong(final String string, final boolean dur, final InputInfo info)
       throws QueryException {
     try {
       return Long.parseLong(string);
     } catch(final NumberFormatException ex) {
       Util.debug(ex);
-      throw (dur ? DURRANGE_X_X : DATERANGE_X_X).get(ii, type, normalize(string, ii));
+      throw (dur ? DURRANGE_X_X : DATERANGE_X_X).get(info, type, string);
     }
   }
 
@@ -97,18 +94,18 @@ public abstract class ADateDur extends Item {
    * Returns an exception if the value is invalid.
    * @param string string to be converted
    * @param dur duration
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @return decimal
    * @throws QueryException query exception
    */
-  final BigDecimal toDecimal(final String string, final boolean dur, final InputInfo ii)
+  final BigDecimal toDecimal(final String string, final boolean dur, final InputInfo info)
       throws QueryException {
 
     try {
       return new BigDecimal(string);
     } catch(final NumberFormatException ex) {
       Util.debug(ex);
-      throw (dur ? DURRANGE_X_X : DATERANGE_X_X).get(ii, type, normalize(string, ii));
+      throw (dur ? DURRANGE_X_X : DATERANGE_X_X).get(info, type, string);
     }
   }
 }

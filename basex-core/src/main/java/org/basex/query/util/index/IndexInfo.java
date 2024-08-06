@@ -22,7 +22,7 @@ import org.basex.util.hash.*;
 /**
  * This class contains methods for storing information on new index expressions.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class IndexInfo {
@@ -39,7 +39,7 @@ public final class IndexInfo {
   public NameTest test;
   /** Index expression. */
   public Expr expr;
-  /** Costs of index access ({@code null}) if no index access is possible). */
+  /** Costs of index access ({@code null} if no index access is possible). */
   public IndexCosts costs;
   /** Indicates if the last step addresses a text node. */
   boolean text;
@@ -90,15 +90,17 @@ public final class IndexInfo {
       final Stats stats = data.elemNames.stats(data.elemNames.id(test.qname.local()));
       if(stats == null || !stats.isLeaf()) return null;
       text = true;
-    } else if(last.test.type != NodeType.ATTRIBUTE) {
+    } else if(last.test.type == NodeType.ATTRIBUTE) {
+      text = false;
+    } else {
       // other tests cannot be rewritten for index access
       return null;
     }
 
     // check if the index contains result for the specified elements or attributes
     final IndexType it = type != null ? type : text ? IndexType.TEXT : IndexType.ATTRIBUTE;
-    if(text ? (it != IndexType.TEXT && it != IndexType.FULLTEXT) :
-      (it != IndexType.TOKEN && it != IndexType.ATTRIBUTE)) return null;
+    if(text ? it != IndexType.TEXT && it != IndexType.FULLTEXT :
+      it != IndexType.TOKEN && it != IndexType.ATTRIBUTE) return null;
 
     // database is known at compile time: perform additional checks
     if(data != null) {
@@ -121,12 +123,12 @@ public final class IndexInfo {
    * @param search expression to find (can be {@code null})
    * @param type index type (can be {@code null})
    * @param trim normalize second string
-   * @param ii input info (can be {@code null})
+   * @param info input info (can be {@code null})
    * @return success flag
    * @throws QueryException query exception
    */
   public boolean create(final Expr search, final IndexType type, final boolean trim,
-      final InputInfo ii) throws QueryException {
+      final InputInfo info) throws QueryException {
 
     // no index or no search value: no optimization
     if(type == null || search == null) return false;
@@ -134,7 +136,7 @@ public final class IndexInfo {
     final Data data = db.data();
     if(data == null && !enforce()) return false;
 
-    final ParseExpr root;
+    final ValueAccess va;
     if(search instanceof Value) {
       // loop through all items
       final Iter iter = search.iter(cc.qc);
@@ -143,7 +145,7 @@ public final class IndexInfo {
         // only strings and untyped items are supported
         if(!item.type.isStringOrUntyped()) return false;
         // do not use text/attribute index if string is empty or too long
-        byte[] token = item.string(ii);
+        byte[] token = item.string(info);
         if(trim) token = Token.trim(token);
         final int sl = token.length;
         if(type != IndexType.TOKEN && (sl == 0 || data != null && sl > data.meta.maxlen))
@@ -158,23 +160,27 @@ public final class IndexInfo {
         }
       }
 
-      // ignore expressions that yield no results
+      // ignore expressions that yield no results.
+      // count number of results. prerequisites:
+      // - index access is not followed by a name test,
+      // - no token index is used, or only one token is looked up
       final TokenSet tokens = new TokenSet();
-      int counts = 0;
+      int size = test == null ? 0 : -1;
       for(final byte[] token : cache) {
         final int count = cache.get(token);
         if(count != 0) tokens.add(token);
-        if(counts >= 0) counts = count >= 0 ? counts + count : -1;
+        if(size >= 0) {
+          size = count < 0 || type == IndexType.TOKEN && tokens.size() > 1 ? -1 : size + count;
+        }
       }
 
       // create expression for index access
-      final ValueAccess va = new ValueAccess(ii, tokens, type, test, db);
-      va.size(counts);
-      root = va;
+      va = new ValueAccess(info, tokens, type, test, db);
+      va.exprType.assign(va.seqType(), size);
 
     } else {
       /* index access is not possible if returned type is not a string or untyped; if
-       * expression depends on context; or if it is non-deterministic. examples:
+       * expression depends on context; or if it is nondeterministic. examples:
        * - for $x in ('a', 1) return //*[text() = $x]
        * - //*[text() = .]
        * - //*[text() = (if(random:double() < .5) then 'X' else 'Y')] */
@@ -184,10 +190,10 @@ public final class IndexInfo {
       // estimate costs for dynamic query terms
       costs = enforce() ? IndexCosts.ENFORCE_DYNAMIC :
         IndexCosts.get(Math.max(1, data.meta.size / 10));
-      root = new ValueAccess(ii, search, type, test, db);
+      va = new ValueAccess(info, search, type, test, db);
     }
 
-    create(root, false, Util.info(OPTINDEX_X_X, type, search), ii);
+    create(va, false, Util.info(OPTINDEX_X_X, type, search), info);
     return true;
   }
 
@@ -196,18 +202,18 @@ public final class IndexInfo {
    * @param root new root expression
    * @param parent add parent step
    * @param opt optimization info
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
   public void create(final ParseExpr root, final boolean parent, final String opt,
-      final InputInfo ii) throws QueryException {
+      final InputInfo info) throws QueryException {
 
     final Expr rt;
     if(test == null || !parent) {
       rt = root;
     } else {
-      final Expr st = Step.get(cc, root, ii, Axis.PARENT, test);
-      rt = Path.get(cc, ii, root, st);
+      final Expr st = Step.get(cc, root, info, Axis.PARENT, test);
+      rt = Path.get(cc, info, root, st);
     }
     expr = pred.invert(rt);
     optInfo = opt;
@@ -219,7 +225,7 @@ public final class IndexInfo {
    * @param search index search definition
    * @return costs costs, or {@code null} if index access is not possible
    */
-  public IndexCosts costs(final Data data, final IndexSearch search) {
+  public static IndexCosts costs(final Data data, final IndexSearch search) {
     return data != null ? data.costs(search) : IndexCosts.ENFORCE_STATIC;
   }
 

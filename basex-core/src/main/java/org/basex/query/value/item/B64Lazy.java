@@ -1,17 +1,19 @@
 package org.basex.query.value.item;
 
 import java.io.*;
+import java.util.function.*;
 
+import org.basex.data.*;
 import org.basex.io.*;
 import org.basex.io.in.*;
 import org.basex.query.*;
-import org.basex.query.func.*;
+import org.basex.query.func.Function;
 import org.basex.util.*;
 
 /**
  * Lazy base64 item ({@code xs:base64Binary}).
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class B64Lazy extends B64 implements Lazy {
@@ -33,8 +35,8 @@ public final class B64Lazy extends B64 implements Lazy {
   }
 
   @Override
-  public byte[] binary(final InputInfo ii) throws QueryException {
-    cache(ii);
+  public byte[] binary(final InputInfo info) throws QueryException {
+    cache(info);
     return data;
   }
 
@@ -70,9 +72,23 @@ public final class B64Lazy extends B64 implements Lazy {
   }
 
   @Override
-  public void plan(final QueryString qs) {
+  public Item materialize(final Predicate<Data> test, final InputInfo ii, final QueryContext qc)
+      throws QueryException {
+    cache(ii);
+    return this;
+  }
+
+  @Override
+  public boolean materialized(final Predicate<Data> test, final InputInfo ii)
+      throws QueryException {
+    cache(ii);
+    return true;
+  }
+
+  @Override
+  public void toString(final QueryString qs) {
     if(isCached()) {
-      super.plan(qs);
+      super.toString(qs);
     } else {
       qs.function(Function._FILE_READ_BINARY, input);
     }

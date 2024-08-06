@@ -10,7 +10,7 @@ import java.util.*;
  * This example requires a running database server instance.
  * Documentation: https://docs.basex.org/wiki/Clients
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  */
 public final class BinaryExample {
   /**
@@ -22,7 +22,7 @@ public final class BinaryExample {
     // create session
     try(BaseXClient session = new BaseXClient("localhost", 1984, "admin", "admin")) {
       // create empty database
-      session.execute("create db database");
+      session.execute("CREATE DB database");
       System.out.println(session.info());
 
       // define input stream
@@ -31,12 +31,12 @@ public final class BinaryExample {
       final ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
 
       // add document
-      session.store("test.bin", bais);
+      session.putBinary("test.bin", bais);
       System.out.println(session.info());
 
       // receive data
       final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      session.execute("retrieve test.bin", baos);
+      session.execute("BINARY GET test.bin", baos);
 
       // should always yield true
       if(Arrays.equals(bytes, baos.toByteArray())) {
@@ -46,7 +46,7 @@ public final class BinaryExample {
       }
 
       // drop database
-      session.execute("drop db database");
+      session.execute("DROP DB database");
     }
   }
 }

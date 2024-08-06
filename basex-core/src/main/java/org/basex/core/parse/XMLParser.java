@@ -12,7 +12,6 @@ import org.basex.core.cmd.List;
 import org.basex.core.cmd.Set;
 import org.basex.io.*;
 import org.basex.query.*;
-import org.basex.query.iter.*;
 import org.basex.query.value.item.*;
 import org.basex.query.value.node.*;
 import org.basex.query.value.seq.*;
@@ -22,7 +21,7 @@ import org.basex.util.list.*;
 /**
  * This is a parser for XML input, creating {@link Command} instances.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class XMLParser extends CommandParser {
@@ -40,18 +39,13 @@ final class XMLParser extends CommandParser {
     try {
       final DBNode node = new DBNode(IO.get(input));
       String query = "/*";
-      if(!execute(COMMANDS, node).isEmpty()) {
+      if(!string(COMMANDS + " ! name()", node).isEmpty()) {
         query = COMMANDS + query;
-        // ensure that the root contains no text nodes as children
-        final String ws = COMMANDS + "/text()[normalize-space()]";
-        try(QueryProcessor qp = new QueryProcessor(ws, ctx)) {
-          qp.context(node);
-          if(!qp.value().isEmpty())
-            throw error(Text.SYNTAX_X, '<' + COMMANDS + "><...></" + COMMANDS + '>');
+        if(!string(COMMANDS + "/text()", node).isEmpty()) {
+          throw error(Text.SYNTAX + Text.COLS + '<' + COMMANDS + "><...></" + COMMANDS + '>');
         }
       }
-      try(QueryProcessor qp = new QueryProcessor(query, ctx)) {
-        qp.context(node);
+      try(QueryProcessor qp = new QueryProcessor(query, ctx).context(node)) {
         for(final Item ia : qp.value()) cmds.add(command(ia).baseURI(uri));
       }
     } catch(final IOException ex) {
@@ -78,14 +72,18 @@ final class XMLParser extends CommandParser {
       return new AlterPassword(value(root, NAME), password(root));
     if(e.equals(ALTER_USER) && check(root, NAME, NEWNAME))
       return new AlterUser(value(root, NAME), value(root, NEWNAME));
+    if(e.equals(BINARY_GET) && check(root, PATH))
+      return new BinaryGet(value(root, PATH));
+    if(e.equals(BINARY_PUT) && check(root, PATH + '?', '<' + INPUT))
+      return new BinaryPut(value(root, PATH), xml(root));
     if(e.equals(CHECK) && check(root, INPUT))
       return new Check(value(root, INPUT));
     if(e.equals(CLOSE) && check(root))
       return new Close();
     if(e.equals(COPY) && check(root, NAME, NEWNAME))
       return new Copy(value(root, NAME), value(root, NEWNAME));
-    if(e.equals(CREATE_BACKUP) && check(root, NAME))
-      return new CreateBackup(value(root, NAME));
+    if(e.equals(CREATE_BACKUP) && check(root, NAME + '?', COMMENT + '?'))
+      return new CreateBackup(value(root, NAME), value(root, COMMENT));
     if(e.equals(CREATE_DB) && check(root, NAME, '<' + INPUT + '?'))
       return new CreateDB(value(root, NAME), xml(root));
     if(e.equals(CREATE_INDEX) && check(root, TYPE))
@@ -94,7 +92,9 @@ final class XMLParser extends CommandParser {
       return new CreateUser(value(root, NAME), password(root));
     if(e.equals(DELETE) && check(root, PATH))
       return new Delete(value(root, PATH));
-    if(e.equals(DROP_BACKUP) && check(root, NAME))
+    if(e.equals(DIR) && check(root, PATH))
+      return new Dir(value(root, PATH));
+    if(e.equals(DROP_BACKUP) && check(root, NAME + '?'))
       return new DropBackup(value(root, NAME));
     if(e.equals(DROP_DB) && check(root, NAME))
       return new DropDB(value(root, NAME));
@@ -102,6 +102,8 @@ final class XMLParser extends CommandParser {
       return new DropIndex(value(root, TYPE));
     if(e.equals(DROP_USER) && check(root, NAME, PATTERN + '?'))
       return new DropUser(value(root, NAME), value(root, PATTERN));
+    if(e.equals(EXECUTE) && check(root, '<' + INPUT))
+      return new Execute(xml(root));
     if(e.equals(EXIT) && check(root))
       return new Exit();
     if(e.equals(EXPORT) && check(root, PATH))
@@ -110,8 +112,8 @@ final class XMLParser extends CommandParser {
       return new Find(value(root));
     if(e.equals(FLUSH) && check(root))
       return new Flush();
-    if(e.equals(GET) && check(root, OPTION + '?'))
-      return new Get(value(root, OPTION));
+    if(e.equals(GET) && check(root, PATH))
+      return new Get(value(root, PATH));
     if(e.equals(GRANT) && check(root, NAME, PERMISSION, PATTERN + '?'))
       return new Grant(value(root, PERMISSION), value(root, NAME), value(root, PATTERN));
     if(e.equals(HELP) && check(root, '#' + COMMAND + '?'))
@@ -124,56 +126,46 @@ final class XMLParser extends CommandParser {
       return new InfoIndex(value(root, TYPE));
     if(e.equals(INFO_STORAGE) && check(root, START + '?', END + '?'))
       return new InfoStorage(value(root, START), value(root, END));
-    if(e.equals(JOBS_LIST))
-      return new JobsList();
-    if(e.equals(JOBS_STOP) && check(root, ID))
-      return new JobsStop(value(root, ID));
-    if(e.equals(JOBS_RESULT) && check(root, ID))
-      return new JobsResult(value(root, ID));
+    if(e.equals(INSPECT) && check(root))
+      return new Inspect();
     if(e.equals(KILL) && check(root, TARGET))
       return new Kill(value(root, TARGET));
     if(e.equals(LIST) && check(root, NAME + '?', PATH + '?'))
       return new List(value(root, NAME), value(root, PATH));
     if(e.equals(OPEN) && check(root, NAME, PATH + '?'))
-      return new Open(value(root, NAME), value(root, PATH));
+      return new Open(value(root, NAME));
     if(e.equals(OPTIMIZE) && check(root))
       return new Optimize();
     if(e.equals(OPTIMIZE_ALL) && check(root))
       return new OptimizeAll();
     if(e.equals(PASSWORD) && check(root, '#' + PASSWORD + '?'))
       return new Password(password(root));
+    if(e.equals(PUT) && check(root, PATH, '<' + INPUT))
+      return new Put(value(root, PATH), xml(root));
     if(e.equals(QUIT) && check(root))
       return new Exit();
     if(e.equals(RENAME) && check(root, PATH, NEWPATH))
       return new Rename(value(root, PATH), value(root, NEWPATH));
-    if(e.equals(REPLACE) && check(root, PATH, '<' + INPUT))
-      return new Replace(value(root, PATH), xml(root));
     if(e.equals(REPO_DELETE) && check(root, NAME))
       return new RepoDelete(value(root, NAME), null);
     if(e.equals(REPO_INSTALL) && check(root, PATH))
       return new RepoInstall(value(root, PATH), null);
     if(e.equals(REPO_LIST) && check(root))
       return new RepoList();
-    if(e.equals(RESTORE) && check(root, NAME))
+    if(e.equals(RESTORE) && check(root, NAME + '?'))
       return new Restore(value(root, NAME));
-    if(e.equals(RETRIEVE) && check(root, PATH))
-      return new Retrieve(value(root, PATH));
     if(e.equals(RUN) && check(root, FILE))
       return new Run(value(root, FILE));
-    if(e.equals(EXECUTE) && check(root, '<' + INPUT))
-      return new Execute(xml(root));
-    if(e.equals(INSPECT) && check(root))
-      return new Inspect();
     if(e.equals(SET) && check(root, OPTION, '#' + VALUE + '?'))
       return new Set(value(root, OPTION), value(root));
     if(e.equals(SHOW_BACKUPS) && check(root))
       return new ShowBackups();
+    if(e.equals(SHOW_OPTIONS) && check(root, NAME + '?'))
+      return new ShowOptions(value(root, NAME));
     if(e.equals(SHOW_SESSIONS) && check(root))
       return new ShowSessions();
     if(e.equals(SHOW_USERS) && check(root, DATABASE + '?'))
       return new ShowUsers(value(root, DATABASE));
-    if(e.equals(STORE) && check(root, PATH + '?', '<' + INPUT))
-      return new Store(value(root, PATH), xml(root));
     if(e.equals(TEST) && check(root, PATH))
       return new Test(value(root, PATH));
     if(e.equals(XQUERY) && check(root, '#' + QUERY))
@@ -189,7 +181,7 @@ final class XMLParser extends CommandParser {
    * @throws QueryException query exception
    */
   private String value(final Item root, final String att) throws QueryException {
-    return execute("string(@" + att + ')', root);
+    return string("@" + att, root);
   }
 
   /**
@@ -199,7 +191,7 @@ final class XMLParser extends CommandParser {
    * @throws QueryException query exception
    */
   private String value(final Item root) throws QueryException {
-    return execute("string(.)", root);
+    return string(".", root);
   }
 
   /**
@@ -209,36 +201,34 @@ final class XMLParser extends CommandParser {
    * @throws QueryException query exception
    */
   private String password(final Item root) throws QueryException {
-    final String pw = execute("string(.)", root);
+    final String pw = string(".", root);
     return pw.isEmpty() && pwReader != null ? pwReader.password() : pw;
   }
 
   /**
-   * Returns an xml value (text node).
-   * @param root root node
+   * Returns the serialized XML value.
+   * @param context context node
    * @return xml value
    * @throws IOException I/O exception
    * @throws QueryException query exception
    */
-  private String xml(final Item root) throws IOException, QueryException {
-    try(QueryProcessor qp = new QueryProcessor("node()", ctx)) {
-      return qp.context(root).value().serialize().toString().trim();
+  private String xml(final Item context) throws IOException, QueryException {
+    try(QueryProcessor qp = new QueryProcessor("node()", ctx).context(context)) {
+      return qp.value().serialize().toString().trim();
     }
   }
 
   /**
-   * Executes the specified query and returns a string representation.
+   * Returns the string value of the executed query.
    * @param query query
    * @param context context node
-   * @return string representation
+   * @return string
    * @throws QueryException query exception
    */
-  private String execute(final String query, final Item context) throws QueryException {
-    try(QueryProcessor qp = new QueryProcessor(query, ctx)) {
+  private String string(final String query, final Item context) throws QueryException {
+    try(QueryProcessor qp = new QueryProcessor("string-join(" + query + ')', ctx)) {
       qp.context(context);
-      final Iter iter = qp.iter();
-      final Item item = iter.next();
-      return item == null ? "" : item.toJava().toString().trim();
+      return qp.value().toJava().toString().trim();
     }
   }
 
@@ -288,7 +278,7 @@ final class XMLParser extends CommandParser {
     // check existence of mandatory attributes
     tb.add("[every $e in $A satisfies @*/name() = $e]");
     // check existence of unknown attributes
-    tb.add("[every $e in @* satisfies $e/name() = ($A,$O)]");
+    tb.add("[every $e in @* satisfies $e/name() = ($A, $O)]");
     // ensure that all values are non-empty
     tb.add("[every $e in @* satisfies data($e)]");
     if(t == null) {
@@ -301,9 +291,8 @@ final class XMLParser extends CommandParser {
     }
 
     // run query
-    try(QueryProcessor qp = new QueryProcessor(tb.toString(), ctx)) {
-      qp.context(root);
-      qp.bind("A", StrSeq.get(mand.toArray())).bind("O", StrSeq.get(opt.toArray()));
+    try(QueryProcessor qp = new QueryProcessor(tb.toString(), ctx).context(root)) {
+      qp.variable("A", StrSeq.get(mand.toArray())).variable("O", StrSeq.get(opt.toArray()));
       if(!qp.value().isEmpty()) return true;
     }
     // build error string
@@ -321,7 +310,7 @@ final class XMLParser extends CommandParser {
     } else {
       syntax.add("/>");
     }
-    throw error(Text.SYNTAX_X, syntax);
+    throw error(Text.SYNTAX + Text.COLS + syntax);
   }
 
   /**

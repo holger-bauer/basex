@@ -4,7 +4,6 @@ import static org.basex.query.QueryText.*;
 
 import java.util.function.*;
 
-import org.basex.data.*;
 import org.basex.query.*;
 import org.basex.query.iter.*;
 import org.basex.query.util.*;
@@ -21,16 +20,16 @@ import org.basex.util.hash.*;
 /**
  * Intersect expression.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class Intersect extends Set {
   /**
    * Constructor.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @param exprs expressions
    */
-  public Intersect(final InputInfo info, final Expr[] exprs) {
+  public Intersect(final InputInfo info, final Expr... exprs) {
     super(info, exprs);
   }
 
@@ -38,41 +37,38 @@ public final class Intersect extends Set {
   Expr opt(final CompileContext cc) throws QueryException {
     flatten(cc);
 
-    // determine type; skip optimizations if operands do not have the correct type
-    SeqType st = null;
+    // determine type
+    SeqType st = SeqType.NODE_ZM;
     for(final Expr expr : exprs) {
       final SeqType st2 = expr.seqType();
       if(!st2.zero()) {
-        st = st == null ? st2 : st.intersect(st2);
-        if(st == null) return null;
+        if(!(st2.type instanceof NodeType)) return null;
+        st = st.intersect(st2);
+        // check for incompatible node types
+        if(st == null) return Empty.VALUE;
       }
     }
-    // check if all operands yield an empty sequence
-    if(st == null) st = SeqType.NODE_ZM;
+    exprType.assign(st.union(Occ.ZERO)).data(exprs);
 
-    if(st.type instanceof NodeType) {
-      exprType.assign(st.union(Occ.ZERO));
-
-      final ExprList list = new ExprList(exprs.length);
-      for(final Expr expr : exprs) {
-        if(expr == Empty.VALUE) {
-          // remove empty operands: * intersect ()  ->  ()
-          return cc.emptySeq(this);
-        } else if(!expr.has(Flag.CNS, Flag.NDT) && list.contains(expr)) {
-          // remove duplicates: * intersect *  ->  *
-          cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
-        } else {
-          list.add(expr);
-        }
+    final ExprList list = new ExprList(exprs.length);
+    for(final Expr expr : exprs) {
+      if(expr == Empty.VALUE) {
+        // empty operand: * intersect ()  ->  ()
+        return Empty.VALUE;
+      } else if(!expr.has(Flag.CNS, Flag.NDT) && list.contains(expr)) {
+        // remove duplicates: * intersect *  ->  *
+        cc.info(OPTREMOVE_X_X, expr, (Supplier<?>) this::description);
+      } else {
+        list.add(expr);
       }
-      exprs = list.finish();
+    }
+    exprs = list.finish();
 
-      final Expr ex = rewrite(Union.class, (invert, ops) ->
-        invert ? new Union(info, ops) : new Intersect(info, ops), cc);
-      if(ex != null) {
-        cc.info(OPTREWRITE_X_X, (Supplier<?>) this::description, ex);
-        return ex;
-      }
+    final Expr ex = rewrite(Union.class, (invert, ops) ->
+      invert ? new Union(info, ops) : new Intersect(info, ops), cc);
+    if(ex != null) {
+      cc.info(OPTREWRITE_X_X, (Supplier<?>) this::description, ex);
+      return ex;
     }
     return null;
   }
@@ -86,7 +82,9 @@ public final class Intersect extends Set {
   Value nodes(final QueryContext qc) throws QueryException {
     ANodeBuilder nodes = new ANodeBuilder();
     Iter iter = exprs[0].iter(qc);
-    for(Item item; (item = qc.next(iter)) != null;) nodes.add(toNode(item));
+    for(Item item; (item = qc.next(iter)) != null;) {
+      nodes.add(toNode(item));
+    }
 
     final int el = exprs.length;
     for(int e = 1; e < el && !nodes.isEmpty(); ++e) {
@@ -116,7 +114,7 @@ public final class Intersect extends Set {
 
         final int il = nodes.length;
         for(int i = 1; i < il;) {
-          final int d = nodes[0].diff(nodes[i]);
+          final int d = nodes[0].compare(nodes[i]);
           if(d > 0) {
             if(!next(i)) return null;
           } else if(d < 0) {
@@ -129,11 +127,6 @@ public final class Intersect extends Set {
         return nodes[0];
       }
     };
-  }
-
-  @Override
-  public Data data() {
-    return data(exprs);
   }
 
   @Override

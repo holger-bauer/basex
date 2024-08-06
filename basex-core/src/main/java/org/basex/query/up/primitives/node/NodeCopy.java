@@ -14,7 +14,7 @@ import org.basex.util.*;
 /**
  * Abstract update primitive which holds a copy of nodes to be inserted.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Lukas Kircher
  */
 abstract class NodeCopy extends NodeUpdate {
@@ -28,25 +28,25 @@ abstract class NodeCopy extends NodeUpdate {
    * @param type type
    * @param pre target node pre value
    * @param data data
-   * @param ii input info
+   * @param info input info (can be {@code null})
    * @param nodes node copy insertion sequence
    */
-  NodeCopy(final UpdateType type, final int pre, final Data data, final InputInfo ii,
+  NodeCopy(final UpdateType type, final int pre, final Data data, final InputInfo info,
       final ANodeList nodes) {
-    super(type, pre, data, ii);
+    super(type, pre, data, info);
     this.nodes = nodes;
   }
 
   @Override
-  public final void prepare(final MemData tmp, final QueryContext qc) {
+  public final void prepare(final MemData memData, final QueryContext qc) throws QueryException {
     // merge texts. after that, text nodes still need to be merged,
     // as two adjacent iterators may lead to two adjacent text nodes
     final ANodeList list = mergeNodeCacheText(nodes);
     nodes = null;
     // build main memory representation of nodes to be copied
-    final int start = tmp.meta.size;
-    new DataBuilder(tmp, qc).build(list);
-    insseq = new DataClip(tmp, start, tmp.meta.size, list.size());
+    final int start = memData.meta.size;
+    new DataBuilder(memData, qc).build(list);
+    insseq = new DataClip(memData, start, memData.meta.size, list.size());
   }
 
   /**
@@ -58,13 +58,12 @@ abstract class NodeCopy extends NodeUpdate {
     final Data d = insseq.data;
     final int s = insseq.start, e = insseq.end;
     for(int p = s; p < e; ++p) {
-      final int kind = d.kind(p);
-      if(kind != Data.ATTR && kind != Data.ELEM) continue;
-      if(p > s && d.parent(p, kind) >= s) break;
-      final int uriId = d.uriId(p, kind);
-      final QNm qnm = new QNm(d.name(p, kind));
-      if(uriId != 0) qnm.uri(d.nspaces.uri(uriId));
-      pool.add(qnm, ANode.type(kind));
+      final int k = d.kind(p);
+      if(k == Data.ATTR || k == Data.ELEM) {
+        if(p > s && d.parent(p, k) >= s) break;
+        final byte[][] qname = d.qname(p, k);
+        pool.add(new QNm(qname[0], qname[1]), ANode.type(k));
+      }
     }
   }
 

@@ -6,7 +6,7 @@ import org.basex.util.*;
 /**
  * Lazy item.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public interface Lazy {
@@ -18,7 +18,7 @@ public interface Lazy {
 
   /**
    * Caches the value.
-   * @param info input info
+   * @param info input info (can be {@code null})
    * @throws QueryException query exception
    */
   void cache(InputInfo info) throws QueryException;

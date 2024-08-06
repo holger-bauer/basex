@@ -1,18 +1,17 @@
 package org.basex.core;
 
-import java.util.*;
+import java.util.stream.*;
 
 import org.basex.build.csv.*;
 import org.basex.build.html.*;
 import org.basex.build.json.*;
-import org.basex.build.text.*;
 import org.basex.io.serial.*;
 import org.basex.util.options.*;
 
 /**
  * This class contains database options which are used all around the project.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class MainOptions extends Options {
@@ -33,14 +32,11 @@ public final class MainOptions extends Options {
   public static final BooleanOption ARCHIVENAME = new BooleanOption("ARCHIVENAME", false);
   /** Flag for skipping corrupt files. */
   public static final BooleanOption SKIPCORRUPT = new BooleanOption("SKIPCORRUPT", false);
-  /** Flag for adding remaining files as raw files. */
+  /** Flag for adding remaining files as binary files. */
   public static final BooleanOption ADDRAW = new BooleanOption("ADDRAW", false);
   /** Define CSV parser options. */
   public static final OptionsOption<CsvParserOptions> CSVPARSER =
       new OptionsOption<>("CSVPARSER", new CsvParserOptions());
-  /** Define text parser options. */
-  public static final OptionsOption<TextOptions> TEXTPARSER =
-      new OptionsOption<>("TEXTPARSER", new TextOptions());
   /** Define JSON parser options. */
   public static final OptionsOption<JsonParserOptions> JSONPARSER =
       new OptionsOption<>("JSONPARSER", new JsonParserOptions());
@@ -53,18 +49,18 @@ public final class MainOptions extends Options {
 
   // XML Parsing
 
-  /** Flag for whitespace chopping. */
-  public static final BooleanOption CHOP = new BooleanOption("CHOP", true);
   /** Use internal XML parser. */
   public static final BooleanOption INTPARSE = new BooleanOption("INTPARSE", false);
-  /** Strips namespaces. */
+  /** Strip whitespace. */
+  public static final BooleanOption STRIPWS = new BooleanOption("STRIPWS", false);
+  /** Strip namespaces. */
   public static final BooleanOption STRIPNS = new BooleanOption("STRIPNS", false);
   /** Flag for parsing DTDs. */
   public static final BooleanOption DTD = new BooleanOption("DTD", false);
   /** Flag for using XInclude. */
   public static final BooleanOption XINCLUDE = new BooleanOption("XINCLUDE", true);
   /** Path to XML Catalog file. */
-  public static final StringOption CATFILE = new StringOption("CATFILE", "");
+  public static final StringOption CATALOG = new StringOption("CATALOG", "");
 
   // Adding documents
 
@@ -123,8 +119,10 @@ public final class MainOptions extends Options {
   public static final BooleanOption MIXUPDATES = new BooleanOption("MIXUPDATES", false);
   /** External variables, separated by commas. */
   public static final StringOption BINDINGS = new StringOption("BINDINGS", "");
-  /** Flag for the size limit on inlineable functions. */
+  /** Limit for inlining functions. */
   public static final NumberOption INLINELIMIT = new NumberOption("INLINELIMIT", 50);
+  /** Limit for unrolling loops. */
+  public static final NumberOption UNROLLLIMIT = new NumberOption("UNROLLLIMIT", 5);
   /** Flag for tail-call optimization. */
   public static final NumberOption TAILCALLS = new NumberOption("TAILCALLS", 256);
   /** Look up documents in databases. */
@@ -145,6 +143,9 @@ public final class MainOptions extends Options {
   public static final BooleanOption ENFORCEINDEX = new BooleanOption("ENFORCEINDEX", false);
   /** Deep node copies. */
   public static final BooleanOption COPYNODE = new BooleanOption("COPYNODE", true);
+  /** Unwrap Java object. */
+  public static final EnumOption<WrapOptions> WRAPJAVA =
+      new EnumOption<>("WRAPJAVA", WrapOptions.SOME);
 
   // Serialize
 
@@ -161,8 +162,8 @@ public final class MainOptions extends Options {
   public static final BooleanOption XMLPLAN = new BooleanOption("XMLPLAN", false);
   /** Creates comprehensive query plan information. */
   public static final BooleanOption FULLPLAN = new BooleanOption("FULLPLAN", false);
-  /** Creates the query plan before or after compilation. */
-  public static final BooleanOption COMPPLAN = new BooleanOption("COMPPLAN", true);
+  /** Creates the query plan before or after optimization. */
+  public static final BooleanOption OPTPLAN = new BooleanOption("OPTPLAN", true);
 
   /** Flushes the database after each update. */
   public static final BooleanOption AUTOFLUSH = new BooleanOption("AUTOFLUSH", true);
@@ -173,8 +174,23 @@ public final class MainOptions extends Options {
 
   // Other
 
-  /** Options that are adopted from parent options. */
-  private static final Option<?>[] INHERIT = { CHOP, INTPARSE, STRIPNS, DTD, XINCLUDE, CATFILE };
+  /** Indexing options. */
+  public static final Option<?>[] INDEXING = { MAXCATS, MAXLEN, SPLITSIZE, LANGUAGE, STOPWORDS,
+    TEXTINDEX, ATTRINDEX, TOKENINDEX, FTINDEX, TEXTINCLUDE, ATTRINCLUDE, TOKENINCLUDE, FTINCLUDE,
+    STEMMING, CASESENS, DIACRITICS, UPDINDEX, AUTOOPTIMIZE };
+
+  /** XML Parsing options. */
+  private static final Option<?>[] XMLPARSING = { INTPARSE, STRIPWS, STRIPNS, DTD, XINCLUDE,
+      CATALOG };
+  /** Extended parsing options. */
+  public static final Option<?>[] EXTPARSING = { CREATEFILTER, ADDARCHIVES, ARCHIVENAME,
+      SKIPCORRUPT, ADDRAW, ADDCACHE, CSVPARSER, JSONPARSER, HTMLPARSER, PARSER };
+  /** All parsing options. */
+  public static final Option<?>[] PARSING = Stream.concat(Stream.of(XMLPARSING),
+      Stream.of(EXTPARSING)).toArray(Option<?>[]::new);
+  /** All create options. */
+  public static final Option<?>[] CREATING = Stream.concat(Stream.of(INDEXING),
+      Stream.of(PARSING)).toArray(Option<?>[]::new);
 
   /** Parser. */
   public enum MainParser {
@@ -182,12 +198,25 @@ public final class MainOptions extends Options {
     /** HTML. */ HTML,
     /** Json. */ JSON,
     /** CSV.  */ CSV,
-    /** Text. */ TEXT,
     /** RAW.  */ RAW;
 
     @Override
     public String toString() {
-      return super.toString().toLowerCase(Locale.ENGLISH);
+      return EnumOption.string(this);
+    }
+  }
+
+  /** Java wrapper. */
+  public enum WrapOptions {
+    /** INSTANCE. */ INSTANCE,
+    /** ALL.      */ ALL,
+    /** VOID.     */ VOID,
+    /** SOM.      */ SOME,
+    /** NONE.     */ NONE;
+
+    @Override
+    public String toString() {
+      return EnumOption.string(this);
     }
   }
 
@@ -207,7 +236,7 @@ public final class MainOptions extends Options {
   }
 
   /**
-   * Constructor, adopting the specified options.
+   * Constructor, adopting all options from the specified instance.
    * @param options parent options
    */
   public MainOptions(final MainOptions options) {
@@ -215,24 +244,12 @@ public final class MainOptions extends Options {
   }
 
   /**
-   * Constructor, adopting XML parsing options from the specified options.
+   * Constructor, adopting parsing options from the specified instance.
    * @param options parent options
-   * @param xml adopt xml options
+   * @param xml limit to XML parsing options
    */
   public MainOptions(final MainOptions options, final boolean xml) {
     this(false);
-    if(xml) {
-      for(final Option<?> option : INHERIT) put(option, options.get(option));
-    }
-  }
-
-  /**
-   * Creates a new options instance with whitespace chopping turned off.
-   * @return main options
-   */
-  public static MainOptions get() {
-    final MainOptions mopts = new MainOptions(false);
-    mopts.set(CHOP, false);
-    return mopts;
+    for(final Option<?> option : xml ? XMLPARSING : PARSING) put(option, options.get(option));
   }
 }

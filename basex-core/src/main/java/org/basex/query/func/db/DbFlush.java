@@ -9,13 +9,13 @@ import org.basex.util.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public final class DbFlush extends DbAccess {
   @Override
   public Item item(final QueryContext qc, final InputInfo ii) throws QueryException {
-    qc.updates().add(new DBFlush(checkData(qc), qc, info), qc);
+    qc.updates().add(new DBFlush(toData(qc), qc, info), qc);
     return Empty.VALUE;
   }
 }

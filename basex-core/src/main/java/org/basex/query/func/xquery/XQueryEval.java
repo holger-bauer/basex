@@ -21,7 +21,7 @@ import org.basex.util.options.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class XQueryEval extends StandardFunc {
@@ -41,11 +41,11 @@ public class XQueryEval extends StandardFunc {
 
   @Override
   public Value value(final QueryContext qc) throws QueryException {
-    return eval(toQuery(0, qc), false, qc);
+    return eval(toContent(arg(0), qc), false, qc);
   }
 
   /**
-   * Evaluates the specified string.
+   * Evaluates the specified string as XQuery expression.
    * @param query query
    * @param updating updating query
    * @param qc query context
@@ -55,26 +55,28 @@ public class XQueryEval extends StandardFunc {
   final Value eval(final IOContent query, final boolean updating, final QueryContext qc)
       throws QueryException {
 
-    // bind variables and context value
-    final HashMap<String, Value> bindings = toBindings(1, qc);
-    final Options opts = toOptions(2, new XQueryOptions(), qc);
-
     // allow limited number of nested calls
     QueryContext qcAnc = qc;
     for(int c = 5; qcAnc != null && c > 0; c--) qcAnc = qcAnc.parent;
     if(qcAnc != null) throw XQUERY_NESTED.get(info);
 
     final User user = qc.context.user();
-    final Perm tmp = user.perm("");
+    final Perm perm = user.perm("");
     Timer to = null;
 
-    final Perm perm = Perm.get(opts.get(XQueryOptions.PERMISSION).toString());
-    if(!user.has(perm)) throw XQUERY_PERMISSION2_X.get(info, perm);
-    user.perm(perm);
+    // bind variables and context value, parse options
+    final HashMap<String, Value> bindings = toBindings(arg(1), qc);
+    final XQueryOptions options = new XQueryOptions();
+    options.put(XQueryOptions.PERMISSION, perm);
+    toOptions(arg(2), options, qc);
+
+    final Perm evalPerm = Perm.get(options.get(XQueryOptions.PERMISSION).toString());
+    if(!user.has(evalPerm)) throw XQUERY_PERMISSION2_X.get(info, evalPerm);
+    user.perm(evalPerm);
 
     try(QueryContext qctx = new QueryContext(qc)) {
       // limit memory consumption: enforce garbage collection and calculate usage
-      final long mb = opts.get(XQueryOptions.MEMORY);
+      final long mb = options.get(XQueryOptions.MEMORY);
       if(mb != 0) {
         Performance.gc(2);
         final long limit = Performance.memory() + (mb << 20);
@@ -92,7 +94,7 @@ public class XQueryEval extends StandardFunc {
       }
 
       // timeout
-      final long ms = opts.get(XQueryOptions.TIMEOUT) * 1000L;
+      final long ms = options.get(XQueryOptions.TIMEOUT) * 1000L;
       if(ms != 0) {
         if(to == null) to = new Timer(true);
         to.schedule(new TimerTask() {
@@ -102,53 +104,57 @@ public class XQueryEval extends StandardFunc {
       }
 
       // evaluate query
+      final boolean pass = options.get(XQueryOptions.PASS);
       try {
         final StaticContext sctx = new StaticContext(qctx);
-        sctx.baseURI(toBaseUri(query.url(), opts));
-        for(final Entry<String, Value> it : bindings.entrySet()) {
-          final String key = it.getKey();
-          final Value value = it.getValue();
-          if(key.isEmpty()) qctx.context(value, sctx);
-          else qctx.bind(key, value, sctx);
+        sctx.baseURI(toBaseUri(query.url(), options, XQueryOptions.BASE_URI));
+        for(final Entry<String, Value> binding : bindings.entrySet()) {
+          qctx.bind(binding.getKey(), binding.getValue(), null, sctx);
         }
         qctx.parseMain(string(query.read()), null, sctx);
 
-        if(updating) {
-          if(!sc.mixUpdates && !qctx.updating && !qctx.root.expr.vacuous())
-            throw XQUERY_UPDATE2.get(info);
-        } else {
-          if(qctx.updating) throw XQUERY_UPDATE1.get(info);
+        if(!sc().mixUpdates && updating != qctx.updating) {
+          if(!updating) throw XQUERY_UPDATE1.get(info);
+          if(!qctx.main.expr.vacuous()) throw XQUERY_UPDATE2.get(info);
         }
 
-        final ValueBuilder vb = new ValueBuilder(qc);
         final Iter iter = qctx.iter();
-        for(Item item; (item = qctx.next(iter)) != null;) {
-          qc.checkStop();
-          vb.add(item);
-        }
+        // value-based iterator: return result unchanged
+        if(iter.valueIter()) return iter.value(qctx, this);
+        // collect resulting items
+        final ValueBuilder vb = new ValueBuilder(qc);
+        for(Item item; (item = qctx.next(iter)) != null;) vb.add(item);
         return vb.value();
       } catch(final JobException ex) {
-        if(qctx.state == JobState.TIMEOUT) throw XQUERY_TIMEOUT.get(info);
-        if(qctx.state == JobState.MEMORY)  throw XQUERY_MEMORY.get(info);
+        QueryError error = null;
+        if(qctx.state == JobState.TIMEOUT) error = XQUERY_TIMEOUT;
+        else if(qctx.state == JobState.MEMORY)  error = XQUERY_MEMORY;
+        if(error != null) throw error.get(pass ? new InputInfo(query.path(), 1, 1) : info);
         throw ex;
       } catch(final QueryException ex) {
+        Util.debug(ex);
+        final InputInfo ii = ex.info();
         final QueryError error = ex.error();
-        if(error == BASEX_PERMISSION_X || error == BASEX_PERMISSION_X_X) {
-          Util.debug(ex);
-          throw XQUERY_PERMISSION1_X.get(info, ex.getLocalizedMessage());
-        }
-        if(!opts.get(XQueryOptions.PASS)) ex.info(info);
-        throw ex;
+        final QueryException qe = error == BASEX_PERMISSION_X || error == BASEX_PERMISSION_X_X ?
+          XQUERY_PERMISSION1_X.get(info, ex.getLocalizedMessage()) : ex;
+        // pass on error info: assign (possibly empty) path of module which caused the error
+        throw qe.info(pass ? ii.path().equals(info.path()) ?
+          new InputInfo(query.path(), ii.line(), ii.column()) : ii : info);
       }
     } finally {
       if(to != null) to.cancel();
-      user.perm(tmp, "");
+      user.perm(perm, "");
     }
   }
 
   @Override
   public boolean accept(final ASTVisitor visitor) {
     // locked resources cannot be detected statically
-    return visitor.lock(null, false) && super.accept(visitor);
+    return visitor.lock((String) null) && super.accept(visitor);
+  }
+
+  @Override
+  public boolean hasUPD() {
+    return sc().mixUpdates || super.hasUPD();
   }
 }

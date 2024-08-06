@@ -12,7 +12,7 @@ import org.basex.util.*;
  * The Lucene stemmers are based on the Apache License:
  * {@code http://lucene.apache.org/}.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 final class LuceneStemmer extends Stemmer {
@@ -40,7 +40,7 @@ final class LuceneStemmer extends Stemmer {
   }
 
   /**
-   * Check if a stemmer class is available, and add it the the list of stemmers.
+   * Check if a stemmer class is available, and add it the list of stemmers.
    * @param lang language
    */
   private static void add(final String... lang) {
@@ -51,21 +51,21 @@ final class LuceneStemmer extends Stemmer {
   }
 
   /**
-   * Check if a stemmer class is available, and add it the the list of stemmers.
+   * Check if a stemmer class is available, and add it the list of stemmers.
    * @param lang language
    * @param name name of language
    */
   private static void add(final Language lang, final String name) {
     final Class<?> clz = Reflect.find(PATTERN, name);
     if(clz == null) {
-      Util.debug("Could not initialize \"%\" Lucene stemmer class.", lang);
+      Util.debugln("Could not initialize \"%\" Lucene stemmer class.", lang);
       return;
     }
     Method m = Reflect.method(clz, "stem", String.class);
     final boolean ch = m == null;
     if(ch) m = Reflect.method(clz, "stem", char[].class, int.class);
     if(m == null) {
-      Util.debug("Could not initialize \"%\" Lucene stemmer method.", lang);
+      Util.debugln("Could not initialize \"%\" Lucene stemmer method.", lang);
     } else {
       CLASSES.put(lang, new StemmerClass(clz, m, ch));
     }

@@ -1,10 +1,7 @@
 package org.basex.query.func.fn;
 
-import java.util.*;
-
 import org.basex.query.*;
 import org.basex.query.expr.*;
-import org.basex.query.expr.List;
 import org.basex.query.expr.gflwor.*;
 import org.basex.query.func.*;
 import org.basex.query.func.update.*;
@@ -20,51 +17,50 @@ import org.basex.util.hash.*;
 /**
  * Function implementation.
  *
- * @author BaseX Team 2005-20, BSD License
+ * @author BaseX Team 2005-24, BSD License
  * @author Christian Gruen
  */
 public class FnForEach extends StandardFunc {
   @Override
   public final Value value(final QueryContext qc) throws QueryException {
-    // implementation for dynamic function lookup
-    final Iter iter = exprs[0].iter(qc);
-    final FItem func = checkArity(exprs[1], 1, this instanceof UpdateForEach, qc);
+    final Iter input = arg(0).iter(qc);
+    final FItem action = toFunction(arg(1), 2, this instanceof UpdateForEach, qc);
 
+    int p = 0;
     final ValueBuilder vb = new ValueBuilder(qc);
-    for(Item item; (item = qc.next(iter)) != null;) vb.add(func.invoke(qc, info, item));
+    for(Item item; (item = input.next()) != null;) {
+      vb.add(action.invoke(qc, info, item, Int.get(++p)));
+    }
     return vb.value(this);
   }
 
   @Override
   protected final Expr opt(final CompileContext cc) throws QueryException {
-    final Expr items = exprs[0];
-    final SeqType st = items.seqType();
-    if(st.zero()) return items;
+    final Expr input = arg(0), action = arg(1);
+    final SeqType st = input.seqType();
+    if(st.zero()) return input;
 
-    // assign type after coercion (expression might have changed)
-    final boolean updating = this instanceof UpdateForEach;
-    final long size = items.size();
-    final Expr func = coerceFunc(exprs[1], cc, SeqType.ITEM_ZM, st.with(Occ.EXACTLY_ONE));
+    final int arity = arity(action);
+    if(arity == 1 || arity == 2) {
+      // for $i in INPUT return ACTION($i)
+      // for $i at $p in INPUT return ACTION($i, $p)
+      final IntObjMap<Var> vm = new IntObjMap<>();
+      final Var i = cc.copy(new Var(new QNm("item"), null, cc.qc, info), vm);
+      final Var p = arity != 1 ? cc.copy(new Var(new QNm("pos"), null, cc.qc, info), vm) : null;
+      final For fr = new For(i, p, null, input, false).optimize(cc);
 
-    final boolean ndt = func.has(Flag.NDT);
-    if(allAreValues(false) && size <= UNROLL_LIMIT) {
-      // unroll the loop
-      final ExprList results = new ExprList((int) size);
-      for(final Item item : (Value) items) {
-        results.add(new DynFuncCall(info, sc, updating, ndt, func, item).optimize(cc));
-      }
-      cc.info(QueryText.OPTUNROLL_X, this);
-      return List.get(cc, info, results.finish());
+      final Expr act = coerce(1, cc, arity);
+      final boolean updating = this instanceof UpdateForEach, ndt = act.has(Flag.NDT);
+      final ExprList args = new ExprList(new VarRef(info, i).optimize(cc));
+      if(arity == 2) args.add(new VarRef(info, p).optimize(cc));
+      final Expr rtrn = new DynFuncCall(info, updating, ndt, act, args.finish()).optimize(cc);
+      return new GFLWOR(info, fr, rtrn).optimize(cc);
     }
+    return this;
+  }
 
-    // otherwise, create FLWOR expression
-    final LinkedList<Clause> clauses = new LinkedList<>();
-    final IntObjMap<Var> vm = new IntObjMap<>();
-    final Var var = cc.copy(new Var(new QNm("each"), null, false, cc.qc, sc, info), vm);
-    clauses.add(new For(var, items).optimize(cc));
-
-    final ParseExpr ref = new VarRef(info, var).optimize(cc);
-    final Expr rtrn = new DynFuncCall(info, sc, updating, ndt, func, ref).optimize(cc);
-    return new GFLWOR(info, clauses, rtrn).optimize(cc);
+  @Override
+  public int hofIndex() {
+    return 1;
   }
 }
